@@ -1,0 +1,131 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+object: {
+	
+	def DEFAULTCAPACITY := 10;
+	
+	// the vector its current maximum capacity
+	def capacity := DEFAULTCAPACITY;
+  // the next free position in the vector
+	def free := 1;
+	
+	// the vector its state represented as a table
+	def elements[capacity] { nil };
+	
+	def init(@args) {
+		// if argument given, change default capacity, otherwise use that of clonee
+		if: (args != []) then: {
+			capacity := args[1];
+		};
+		elements := table(args[1]);
+		free := 1
+	};
+	
+	def grow() {
+		def newelements[elements.length * 2] { nil };
+		1.to: free do: { |i| newelements[i] := elements[i] };
+		elements := newelements;
+	};
+	
+	def growIfNecessary() {
+		do: { grow() } if: self.atMaxCapacity();
+	};
+	
+	// public interface
+	
+	def length() { free - 1 };
+	def isEmpty() { free == 1 };
+	def atMaxCapacity() { free > capacity };
+	
+	def at(idx) { elements[idx] };
+	def atPut(idx, val) { elements[idx] := val }; // TODO modify free = max(free,idx)
+	
+	def each: iterator {
+		1.to: free do: { |i| iterator(elements[i]) };
+		self
+	};
+	
+	def map: fun {
+		def cloned := clone: self;
+		1.to: free do: { |i| cloned.atPut(i, fun(elements[i])) };
+    self
+	};
+	
+	def with: init collect: accum {
+		def result := init;
+		1.to: free do: { |i| result := accum(result, elements[i]) };
+		result
+	};
+	
+	def implode() {
+		elements.select(1,free-1).implode()
+	};
+	
+	def join(txt) {
+		elements.select(1,free-1).join(txt)
+	};
+
+  def select(start, stop) {
+	  elements.select(start, stop)
+  };
+
+  def append(element) {
+	  self.growIfNecessary();
+		elements[free] := element;
+		free := free + 1;
+		self
+  };
+
+  def <<(element) { self.append(element) };
+  
+  def insert(atPos, element) {
+	  self.growIfNecessary();
+	  free.to: atPos do: {|i|
+		  elements[i] := elements[i-1]
+		};
+		elements[atPos] := element;
+		free := free+1;
+		self
+  };
+
+  def push(element) { insert(1, element) };
+
+  def delete(atPos, element) {
+	  def tmp := elements[atPos];
+	  free := free - 1;
+	  atPos.to: free do: { |i|
+		  elements[i] := elements[i+1]
+		};
+		tmp
+  };
+
+  def pop(element) { delete(1, element) };
+	
+	// TODO: + (union), -(intersection), ++ (collation), filter(clo)
+	
+}
