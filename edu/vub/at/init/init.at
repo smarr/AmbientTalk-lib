@@ -38,6 +38,10 @@ def share: obj with: code {
   (reflect: obj).share(code)
 }
 
+def clone: obj {
+  (reflect: obj).clone()
+}
+
 def !(b) { b.not() }
 
 def -(n) { 0-n }
@@ -46,8 +50,23 @@ def +(n) { 0+n }
 
 */
 
-def roottest := self;
+def table(size) {
+  def t[size] { nil };
+  t
+};
 
-def test() {
-  system.println("Global method test successfully installed.")
+def functor: closure {
+  def obj := object: closure;
+  eval: `{ // TODO: this evaluates a closure definition within obj, which does nothing...
+    // base-level interface for closures
+    def apply(args) { self.run(@args) };
+    def whileTrue: body { self.run.whileTrue: body };
+    def getMethod() { (reflect: self.run).getMethod() };
+    def getContext() { (reflect: self.run).getContext() };
+  } in: obj;
+  obj;
+  /* def obj.apply(args) {
+    self.run(@args)
+  } */
+  //(reflect: obj).addMethod(methodP.new(`apply, `[args], `{ self.run(args); }))
 }

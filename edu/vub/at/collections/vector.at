@@ -25,12 +25,14 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+def DEFAULTCAPACITY := 10;
+def IndexOutOfBounds := /.at.exceptions.IndexOutOfBoundsException;
+
 object: {
-	
-	def DEFAULTCAPACITY := 10;
 	
 	// the vector its current maximum capacity
 	def capacity := DEFAULTCAPACITY;
+	
   // the next free position in the vector
 	def free := 1;
 	
@@ -42,7 +44,7 @@ object: {
 		if: (args != []) then: {
 			capacity := args[1];
 		};
-		elements := table(args[1]);
+		elements := table(capacity);
 		free := 1
 	};
 	
@@ -56,15 +58,28 @@ object: {
 		do: { grow() } if: self.atMaxCapacity();
 	};
 	
+	def checkBounds(min, max, idx) {
+		if: { idx < min }.or: { idx > max } then: {
+			IndexOutOfBounds.raise(min, max, idx);
+		}
+	};
+	
 	// public interface
 	
 	def length() { free - 1 };
 	def isEmpty() { free == 1 };
 	def atMaxCapacity() { free > capacity };
 	
-	def at(idx) { elements[idx] };
-	def atPut(idx, val) { elements[idx] := val }; // TODO modify free = max(free,idx)
+	def at(idx) {
+		checkBounds(1,free-1,idx);
+		elements[idx];
+	};
 	
+	def atPut(idx, val) {
+		checkBounds(1,free-1,idx);
+		elements[idx] := val;
+	};
+
 	def each: iterator {
 		1.to: free do: { |i| iterator(elements[i]) };
 		self
@@ -73,7 +88,7 @@ object: {
 	def map: fun {
 		def cloned := clone: self;
 		1.to: free do: { |i| cloned.atPut(i, fun(elements[i])) };
-    self
+    cloned
 	};
 	
 	def with: init collect: accum {
@@ -82,12 +97,30 @@ object: {
 		result
 	};
 	
+	def filter: cond {
+		def newvec := self.new();
+		self.each: { |v|
+			do: { newvec.append(v) } if: cond(v);
+		};
+		newvec;
+	};
+	
+	def contains: elt compareUsing: comparator {
+		def found := false;
+		self.each: { |e| found := comparator(elt, e) };
+		found;
+	};
+	
+	def contains(elt) {
+		self.contains: elt compareUsing: { |e1,e2| e1 == e2 };
+	};
+	
 	def implode() {
-		elements.select(1,free-1).implode()
+		elements.select(1,free).implode()
 	};
 	
 	def join(txt) {
-		elements.select(1,free-1).join(txt)
+		elements.select(1,free).join(txt)
 	};
 
   def select(start, stop) {
@@ -104,9 +137,10 @@ object: {
   def <<(element) { self.append(element) };
   
   def insert(atPos, element) {
-	  self.growIfNecessary();
-	  free.to: atPos do: {|i|
-		  elements[i] := elements[i-1]
+	  checkBounds(1,free,atPos);
+		self.growIfNecessary();
+		free.to: atPos do: {|i|
+			elements[i] := elements[i-1]
 		};
 		elements[atPos] := element;
 		free := free+1;
@@ -115,17 +149,97 @@ object: {
 
   def push(element) { insert(1, element) };
 
-  def delete(atPos, element) {
-	  def tmp := elements[atPos];
-	  free := free - 1;
-	  atPos.to: free do: { |i|
-		  elements[i] := elements[i+1]
+  def delete(atPos) {
+	  checkBounds(1,free-1,atPos);
+		def tmp := elements[atPos];
+		atPos.to: free do: { |i|
+			elements[i] := elements[i+1]
 		};
+		free := free - 1;
 		tmp
   };
 
   def pop(element) { delete(1, element) };
 	
-	// TODO: + (union), -(intersection), ++ (collation), filter(clo)
+	def indexOf(elt) {
+		def idx := 1;
+		def found := false;
+		while: { idx < free }.and: { !found } do: {
+			if: (elt == elements[idx]) then: {
+				found := true;
+			} else: {
+				idx := idx + 1;
+			};
+		};
+		if: found then: idx else: 0;
+	};
+	
+	def remove(elt) {
+		def idx := indexOf(elt);
+		if: (idx > 0) then: {
+			self.delete(idx);
+		}
+	};
+	
+	def ++(otherVector) {
+		def collated := clone: self;
+		otherVector.each: { |elt| collated.append(elt) };
+	};
+	
+	def union(otherVector) {
+		def theUnion := clone: self;
+		otherVector.each: { |elt|
+			do: { theUnion.append(elt) } unless: self.contains(elt);
+		};
+		theUnion;
+	};
+	
+	def +(otherVector) { self.union(otherVector) };
+	
+	def intersection(otherVector) {
+		def theIntersection := self.new();
+		self.each: { |elt|
+		  do: { theIntersection.append(elt) } if: (otherVector.contains(elt));
+		};
+	};
+	
+	def *(otherVector) { self.intersection(otherVector) };
+	
+	def difference(otherVector) {
+		def theDifference := clone: self;
+		self.each: { |elt|
+			do: { theDifference.remove(elt) } if: otherVector.contains(elt);
+		};
+	};
+	
+	def sortUsing: comparator {
+		
+		def quickSort(table, low, high) {
+	    def left := low;
+	    def right := high;
+	    def pivot := table[(left+right) /- 2];
+	    def save := nil;
+	    while: { left <= right } do: {
+		    while: { comparator(table[left], pivot) } do: left.inc;
+		    while: { comparator(pivot, table[right]) } do: right.dec;
+		    if: (left <= right) then: {
+			    save := table[left];
+					table[left] := table[right];
+					table[right] := save;
+					left.inc();
+					right.dec();
+		    };
+	   };
+	   if: (low<right) then: { quickSort(table,low,right) };
+	   if: (high>left) then: { quickSort(table,left,high) };
+	  };
+
+	  quickSort(elements, 1, free - 1);
+	  self;	
+	};
+	
+	def sort() {
+		self.sortUsing: { |e1,e2| e1 < e2 };
+	};
 	
 }
