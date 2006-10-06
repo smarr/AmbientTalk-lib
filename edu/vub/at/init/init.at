@@ -55,18 +55,27 @@ def table(size) {
   t
 };
 
-def functor: closure {
+/*def functor: closure {
   def obj := object: closure;
-  eval: `{ // TODO: this evaluates a closure definition within obj, which does nothing...
+  eval: `({ // TODO: this evaluates a closure definition within obj, which does nothing...
     // base-level interface for closures
     def apply(args) { self.run(@args) };
     def whileTrue: body { self.run.whileTrue: body };
-    def getMethod() { (reflect: self.run).getMethod() };
-    def getContext() { (reflect: self.run).getContext() };
-  } in: obj;
+    def getMethod() { (reflect: self.run).method };
+    def getContext() { (reflect: self.run).context };
+  }) in: obj;
   obj;
-  /* def obj.apply(args) {
-    self.run(@args)
-  } */
-  //(reflect: obj).addMethod(methodP.new(`apply, `[args], `{ self.run(args); }))
-}
+};*/
+
+def functor: closure {
+  def functorPrototype := object: {
+    // to be overridden by children
+    def run(@args) { nil };
+    // base-level interface for closures
+    def apply(args) { self.run(@args) };
+    def whileTrue: body { self.run.whileTrue: body };
+    def getMethod() { (reflect: self.run).method };
+    def getContext() { (reflect: self.run).context };    
+  };
+  extend: functorPrototype with: closure;
+};
