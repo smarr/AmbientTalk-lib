@@ -8,45 +8,45 @@ def root := self;
 
 def if: booleanCondition then: consequent {
   booleanCondition.ifTrue: consequent
-}
+};
 
 def if: booleanCondition then: consequent else: alternative {
   booleanCondition.ifTrue: consequent ifFalse: alternative
-}
+};
 
 def while: cond do: body {
   cond.whileTrue: body
-}
+};
 
 def foreach: iterator in: table {
   table.each: iterator
-}
+};
 
 def do: body if: cond {
   cond.ifTrue: body
-}
+};
 
 def do: body unless: cond {
   cond.ifFalse: body
-}
+};
 
 def extend: obj with: code {
   (reflect: obj).extend(code)
-}
+};
 
 def share: obj with: code {
   (reflect: obj).share(code)
-}
+};
 
 def clone: obj {
   (reflect: obj).clone()
-}
+};
 
-def !(b) { b.not() }
+def !(b) { b.not() };
 
-def -(n) { 0-n }
+def -(n) { 0-n };
 
-def +(n) { 0+n }
+def +(n) { 0+n };
 
 */
 

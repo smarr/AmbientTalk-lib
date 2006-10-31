@@ -60,7 +60,7 @@ object: {
 	
 	def checkBounds(min, max, idx) {
 		if: { idx < min }.or: { idx > max } then: {
-			IndexOutOfBounds.raise(min, max, idx);
+			raise: IndexOutOfBounds.new(min, max, idx);
 		}
 	};
 	
@@ -106,9 +106,10 @@ object: {
 	};
 	
 	def contains: elt compareUsing: comparator {
-		def found := false;
-		self.each: { |e| found := comparator(elt, e) };
-		found;
+		{ |return|
+		  self.each: { |e| if: comparator(elt, e) then: { return(true) } };
+		  false
+		}.escape()
 	};
 	
 	def contains(elt) {
@@ -163,15 +164,16 @@ object: {
 	
 	def indexOf(elt) {
 		def idx := 1;
-		def found := false;
-		while: { idx < free }.and: { !found } do: {
-			if: (elt == elements[idx]) then: {
-				found := true;
-			} else: {
-				idx := idx + 1;
-			};
-		};
-		if: found then: idx else: 0;
+		{ |return|
+			while: { idx < free } do: {
+			  if: (elt == elements[idx]) then: {
+				  return(idx);
+			  } else: {
+				  idx := idx + 1;
+			  };
+		  };
+		  0; // if not found, return 0
+		}.escape()
 	};
 	
 	def remove(elt) {
