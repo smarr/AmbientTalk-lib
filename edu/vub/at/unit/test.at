@@ -1,0 +1,74 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+
+/*
+ * Defines unit test code for performing unit tests in AT/2 itself
+ */
+def XAssertionFailed := object: {
+	def reason := "";
+	def init(reason) { self.reason := reason };
+};
+
+def assert(bln, optreason, defaultreason) {
+	bln.ifFalse: { raise: XAssertionFailed.new(if: (optreason.length > 0)
+		                                         then: { optreason[1] } else: { defaultreason }) }
+};
+
+def retrieveTestMethods(obj) {
+	def allMethods := (reflect: obj).listMethods().base;
+	allMethods.filter: { |mth| mth.name ~= "test*" };
+	// TODO: should retrieve test methods of parents as well
+}
+
+// unit tests should delegate to this object
+object: {
+
+	// methods to assert the validity of programs
+	def assertTrue(bln, @reason) { assert(bln, reason, "expected true, given false") };
+	def assertFalse(bln, @reason) { assert(!bln, reason, "expected true, given false") };
+	def assertEquals(o1,o2, @reason) { assert(o1==o2, reason, "expected "+o1+" to be equal to "+o2) };
+	def assertNotEquals(o1,o2, @reason) { assert(o1!=o2, reason, "expected "+o1+" not to be equal to "+o2) };
+	def assertLessThan(o1,o2, @reason) { assert(o1<o2, reason, "expected "+o1+" to be less than "+o2) };
+	def assertGreaterThan(o1,o2, @reason) { assert(o1>o2, reason, "expected "+o1+" to be greater than "+o2) };
+	def assertLessThanOrEquals(o1,o2, @reason) { assert(o1<=o2, reason, "expected "+o1+" to be <= than "+o2) };
+	def assertGreaterThanOrEquals(o1,o2, @reason) { assert(o1>=o2, reason, "expected "+o1+" to be >= than "+o2) };
+	def assertMatches(str, pattern, @reason) { assert(str ~= pattern, reason, "expected "+str+" to match "+pattern) };
+	
+	def runTest() {
+		def succeeded := vector.new();
+		def failed := vector.new();
+		retrieveTestMethods(self).each: { |meth|
+			try: {
+				// TODO: should run setup first
+				meth.apply([], /.at.reflection.toContext(self));
+				succeeded.add(meth);
+			} catch: XAssertionFailed using: {|e| failed.add(meth) }
+			// TODO: finally: run teardown
+		}
+	}
+}
