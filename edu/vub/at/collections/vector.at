@@ -44,7 +44,7 @@ object: {
 		if: (args != []) then: {
 			capacity := args[1];
 		};
-		elements := table(capacity);
+		elements := (table: capacity fill: { |i| nil });
 		free := 1
 	};
 	
