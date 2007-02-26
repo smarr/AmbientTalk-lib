@@ -1,0 +1,61 @@
+/* definition of native AmbientTalk/2 stripes */
+
+// defines whether an object is an isolate or not
+defstripe Isolate;
+
+// defines whether an object is a Java wrapper or not
+defstripe JavaObject;
+
+defstripe Boolean;
+defstripe Closure;
+defstripe Context;
+defstripe Field;
+defstripe Handler;
+defstripe Method;
+defstripe Message;
+defstripe MethodInvocation <: Message;
+defstripe AsyncMessage <: Message;
+defstripe Mirror;
+defstripe ActorMirror;
+defstripe Stripe;
+
+// abstract grammar
+defstripe AbstractGrammar;
+defstripe Statement <: AbstractGrammar; // TODO: still need to tag those AG elements
+defstripe Expression <: Statement;
+
+// literal values
+defstripe Table <: Expression;
+defstripe Text <: Expression;
+defstripe Numeric <: Expression;
+defstripe Number <: Numeric;
+defstripe Fraction <: Numeric;
+
+// exception types
+defstripe Exception;
+defstripe ArityMismatch <: Exception;
+defstripe ClassNotFound <: Exception;
+defstripe DuplicateSlot <: Exception;
+defstripe IllegalApplication <: Exception;
+defstripe IllegalArgument <: Exception;
+defstripe IllegalIndex <: Exception;
+defstripe IllegalOperation <: Exception;
+defstripe IllegalParameter <: Exception;
+defstripe IllegalQuote <: Exception;
+defstripe IllegalSplice <: Exception;
+defstripe IllegalUnquote <: Exception;
+defstripe IndexOutOfBounds <: Exception;
+defstripe IOProblem <: Exception;
+defstripe NotInstantiatable <: Exception;
+defstripe ParseError <: Exception;
+defstripe ReflectionFailure <: Exception;
+defstripe SelectorNotFound <: Exception;
+defstripe SymbiosisFailure <: Exception;
+defstripe TypeMismatch <: Exception;
+defstripe UnassignableField <: Exception;
+defstripe UndefinedField <: Exception;
+defstripe CustomException <: Exception;
+defstripe JavaException <: Exception;
+
+// make all definitions in this file public
+self
