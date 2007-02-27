@@ -3,9 +3,6 @@
 // defines whether an object is an isolate or not
 defstripe Isolate;
 
-// defines whether an object is a Java wrapper or not
-defstripe JavaObject;
-
 defstripe Boolean;
 defstripe Closure;
 defstripe Context;
@@ -30,6 +27,12 @@ defstripe Text <: Expression;
 defstripe Numeric <: Expression;
 defstripe Number <: Numeric;
 defstripe Fraction <: Numeric;
+defstripe Symbol <: Expression;
+defstripe Begin <: AbstractGrammar;
+defstripe Splice <: Expression;
+defstripe UnquoteSplice <: Expression;
+defstripe MessageCreation <: Expression;
+defstripe Definition <: Statement;
 
 // exception types
 defstripe Exception;
