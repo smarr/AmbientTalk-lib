@@ -59,6 +59,7 @@ defstripe UnassignableField <: Exception;
 defstripe UndefinedField <: Exception;
 defstripe CustomException <: Exception;
 defstripe JavaException <: Exception;
+defstripe ImportConflict <: Exception;
 
 // make all definitions in this file public
 self
