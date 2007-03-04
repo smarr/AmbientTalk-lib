@@ -1,0 +1,76 @@
+/*
+ * This program demonstrates an extremely simple peer-to-peer instant messenger
+ * written in AmbientTalk/2. It demonstrates peer discovery and how to deal with
+ * disconnections.
+ *
+ * @author tvcutsem
+ */
+def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user.name")) {
+  
+  defstripe InstantMessenger;
+
+  def TextMessage := isolate: {
+	  def from := nil;
+	  def content := nil;
+	  def init(f,c) {
+		  from := f;
+		  content := c;
+	  };
+  };
+
+  def buddyList := jlobby.java.util.HashMap.new();
+
+	def printMessage(textMessage) {
+    system.println(textMessage.from + ": " + textMessage.content)
+  };
+
+  def localInterface := object: {
+	  def sendTextMessage(to, string) {
+		  def buddy := buddyList.get(to);
+		  if: (nil == buddy) then: {
+			  system.println("Unknown buddy: " + to);
+		  } else: {
+			  def msg := TextMessage.new(username, string);
+			  buddy<-receiveTextMessage(msg, object: {
+				  def resolve() {
+					  printMessage(msg);
+				  }
+			  });
+		  };
+    };
+  };
+
+  def remoteInterface := object: {
+    def receiveTextMessage(textMessage, future) {
+      printMessage(textMessage);
+      future<-resolve();
+    };
+    def getName(future) { future<-resolve(username) };
+  };
+  
+  export: remoteInterface as: InstantMessenger;
+  
+  whenever: InstantMessenger discovered: { |messenger|
+	  messenger<-getName(object: {
+		  def resolve(name) {
+			  if: (nil == buddyList.get(name)) then: {
+				  buddyList.put(name, messenger);
+				  system.println("Added buddy: " + name);
+				  when: messenger disconnected: {
+					  system.println("Buddy offline: " + name);
+				  };
+				  when: messenger reconnected: {
+					  system.println("Buddy online: " + name);
+				  };
+			  };
+		  };
+	  });
+	};
+	
+	localInterface;
+};
+
+def testIt() {
+	network.online();
+	createInstantMessenger();
+}
