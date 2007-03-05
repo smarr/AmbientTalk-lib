@@ -1,0 +1,166 @@
+/* The meta-level implementation of the futures language construct */
+
+// import Exception stripe, used for catching exceptions
+def Exception := /.at.stripes.Exception;
+
+// a future can be in one of these three states
+def UNRESOLVED := 0;
+def RESOLVED := 1;
+def RUINED := 2;
+
+// all future objects are marked with this stripe
+defstripe Future;
+
+// the mirror of a Future object
+def FutureMirror := mirror: {
+	def state := UNRESOLVED;
+	def resolvedValue := nil;
+	def inbox := [];
+	def subscribers := [];
+	
+	// constructor
+	def init() {
+		state := UNRESOLVED;
+		resolvedValue := nil;
+		inbox := [];
+		subscribers := [];
+	};
+	
+	def resolve(value) {
+		// is the future resolved by another future?
+		if: (is: value stripedWith: Future) then: {
+			// register this future as a listener with the resolved future value
+			(reflect: value).addResolutionListener(object: {
+				def notifyResolved(val) {
+					// re-resolve this future with the actual value
+					resolve(val);
+				};
+				def notifyRuined(exc) {
+					// ruin this future
+					ruin(exc);
+				}
+			});
+		} else: {
+			if: (state == UNRESOLVED) then: {
+				state := RESOLVED;
+				resolvedValue := value;
+				inbox.each: { |msg| value <+ msg };
+				inbox := [];
+				subscribers.each: { |sub| sub<-notifyResolved(value) };
+				subscribers := [];	
+			};	
+		};
+	};
+	
+	def ruin(exception) {
+		if: (state == UNRESOLVED) then: {
+			state := RUINED;
+			resolvedValue := exception;
+			inbox.each: { |msg|
+				if: (reflect: msg).respondsTo(`future) then: {
+					msg.future.ruin(exception);
+				};
+			};
+			inbox := [];
+			subscribers.each: { |sub| sub<-notifyRuined(excception) };
+			subscribers := [];	
+		};
+	};
+	
+	// adds a resolution listener to the future
+	// @param sub a resolution listener
+	def addResolutionListener(sub) {
+		// if future has already been resolved/ruined, notify listener immediately
+		if: (state == RESOLVED) then: {
+			sub<-notifyResolved(resolvedValue);
+		} else: {
+			if: (state == RUINED) then: {
+				sub<-notifyRuined(resolvedValue);
+			} else: {
+			  subscribers := subscribers + sub;	
+			}
+		};
+	};
+	
+	// hook into the meta-object protocol by overriding meta_receive
+	def receive(msg) {
+		if: (state == RESOLVED) then: {
+			  resolvedValue <+ msg;
+		} else: {
+			if: (state == RUINED) then: {
+				if: (reflect: msg).respondsTo(`future) then: {
+					msg.future.ruin(exception);
+				};
+			}	else: {
+				// accumulate message in this future's inbox
+				inbox := inbox + msg;
+			};
+		};
+	};
+};
+
+// futures are empty objects mirrored by a future mirror
+def createFuture() {
+	object: {
+		nil
+	} mirroredBy: FutureMirror.new() stripedWith: [ Future ];
+};
+
+// this object is returned when this file is loaded, hence
+// it is the public interface to code defined in this file
+def FuturesModule := object: {
+	// support for first-class futures: returns a pair
+	// [ future, resolver]. The resolver can be used to easily resolve
+	// or ruin the corresponding future
+	def makeFuture() {
+		def fut := createFuture();
+		[ fut, object: {
+			def resolve(val) { (reflect: fut).resolve(val).base };
+			def ruin(exc) { (reflect: fut).ruin(exc).base };
+		}]
+	};
+	
+	// when-catch support
+	def when: future becomes: resolvedBlock catch: excBlock {
+		def [whenFuture,resolver] := makeFuture();
+		def notify(block, val) {
+			try: {
+				resolver.resolve(block.apply([val]));
+			} catch: Exception using: {|e|
+				resolver.ruin(e);
+			};
+		}
+		(reflect: future).addResolutionListener(object: {
+			def notifyResolved(val) { notify(resolvedBlock, val) };
+			def notifyRuined(exc) { notify(excBlock, exc) };
+		});
+		whenFuture; // when returns a future itself
+	};
+	
+	// install the futures protocol on the invoking actor
+	def install() {
+		actor.install: {
+			def createMessage(@args) {
+				// perform default message creation behaviour
+				def msg := super^createMessage(@args);
+				// attach a future to the message
+				extend: msg with: {
+					def future := makeFuture();
+					// invoked when the message arrives
+				  def process() {
+						try: {
+							(reflect: future).resolve(super^process());
+						} catch: Exception using: { |e|
+							(reflect: future).ruin(e);
+						};
+					};
+			  } stripedWith: [ /.at.stripes.AsyncMessage ];
+			};
+			def send(msg) {
+				super^send(msg);
+				// return value now becomes the message's future rather than nil
+				msg.future;
+			};
+		};
+	};
+};
