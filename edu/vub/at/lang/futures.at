@@ -57,12 +57,12 @@ def FutureMirror := mirror: {
 			state := RUINED;
 			resolvedValue := exception;
 			inbox.each: { |msg|
-				if: (reflect: msg).respondsTo(`future) then: {
+				if: (reflect: msg).respondsTo(`future).base then: {
 					msg.future.ruin(exception);
 				};
 			};
 			inbox := [];
-			subscribers.each: { |sub| sub<-notifyRuined(excception) };
+			subscribers.each: { |sub| sub<-notifyRuined(exception) };
 			subscribers := [];	
 		};
 	};
@@ -83,6 +83,9 @@ def FutureMirror := mirror: {
 	};
 	
 	// hook into the meta-object protocol by overriding meta_receive
+	// TODO: will not prohibit the future of 'future messages' from being
+	// resolved with the return value of this method, even if the message is
+	// not actually processed...
 	def receive(msg) {
 		if: (state == RESOLVED) then: {
 			  resolvedValue <+ msg;
@@ -147,7 +150,7 @@ def FuturesModule := object: {
 				extend: msg with: {
 					def future := makeFuture();
 					// invoked when the message arrives
-				  def process() {
+				  def process(byActor) {
 						try: {
 							(reflect: future).resolve(super^process());
 						} catch: Exception using: { |e|
