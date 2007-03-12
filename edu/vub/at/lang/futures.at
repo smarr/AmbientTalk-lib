@@ -149,6 +149,7 @@ def FuturesModule := object: {
 		[ fut, object: {
 			def resolve(val) { (reflect: fut).resolve(val) };
 			def ruin(exc) { (reflect: fut).ruin(exc) };
+			def future := fut;
 		}]
 	};
 	
@@ -193,8 +194,8 @@ def FuturesModule := object: {
 				def msg := super^createMessage(@args);
 				
 				// attach a future to the message
-				def future := createFuture();
-				extend: msg with: { |future|
+				def [future, resolver] := makeFuture();
+				extend: msg with: { |resolver|
 					// cannot define the future here because 'createFuture' is no longer
 					// visible, as this extension is an isolate!
 					// def future := createFuture();
@@ -205,12 +206,15 @@ def FuturesModule := object: {
 							// delegate to parent to actually invoke the method
 							def result := super^process(behaviour);
 							// if everything goes right, resolve the attached future
-							(reflect: future)<-resolve(result);
+							resolver<-resolve(result);
+							//(reflect: future)<-resolve(result);
 							result;
 						} catch: /.at.stripes.Exception using: { |e|
 							// note that we needed to qualify the full path to the Exception stripe:
 							// the Exception variable defined above is out of scope since this message is an isolate!
-							(reflect: future)<-ruin(e); e;
+							//(reflect: future)<-ruin(e);
+							resolver<-ruin(e);
+							raise: e;
 						};
 					};
 			  };
@@ -221,7 +225,7 @@ def FuturesModule := object: {
 			def send(msg) {
 				super^send(msg);
 				// return value now becomes the message's future rather than nil
-				msg.future;
+				msg.resolver.future;
 			};
 		});
 	};
