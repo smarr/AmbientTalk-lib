@@ -73,4 +73,6 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
 def testIt() {
 	network.online();
 	createInstantMessenger();
-}
+};
+
+self

@@ -11,14 +11,20 @@ def RUINED := 2;
 // all future objects are marked with this stripe
 defstripe Future;
 
+// auxiliary function to check whether an object understands a message
+def does: object understand: selector {
+	(reflect: object).respondsTo(selector).base
+};
+
 // the mirror of a Future object
 def FutureMirror := mirror: {
+	// initialize the state of the prototype
 	def state := UNRESOLVED;
 	def resolvedValue := nil;
 	def inbox := [];
 	def subscribers := [];
 	
-	// constructor
+	// constructor: used to initialize the state of the new future
 	def init() {
 		state := UNRESOLVED;
 		resolvedValue := nil;
@@ -30,7 +36,8 @@ def FutureMirror := mirror: {
 		// is the future resolved by another future?
 		if: (is: value stripedWith: Future) then: {
 			// register this future as a listener with the resolved future value
-			(reflect: value).addResolutionListener(object: {
+			// TODO: what if value is a far future?
+			(reflect: value)<-addResolutionListener(object: {
 				def notifyResolved(val) {
 					// re-resolve this future with the actual value
 					resolve(val);
@@ -47,9 +54,10 @@ def FutureMirror := mirror: {
 				inbox.each: { |msg| value <+ msg };
 				inbox := [];
 				subscribers.each: { |sub| sub<-notifyResolved(value) };
-				subscribers := [];	
+				subscribers := [];
 			};	
 		};
+		value;
 	};
 	
 	def ruin(exception) {
@@ -57,7 +65,7 @@ def FutureMirror := mirror: {
 			state := RUINED;
 			resolvedValue := exception;
 			inbox.each: { |msg|
-				if: (reflect: msg).respondsTo(`future).base then: {
+				(does: msg understand: `future).ifTrue: {
 					msg.future.ruin(exception);
 				};
 			};
@@ -65,6 +73,7 @@ def FutureMirror := mirror: {
 			subscribers.each: { |sub| sub<-notifyRuined(exception) };
 			subscribers := [];	
 		};
+		exception;
 	};
 	
 	// adds a resolution listener to the future
@@ -83,20 +92,40 @@ def FutureMirror := mirror: {
 	};
 	
 	// hook into the meta-object protocol by overriding meta_receive
-	// TODO: will not prohibit the future of 'future messages' from being
-	// resolved with the return value of this method, even if the message is
-	// not actually processed...
 	def receive(msg) {
 		if: (state == RESOLVED) then: {
 			  resolvedValue <+ msg;
 		} else: {
 			if: (state == RUINED) then: {
-				if: (reflect: msg).respondsTo(`future) then: {
+				(does: msg understand: `future).ifTrue: {
 					msg.future.ruin(exception);
 				};
 			}	else: {
 				// accumulate message in this future's inbox
 				inbox := inbox + msg;
+			};
+		};
+	};
+	
+	// it is illegal to invoke methods synchronously on a future
+	def invoke(rcv, sel, arg) {
+		// the only legal operation on futures is '=='
+		if: (`(==) == sel) then: {
+			super^invoke(rcv, sel, arg);
+		} else: {
+			// TODO: creating your own exceptions is not yet supported properly...
+			raise: (object: { nil } stripedWith: [/.at.stripes.IllegalOperation]);
+		}
+	};
+	
+	def print() {
+		if: (state == RESOLVED) then: {
+			  "<resolved future:" + resolvedValue +">";
+		} else: {
+			if: (state == RUINED) then: {
+				"<ruined future:" + resolvedValue +">";
+			}	else: {
+				"<unresolved future>";
 			};
 		};
 	};
@@ -106,7 +135,7 @@ def FutureMirror := mirror: {
 def createFuture() {
 	object: {
 		nil
-	} mirroredBy: FutureMirror.new() stripedWith: [ Future ];
+	} stripedWith: [ Future ] mirroredBy: FutureMirror.new();
 };
 
 // this object is returned when this file is loaded, hence
@@ -118,13 +147,23 @@ def FuturesModule := object: {
 	def makeFuture() {
 		def fut := createFuture();
 		[ fut, object: {
-			def resolve(val) { (reflect: fut).resolve(val).base };
-			def ruin(exc) { (reflect: fut).ruin(exc).base };
+			def resolve(val) { (reflect: fut).resolve(val) };
+			def ruin(exc) { (reflect: fut).ruin(exc) };
 		}]
 	};
 	
-	// when-catch support
+	// when-catch support, version without a catch block
+	def when: future becomes: resolvedBlock {
+		when: future becomes: resolvedBlock catch: Exception using: { |e| nil }
+	};
+
+  // when-catch support, version with one generic catch-all block
 	def when: future becomes: resolvedBlock catch: excBlock {
+		when: future becomes: resolvedBlock catch: Exception using: excBlock
+	};
+	
+	// when-catch support, version with one specific catch block
+	def when: future becomes: resolvedBlock catch: excType using: excBlock {
 		def [whenFuture,resolver] := makeFuture();
 		def notify(block, val) {
 			try: {
@@ -132,38 +171,58 @@ def FuturesModule := object: {
 			} catch: Exception using: {|e|
 				resolver.ruin(e);
 			};
-		}
+		};
 		(reflect: future).addResolutionListener(object: {
 			def notifyResolved(val) { notify(resolvedBlock, val) };
-			def notifyRuined(exc) { notify(excBlock, exc) };
+			def notifyRuined(exc) {
+				if: (exc.isSubstripeOf(excType)) then: {
+					notify(excBlock, exc);
+				};
+			};
 		});
 		whenFuture; // when returns a future itself
 	};
 	
-	// install the futures protocol on the invoking actor
-	def install() {
-		actor.install: {
+	// install the futures protocol on the invoking actor,
+	// returns the previously active protocol
+	def enableFutures() {
+		// the futures protocol by default extends the currently active protocol
+		actor.install: (extend: actor with: {
 			def createMessage(@args) {
 				// perform default message creation behaviour
 				def msg := super^createMessage(@args);
+				
 				// attach a future to the message
-				extend: msg with: {
-					def future := makeFuture();
-					// invoked when the message arrives
-				  def process(byActor) {
+				def future := createFuture();
+				extend: msg with: { |future|
+					// cannot define the future here because 'createFuture' is no longer
+					// visible, as this extension is an isolate!
+					// def future := createFuture();
+					
+					// the process method is invoked when an async message arrives
+				  def process(behaviour) {
 						try: {
-							(reflect: future).resolve(super^process());
-						} catch: Exception using: { |e|
-							(reflect: future).ruin(e);
+							// delegate to parent to actually invoke the method
+							def result := super^process(behaviour);
+							// if everything goes right, resolve the attached future
+							(reflect: future)<-resolve(result);
+							result;
+						} catch: /.at.stripes.Exception using: { |e|
+							// note that we needed to qualify the full path to the Exception stripe:
+							// the Exception variable defined above is out of scope since this message is an isolate!
+							(reflect: future)<-ruin(e); e;
 						};
 					};
-			  } stripedWith: [ /.at.stripes.AsyncMessage ];
+			  };
+			  // it is allowed, but not necessary to stripe the message extension, because
+			  // objects are 'automatically' striped with their parent's stripes
+			  //stripedWith: [ /.at.stripes.AsyncMessage ];
 			};
 			def send(msg) {
 				super^send(msg);
 				// return value now becomes the message's future rather than nil
 				msg.future;
 			};
-		};
+		});
 	};
 };
