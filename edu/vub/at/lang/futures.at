@@ -187,6 +187,12 @@ def FuturesModule := object: {
 	// install the futures protocol on the invoking actor,
 	// returns the previously active protocol
 	def enableFutures() {
+		// before installing changes to the creation of messages, create messages that will be used internally
+		// to resolve or ruin the futures. If these messages are not created up front they will be subject to 
+		// the futures protocol resulting in an endless cycle of messages being sent back and forth.
+		def resolveMsg := <- resolve( `placeHolderForReturnValue  );
+		def ruinMsg    := <- ruin( `placeHolderForRaisedException );
+		
 		// the futures protocol by default extends the currently active protocol
 		actor.install: (extend: actor with: {
 			def createMessage(@args) {
@@ -195,7 +201,7 @@ def FuturesModule := object: {
 				
 				// attach a future to the message
 				def [future, resolver] := makeFuture();
-				extend: msg with: { |resolver|
+				extend: msg with: { |resolver, resolveMsg, ruinMsg |
 					// cannot define the future here because 'createFuture' is no longer
 					// visible, as this extension is an isolate!
 					// def future := createFuture();
@@ -206,14 +212,25 @@ def FuturesModule := object: {
 							// delegate to parent to actually invoke the method
 							def result := super^process(behaviour);
 							// if everything goes right, resolve the attached future
-							resolver<-resolve(result);
-							//(reflect: future)<-resolve(result);
+							// replace the placeholder symbol with the actual result
+							(resolveMsg.arguments)[1] := result;
+							
+							// send the first-class message (possibly using the futures mixin)
+							// since the message as no future, the rsult should be nil
+							resolver <+ resolveMsg;
+							
 							result;
 						} catch: /.at.stripes.Exception using: { |e|
 							// note that we needed to qualify the full path to the Exception stripe:
 							// the Exception variable defined above is out of scope since this message is an isolate!
-							//(reflect: future)<-ruin(e);
-							resolver<-ruin(e);
+							
+							// replace the placeholder symbol with the actual exception
+							(ruinMsg.arguments)[1] := e;
+							
+							// send the first-class message (possibly using the futures mixin)
+							// since the message as no future, the result should be nil
+							resolver <+ ruinMsg;
+							
 							raise: e;
 						};
 					};
@@ -223,9 +240,13 @@ def FuturesModule := object: {
 			  //stripedWith: [ /.at.stripes.AsyncMessage ];
 			};
 			def send(msg) {
-				super^send(msg);
-				// return value now becomes the message's future rather than nil
-				msg.resolver.future;
+				def result := super^send(msg);
+				// return value now becomes the message's future
+				if: (does: msg understand: `resolver) then: {
+					msg.resolver.future;
+				} else: {
+					result;
+				}
 			};
 		});
 	};
