@@ -60,6 +60,7 @@ defstripe UndefinedField <: Exception;
 defstripe CustomException <: Exception;
 defstripe JavaException <: Exception;
 defstripe ImportConflict <: Exception;
+defstripe ObjectOffline <: Exception;
 
 // make all definitions in this file public
 self
