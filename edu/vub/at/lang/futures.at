@@ -203,7 +203,8 @@ def FuturesModule := object: {
 				resolver.ruin(e);
 			};
 		};
-		(reflect: future).addResolutionListener(object: {
+		// TODO: what if future is a far ref?
+		(reflect: future)<-(object: {
 			def notifyResolved(val) { notify(resolvedBlock, val) };
 			def notifyRuined(exc) {
 				if: (is: exc stripedWith: excType) then: {
