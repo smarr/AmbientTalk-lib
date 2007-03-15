@@ -27,8 +27,6 @@
 
 /* The meta-level implementation of the ambient references language construct */
 
-// import Exception stripe, used for catching exceptions
-def Exception := /.at.stripes.Exception;
 def FuturesModule := /.at.lang.futures;
 
 def createAmbientReference(stripe) {

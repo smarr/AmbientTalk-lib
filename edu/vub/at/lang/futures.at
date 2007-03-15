@@ -118,7 +118,7 @@ def FutureMirror := mirror: {
 			state := RUINED;
 			resolvedValue := exception;
 			inbox.each: { |msg|
-				(does: msg understand: `future).ifTrue: {
+				(does: msg understand: `resolver).ifTrue: {
 					msg.resolver<-ruin(exception);
 				};
 			};
@@ -154,7 +154,7 @@ def FutureMirror := mirror: {
 				resolvedValue <+ msg;
 			} else: {
 				if: (state == RUINED) then: {
-					(does: msg understand: `future).ifTrue: {
+					(does: msg understand: `resolver).ifTrue: {
 						msg.resolver<-ruin(exception);
 					};
 				}	else: {
@@ -227,7 +227,7 @@ def FuturesModule := object: {
 		def [whenFuture,resolver] := makeFuture();
 		def notify(block, val) {
 			try: {
-				resolver.resolve(block.apply([val]));
+				resolver.resolve(block(val));
 			} catch: Exception using: {|e|
 				resolver.ruin(e);
 			};
