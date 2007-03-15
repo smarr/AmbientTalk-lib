@@ -45,8 +45,21 @@ defstripe Future;
 // forwarded when the result becomes available.
 defstripe FutureMessage;
 
-def futureMessage: msg {
-	extend: msg with: { nil } stripedWith: [ FutureMessage ];
+// auxiliary function to create an addResolutionListener message which is not subject to the futures protocol
+def addListenerMessage := let: {
+	// create a message before the futures protocol is activated.
+	
+	def defaultListenerMessage := 
+		actor.createMessage( nil, `addResolutionListener, [ `placeholderForActualListener ] , [ FutureMessage ] );
+	
+	{ | listener | 
+		// create a new message
+		def msg := clone: defaultListenerMessage;
+		
+		// replace the placeholder argument with the actual listener
+		(msg.arguments)[1] := listener;
+		msg;
+	};
 };
 
 // auxiliary function to check whether an object understands a message
@@ -75,7 +88,7 @@ def FutureMirror := mirror: {
 		// is the future resolved by another future?
 		if: (is: value stripedWith: Future) then: {
 			// register this future as a listener with the resolved future value
-			value <+ (futureMessage: <-addResolutionListener(object: {
+			value <+ addListenerMessage(object: {
 				def notifyResolved(val) {
 					// re-resolve this future with the actual value
 					resolve(val);
@@ -84,7 +97,7 @@ def FutureMirror := mirror: {
 					// ruin this future
 					ruin(exc);
 				}
-			}));
+			});
 		} else: {
 			if: (state == UNRESOLVED) then: {
 				state := RESOLVED;
@@ -104,7 +117,7 @@ def FutureMirror := mirror: {
 			resolvedValue := exception;
 			inbox.each: { |msg|
 				(does: msg understand: `future).ifTrue: {
-					msg.future.ruin(exception);
+					msg.resolver<-ruin(exception);
 				};
 			};
 			inbox := [];
@@ -124,7 +137,7 @@ def FutureMirror := mirror: {
 			if: (state == RUINED) then: {
 				sub<-notifyRuined(resolvedValue);
 			} else: {
-			  subscribers := subscribers + [sub];	
+			  subscribers := subscribers + [ sub ];	
 			}
 		};
 	};
@@ -217,7 +230,7 @@ def FuturesModule := object: {
 				resolver.ruin(e);
 			};
 		};
-		value <+ (futureMessage: <-addResolutionListener(object: {
+		future <+ (addListenerMessage(object: {
 			def notifyResolved(val) { notify(resolvedBlock, val) };
 			def notifyRuined(exc) {
 				if: (is: exc stripedWith: excType) then: {
