@@ -45,10 +45,12 @@ defstripe Future;
 // forwarded when the result becomes available.
 defstripe FutureMessage;
 
-// auxiliary function to create an addResolutionListener message which is not subject to the futures protocol
+// auxiliary function to create an addResolutionListener message which should not be subject
+// to the futures protocol itself
 def addListenerMessage := let: {
-	// create a message before the futures protocol is activated.
 	
+	// create a message manually, before the futures protocol is activated.
+	// actor.createMessage(sender, selector, [arguments], [stripes])
 	def defaultListenerMessage := 
 		actor.createMessage( nil, `addResolutionListener, [ `placeholderForActualListener ] , [ FutureMessage ] );
 	
@@ -77,7 +79,7 @@ def FutureMirror := mirror: {
 
 	// constructor: used to initialize the state of the new future
 	def init(@args) {
-		super^init(@args);
+		super^init(@args); // initialize this future's base field
 		state := UNRESOLVED;
 		resolvedValue := nil;
 		inbox := [];
@@ -122,7 +124,7 @@ def FutureMirror := mirror: {
 			};
 			inbox := [];
 			subscribers.each: { |sub| sub<-notifyRuined(exception) };
-			subscribers := [];	
+			subscribers := [];
 		};
 		exception;
 	};
