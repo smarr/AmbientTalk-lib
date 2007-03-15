@@ -1,0 +1,171 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/* The MobiTunes music player is a peer-to-peer application meant to be
+ * deployed on mobile ad hoc networks. Each music player has a local
+ * music library filled with Song objects. When a music player discovers
+ * another player in its environment (its 'ambient'), both music players
+ * engage in a library exchange session, where they exchange the (indices of)
+ * their music library. This way, a music player can e.g. notify its owner
+ * whenever someone is found in the environment with a similar taste in music.
+ *
+ * For more detailed information, cfr. the paper 'Object-oriented Coordination
+ * in Mobile Ad Hoc Networks', in Proceedings of the 9th internation conference
+ * on coordination models and languages (COORDINATION '07), 2007.
+ *
+ * @author tvcutsem
+ */
+
+import /.at.lang.ambientrefs; // for ambient:
+import /.at.lang.futures; // for when:becomes:
+enableFutures();
+
+def notification(@texts) {
+	system.println("[mobiTunes] ", @texts);
+};
+
+def Song := object: {
+	def artist := nil;
+	def title := nil;
+	def timesPlayed := 0;
+	def init(artist, title) {
+		self.artist := artist;
+		self.title := title;
+		self.timesPlayed := 0;
+	};
+	def ==(other) {
+		(artist == other.artist) && (title == other.title);
+	};
+	def play() {
+		timesPlayed := timesPlayed + 1;
+	};
+	def toString() {
+		artist + " - " + title + "(" + timesPlayed + ")";
+	};
+};
+
+def Set := jlobby.java.util.HashSet;
+def THRESHOLD := 0.25;
+
+defstripe MusicPlayer;
+
+def MobiTunesPrototype := object: {
+	def myLib := Set.new(); // the local user's songs library
+	def userName := jlobby.java.lang.System.getProperty("user.name");
+	
+  def init(userName) {
+	  self.userName := userName;
+  };
+
+  def interface := object: {
+		// returns a session object encapsulating the state of the music library exchange process
+		def openSession(remoteUser) {
+			def senderLib := Set.new(); // to store sender's music library
+			
+			// garbage collect resources held by this session upon disconnection
+			/*when: remotePlayer disconnected: {
+				senderLib := nil;
+			};*/
+
+			object: {
+	      def downloadSong(artist, title) {
+		      notification("downloaded song: " + artist + " - " + title + " from " + remoteUser);
+		      senderLib.add(Song.new(artist, title));
+		      "ok"; // tell sender that song was successfully received
+	      };
+	      def endExchange() {
+		      notification("finished exchanging library with " + remoteUser);
+		      senderLib.removeAll(myLib);
+				  def matchRatio := senderLib.size() / (myLib.size()+0.1);
+					if: (matchRatio >= THRESHOLD) then: {
+					  notification("Found user ", remoteUser, " with similar taste in music (", matchRatio ,"%)");
+					};
+			  };
+		  };
+	  };
+
+	  def getSizeOfLibrary() { myLib.size() };
+  };
+
+   // upon discovery, this peer pushes its music library to the remote peer
+   def goOnline() {
+	   export: interface as: MusicPlayer;
+	
+	   def musicPlayerFuture := ambient: MusicPlayer;
+     when: musicPlayerFuture becomes: { |ambientReference|
+	
+	     notification("discovered new music player: " + ambientReference);
+	
+	     def session := ambientReference<-openSession(userName);
+	
+		   // Library Exchange Protocol
+		   def iterator := myLib.iterator(); // to iterate over own music library
+		   def sendSongs() { // auxiliary function to send each song
+		     if: (iterator.hasNext()) then: {
+		       def song := iterator.next();
+		       notification(userName, " is sending song: " + song.artist + " - " + song.title);
+		       when: session<-downloadSong(song.artist, song.title) becomes: { |ack|
+			       notification(userName, " successfully sent song " + artist + " - " + title);
+		         sendSongs(); // recursive call to send the rest of the songs
+		       } catch: { |exception| nil /* stops the exchange */ };
+		     } else: {
+			     notification(userName, " has sent entire library, stopping exchange");
+		       session<-endExchange();
+		     }
+		   };
+		
+		   notification(userName, " starting to send songs");
+		   sendSongs();
+		
+		   // failure handling
+	     when: ambientReference disconnected: {
+		     notification("music player disconnected: ", ambientReference);
+		     // do nothing upon disconnection: keeps the session alive until reconnect
+		     // alternative strategy is to clean up the session:
+		
+		     // discard all messages still buffered by the ref + resolve their futures
+		     // with exception + respond to all future incoming messages by resolving their
+		     // future with an exception
+		     /*rebind: session to: (object: { nil } mirroredBy: (mirror: {
+			     def doesNotUnderStand(selector) {
+				     defstripe DisconnectedException <: /.at.stripes.Exception;
+				     raise: object: { nil } stripedWith: [ DisconnectedException ]
+			     };
+		     }));*/
+		
+		   };
+		   when: ambientReference reconnected: {
+			   notification("music player reconnected: ", ambientReference);
+		   };
+		};
+	};
+	
+	def addSong(artist, title) {
+		myLib.add(Song.new(artist, title));
+	};
+	
+};
