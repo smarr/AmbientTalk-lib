@@ -52,7 +52,7 @@ def addListenerMessage := let: {
 	// create a message manually, before the futures protocol is activated.
 	// actor.createMessage(sender, selector, [arguments], [stripes])
 	def defaultListenerMessage := 
-		actor.createMessage( nil, `addResolutionListener, [ `placeholderForActualListener ] , [ FutureMessage ] );
+		actor.createMessage(`addResolutionListener, [ `placeholderForActualListener ] , [ FutureMessage ] );
 	
 	{ | listener | 
 		// create a new message
