@@ -44,10 +44,6 @@ import /.at.lang.ambientrefs; // for ambient:
 import /.at.lang.futures; // for when:becomes:
 enableFutures();
 
-def notification(@texts) {
-	system.println("[mobiTunes] ", @texts);
-};
-
 def Song := object: {
 	def artist := nil;
 	def title := nil;
@@ -58,7 +54,7 @@ def Song := object: {
 		self.timesPlayed := 0;
 	};
 	def ==(other) {
-		(artist == other.artist) && (title == other.title);
+		(artist == other.artist) & (title == other.title);
 	};
 	def play() {
 		timesPlayed := timesPlayed + 1;
@@ -68,52 +64,64 @@ def Song := object: {
 	};
 };
 
-def Set := jlobby.java.util.HashSet;
-def THRESHOLD := 0.25;
+def Vector := jlobby.java.util.Vector;
+def THRESHOLD := 25; // 25% match
 
 defstripe MusicPlayer;
 
 def MobiTunesPrototype := object: {
-	def myLib := Set.new(); // the local user's songs library
+	def myLib := Vector.new(); // the local user's songs library
 	def userName := jlobby.java.lang.System.getProperty("user.name");
 	
   def init(userName) {
 	  self.userName := userName;
+	  myLib := Vector.new();
   };
 
-  def interface := object: {
-		// returns a session object encapsulating the state of the music library exchange process
-		def openSession(remoteUser) {
-			def senderLib := Set.new(); // to store sender's music library
-			
-			// garbage collect resources held by this session upon disconnection
-			/*when: remotePlayer disconnected: {
-				senderLib := nil;
-			};*/
+	def notification(@texts) {
+		system.println("[mobiTunes "+userName+"] ", @texts);
+	};
 
-			object: {
-	      def downloadSong(artist, title) {
-		      notification("downloaded song: " + artist + " - " + title + " from " + remoteUser);
-		      senderLib.add(Song.new(artist, title));
-		      "ok"; // tell sender that song was successfully received
-	      };
-	      def endExchange() {
-		      notification("finished exchanging library with " + remoteUser);
-		      senderLib.removeAll(myLib);
-				  def matchRatio := senderLib.size() / (myLib.size()+0.1);
-					if: (matchRatio >= THRESHOLD) then: {
-					  notification("Found user ", remoteUser, " with similar taste in music (", matchRatio ,"%)");
-					};
+  def createInterface() {
+		object: {
+			// returns a session object encapsulating the state of the music library exchange process
+			def openSession(remoteUser) {
+				notification("opening new session for " + remoteUser);
+				def senderLib := Vector.new(); // to store sender's music library
+			
+				// garbage collect resources held by this session upon disconnection
+				/*when: remotePlayer disconnected: {
+					senderLib := nil;
+				};*/
+
+				object: {
+		      def downloadSong(artist, title) {
+			      notification("downloaded song: " + artist + " - " + title + " from " + remoteUser);
+			      senderLib.add(Song.new(artist, title));
+			      "ok"; // tell sender that song was successfully received
+			      "downloaded " + artist + " - " + title;
+		      };
+		      def endExchange() {
+			      notification("finished exchanging library with " + remoteUser + " sharing " + senderLib.size() + " songs");
+			      senderLib.retainAll(myLib);
+					  def matchRatio := (senderLib.size() * 100 / (myLib.size()+0.01)).round();
+						if: (matchRatio >= THRESHOLD) then: {
+						  notification("Found user ", remoteUser, " with similar taste in music (",matchRatio,"%)");
+						} else: {
+							notification("User ", remoteUser, " does not share your taste in music (",matchRatio,"%)");
+						};
+						"done";
+				  };
 			  };
 		  };
-	  };
 
-	  def getSizeOfLibrary() { myLib.size() };
+		  def getSizeOfLibrary() { myLib.size() };
+	  };
   };
 
    // upon discovery, this peer pushes its music library to the remote peer
    def goOnline() {
-	   export: interface as: MusicPlayer;
+	   export: createInterface() as: MusicPlayer;
 	
 	   def musicPlayerFuture := ambient: MusicPlayer;
      when: musicPlayerFuture becomes: { |ambientReference|
@@ -127,18 +135,19 @@ def MobiTunesPrototype := object: {
 		   def sendSongs() { // auxiliary function to send each song
 		     if: (iterator.hasNext()) then: {
 		       def song := iterator.next();
-		       notification(userName, " is sending song: " + song.artist + " - " + song.title);
+		       notification("sending song: " + song.artist + " - " + song.title);
 		       when: session<-downloadSong(song.artist, song.title) becomes: { |ack|
-			       notification(userName, " successfully sent song " + artist + " - " + title);
+			       notification("successfully sent song " + song.artist + " - " + song.title);
 		         sendSongs(); // recursive call to send the rest of the songs
-		       } catch: { |exception| nil /* stops the exchange */ };
+		       } catch: { |exception| notification("stopping exchange: " + exception) };
 		     } else: {
-			     notification(userName, " has sent entire library, stopping exchange");
+			     notification("sent entire library, stopping exchange");
 		       session<-endExchange();
-		     }
+		     };
+		     nil;
 		   };
 		
-		   notification(userName, " starting to send songs");
+		   notification("starting to send songs");
 		   sendSongs();
 		
 		   // failure handling
