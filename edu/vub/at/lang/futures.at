@@ -110,7 +110,7 @@ def FutureMirror := mirror: {
 				subscribers := [];
 			};	
 		};
-		value;
+		nil;
 	};
 
 	def ruin(exception) {
@@ -126,7 +126,7 @@ def FutureMirror := mirror: {
 			subscribers.each: { |sub| sub<-notifyRuined(exception) };
 			subscribers := [];
 		};
-		exception;
+		nil;
 	};
 
 	// adds a resolution listener to the future
@@ -142,6 +142,7 @@ def FutureMirror := mirror: {
 			  subscribers := subscribers + [ sub ];	
 			}
 		};
+		nil;
 	};
 
 	// hook into the meta-object protocol by overriding meta_receive
@@ -231,9 +232,10 @@ def FuturesModule := object: {
 			} catch: Exception using: {|e|
 				resolver.ruin(e);
 			};
+			nil;
 		};
 		future <+ (addListenerMessage(object: {
-			def notifyResolved(val) { notify(resolvedBlock, val) };
+			def notifyResolved(val) { notify(resolvedBlock, val); };
 			def notifyRuined(exc) {
 				if: (is: exc stripedWith: excType) then: {
 					notify(excBlock, exc);
@@ -243,70 +245,77 @@ def FuturesModule := object: {
 		whenFuture; // when returns a future itself
 	};
 
+  defstripe FuturesModule;
+  
 	// install the futures protocol on the invoking actor,
 	// returns the previously active protocol
 	def enableFutures() {
-		// before installing changes to the creation of messages, create messages that will be used internally
-		// to resolve or ruin the futures. If these messages are not created up front they will be subject to 
-		// the futures protocol themselves, resulting in an endless cycle of messages if the receiver also has
-		// futures enabled.
-		def resolveMsg := <- resolve( `placeHolderForReturnValue  );
-		def ruinMsg    := <- ruin( `placeHolderForRaisedException );
+		
+		// do not load the futures module twice!
+		if: !(is: actor stripedWith: FuturesModule) then: {
+			// before installing changes to the creation of messages, create messages that will be used internally
+			// to resolve or ruin the futures. If these messages are not created up front they will be subject to 
+			// the futures protocol themselves, resulting in an endless cycle of messages if the receiver also has
+			// futures enabled.
+			system.println("[futures.at] enabling futures on actor " + actor);
+			def resolveMsg := <- resolve( `placeHolderForReturnValue  );
+			def ruinMsg    := <- ruin( `placeHolderForRaisedException );
 
-		// the futures protocol by default extends the currently active protocol
-		actor.install: (extend: actor with: {
-			def createMessage(@args) {
-				// perform default message creation behaviour
-				def msg := super^createMessage(@args);
+			// the futures protocol by default extends the currently active protocol
+			actor.install: (extend: actor with: {
+				def createMessage(@args) {
+					// perform default message creation behaviour
+					def msg := super^createMessage(@args);
 
-				// attach the resolver for a future to the message
-				def [future, resolver] := makeFuture();
-				extend: msg with: { |resolver, resolveMsg, ruinMsg |
+					// attach the resolver for a future to the message
+					def [future, resolver] := makeFuture();
+					extend: msg with: { |resolver, resolveMsg, ruinMsg |
 
-					// the process method is invoked when an async message arrives
-				  def process(behaviour) {
-						try: {
-							// delegate to parent to actually invoke the method
-							def result := super^process(behaviour);
-							// if everything goes right, resolve the attached future
-							// replace the placeholder symbol with the actual result
-							(resolveMsg.arguments)[1] := result;
+						// the process method is invoked when an async message arrives
+					  def process(behaviour) {
+							try: {
+								// delegate to parent to actually invoke the method
+								def result := super^process(behaviour);
+								// if everything goes right, resolve the attached future
+								// replace the placeholder symbol with the actual result
+								(resolveMsg.arguments)[1] := result;
 
-							// send the first-class message manually (possibly using the futures mixin)
-							resolver <+ resolveMsg; // resolver<-resolve(result)
+								// send the first-class message manually (possibly using the futures mixin)
+								resolver <+ resolveMsg; // resolver<-resolve(result)
 
-							result;
-							
-						// note that we needed to qualify the full path to the Exception stripe:
-						// the Exception variable defined above is out of scope since this message is an isolate!
-						} catch: /.at.stripes.Exception using: { |e|
+								result;
+
 							// note that we needed to qualify the full path to the Exception stripe:
 							// the Exception variable defined above is out of scope since this message is an isolate!
+							} catch: /.at.stripes.Exception using: { |e|
+								// note that we needed to qualify the full path to the Exception stripe:
+								// the Exception variable defined above is out of scope since this message is an isolate!
 
-							// replace the placeholder symbol with the actual exception
-							(ruinMsg.arguments)[1] := e;
+								// replace the placeholder symbol with the actual exception
+								(ruinMsg.arguments)[1] := e;
 
-							// send the first-class message manually (possibly using the futures mixin)
-							resolver <+ ruinMsg; // resolver<-ruin(e)
-							
-							// re-raise the caught exception
-							raise: e;
+								// send the first-class message manually (possibly using the futures mixin)
+								resolver <+ ruinMsg; // resolver<-ruin(e)
+
+								// re-raise the caught exception
+								raise: e;
+							};
 						};
-					};
-			  };
-			  // it is allowed, but not necessary to stripe the message extension, because
-			  // objects are 'automatically' striped with their parent's stripes
-			  //stripedWith: [ /.at.stripes.AsyncMessage ];
-			};
-			def send(msg) {
-				def result := super^send(msg);
-				// return value now becomes the message's future, if a resolver for it is attached to the message
-				if: (does: msg understand: `resolver) then: {
-					msg.resolver.future;
-				} else: {
-					result;
-				}
-			};
-		});
+				  };
+				  // it is allowed, but not necessary to stripe the message extension, because
+				  // objects are 'automatically' striped with their parent's stripes
+				  //stripedWith: [ /.at.stripes.AsyncMessage ];
+				};
+				def send(msg) {
+					def result := super^send(msg);
+					// return value now becomes the message's future, if a resolver for it is attached to the message
+					if: (does: msg understand: `resolver) then: {
+						msg.resolver.future;
+					} else: {
+						result;
+					}
+				};
+			} stripedWith: [ FuturesModule ]);
+		}
 	};
 };
