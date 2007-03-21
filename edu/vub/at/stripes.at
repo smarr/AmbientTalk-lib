@@ -3,6 +3,9 @@
 // defines whether an object is an isolate or not
 defstripe Isolate;
 
+// defines whether a message is directed to the base object or its mirror
+defstripe Meta;
+
 defstripe Boolean;
 defstripe Closure;
 defstripe Context;
@@ -11,6 +14,7 @@ defstripe Handler;
 defstripe Method;
 defstripe Message;
 defstripe MethodInvocation <: Message;
+defstripe Delegation <: Message;
 defstripe AsyncMessage <: Message;
 defstripe Mirror;
 defstripe ActorMirror;

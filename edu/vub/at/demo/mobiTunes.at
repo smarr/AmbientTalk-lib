@@ -42,7 +42,7 @@
 
 import /.at.lang.ambientrefs; // for ambient:
 import /.at.lang.futures; // for when:becomes:
-enableFutures(); // from now on, using <- returns a future rather than nil
+enableFutures(true); // from now on, using <- returns a future rather than nil
 
 // the library consists of simple song objects
 def Song := object: {
@@ -154,7 +154,7 @@ def MobiTunesPrototype := object: {
 		       } catch: { |exception| notification("stopping exchange: " + exception) };
 		     } else: {
 			     // all songs sent, signal the end of the exchange
-		       session<-endExchange();
+		       session<-endExchange()@OneWayMessage;
 		     };
 		     // it is better to return nil than to return a future that will resolve the future
 		     // of the previous recursive call to sendSongs()
@@ -192,3 +192,24 @@ def MobiTunesPrototype := object: {
 	};
 	
 };
+
+// DEMO: run within one VM, creates two local mobiTunes applications, one within
+// the root actor, the other within another local actor
+/*
+def peerA := /.at.demo.mobiTunes.new("A");
+peerA.addSong("1", "AB");
+peerA.addSong("2", "AB");
+peerA.addSong("3", "A");
+peerA.goOnline();
+def otherPeerHost := actor: {
+  def peerB := /.at.demo.mobiTunes.new("B");
+  peerB.addSong("1", "AB");
+  peerB.addSong("2", "AB");
+  peerB.addSong("3", "B");
+  peerB.addSong("4", "B");
+  peerB.addSong("5", "B");
+  peerB.addSong("6", "B");
+  def start() { peerB.goOnline() };
+};
+otherPeerHost<-start();
+*/

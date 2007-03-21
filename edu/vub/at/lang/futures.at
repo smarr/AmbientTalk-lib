@@ -38,36 +38,18 @@ def RUINED := 2;
 // all future objects are marked with this stripe
 defstripe Future;
 
-// To register a when observer on a future, a message needs to be sent to its mirror
-// This would only be possible if the mirror is accessible (i.e. for a local future)
-// This restriction is avoided through the introduction of a FutureMessage stripe:
-// Messages striped with it will be handled by the future's mirror rather than being
-// forwarded when the result becomes available.
+// all future-carrying messages are marked with this stripe
 defstripe FutureMessage;
 
-// auxiliary function to create an addResolutionListener message which should not be subject
-// to the futures protocol itself
-def addListenerMessage := let: {
-	
-	// create a message manually, before the futures protocol is activated.
-	// actor.createMessage(sender, selector, [arguments], [stripes])
-	def defaultListenerMessage := 
-		actor.createMessage(`addResolutionListener, [ `placeholderForActualListener ] , [ FutureMessage ] );
-	
-	{ | listener | 
-		// create a new message
-		def msg := clone: defaultListenerMessage;
-		
-		// replace the placeholder argument with the actual listener
-		(msg.arguments)[1] := listener;
-		msg;
-	};
-};
+// stripe that signifies that no future should be attached to a message
+defstripe OneWayMessage;
 
-// auxiliary function to check whether an object understands a message
-def does: object understand: selector {
-	(reflect: object).respondsTo(selector)
-};
+// To register a when-observer on a future, a message needs to be sent to its mirror
+// This would only be possible on far references to futures if an explicit additional
+// far reference to its mirror would be passed. This restriction is avoided through the
+// introduction of a MetaMessage stripe: messages striped with it will be handled by the
+// future's mirror rather than being forwarded to the actual principal when the future is resolved.
+defstripe MetaMessage;
 
 // the mirror of a Future object
 def FutureMirror := mirror: {
@@ -90,7 +72,7 @@ def FutureMirror := mirror: {
 		// is the future resolved by another future?
 		if: (is: value stripedWith: Future) then: {
 			// register this future as a listener with the resolved future value
-			value <+ addListenerMessage(object: {
+			value<-addResolutionListener(object: {
 				def notifyResolved(val) {
 					// re-resolve this future with the actual value
 					resolve(val);
@@ -99,14 +81,16 @@ def FutureMirror := mirror: {
 					// ruin this future
 					ruin(exc);
 				}
-			});
+		  // note that <-addResolutionListener is a message directed to the future's mirror
+		  // and that no future return value is required
+			})@[MetaMessage, OneWayMessage];
 		} else: {
 			if: (state == UNRESOLVED) then: {
 				state := RESOLVED;
 				resolvedValue := value;
 				inbox.each: { |msg| value <+ msg };
 				inbox := [];
-				subscribers.each: { |sub| sub<-notifyResolved(value) };
+				subscribers.each: { |sub| sub<-notifyResolved(value)@OneWayMessage };
 				subscribers := [];
 			};	
 		};
@@ -118,12 +102,12 @@ def FutureMirror := mirror: {
 			state := RUINED;
 			resolvedValue := exception;
 			inbox.each: { |msg|
-				(does: msg understand: `resolver).ifTrue: {
-					msg.resolver<-ruin(exception);
+				if: (is: msg stripedWith: FutureMessage) then: {
+					msg.resolver<-ruin(exception)@OneWayMessage;
 				};
 			};
 			inbox := [];
-			subscribers.each: { |sub| sub<-notifyRuined(exception) };
+			subscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
 			subscribers := [];
 		};
 		nil;
@@ -134,10 +118,10 @@ def FutureMirror := mirror: {
 	def addResolutionListener(sub) {
 		// if future has already been resolved/ruined, notify listener immediately
 		if: (state == RESOLVED) then: {
-			sub<-notifyResolved(resolvedValue);
+			sub<-notifyResolved(resolvedValue)@OneWayMessage;
 		} else: {
 			if: (state == RUINED) then: {
-				sub<-notifyRuined(resolvedValue);
+				sub<-notifyRuined(resolvedValue)@OneWayMessage;
 			} else: {
 			  subscribers := subscribers + [ sub ];	
 			}
@@ -147,7 +131,7 @@ def FutureMirror := mirror: {
 
 	// hook into the meta-object protocol by overriding meta_receive
 	def receive(msg) {
-		if: (is: msg stripedWith: FutureMessage) then: {
+		if: (is: msg stripedWith: MetaMessage) then: {
 			self <+ msg;
 		} else: {
 			// msg received by a resolved future? forward the message
@@ -155,12 +139,13 @@ def FutureMirror := mirror: {
 				resolvedValue <+ msg;
 			} else: {
 				if: (state == RUINED) then: {
-					(does: msg understand: `resolver).ifTrue: {
-						msg.resolver<-ruin(exception);
+					(is: msg stripedWith: FutureMessage).ifTrue: {
+						msg.resolver<-ruin(exception)@OneWayMessage;
 					};
 				}	else: {
 					// accumulate message in this future's inbox
 					inbox := inbox + [msg];
+					nil;
 				};
 			};
 		};
@@ -190,13 +175,55 @@ def FutureMirror := mirror: {
 	};
 };
 
-// futures are empty objects mirrored by a future mirror
-def createFuture() {
-	object: {
-		nil
-		// note that the future mirror is implicitly instantiated for each new future!
-	} stripedWith: [ Future ] mirroredBy: FutureMirror;
+def makeFuture() {
+	// futures are empty objects mirrored by a future mirror
+	// note that the future mirror is implicitly instantiated for each new future!
+	def fut := object: { nil } stripedWith: [ Future ] mirroredBy: FutureMirror;
+	
+	[ fut, object: {
+		def resolve(val) { (reflect: fut).resolve(val) };
+		def ruin(exc) { (reflect: fut).ruin(exc) };
+		def future := fut;
+	}]
 };
+
+// extend a regular asynchronous message with futures behaviour
+def futurize(msg) {
+	// attach the resolver for a future to the message
+	def [future, resolver] := makeFuture();
+
+	// extend default message with FutureMessage behaviour
+	extend: msg with: { |resolver, OneWayMessage|
+
+		// the process method is invoked when an async message arrives
+	  def process(behaviour) {
+			try: {
+				// delegate to parent to actually invoke the method
+				def result := super^process(behaviour);
+
+				// if everything goes right, resolve the attached future
+				// replace the placeholder symbol with the actual result
+				resolver<-resolve(result)@OneWayMessage;
+
+				result;
+
+			// note that we needed to qualify the full path to the Exception stripe:
+			// the Exception variable defined above is out of scope since this message is an isolate!
+			} catch: /.at.stripes.Exception using: { |e|
+				// note that we needed to qualify the full path to the Exception stripe:
+				// the Exception variable defined above is out of scope since this message is an isolate!
+
+				resolver<-ruin(e)@OneWayMessage;
+
+				// re-raise the caught exception
+				raise: e;
+			};
+		};
+	} stripedWith: [ FutureMessage ];
+};
+
+// should future-type message sending be supported for default (unannotated) messages?
+def enableFuturesOnDefaultMessages := false;
 
 // this object is returned when this file is loaded, hence
 // it is the public interface to code defined in this file
@@ -204,14 +231,7 @@ def FuturesModule := object: {
 	// support for first-class futures: returns a pair
 	// [ future, resolver]. The resolver can be used to easily resolve
 	// or ruin the corresponding future
-	def makeFuture() {
-		def fut := createFuture();
-		[ fut, object: {
-			def resolve(val) { (reflect: fut).resolve(val) };
-			def ruin(exc) { (reflect: fut).ruin(exc) };
-			def future := fut;
-		}]
-	};
+  def makeFuture := makeFuture;
 
 	// when-catch support, version without a catch block
 	def when: future becomes: resolvedBlock {
@@ -234,22 +254,41 @@ def FuturesModule := object: {
 			};
 			nil;
 		};
-		future <+ (addListenerMessage(object: {
+		future<-addResolutionListener(object: {
 			def notifyResolved(val) { notify(resolvedBlock, val); };
 			def notifyRuined(exc) {
 				if: (is: exc stripedWith: excType) then: {
 					notify(excBlock, exc);
 				};
 			};
-		}));
+		// note that <-addResolutionListener is a message directed to the future's mirror
+		// and that no future return value is required
+		})@[MetaMessage, OneWayMessage];
 		whenFuture; // when returns a future itself
 	};
 
+  // make the OneWayMessage stripe publicly visible
+  def OneWayMessage := OneWayMessage;
+
+  // make the FutureMessage stripe publicly visible
+  def FutureMessage := FutureMessage;
+
+  // stripe that identifies this language module
   defstripe FuturesModule;
-  
+
 	// install the futures protocol on the invoking actor,
 	// returns the previously active protocol
-	def enableFutures() {
+	// the optional argument indicates whether futures should be enabled on unannotated messages
+	// by default, futures are not enabled on unannotated messages
+	def enableFutures(enabledByDefault := false) {
+		
+		// can only change this default from 'false' to 'true'
+		// once set to 'true', the default may no longer change
+		// (as it may break existing code that relies on implicit futures)
+		if: ((!enableFuturesOnDefaultMessages) & enabledByDefault) then: {
+			system.println("[futures.at] futures are now enabled by default on " + actor);
+			enableFuturesOnDefaultMessages := enabledByDefault;
+		};
 		
 		// do not load the futures module twice!
 		if: !(is: actor stripedWith: FuturesModule) then: {
@@ -257,65 +296,50 @@ def FuturesModule := object: {
 			// to resolve or ruin the futures. If these messages are not created up front they will be subject to 
 			// the futures protocol themselves, resulting in an endless cycle of messages if the receiver also has
 			// futures enabled.
-			system.println("[futures.at] enabling futures on actor " + actor);
-			def resolveMsg := <- resolve( `placeHolderForReturnValue  );
-			def ruinMsg    := <- ruin( `placeHolderForRaisedException );
+			system.println("[futures.at] enabling futures on actor " + actor + " (default = " + enabledByDefault + ")");
 
 			// the futures protocol by default extends the currently active protocol
 			actor.install: (extend: actor with: {
-				def createMessage(@args) {
-					// perform default message creation behaviour
-					def msg := super^createMessage(@args);
-
-					// attach the resolver for a future to the message
-					def [future, resolver] := makeFuture();
-					extend: msg with: { |resolver, resolveMsg, ruinMsg |
-
-						// the process method is invoked when an async message arrives
-					  def process(behaviour) {
-							try: {
-								// delegate to parent to actually invoke the method
-								def result := super^process(behaviour);
-								// if everything goes right, resolve the attached future
-								// replace the placeholder symbol with the actual result
-								(resolveMsg.arguments)[1] := result;
-
-								// send the first-class message manually (possibly using the futures mixin)
-								resolver <+ resolveMsg; // resolver<-resolve(result)
-
-								result;
-
-							// note that we needed to qualify the full path to the Exception stripe:
-							// the Exception variable defined above is out of scope since this message is an isolate!
-							} catch: /.at.stripes.Exception using: { |e|
-								// note that we needed to qualify the full path to the Exception stripe:
-								// the Exception variable defined above is out of scope since this message is an isolate!
-
-								// replace the placeholder symbol with the actual exception
-								(ruinMsg.arguments)[1] := e;
-
-								// send the first-class message manually (possibly using the futures mixin)
-								resolver <+ ruinMsg; // resolver<-ruin(e)
-
-								// re-raise the caught exception
-								raise: e;
-							};
-						};
-				  };
-				  // it is allowed, but not necessary to stripe the message extension, because
-				  // objects are 'automatically' striped with their parent's stripes
-				  //stripedWith: [ /.at.stripes.AsyncMessage ];
-				};
-				def send(msg) {
-					def result := super^send(msg);
-					// return value now becomes the message's future, if a resolver for it is attached to the message
-					if: (does: msg understand: `resolver) then: {
-						msg.resolver.future;
+				def createMessage(sel, args, stripes) {
+					// first, create a regular message
+					def msg := super^createMessage(sel, args, stripes);
+					
+					// do we need to support futures by default on all messages?
+					if: enableFuturesOnDefaultMessages then: {
+						// if the message was annotated with OneWayMessage stripe, override this behaviour
+						// and simply return the regular message
+						if: (is: msg stripedWith: OneWayMessage) then: {
+							// default = FutureMessage, overridden by OneWayMessage, so return normal message
+							msg;
+						} else: {
+							// default = FutureMessage, so attach future behaviour
+							futurize(msg);
+						}
 					} else: {
-						result;
+						// if the message was explicitly annotated with FutureMessage stripe, activate
+						// the futures behaviour
+						if: (is: msg stripedWith: FutureMessage) then: {
+							// default = OneWayMessage, overridden by FutureMessage, so attach future behaviour
+							futurize(msg);
+						} else: {
+							// default = OneWayMessage, so return the normal message
+							msg;
+						}
 					}
 				};
-			} stripedWith: [ FuturesModule ]);
-		}
-	};
+			
+			  def send(msg) {
+				  def result := super^send(msg);
+				  // for a future message, the return value now becomes the message's future
+				  if: (is: msg stripedWith: FutureMessage) then: {
+					  msg.resolver.future;
+				  } else: {
+					  result;
+				  };
+			  };	
+		  } stripedWith: [ FuturesModule ]);
+	  } else: {
+		  actor; // return the current actor protocol
+	  };
+  };
 };
