@@ -29,46 +29,139 @@
 /*
  * Defines unit test code for performing unit tests in AT/2 itself
  */
-def XAssertionFailed := object: {
-	def reason := "";
-	def init(reason) { self.reason := reason };
+defstripe AssertionFailed <: /.at.stripes.Exception;
+def XAssertionFailed := /.at.exceptions.createException(AssertionFailed);
+
+def assert(bln, reason) {
+	bln.ifFalse: { raise: XAssertionFailed.new(reason) }
 };
 
-def assert(bln, optreason, defaultreason) {
-	bln.ifFalse: { raise: XAssertionFailed.new(if: (optreason.length > 0)
-		                                         then: { optreason[1] } else: { defaultreason }) }
+def retrieveTestMethodNames(obj) {
+	def methodNames := [];
+	while: { !(nil == obj) } do: {
+		def localTestMethods := ((reflect: obj).listMethods().filter: { |mth| mth.name.text ~= "test.*" });
+		methodNames := methodNames + (localTestMethods.map: { |mth| mth.name });
+		obj := obj.super;
+	};
+	methodNames;
 };
 
-def retrieveTestMethods(obj) {
-	def allMethods := (reflect: obj).listMethods().base;
-	allMethods.filter: { |mth| mth.name ~= "test*" };
-	// TODO: should retrieve test methods of parents as well
-}
+def consoleReporter := object: {
+	def numSuccess := 0;
+	def numFailed := 0;
+	def numError := 0;
+	def init() {
+		numSuccess := 0;
+		numFailed := 0;
+		numError := 0;
+	};
+	def start(testName) {
+		system.println("Starting unit test " + testName);
+	};
+	def success(methName) {
+		numSuccess := numSuccess + 1;
+		system.println("Test " + methName + " ok");
+	};
+	def failure(methName, assertionFailedExc) {
+		numFailed := numFailed + 1;
+		system.println("Test " + methName + " failed (reason = "+assertionFailedExc.message+")");
+	};
+	def error(methName, exc) {
+		numError := numError + 1;
+		system.println("Error in test " + methName + ": "+exc);
+		system.println(exc.message);
+		system.println(exc.stackTrace);
+	};
+	def stop(testName) {
+		system.println("Unit test " + testName + " done. Success: " + numSuccess + " Failed: " + numFailed + " Error: " + numError);
+	};
+};
 
 // unit tests should delegate to this object
-object: {
+def UnitTest := object: {
+  def name := "Unnamed";
+
+  def init(newname) {
+	  name := newname;
+  };
 
 	// methods to assert the validity of programs
-	def assertTrue(bln, @reason) { assert(bln, reason, "expected true, given false") };
-	def assertFalse(bln, @reason) { assert(!bln, reason, "expected true, given false") };
-	def assertEquals(o1,o2, @reason) { assert(o1==o2, reason, "expected "+o1+" to be equal to "+o2) };
-	def assertNotEquals(o1,o2, @reason) { assert(o1!=o2, reason, "expected "+o1+" not to be equal to "+o2) };
-	def assertLessThan(o1,o2, @reason) { assert(o1<o2, reason, "expected "+o1+" to be less than "+o2) };
-	def assertGreaterThan(o1,o2, @reason) { assert(o1>o2, reason, "expected "+o1+" to be greater than "+o2) };
-	def assertLessThanOrEquals(o1,o2, @reason) { assert(o1<=o2, reason, "expected "+o1+" to be <= than "+o2) };
-	def assertGreaterThanOrEquals(o1,o2, @reason) { assert(o1>=o2, reason, "expected "+o1+" to be >= than "+o2) };
-	def assertMatches(str, pattern, @reason) { assert(str ~= pattern, reason, "expected "+str+" to match "+pattern) };
+	def assertTrue(bln, reason := "expected true, given false") { assert(bln, reason) };
+	def assertFalse(bln, reason := "expected false, given true") { assert(!bln, reason) };
+	def assertEquals(o1,o2, reason := "expected "+o1+" to be equal to "+o2) { assert(o1==o2, reason) };
+	def assertNotEquals(o1,o2, reason := "expected "+o1+" not to be equal to "+o2) { assert(!(o1==o2), reason) };
+	def assertLessThan(o1,o2, reason := "expected "+o1+" to be less than "+o2) { assert(o1<o2, reason) };
+	def assertGreaterThan(o1,o2, reason := "expected "+o1+" to be greater than "+o2) { assert(o1>o2, reason) };
+	def assertLessThanOrEquals(o1,o2, reason := "expected "+o1+" to be <= than "+o2) { assert(o1<=o2, reason) };
+	def assertGreaterThanOrEquals(o1,o2, reason := "expected "+o1+" to be >= than "+o2) { assert(o1>=o2, reason) };
+	def assertMatches(str, pattern, reason := "expected "+str+" to match "+pattern) { assert(str ~= pattern, reason) };
+	def assert: excType raisedIn: code {
+		{ |return|
+			try: code
+		  catch: excType using: { |e|
+			  return("ok");
+		  };
+		  raise: XAssertionFailed.new("Expected exception " + excType + " was not raised");
+		}.escape();
+	};
 	
-	def runTest() {
-		def succeeded := vector.new();
-		def failed := vector.new();
-		retrieveTestMethods(self).each: { |meth|
+	def setUp() { nil };
+	def tearDown() { nil };
+	
+	def runTest(reporter := consoleReporter.new()) {
+		reporter.start(self.name);
+		retrieveTestMethodNames(self).each: { |methName|
 			try: {
-				// TODO: should run setup first
-				meth.apply([], /.at.reflection.toContext(self));
-				succeeded.add(meth);
-			} catch: XAssertionFailed using: {|e| failed.add(meth) }
-			// TODO: finally: run teardown
-		}
+				self.setUp();
+				(reflect: self).select(self, methName).apply([]);
+				self.tearDown();
+				reporter.success(methName);
+			} catch: AssertionFailed using: {|e|
+				reporter.failure(methName, e);
+			} catch: /.at.stripes.Exception using: { |e|
+				reporter.error(methName, e);
+			};
+		};
+		reporter.stop(self.name);
+	};
+};
+
+def TestModule := object: {
+	def UnitTest := UnitTest;
+	
+	def ConsoleReporter := consoleReporter;
+	
+	def testIt() {
+		// a unit test to test the unit test
+		def weekDayTest := extend: UnitTest.new("WeekDayTest") with: {
+		  def dow := ["mo","tue","wed","thu","fri","sat","sun"];
+
+		  def testEquals() { self.assertEquals(7, dow.length) };
+		  def testTrue() { self.assertTrue(dow[1]==dow[1]) };
+		  def testFalse() { self.assertFalse(dow[2]==dow[3]) };
+		  def testNotEquals() { self.assertNotEquals(dow[2],dow[3]) };
+		  def testLessThan() { self.assertLessThan(dow[1].explode().length, dow[2].explode().length) };
+		  def testException() { self.assert: /.at.stripes.IndexOutOfBounds raisedIn: { dow[8] } };
+
+		  def testError() { self.assertEquals("sun", dow[8]) }; // raises index out of bounds -> error
+		  def testFailure() { self.assertNotEquals(dow[2], dow[2]) }; // test correct handling of failure
+		};
+
+		// expecting  6 success, 1 failure and 1 error
+		def unittesttester := object: {
+			def succ := 0; def fail := 0; def err := 0;
+			def start(@args) { nil };
+			def success(@args) { succ := succ + 1 };
+			def failure(@args) { fail := fail + 1 };
+			def error(@args) { err := err + 1 };
+			def stop(@args) {
+				if: !((succ == 6) & (fail == 1) & (err == 1)) then: {
+					system.println("Unit Test self-checking test failed!");
+				} else: {
+					system.println("Unit test module ok");
+				}
+			};
+		};
+		weekDayTest.runTest(unittesttester);	
 	}
 }
