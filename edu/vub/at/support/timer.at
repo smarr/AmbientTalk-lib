@@ -1,0 +1,99 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/* The TimerModule makes use of java.util.Timer to be able to schedule
+ * code for execution at a later point in time. Code can be scheduled
+ * for execution either once or at regular intervals. Scheduled pieces
+ * of code can be cancelled prematurely.
+ *
+ * @author tvcutsem
+ */
+
+// support class that allows you to create a TimerTask by means of a Runnable
+// this is necessary because AT objects can only be passed as interface types.
+def RunnableTimerTask := jlobby.edu.vub.at.support.RunnableTimerTask;
+def Timer := jlobby.java.util.Timer;
+def TimerTask := jlobby.java.util.TimerTask;
+def long := jlobby.java.lang.Long.TYPE;
+
+def theTimer := Timer.new();
+def scheduleMethod := theTimer.schedule.cast(TimerTask, long);
+def scheduleAtFixedRateMethod := theTimer.schedule.cast(TimerTask, long, long);
+
+def TimerModule := object: {
+	
+	// convert AmbientTalk number to a Java long representing # millisec
+	def millisec(ms) { jlobby.java.lang.Integer.new(ms).longValue() };
+	def seconds(s) { millisec(s*1000) };
+	def minutes(m) { seconds(s*60) };
+	
+	// when the timeout has elapsed, invoke the given code block
+	// returns a subscription object that can be used to cancel execution of the block
+	def when: timeout elapsed: code {
+		def ttask := RunnableTimerTask.new(object: {
+			def run() { code() };
+		});
+		scheduleMethod(ttask, timeout);
+		object: {
+			def cancel() { ttask.cancel() }
+		}
+	};
+	
+	// each timeout milliseconds, invoke the given code block
+	// returns a subscription object that can be used to cancel execution of the block
+	def whenever: timeout elapsed: code {
+		def ttask := RunnableTimerTask.new(object: {
+			def run() { code() };
+		});
+		scheduleAtFixedRateMethod(ttask, timeout, timeout);
+		object: {
+			def cancel() { ttask.cancel() }
+		}
+	};
+	
+	def testIt() {
+		def TimerTest := extend: /.at.unit.test.UnitTest.new("TimerTest") with: {
+			def testWhenElapsed() {
+				when: seconds(3) elapsed: {
+					system.println("when:elapsed: works (3 sec)");
+				};
+			};
+			def testWhenEverElapsed() {
+				def run := 0;
+				def sub := whenever: seconds(2) elapsed: {
+					run := run + 1;
+					system.println("whenever:elapsed: works (2 sec) (run "+run+")");
+					if: (run == 3) then: {
+						sub.cancel();
+					};
+				};
+			};
+		};
+		TimerTest.runTest();
+	};
+	
+};
