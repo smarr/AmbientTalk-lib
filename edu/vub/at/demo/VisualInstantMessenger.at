@@ -1,0 +1,99 @@
+/*
+ * This program demonstrates an extremely simple peer-to-peer instant messenger
+ * written in AmbientTalk/2. It demonstrates peer discovery and how to deal with
+ * disconnections.
+ *
+ * @author tvcutsem
+ */
+ 
+def IMGUI := jlobby.edu.vub.at.demo.IMGUI;
+
+network.online();
+ 
+def createInstantMessenger() {
+
+  def username := "anonymous";
+
+  defstripe InstantMessenger;
+
+  def TextMessage := isolate: {
+	  def from := nil;
+	  def content := nil;
+	  def init(f,c) {
+		  from := f;
+		  content := c;
+	  };
+  };
+
+  def buddyList := jlobby.java.util.Vector.new();
+
+  def printMessage(textMessage) {
+    myIMGUI.printTextMessage(textMessage.from + ": " + textMessage.content);
+    //system.println(textMessage.from + ": " + textMessage.content)
+  };
+
+  def localInterface := object: {
+      def setUsername(un) { username := un; startTheMessenger() };
+      // broadcast message to all connected buddies
+	  def sendTextMessage(string) {
+	    system.println("sending "+string+" to "+buddyList.size() +" buddies.");
+	    def it := buddyList.iterator();
+	    while: { it.hasNext() } do: {
+	      def buddy := it.next();
+	      system.println("sending to "+buddy.name);
+	      def msg := TextMessage.new(username, string);
+		  buddy.ref<-receiveTextMessage(msg, object: {
+		    def resolve() {
+			  printMessage(msg);
+		    }
+		  });
+	    }
+    };
+  };
+  
+  def myIMGUI := IMGUI.new(localInterface);
+
+  def remoteInterface := object: {
+    def receiveTextMessage(textMessage, future) {
+      printMessage(textMessage);
+      future<-resolve();
+    };
+    def getName(future) { future<-resolve(username) };
+  };
+  
+  def startTheMessenger() {
+    export: remoteInterface as: InstantMessenger;
+  
+    whenever: InstantMessenger discovered: { |messenger|
+	  messenger<-getName(object: {
+		  def resolve(name) {
+			  if: !(buddyList.contains(name)) then: {
+				  buddyList.add(object: {
+				    def name := name;
+				    def ref := messenger;
+				    def ==(other) { name == other.name };
+				  });
+				  myIMGUI.printTextMessage("Discovered buddy: " + name);
+				  when: messenger disconnected: {
+				      myIMGUI.printTextMessage("Buddy offline: " + name);
+					  //system.println("Buddy offline: " + name);
+				  };
+				  when: messenger reconnected: {
+				      myIMGUI.printTextMessage("Buddy online: " + name);
+					  //system.println();
+				  };
+			  };
+		  };
+	  });
+	};
+  };
+	
+	localInterface;
+};
+
+def testIt() {
+	network.online();
+	createInstantMessenger();
+};
+
+self
