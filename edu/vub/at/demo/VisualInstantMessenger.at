@@ -61,18 +61,25 @@ def createInstantMessenger() {
     def getName(future) { future<-resolve(username) };
   };
   
+  def buddyP := object: {
+     def name;
+	 def ref;
+	 def init(name,ref) {
+	   self.name := name;
+	   self.ref := ref;
+	 };
+	 def ==(other) { name == other.name };
+  };
+  
   def startTheMessenger() {
     export: remoteInterface as: InstantMessenger;
   
     whenever: InstantMessenger discovered: { |messenger|
 	  messenger<-getName(object: {
 		  def resolve(name) {
-			  if: !(buddyList.contains(name)) then: {
-				  buddyList.add(object: {
-				    def name := name;
-				    def ref := messenger;
-				    def ==(other) { name == other.name };
-				  });
+		      def newBuddy := buddyP.new(name, messenger);
+			  if: !(buddyList.contains(newBuddy)) then: {
+				  buddyList.add(newBuddy);
 				  myIMGUI.printTextMessage("Discovered buddy: " + name);
 				  when: messenger disconnected: {
 				      myIMGUI.printTextMessage("Buddy offline: " + name);

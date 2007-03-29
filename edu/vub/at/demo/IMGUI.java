@@ -99,26 +99,6 @@ public class IMGUI extends Frame {
         outTextArea_ = new TextArea(7,20);
         bottomcontainer.add(outTextArea_);
         
-        
-        /*this.add(outTextArea_, c, TextArea.SCROLLBARS_BOTH);*/
-
-/*      inputArea_ = new TextField(16);
-        c.ipady = 0;
-        c.ipadx = 0;
-        c.gridx = 0;
-        c.gridy = 3;
-        this.add(inputArea_,c);
-        
-        inputOK_ = new Button("OK");
-        c.ipady = 0;
-        c.ipadx = 0;
-
-        c.gridx = 1;
-        c.gridy = 3;
-        this.add(inputOK_,c);
-        inputArea_.setEnabled(false);
-        inputOK_.setEnabled(false);*/
-        
         addWindowListener(new WindowAdapter() { 
             public void windowClosing(WindowEvent e) { 
               setVisible(false); 
@@ -126,11 +106,9 @@ public class IMGUI extends Frame {
               System.exit(0); 
             } 
         });
+        
         initMenu();
-        
-        System.err.println("IN CONSTRUCTOR");
         this.setVisible(true);
-        
         askForUsername();
     }
     
@@ -147,7 +125,7 @@ public class IMGUI extends Frame {
         MenuBar mb = new MenuBar();
         Menu m = new Menu("Actions");
         mb.add(m);
-        MenuItem mi = new MenuItem("Load");
+        MenuItem mi = new MenuItem("Open & Send");
         mi.addActionListener(new ActionListener() {
             public void actionPerformed(ActionEvent event) {
                 IMGUI.this.openFile();
@@ -244,7 +222,9 @@ public class IMGUI extends Frame {
         dbtn.addActionListener(new ActionListener() { 
             public void actionPerformed(ActionEvent e) {
               try {
-                atIm_.setUsername(inputArea_.getText());
+            	String username = inputArea_.getText();
+            	setTitle(getTitle() + " - " + username);
+                atIm_.setUsername(username);
               } catch (Exception e2) {
                 e2.printStackTrace(System.out);
               }
@@ -252,23 +232,6 @@ public class IMGUI extends Frame {
             }
         });
         d.setVisible(true);
-        
-/*          inputOK_.setEnabled(true);
-            inputArea_.setEnabled(true);
-        final Process process = Process.getCurrentProcess();    
-        inputOK_.addActionListener(new ActionListener() { 
-                public void actionPerformed(ActionEvent e) { 
-                    try {
-                    process._accept_(process.getCurrentCallBack(), inputArea_.getText());
-                 } catch (BadStateException ex) {
-                    process.getCurrentCallBack()._error_("Bad State", "Accept could not be continued because process was in a bad state.", null);
-                }
-                inputArea_.setText("");
-                inputOK_.removeActionListener(this);
-                inputOK_.setEnabled(false);
-                inputArea_.setEnabled(false);
-            } 
-        });     */
-        }
+    }
     
 }
