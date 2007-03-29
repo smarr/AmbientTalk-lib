@@ -26,7 +26,12 @@
  */
 
 /*
- * The meta-level implementation of the ambient references language construct
+ * The meta-level implementation of the ambient references language construct.
+ * 
+ * We distinguish between an ambient reference's 'base-level' behaviour
+ * and its 'cardinality' and 'elasticity' behaviour, which are both mixed
+ * into the base-level behaviour by means of trait composition.
+ *
  * @author tvcutsem
  */
 
@@ -66,7 +71,7 @@ def createSturdyUniRef(stripe) {
  */
 
 defstripe AmbientRef; // stripe of a base-level ambient reference
-defstripe ARefMessage; // stripe signifying that the message is destined for the AR itself
+defstripe ARefMessage <: OneWayMessage; // stripe signifying that the message is destined for the AR itself
 
 def makeAmbientRef(serviceType, TCardinality, TElasticity) {
 	object: {
@@ -74,38 +79,55 @@ def makeAmbientRef(serviceType, TCardinality, TElasticity) {
 	} stripedWith: [AmbientRef] mirroredBy: makeAmbientRefMirror(serviceType, TCardinality, TElasticity);
 };
 
+// create a new ambient reference mirror.
+// assumes that TCardinality and TElasticity have been properly initialized already
 def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 	mirror: {
-		def init(base) {
-			super^init(base); // default constructor
-			
-			// register discovery observers
-			whenever: serviceType discovered: { |potentialPrincipal|
-				debug("Potential Principal discovered: ", potentialPrincipal);
-				joinedbox.add(potentialPrincipal);
-				if: !(self.isBoundPrincipal(potentialPrincipal)) then: {
-					// dispatch to cardinality mixin
-					self.foundPrincipal(potentialPrincipal);
-				};
-				
-				def sub := when: potentialPrincipal disconnected: {
-					debug("Potential Principal lost: ", potentialPrincipal);
-					joinedbox.remove(potentialPrincipal);
-					if: (self.isBoundPrincipal(potentialPrincipal)) then: {
-						// dispatch to elasticity mixin
-						self.disconnected(potentialPrincipal);
-					};
-					sub.cancel();
-				};
-			};
-		};
-	
-	  // import cardinality and elasticity behaviour
+		
+		// import cardinality and elasticity behaviour
 	  import TCardinality;
 	  import TElasticity;
-	
-	  def inbox := vector.new(); // to store messages sent to an unbound AR
+		
+		def inbox := Vector.new(); // to store messages sent to an unbound AR
 	  def joinedbox := Vector.new(); // to store available matching objects
+		
+		def disconnectionObservers := Vector.new(); // to store when:disconnected: observers
+	  def connectionObservers := Vector.new(); // to store when:connected: observers
+		
+		// register discovery observers
+		whenever: serviceType discovered: { |potentialPrincipal|
+			debug("Base: potential principal discovered: ", potentialPrincipal);
+			joinedbox.add(potentialPrincipal);
+			if: !(self.isBoundPrincipal(potentialPrincipal)) then: {
+				// dispatch to cardinality mixin
+				self.foundPrincipal(potentialPrincipal);
+			};
+			
+			def sub := when: potentialPrincipal disconnected: {
+				debug("Base: potential principal disconnected: ", potentialPrincipal);
+				joinedbox.remove(potentialPrincipal);
+				if: (self.isBoundPrincipal(potentialPrincipal)) then: {
+					// dispatch to elasticity mixin
+					self.disconnected(potentialPrincipal);
+				};
+				sub.cancel();
+			};
+		};
+		
+		/*def init(base) {
+			super^init(base); // default constructor
+			TCardinality^init(); // initialize state imported from cardinality trait
+			TElasticity^init(); // initialize state imported from elasticity trait
+			
+			inbox := Vector.new();
+			joinedbox := Vector.new();
+			
+			disconnectionObservers := Vector.new();
+		  connectionObservers := Vector.new();
+			
+			// TODO: should have some way of initializing the state imported by traits!
+			// e.g. principals for TCardinality
+		};*/
 	
 	  // forward all messages in the inbox to the given principal
 	  def flushInbox(toPrincipal) {
@@ -120,12 +142,11 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 		  def out := (retract: ofPrincipal);
 		  // add untransmitted messages to the front of the inbox
 		  out.each: { |msg| inbox.insert(1,msg) };
+		  nil;
 	  };
 	
 	  // == observer management ==
-	  def disconnectionObservers := Vector.new(); // to store when:disconnected: observers
-	  def connectionObservers := Vector.new(); // to store when:connected: observers
-	
+
 	  def addDisconnectionObserver(obs) {
 		  disconnectionObservers.add(obs);
 		  // return a subscription object that can be used to remove the observer
@@ -133,7 +154,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 			  def cancel() { disconnectionObservers.remove(obs) }
 		  };
 	  };
-		def addconnectionObserver(obs) {
+		def addConnectionObserver(obs) {
 		  connectionObservers.add(obs);
 		  // return a subscription object that can be used to remove the observer
 		  object: {
@@ -149,7 +170,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 		
 		// received messages are either processed by mirror itself or delegated to TCardinality
 		def receive(msg) {
-			if: (is: msg stripedWith: MetaMessage) then: {
+			if: (is: msg stripedWith: ARefMessage) then: {
 				self <+ msg;
 			} else: {
 				self.acceptMessage(msg); // provided by cardinality trait
@@ -162,17 +183,36 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 			if: (`(==) == sel) then: {
 				super^invoke(rcv, sel, arg);
 			} else: {
-				raise: /.at.exceptions.XException.newWithStripe(IllegalOperation);
+				raise: /.at.exceptions.XIllegalOperation.new("cannot synchronously invoke operation " + sel + " on ambient reference " + base);
 			}
 		};
 		
-		// TODO: override meta_pass, ars should be passed as ars and not as far refs
+		def print() {
+			"<ambient "+serviceType+": "+self+">";
+		};
+		
+		def clone() {
+			makeAmbientRef(serviceType, TCardinality.new(), TElasticity.new());
+		};
+		
+		// TODO: abstract boilerplate isolate/mirror code
+		// TODO: ensure that an ambient ref has the same elasticity/cardinality at the remote end
+		// does a passed AR remain bound to same principals?
+		def pass() {
+			object: { nil } stripedWith: [/.at.stripes.Isolate] mirroredBy: (
+				extend: defaultMirror with: { |serviceType|
+					def resolve() {
+						// when arriving at the remote host, create a new local ambient reference
+						/.at.lang.ambientrefs.ambient: serviceType
+					};
+				} stripedWith: [ /.at.stripes.Isolate ]);
+		};
 	};
 };
 
 defstripe XUnimplemented <: /.at.stripes.Exception;
 def abstractMethod(name) {
-	raise: /.at.exceptions.createException(XUnimplemented);
+	raise: /.at.exceptions.createException(XUnimplemented).new("Invoked abstract method: "+name);
 };
 
 def TAbstractCardinality := object: {
@@ -190,10 +230,17 @@ def TUniRef := extend: TAbstractCardinality with: {
 	// store the single far ref to which the AR can be bound
 	// !! always access this variable using 'self' to access
 	// the field that was 'imported' into the actual AR !!
-	def principal := nil;
+	def self.principal := nil;
+	
+	// initialize this trait's state
+	// note that the 'self' prefix is used to ensure that the correct imported state is modified
+	def init() {
+		super^init();
+		self.principal := nil;
+	};
 	
 	def acceptMessage(msg) {
-		if: !(nil == principal) then: {
+		if: !(nil == self.principal) then: {
 			self.principal <+ msg; // forward message to principal
 		} else: {
 			debug("Uniref: acceptmessage: unbound, storing ",msg.selector);
@@ -203,12 +250,14 @@ def TUniRef := extend: TAbstractCardinality with: {
 	};
 	def isBoundPrincipal(p) { self.principal == p };
 	def foundPrincipal(p) {
-		if: !(nil == self.principal) then: {
+		if: (nil == self.principal) then: {
 			debug("Uniref: foundPrincipal: binding to ", p);
 			self.principal := p;
 			self.notifyObservers(self.connectionObservers, p);
 			// flush stored messages
 			self.flushInbox(p);
+		} else: {
+			debug("Uniref: foundPrincipal: already bound, ignoring ",p);
 		};
 		nil;
 	};
@@ -216,7 +265,7 @@ def TUniRef := extend: TAbstractCardinality with: {
 		debug("Uniref: lostPrincipal: unbound due to loss of ",p);
 		self.principal := nil;
 		self.notifyObservers(self.disconnectionObservers, p);
-		// retract all unsent messages to the inbox
+		// retract all unsent messages back to the inbox
 		self.retractOutbox(p);
 	};
 };
@@ -225,11 +274,20 @@ def TOmniRef := extend: TAbstractCardinality with: {
 	// store a set of currently bound principals
 	// !! always access this variable using 'self' to access
 	// the field that was 'imported' into the actual AR !!
-	def principals := Vector.new();
+	def self.principals;
+	
+	// initialize this trait's state
+	// note that the 'self' prefix is used to ensure that the correct imported state is modified
+	def init() {
+		super^init();
+		self.principals := Vector.new();
+	};
 	
 	def acceptMessage(msg) {
 		// broadcast the message to all currently connected principals
+		debug("Omniref: acceptMessage: broadcasting " + msg.selector + " to "+self.principals.length()+ " principals.");
 		self.principals.each: { |p| p <+ msg };
+		// TODO: sustained messages: place those in inbox here + register timeout
 	};
 	def isBoundPrincipal(p) { self.principals.contains(p) };
 	def foundPrincipal(p) {
@@ -237,12 +295,14 @@ def TOmniRef := extend: TAbstractCardinality with: {
 		self.principals.add(p);
 		self.notifyObservers(self.connectionObservers, p);
 		// TODO: add support for sustained and enduring messages
+		// forward all messages in inbox to new principal here
 		nil;
 	};
 	def lostPrincipal(p) {
 		debug("Omniref: lostPrincipal: removing ",p);
 		self.principals.remove(p);
 		self.notifyObservers(self.disconnectionObservers, p);
+		nil;
 	};
 };
 
@@ -251,10 +311,10 @@ def TBreakableRef := extend: TAbstractElasticity with: {
 		// dispatch to cardinality trait
 		self.lostPrincipal(principal);
 		// try to rebind to spare candidate principals
-		def idx := joinedbox.find: { |potentialP| !(self.isBoundPrincipal(potentialP)) };
+		def idx := self.joinedbox.find: { |potentialP| !(self.isBoundPrincipal(potentialP)) };
 		if: !(nil == idx) then: {
 			// found a spare principal
-			def newPrincipal := joinedbox.at(idx);
+			def newPrincipal := self.joinedbox.at(idx);
 			debug("Breakableref: erase: found spare principal: ", newPrincipal);
 			// dispatch to cardinality trait
 			self.foundPrincipal(newPrincipal);
@@ -265,29 +325,31 @@ def TBreakableRef := extend: TAbstractElasticity with: {
 def TFragileRef := extend: TBreakableRef with: {
 	def disconnected(principal) {
 		debug("Fragileref: disconnected: signalling loss of ", principal);
-		erase(principal);
+		self.erase(principal);
 	};
 };
 
 def TElasticRef := extend: TBreakableRef with: {
-	def timeout := nil;
-	def init(t) {
-		timeout := t;
+	def self.timeout;
+	
+	// if no timeout is given, reuse that of the clonee
+	def init(t := self.timeout) {
+		self.timeout := t;
 	};
 	
 	def disconnected(principal) {
 	  debug("ElasticRef: disconnected: starting timeout period for principal: ",principal);
-	  def isReconnected := false;
+	  def isDisconnected := true;
 	  def sub := when: principal reconnected: {
-		  isReconnected := true;
+		  isDisconnected := false;
 		  sub.cancel();
 	  };
-	  when: timeout elapsed: { // TODO: implement when:elapsed:
-		  if: !isReconnected then: {
+	  when: self.timeout elapsed: { // TODO: implement when:elapsed:
+		  if: isDisconnected then: {
 			  debug("ElasticRef: disconnected: principal lost: ", principal);
-			  erase(principal);
+			  self.erase(principal);
 			  sub.cancel();
-		  };
+		  }; // if principal reconnected in time, ignore this disconnection
 	  };
   };
 };
@@ -299,8 +361,71 @@ def TSturdyRef := extend: TAbstractElasticity with: {
 	};
 };
 
+def nativeWhen: farref disconnected: code {
+	when: farref disconnected: code
+};
+def nativeWhen: farref reconnected: code {
+	when: farref reconnected: code
+};
+
 def AmbientRefModule := object: {
 	def ambient: serviceType {
 		createSturdyUniRef(serviceType);
+	};
+	
+	// cardinality traits
+	def uni() { TUniRef.new() };
+	def omni() { TOmniRef.new() };
+	
+	// elasticity traits
+	def fragile() { TFragileRef.new() };
+	def elastic(timeout) { TElasticRef.new(timeout) };
+	def sturdy() { TSturdyRef.new() };
+	
+	def ambient: serviceType withCardinality: cTrait withElasticity: eTrait {
+		makeAmbientRef(serviceType, cTrait, eTrait);
+	};
+	
+	// if ambientRef is indeed an ambient reference, add an observer,
+	// otherwise perform the default behaviour
+	def when: ambientRef disconnected: code {
+		if: (is: ambientRef stripedWith: AmbientRef) then: {
+			(reflect: ambientRef).addDisconnectionObserver(code);
+		} else: {
+			nativeWhen: ambientRef disconnected: code
+		};
+	};
+	
+	// if ambientRef is indeed an ambient reference, add an observer,
+	// otherwise perform the default behaviour
+	def when: ambientRef reconnected: code {
+		if: (is: ambientRef stripedWith: AmbientRef) then: {
+			(reflect: ambientRef).addConnectionObserver(code);
+		} else: {
+			nativeWhen: ambientRef reconnected: code
+		};
+	};
+	
+	def testIt() {
+		def ARTest := extend: /.at.unit.test.UnitTest.new("AmbientRefTest") with: {
+			defstripe Foo;
+			def providerHost := actor: {
+				defstripe Foo;
+				def service := object: {
+					def testMethod(x) { system.println("testMethod invoked with x = " + x) };
+				};
+				export: service as: Foo
+			};
+			
+			/*def testFragileUni() {
+				def a := ambient: Foo withCardinality: uni() withElasticity: fragile();
+				a<-testMethod(5);
+			};*/
+			def testFragileOmni() {
+				def a := ambient: Foo withCardinality: omni() withElasticity: fragile();
+				a<-testMethod(5);
+			};
+		};
+		ARTest.runTest();
 	};
 };
