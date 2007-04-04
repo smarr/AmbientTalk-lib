@@ -61,7 +61,6 @@ defstripe SymbiosisFailure <: Exception;
 defstripe TypeMismatch <: Exception;
 defstripe UnassignableField <: Exception;
 defstripe UndefinedField <: Exception;
-defstripe CustomException <: Exception;
 defstripe JavaException <: Exception;
 defstripe ImportConflict <: Exception;
 defstripe ObjectOffline <: Exception;

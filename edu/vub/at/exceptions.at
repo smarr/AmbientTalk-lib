@@ -47,12 +47,21 @@ def IndexOutOfBoundsPrototype := extend: createException(Stripes.IndexOutOfBound
 		self.min := min;
 		self.max := max;
 		self.idx := idx;
-	};
-};
+	}; 
+} stripedWith: [ Stripes.IndexOutOfBounds ];
 
 def ExceptionModule := object: {
 	def createException := createException;
 	def XException := createException(Stripes.Exception);
-	def XIllegalOperation := createException(Stripes.IllegalOperation);
+
+	def XArityMismatch := 
+		jlobby.edu.vub.at.exceptions.XArityMismatch.new("object:", 1, 0).getAmbientTalkRepresentation();
+	def XIllegalOperation := 
+		jlobby.edu.vub.at.exceptions.XIllegalOperation.new("Synchronous communication over a far reference").getAmbientTalkRepresentation();
+	def XParseError := 
+		jlobby.edu.vub.at.exceptions.XParseError.new("def x:=nil -> did you mean: def x := nil", nil).getAmbientTalkRepresentation();
+	def XSelectorNotFound := 
+		jlobby.edu.vub.at.exceptions.XSelectorNotFound.new(`at, root).getAmbientTalkRepresentation();
+
 	def XIndexOutOfBounds := IndexOutOfBoundsPrototype;
 };
