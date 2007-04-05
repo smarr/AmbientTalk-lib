@@ -70,6 +70,7 @@ def table: size fill: closure {
 };*/
 
 def functor: closure {
+  defstripe Closure;
   def functorPrototype := object: {
     // to be overridden by children
     def run(@args) { nil };
@@ -77,7 +78,8 @@ def functor: closure {
     def apply(args) { self.run(@args) };
     def whileTrue: body { self.run.whileTrue: body };
     def getMethod() { (reflect: self.run).method };
-    def getContext() { (reflect: self.run).context };    
-  };
+    def getContext() { (reflect: self.run).context };
+    def escape() { self.run.escape() };
+  } stripedWith: [ Closure ];
   extend: functorPrototype with: closure;
 };
