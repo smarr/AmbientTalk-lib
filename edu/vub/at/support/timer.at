@@ -44,10 +44,12 @@ def theTimer := Timer.new();
 def scheduleMethod := theTimer.schedule.cast(TimerTask, long);
 def scheduleAtFixedRateMethod := theTimer.schedule.cast(TimerTask, long, long);
 
+def makeLong := /.at.support.symbiosis.long;
+
 def TimerModule := object: {
 	
 	// convert AmbientTalk number to a Java long representing # millisec
-	def millisec(ms) { jlobby.java.lang.Integer.new(ms).longValue() };
+	def millisec(ms) { makeLong(ms) };
 	def seconds(s) { millisec(s*1000) };
 	def minutes(m) { seconds(s*60) };
 	
@@ -76,21 +78,28 @@ def TimerModule := object: {
 	};
 	
 	def testIt() {
+		def FuturesModule := /.at.lang.futures; FuturesModule.enableFutures(false);
 		def TimerTest := extend: /.at.unit.test.UnitTest.new("TimerTest") with: {
-			def testWhenElapsed() {
+			def testAsyncWhenElapsed() {
+				def [fut,res] := FuturesModule.makeFuture();
 				when: seconds(3) elapsed: {
 					system.println("when:elapsed: works (3 sec)");
+					res.resolve(true);
 				};
+				fut;
 			};
-			def testWhenEverElapsed() {
+			def testAsyncWhenEverElapsed() {
 				def run := 0;
+				def [fut,res] := FuturesModule.makeFuture();
 				def sub := whenever: seconds(2) elapsed: {
 					run := run + 1;
 					system.println("whenever:elapsed: works (2 sec) (run "+run+")");
 					if: (run == 3) then: {
 						sub.cancel();
+						res.resolve(true);
 					};
 				};
+				fut;
 			};
 		};
 		TimerTest.runTest();

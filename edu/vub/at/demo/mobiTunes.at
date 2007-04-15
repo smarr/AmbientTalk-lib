@@ -191,25 +191,26 @@ def MobiTunesPrototype := object: {
 		myLib.add(Song.new(artist, title));
 	};
 	
+	// DEMO: run within one VM, creates two local mobiTunes applications, one within
+	// the root actor, the other within another local actor
+	def testIt() {
+		def peerA := /.at.demo.mobiTunes.new("A");
+		peerA.addSong("1", "AB");
+		peerA.addSong("2", "AB");
+		peerA.addSong("3", "A");
+		peerA.goOnline();
+		def otherPeerHost := actor: {
+		  def peerB := /.at.demo.mobiTunes.new("B");
+		  peerB.addSong("1", "AB");
+		  peerB.addSong("2", "AB");
+		  peerB.addSong("3", "B");
+		  peerB.addSong("4", "B");
+		  peerB.addSong("5", "B");
+		  peerB.addSong("6", "B");
+		  def start() { peerB.goOnline() };
+		};
+		otherPeerHost<-start();
+	};
+	
 };
 
-// DEMO: run within one VM, creates two local mobiTunes applications, one within
-// the root actor, the other within another local actor
-/*
-def peerA := /.at.demo.mobiTunes.new("A");
-peerA.addSong("1", "AB");
-peerA.addSong("2", "AB");
-peerA.addSong("3", "A");
-peerA.goOnline();
-def otherPeerHost := actor: {
-  def peerB := /.at.demo.mobiTunes.new("B");
-  peerB.addSong("1", "AB");
-  peerB.addSong("2", "AB");
-  peerB.addSong("3", "B");
-  peerB.addSong("4", "B");
-  peerB.addSong("5", "B");
-  peerB.addSong("6", "B");
-  def start() { peerB.goOnline() };
-};
-otherPeerHost<-start();
-*/

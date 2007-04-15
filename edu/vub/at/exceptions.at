@@ -55,13 +55,13 @@ def ExceptionModule := object: {
 	def XException := createException(Stripes.Exception);
 
 	def XArityMismatch := 
-		jlobby.edu.vub.at.exceptions.XArityMismatch.new("object:", 1, 0).getAmbientTalkRepresentation();
+		jlobby.edu.vub.at.exceptions.XArityMismatch.new("object:", 1, 0);
 	def XIllegalOperation := 
-		jlobby.edu.vub.at.exceptions.XIllegalOperation.new("Synchronous communication over a far reference").getAmbientTalkRepresentation();
+		jlobby.edu.vub.at.exceptions.XIllegalOperation.new("Synchronous communication over a far reference");
 	def XParseError := 
-		jlobby.edu.vub.at.exceptions.XParseError.new("def x:=nil -> did you mean: def x := nil", nil).getAmbientTalkRepresentation();
+		jlobby.edu.vub.at.exceptions.XParseError.new("def x:=nil -> did you mean: def x := nil", nil);
 	def XSelectorNotFound := 
-		jlobby.edu.vub.at.exceptions.XSelectorNotFound.new(`at, root).getAmbientTalkRepresentation();
+		jlobby.edu.vub.at.exceptions.XSelectorNotFound.new(`at, root);
 
 	def XIndexOutOfBounds := IndexOutOfBoundsPrototype;
 };

@@ -32,6 +32,9 @@
 defstripe AssertionFailed <: /.at.stripes.Exception;
 def XAssertionFailed := /.at.exceptions.createException(AssertionFailed);
 
+def FuturesModule := /.at.lang.futures;
+FuturesModule.enableFutures(false); // only enable explicit futures
+
 def assert(bln, reason) {
 	bln.ifFalse: { raise: XAssertionFailed.new(reason) }
 };
@@ -55,8 +58,8 @@ def consoleReporter := object: {
 		numFailed := 0;
 		numError := 0;
 	};
-	def start(testName) {
-		system.println("Starting unit test " + testName);
+	def start(testName, numTests) {
+		system.println("Starting unit test " + testName + "("+numTests+" tests)");
 	};
 	def success(methName) {
 		numSuccess := numSuccess + 1;
@@ -109,20 +112,57 @@ def UnitTest := object: {
 	def tearDown() { nil };
 	
 	def runTest(reporter := consoleReporter.new()) {
-		reporter.start(self.name);
-		retrieveTestMethodNames(self).each: { |methName|
-			try: {
-				self.setUp();
-				(reflect: self).select(self, methName).apply([]);
-				self.tearDown();
-				reporter.success(methName);
-			} catch: AssertionFailed using: {|e|
-				reporter.failure(methName, e);
-			} catch: /.at.stripes.Exception using: { |e|
-				reporter.error(methName, e);
+		def numAsyncTests := 0; // count number of outstanding async unit tests
+		
+		def asyncTestFinished() {
+			self.tearDown();
+			numAsyncTests := numAsyncTests - 1;
+			// last async test fininshed?
+			if: (0 == numAsyncTests) then: {
+				reporter.stop(self.name);
 			};
 		};
-		reporter.stop(self.name);
+		
+		def testMethods := retrieveTestMethodNames(self);
+		
+		reporter.start(self.name, testMethods.length);
+		
+		testMethods.each: { |methName|
+			if: (methName.text ~= "testAsync.*") then: {
+				// asynchronous unit test
+				numAsyncTests := numAsyncTests + 1;
+				self.setUp();
+				def fut := (reflect: self).select(self, methName).apply([]);
+				FuturesModule.when: fut becomes: { |val|
+					reporter.success(methName);
+					asyncTestFinished();
+				} catch: { |e|
+					if: (is: e stripedWith: AssertionFailed) then: {
+						reporter.failure(methName, e);
+					} else: {
+						reporter.error(methName, e);
+					};
+					asyncTestFinished();
+				};
+				nil;
+			} else: {
+				// synchronous unit test
+				try: {
+					self.setUp();
+					(reflect: self).select(self, methName).apply([]);
+					self.tearDown();
+					reporter.success(methName);
+				} catch: AssertionFailed using: {|e|
+					reporter.failure(methName, e);
+				} catch: /.at.stripes.Exception using: { |e|
+					reporter.error(methName, e);
+				};
+			}
+		};
+		// only stop if there are no outstanding async unit tests
+		if: (0 == numAsyncTests) then: {
+			reporter.stop(self.name);
+		};
 	};
 };
 
@@ -142,6 +182,11 @@ def TestModule := object: {
 		  def testNotEquals() { self.assertNotEquals(dow[2],dow[3]) };
 		  def testLessThan() { self.assertLessThan(dow[1].explode().length, dow[2].explode().length) };
 		  def testException() { self.assert: /.at.stripes.IndexOutOfBounds raisedIn: { dow[8] } };
+      def testAsyncSend() {
+	      FuturesModule.when: dow<-at(1)@FuturesModule.FutureMessage becomes: { |v|
+		      self.assertEquals("mo", v);
+		    };
+      };
 
 		  def testError() { self.assertEquals("sun", dow[8]) }; // raises index out of bounds -> error
 		  def testFailure() { self.assertNotEquals(dow[2], dow[2]) }; // test correct handling of failure
@@ -155,7 +200,7 @@ def TestModule := object: {
 			def failure(@args) { fail := fail + 1 };
 			def error(@args) { err := err + 1 };
 			def stop(@args) {
-				if: !((succ == 6) & (fail == 1) & (err == 1)) then: {
+				if: !((succ == 7) & (fail == 1) & (err == 1)) then: {
 					system.println("Unit Test self-checking test failed!");
 				} else: {
 					system.println("Unit test module ok");

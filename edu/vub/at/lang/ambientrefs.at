@@ -38,6 +38,7 @@
 def FuturesModule := /.at.lang.futures;
 def OneWayMessage := FuturesModule.OneWayMessage;
 def Vector := /.at.collections.vector.Vector;
+FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
 
 def debug(@args) {
 	system.println("[ambientrefs.at] ", @args);
@@ -412,7 +413,7 @@ def AmbientRefModule := object: {
 			def providerHost := actor: {
 				defstripe Foo;
 				def service := object: {
-					def testMethod(x) { system.println("testMethod invoked with x = " + x) };
+					def testMethod(x) { system.println("testMethod invoked with x = " + x); x+1 };
 				};
 				export: service as: Foo
 			};
@@ -421,9 +422,11 @@ def AmbientRefModule := object: {
 				def a := ambient: Foo withCardinality: uni() withElasticity: fragile();
 				a<-testMethod(5);
 			};*/
-			def testFragileOmni() {
+			def testAsyncFragileOmni() {
 				def a := ambient: Foo withCardinality: omni() withElasticity: fragile();
-				a<-testMethod(5);
+				FuturesModule.when: a<-testMethod(5)@FuturesModule.FutureMessage becomes: { |v|
+					self.assertEquals(6,v);
+				};
 			};
 		};
 		ARTest.runTest();
