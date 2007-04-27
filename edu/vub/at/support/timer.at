@@ -51,7 +51,7 @@ def TimerModule := object: {
 	// convert AmbientTalk number to a Java long representing # millisec
 	def millisec(ms) { makeLong(ms) };
 	def seconds(s) { millisec(s*1000) };
-	def minutes(m) { seconds(s*60) };
+	def minutes(m) { seconds(m*60) };
 	
 	// when the timeout has elapsed, invoke the given code block
 	// returns a subscription object that can be used to cancel execution of the block
