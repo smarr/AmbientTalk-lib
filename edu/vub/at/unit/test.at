@@ -26,9 +26,37 @@
  */
 
 
-/*
- * Defines unit test code for performing unit tests in AT/2 itself
+/**
+ * This file defines a unit testing framework for AmbientTalk/2 which
+ * is similar in spirit and structure to JUnit and SUnit.
+ *
+ * Usage: create your own unit tests by making an extension of the
+ * UnitTest object. In the extension, define zero-arity methods starting
+ * with the prefix 'test'. Example:
+ *
+ * def myUnitTest := extend: UnitTest.new("my unit test") with: {
+ *   def testSomething() {
+ *     self.assertEquals(3,1+2);
+ *   }
+ * }
+ *
+ * This framework defines a large number of assertion methods that you can use.
+ * Be sure to invoke these methods by means of self-sends! They are defined in
+ * the unit test object, not in the global lexical scope.
+ *
+ * When a method is prefixed with 'testAsync', the unit testing framework
+ * expects the method to return a future and will only process subsequent test
+ * methods once the future is resolved/ruined. This is useful for performing
+ * unit tests that require asynchronous message sends.
+ *
+ * Finally, the TestSuite object allows you to easily perform unit tests
+ * in batch. Example: TestSuite.new("my test suite", [unittest1, unittest2]);
+ *
+ * You can run a unit test or test suite by sending it the message .runTest()
+ *
+ * @author tvcutsem
  */
+ 
 defstripe AssertionFailed <: /.at.stripes.Exception;
 def XAssertionFailed := /.at.exceptions.createException(AssertionFailed);
 
@@ -98,6 +126,7 @@ def UnitTest := object: {
 	def assertLessThanOrEquals(o1,o2, reason := "expected "+o1+" to be <= than "+o2) { assert(o1<=o2, reason) };
 	def assertGreaterThanOrEquals(o1,o2, reason := "expected "+o1+" to be >= than "+o2) { assert(o1>=o2, reason) };
 	def assertMatches(str, pattern, reason := "expected "+str+" to match "+pattern) { assert(str ~= pattern, reason) };
+	def assertNotNil(val, reason := "expected non-nil value, given "+val) { assert(!(nil==val), reason) };
 	def assert: excType raisedIn: code {
 		{ |return|
 			try: code
@@ -166,12 +195,51 @@ def UnitTest := object: {
 	};
 };
 
+// usage: TestSuite.new("name", [unittest1,unittest2]).runTest(reporter);
+def TestSuite := object: {
+  def testSuiteName := "anonymous test suite";
+  def unitTests := [];
+  
+  def init(name, unittests) {
+    testSuiteName := name;
+    unitTests := unittests;
+  };
+  
+  def runTest(reporter := consoleReporter.new()) {
+    reporter.start(testSuiteName, unitTests.length);
+    runSubTest(1, reporter);
+  };
+  
+  def runSubTest(i, reporter) {
+    if: (i > unitTests.length) then: {
+      reporter.stop(testSuiteName);
+    } else: {
+      unitTests[i].runTest(extend: consoleReporter.new() with: {
+        def start(nam, numTests) {
+          system.println("-- Starting subtest "+nam+" --")
+        };
+        def stop(nam) {
+          system.println("-- Stopping subtest "+nam+" --");
+          super^stop(nam);
+          system.println("------------------------------");
+          if: ((self.numFailed + self.numError) == 0) then: {
+            reporter.success(nam);
+          } else: {
+            reporter.failure(nam, /.at.exceptions.XException.new("subtest failed"));
+          };
+          runSubTest(i+1, reporter);
+        };
+      });
+    };
+  };
+};
+
 def TestModule := object: {
 	def UnitTest := UnitTest;
-	
+	def TestSuite := TestSuite;
 	def ConsoleReporter := consoleReporter;
 	
-	def testIt() {
+	def selfTest() {
 		// a unit test to test the unit test
 		def weekDayTest := extend: UnitTest.new("WeekDayTest") with: {
 		  def dow := ["mo","tue","wed","thu","fri","sat","sun"];

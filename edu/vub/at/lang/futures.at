@@ -267,6 +267,9 @@ def FuturesModule := object: {
 		whenFuture; // when returns a future itself
 	};
 
+  // make the Future stripe publicly visible
+  def Future := Future;
+
   // make the OneWayMessage stripe publicly visible
   def OneWayMessage := OneWayMessage;
 
@@ -341,5 +344,32 @@ def FuturesModule := object: {
 	  } else: {
 		  actor; // return the current actor protocol
 	  };
+  };
+  
+  def FuturesTest() {
+   extend: /.at.unit.test.UnitTest.new("futures test") with: {
+    
+    def foo() { 5 };
+    enableFutures(false);
+    
+    def testFutureCreation() {
+      def [fut,res] := makeFuture();
+      self.assertEquals("<unresolved future>", print: fut);
+      res.resolve(5);
+      self.assertEquals("<resolved future:5>", print: fut);
+    };
+    
+    def testFutureSend() {
+      def fut := foo<-apply([])@FutureMessage;
+      self.assertNotNil(fut);
+      self.assertTrue(is: fut stripedWith: Future);
+    };
+    
+    def testAsyncWhen() {
+      when: (foo<-apply([])@FutureMessage) becomes: { |v|
+        self.assertEquals(5,v);
+      };
+    };
+   };
   };
 };

@@ -77,32 +77,32 @@ def TimerModule := object: {
 		}
 	};
 	
-	def testIt() {
-		def FuturesModule := /.at.lang.futures; FuturesModule.enableFutures(false);
-		def TimerTest := extend: /.at.unit.test.UnitTest.new("TimerTest") with: {
-			def testAsyncWhenElapsed() {
-				def [fut,res] := FuturesModule.makeFuture();
-				when: seconds(3) elapsed: {
-					system.println("when:elapsed: works (3 sec)");
-					res.resolve(true);
-				};
-				fut;
-			};
-			def testAsyncWhenEverElapsed() {
-				def run := 0;
-				def [fut,res] := FuturesModule.makeFuture();
-				def sub := whenever: seconds(2) elapsed: {
-					run := run + 1;
-					system.println("whenever:elapsed: works (2 sec) (run "+run+")");
-					if: (run == 3) then: {
-						sub.cancel();
-						res.resolve(true);
-					};
-				};
-				fut;
-			};
+	def TimerTest() {
+	 extend: /.at.unit.test.UnitTest.new("TimerTest") with: {
+      def FuturesModule := /.at.lang.futures; FuturesModule.enableFutures(false);
+		
+	  def testAsyncWhenElapsed() {
+		def [fut,res] := FuturesModule.makeFuture();
+		when: seconds(3) elapsed: {
+		  system.println("when:elapsed: works (3 sec)");
+		  res.resolve(true);
+	    };
+		fut;
+	  };
+	  def testAsyncWhenEverElapsed() {
+	    def run := 0;
+		def [fut,res] := FuturesModule.makeFuture();
+		def sub := whenever: seconds(2) elapsed: {
+		  run := run + 1;
+		  system.println("whenever:elapsed: works (2 sec) (run "+run+")");
+		  if: (run == 3) then: {
+			sub.cancel();
+			res.resolve(true);
+		  };
 		};
-		TimerTest.runTest();
+		fut;
+	  };
 	};
+   };
 	
 };

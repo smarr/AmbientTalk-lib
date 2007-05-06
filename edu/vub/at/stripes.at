@@ -19,6 +19,7 @@ defstripe AsyncMessage <: Message;
 defstripe Mirror;
 defstripe ActorMirror;
 defstripe Stripe;
+defstripe FarReference;
 
 // abstract grammar
 defstripe AbstractGrammar;
@@ -60,7 +61,7 @@ defstripe SelectorNotFound <: Exception;
 defstripe SymbiosisFailure <: Exception;
 defstripe TypeMismatch <: Exception;
 defstripe UnassignableField <: Exception;
-defstripe UndefinedField <: Exception;
+defstripe UndefinedSlot <: Exception;
 defstripe JavaException <: Exception;
 defstripe ImportConflict <: Exception;
 defstripe ObjectOffline <: Exception;

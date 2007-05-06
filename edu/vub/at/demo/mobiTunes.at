@@ -78,12 +78,15 @@ defstripe MusicPlayer;
 
 // this prototype is the result of loading the mobiTunes file
 def MobiTunesPrototype := object: {
-	def myLib := Vector.new(); // the local user's songs library
-	def userName := jlobby.java.lang.System.getProperty("user.name");
-	
-  def init(userName) {
+  def myLib := Vector.new(); // the local user's songs library
+  def userName := jlobby.java.lang.System.getProperty("user.name");
+  
+  def notifyOnMatch := { |user, percentage| nil };
+  
+  def init(userName, notifier := notifyOnMatch) {
 	  self.userName := userName;
 	  myLib := Vector.new();
+	  notifyOnMatch := notifier;
   };
 
 	def notification(@texts) {
@@ -118,8 +121,9 @@ def MobiTunesPrototype := object: {
 					  def matchRatio := (senderLib.size() * 100 / (myLib.size()+0.01)).round();
 						if: (matchRatio >= THRESHOLD) then: {
 						  notification("Found user ", remoteUser, " with similar taste in music (",matchRatio,"% match)");
+						  notifyOnMatch(remoteUser, matchRatio);
 						} else: {
-							notification("User ", remoteUser, " does not share your taste in music (",matchRatio,"% match)");
+						  notification("User ", remoteUser, " does not share your taste in music (",matchRatio,"% match)");
 						};
 						"done";
 				  };
@@ -193,23 +197,36 @@ def MobiTunesPrototype := object: {
 	
 	// DEMO: run within one VM, creates two local mobiTunes applications, one within
 	// the root actor, the other within another local actor
-	def testIt() {
-		def peerA := /.at.demo.mobiTunes.new("A");
-		peerA.addSong("1", "AB");
-		peerA.addSong("2", "AB");
-		peerA.addSong("3", "A");
-		peerA.goOnline();
-		def otherPeerHost := actor: {
-		  def peerB := /.at.demo.mobiTunes.new("B");
-		  peerB.addSong("1", "AB");
-		  peerB.addSong("2", "AB");
-		  peerB.addSong("3", "B");
-		  peerB.addSong("4", "B");
-		  peerB.addSong("5", "B");
-		  peerB.addSong("6", "B");
-		  def start() { peerB.goOnline() };
+	def MobiTunesTest() {
+	  extend: /.at.unit.test.UnitTest.new("mobiTunes test") with: {		
+		def testAsyncMobiTunes() {
+		  def [fut,res] := /.at.lang.futures.makeFuture();
+		  def test := self;
+		  
+		  // expecting peerA to find peerB and to have a 66% match
+		  def peerA := /.at.demo.mobiTunes.new("A", { |usr, match|
+		    test.assertEquals("B", usr);
+		    test.assertEquals(66, match);
+		    res.resolve(true);
+		  });
+		  peerA.addSong("1", "AB");
+		  peerA.addSong("2", "AB");
+		  peerA.addSong("3", "A");
+		  peerA.goOnline();
+		  def otherPeerHost := actor: {
+		    def peerB := /.at.demo.mobiTunes.new("B");
+		    peerB.addSong("1", "AB");
+		    peerB.addSong("2", "AB");
+		    peerB.addSong("3", "B");
+		    peerB.addSong("4", "B");
+		    peerB.addSong("5", "B");
+		    peerB.addSong("6", "B");
+		    peerB.goOnline();
+		  };
+		  
+		  fut;
 		};
-		otherPeerHost<-start();
+	  };
 	};
 	
 };

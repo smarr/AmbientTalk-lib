@@ -297,8 +297,8 @@ def VectorModule := object: {
 	def StackUnderflow := StackUnderflow;
 	
 	// unit test for the vector prototype
-	def testIt() {
-		def VectorTest := extend: /.at.unit.test.UnitTest.new("VectorTest") with: {
+	def VectorTest() {
+	   extend: /.at.unit.test.UnitTest.new("VectorTest") with: {
 			def v;
 			def setUp() { v := VectorPrototype.new() };
 			
@@ -449,7 +449,6 @@ def VectorModule := object: {
 				v.sort({|e1,e2| e1.explode().length < e2.explode().length });
 				self.assertEquals("1223334444", v.implode());
 			};
-		};
-		VectorTest.runTest();
+	  };
 	};
 }

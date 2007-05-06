@@ -407,8 +407,8 @@ def AmbientRefModule := object: {
 		};
 	};
 	
-	def testIt() {
-		def ARTest := extend: /.at.unit.test.UnitTest.new("AmbientRefTest") with: {
+	def AmbientRefsTest() {
+	  extend: /.at.unit.test.UnitTest.new("AmbientRefTest") with: {
 			defstripe Foo;
 			def providerHost := actor: {
 				defstripe Foo;
@@ -427,8 +427,7 @@ def AmbientRefModule := object: {
 				FuturesModule.when: a<-testMethod(5)@FuturesModule.FutureMessage becomes: { |v|
 					self.assertEquals(6,v);
 				};
-			};
 		};
-		ARTest.runTest();
-	};
+	  };
+    };
 };

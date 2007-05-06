@@ -5,44 +5,51 @@
  *
  * @author tvcutsem
  */
-def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user.name")) {
+def IMListener := object: {
+  def unknownBuddy(name) { system.println("Unknown buddy: " + to); };
+  def printMessage(textMsg) {
+    system.println(textMsg.from + ": " + textMsg.content);
+  };
+  def addBuddy(name) { system.println("Added buddy: " + name); };
+  def buddyOffline(name) { system.println("Buddy offline: " + name); };
+  def buddyOnline(name) { system.println("Buddy online: " + name); };
+};
+
+def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user.name"),
+                           listener := IMListener) {
   
   defstripe InstantMessenger;
 
   def TextMessage := isolate: {
-	  def from := nil;
-	  def content := nil;
-	  def init(f,c) {
-		  from := f;
-		  content := c;
-	  };
+    def from := nil;
+    def content := nil;
+    def init(f,c) {
+      from := f;
+      content := c;
+    };
   };
 
   def buddyList := jlobby.java.util.HashMap.new();
 
-	def printMessage(textMessage) {
-    system.println(textMessage.from + ": " + textMessage.content)
-  };
-
   def localInterface := object: {
-	  def sendTextMessage(to, string) {
+    def sendTextMessage(to, string) {
 		  def buddy := buddyList.get(to);
 		  if: (nil == buddy) then: {
-			  system.println("Unknown buddy: " + to);
+			  listener<-unknownBuddy(to);
 		  } else: {
-			  def msg := TextMessage.new(username, string);
+		      def msg := TextMessage.new(username, string);
 			  buddy<-receiveTextMessage(msg, object: {
 				  def resolve() {
-					  printMessage(msg);
+					  listener<-printMessage(msg);
 				  }
 			  });
-		  };
+		 };
     };
   };
 
   def remoteInterface := object: {
     def receiveTextMessage(textMessage, future) {
-      printMessage(textMessage);
+      listener<-printMessage(textMessage);
       future<-resolve();
     };
     def getName(future) { future<-resolve(username) };
@@ -55,12 +62,12 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
 		  def resolve(name) {
 			  if: (nil == buddyList.get(name)) then: {
 				  buddyList.put(name, messenger);
-				  system.println("Added buddy: " + name);
+				  listener<-addBuddy(name);
 				  when: messenger disconnected: {
-					  system.println("Buddy offline: " + name);
+					  listener<-buddyOffline(name);
 				  };
 				  when: messenger reconnected: {
-					  system.println("Buddy online: " + name);
+					  listener<-buddyOnline(name);
 				  };
 			  };
 		  };
@@ -70,9 +77,27 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
 	localInterface;
 };
 
-def testIt() {
-	network.online();
-	createInstantMessenger();
+def InstantMessengerTest() {
+ extend: /.at.unit.test.UnitTest.new("InstantMessenger test") with: {
+  def test := self;
+  
+  def testAsyncMessageSend() {
+    def [fut,res] := /.at.lang.futures.makeFuture();
+    
+    def A := createInstantMessenger("A", extend: IMListener with: {
+      def addBuddy(name) {
+        A<-sendTextMessage(name, "hello");
+      };
+      def printMessage(txt) {
+        test.assertEquals("hello", txt.content);
+        res.resolve(true); // only make test pass when message was successfully transmitted to B
+      }
+    });
+    def Bact := actor: { def B := /.at.demo.InstantMessenger.createInstantMessenger("B") };
+    
+    fut;
+  };
+ }; 
 };
 
 self
