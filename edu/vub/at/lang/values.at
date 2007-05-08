@@ -1,0 +1,20 @@
+/* This file provides constructor functions for a series of useful implementation-level
+ * object which cannot be created directly in AmbientTalk itself. That is to say, some
+ * can be created indirectly (e.g. literal notation for closures) yet only in such a way
+ * that some parameters are implicitly filled in. 
+ */
+
+def closure( method, context )
+	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( method, context ) };
+def closureMethod( scope, method )
+	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( scope, method ) };
+def context( scope, this )
+	{ jlobby.edu.vub.at.objects.natives.NATContext.new( scope, this ) };
+def field( name, scope )
+	{ jlobby.edu.vub.at.objects.natives.NATField.new( name, scope ) };
+def method( name, parameters, body )
+	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body ) };
+def namespace( name, path )
+	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
+
+self;

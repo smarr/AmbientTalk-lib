@@ -38,6 +38,8 @@ defstripe Splice <: Expression;
 defstripe UnquoteSplice <: Expression;
 defstripe MessageCreation <: Expression;
 defstripe Definition <: Statement;
+defstripe MethodDefinition <: Definition;
+
 
 // exception types
 defstripe Exception;
