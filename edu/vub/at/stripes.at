@@ -18,7 +18,7 @@ defstripe Delegation <: Message;
 defstripe AsyncMessage <: Message;
 defstripe Mirror;
 defstripe ActorMirror;
-defstripe Stripe;
+defstripe Stripe <: Isolate;
 defstripe FarReference;
 
 // abstract grammar

@@ -46,12 +46,12 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
 
   def testSayHello() {
-    self.assertEquals(nil, a<-sayHello());
+    self.assertEquals(nil, a<-sayHello()@OneWayMessage);
   };
 
   def calculator := actor: {
     def add(x,y,customer := nil) {
-      customer<-result(x+y); // for the customer-case
+      if: !(nil == customer) then: { customer<-result(x+y) }; // for the customer-case
       x+y; // for the futures-case
     };
     def divide(x,y) {

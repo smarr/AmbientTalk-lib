@@ -1,0 +1,252 @@
+def TimerModule := /.at.support.timer;
+import TimerModule;
+
+def long := jlobby.java.lang.Long.TYPE;
+def maxMethod := jlobby.java.lang.Math.max;
+def Vector := /.at.collections.vector.Vector;
+
+def RENEWALONCALL := millisec(10); // default call time renewal 
+def LEASETIME := millisec(15); // default lease time
+
+defstripe LeasedRef;
+defstripe ClientLeasedRef;
+def Isolate := /.at.stripes.Isolate;
+
+def createLeasingMirror(principal, timeout := LEASETIME) { mirror: {
+	
+	def timerSubscription := nil;
+	def expiredObservers := Vector.new();
+	def expired := false;
+	
+    def init(base) {
+	  	super^init(base);
+		expired := false;
+		expiredObservers := Vector.new();
+	  	timerSubscription := when: timeout elapsed: {
+			expired := true;
+			self.notifyExpiredObservers();
+			takeOffline: self;
+	  	};
+    };
+
+	def revoke(){ 
+		timerSubscription.cancel();
+		expired := true;
+	};
+	
+	def renew(renewalTime := RENEWALONCALL) {
+		if: !(expired) then:{
+			def interval := maxMethod(timerSubscription.getTimeRemaining(), renewalTime);
+			timerSubscription.cancel();
+			timerSubscription := when: interval elapsed: {
+				expired := true;
+				self.notifyExpiredObservers();
+				takeOffline: self;
+			};
+		} else: {
+			raise: /.at.exceptions.XIllegalOperation.new("cannot renew an expired leased reference " +self.base);
+		}
+	};
+	
+	def getTimeLeft() {
+		timerSubscription.getTimeRemaining(); 
+	};
+		
+	def addExpiredObserver(obs){
+		expiredObservers.add(obs);
+		//return a subscription object that can be used to remove the observer
+		object: {
+			def cancel() { expiredObservers.remove(obs) }
+		};
+	};
+	
+	def notifyExpiredObservers(){ expiredObservers.each: { |o| o<-apply([]) }};
+	
+	def receive(msg) {
+		//all mesages received are forwarded to principal 
+		//the base object of a leased ref is an empty object => it does not understand any async msg.
+		if: !(expired) then: {
+			principal <+ msg 
+		} else: { system.println("receive:expired")}
+	};
+	
+	def invoke(rcv, sel, arg) {
+		//the only legal operation on leased references is '==' 
+		if: (`(==) == sel) then: {
+			super^invoke(rcv,sel,arg);
+		} else: {
+			raise: /.at.exceptions.XIllegalOperation.new("cannot synchronously invoke operation " +sel+ " on leased reference "+self.base);
+		}
+	};
+	
+	def pass(){
+		if: !(expired) then: {
+			def remoteLease := self;
+		    def timeout := getTimeLeft();
+			object: { nil } stripedWith: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout|
+				
+				defstripe ClientLeasedRef;
+				def resolve() {	
+					import /.at.lang.clientleasedrefs;	
+					object: {nil} stripedWith: [ClientLeasedRef] mirroredBy: createClientLeasingMirror(remoteLease, timeout);
+				};
+			} stripedWith: [Isolate]);
+		} else: { system.println("pass:expired")}	
+	};
+	
+	def print() {
+		if: (expired) then: {
+			"<expired lease: " + super^print() + ">";
+		} else: {
+			"<lease: " + super^print() + ">";
+		};
+	}
+}};	
+
+def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := timeout) {  extend: createLeasingMirror( principal, timeout) with: {
+
+	def receive(msg) {
+		//automatically renew the lease upon mesage reception. 
+		//By default, renewal time = leasetime. 
+		super^renew(renewal);
+		super^receive(msg);
+	};	
+	
+	def pass(){
+			if: !(self.expired) then: {
+				def remoteLease := self;
+			    def timeout := super^getTimeLeft();
+				object: { nil } stripedWith: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout, renewal|	
+					defstripe ClientLeasedRef;
+					def resolve() {	
+						import /.at.lang.clientleasedrefs;		
+						object: {nil} stripedWith: [ClientLeasedRef] mirroredBy: createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal);
+					};
+				} stripedWith: [Isolate]);
+			} else: { system.println("pass:expired")}
+	};
+		
+}};
+
+def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelectors := []) {  extend: createLeasingMirror(principal, timeout) with: {
+	
+	def init(base) {
+	  super^init(base);
+	};
+
+	def receive(msg){
+		def res := super^receive(msg);
+		if: !(self.expired) then: {		
+		  	if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
+				super^revoke();
+			  	takeOffline: self;
+		  	}
+		}; 
+		res;
+	};
+	
+	def pass(){
+		if: !(self.expired) then: {
+			def remoteLease := self;
+		    def timeout := super^getTimeLeft();
+			def selectors := forSelectors;
+		
+			object: { nil } stripedWith: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout, selectors|
+				defstripe ClientLeasedRef;
+				def resolve() {	
+					import /.at.lang.clientleasedrefs;		
+					object: {nil} stripedWith: [ClientLeasedRef] mirroredBy: createLeasingWithSingleUseMirror(remoteLease, timeout, selectors);			
+				};
+			} stripedWith: [Isolate]);
+		} else: { system.println("pass:expired")}	
+	};
+
+}};
+
+//Public interface of leased object references
+def LeasingModule := object: {
+	
+	//Construct a lease that lasts for a given period of time.
+	def lease: timeout for: obj  {
+		object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingMirror(obj, timeout)
+	};
+	
+	/* Construct a lease for only a single call. The lease is alive for the given period unless
+	it has processed a single message. This is a useful lease for callback objects, such as futures.
+	*/
+	def singleCallLease: timeout for: obj {
+		object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout)
+	};
+	
+	/* Customizable version of singleCallLeasee where one can determine
+	which message name(s) must be receiver to expire the lease. 
+	selectors is expected to be an array of message names. An empty array has
+	the same effect than singleCallLease construct.
+	*/
+	def singleCallLease: timeout revokedOn: selectors for: obj {
+		object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout, selectors)
+	};
+	
+	/* Construct a lease which keeps the object alive for the given period. 
+	Each time a message is sent to the object, the lease is prolonged with the 
+	given initial period of time. Hence, when an object has not been 'used' for more than
+    the given period, its access expires. The lease can always be explicitely revoked earlier.
+    */
+	def renewOnCallLease: timeout for: obj {
+	    object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout)
+	};
+	
+	/* Customizable version of renewedOnCallLease where one can determine
+	the renewal time instead of using timeout. 
+	*/
+	def renewOnCallLease: timeout renewedWith: renewalTime for: obj {
+	    object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout, renewalTime)
+	};
+			 
+	// Tries to renew explicitly the lease.		
+	def renew: leasedRef for: time {
+	  	(reflect: leasedRef).renew(time)	
+	};
+	
+	/* Cancels explicitly the lease without triggering when:expired: listener 
+	   Canceling a lease is analogous to a natural expiration of the lease.
+	   Any later message sent to the lease won't be forwarded to the server object.
+	*/
+	def revoke: leasedRef {
+	  	(reflect: leasedRef).revoke()	
+	};
+	
+	/* Places an observer with the given code to a leased reference. 
+	The block of code is executed upon the expiration of the lease.
+	*/	
+	def when: leasedRef expired: code {
+		//Note that when:expired: on lease references places an observer on the server side while
+		//when:expired: of remote far references on the client side.
+		
+		if: ((is: leasedRef stripedWith: LeasedRef) & !(is: leasedRef stripedWith: /.at.stripes.FarReference)) then: {
+			(reflect: leasedRef).addExpiredObserver(code) 
+		} else: {
+			if: (is: leasedRef stripedWith: ClientLeasedRef) then: { 
+				(reflect: leasedRef).addExpiredObserver(code) 
+			} else: {
+			//call the native when:takenOffline: of remote far references. 
+			//leased references are subject to leasing as well when passed to client objects.
+			//Thus, it should never enter here when working with leased references.
+			when: leasedRef takenOffline: code
+			}
+		}
+	};
+	// Returns a Long with the amount of time left before the lease expires
+	def leaseTimeLeft: leasedRef {
+		(reflect: leasedRef).getTimeLeft();
+	};
+	
+	// Suport primitives to manipulate time intervals. 
+	// Export here also so that people using leasing abstractions
+	// do not need to explicitly import timer module.
+ 	def millisec(ms) { TimerModule^millisec(ms) };
+	def seconds(s) { TimerModule^seconds(s) };
+	def minutes(m) { TimerModule^minutes(m) };
+
+}
+

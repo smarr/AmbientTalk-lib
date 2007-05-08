@@ -5,6 +5,9 @@
  *
  * @author tvcutsem
  */
+
+import /.at.lang.leasedrefs;  
+
 def IMListener := object: {
   def unknownBuddy(name) { system.println("Unknown buddy: " + to); };
   def printMessage(textMsg) {
@@ -38,11 +41,12 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
 			  listener<-unknownBuddy(to);
 		  } else: {
 		      def msg := TextMessage.new(username, string);
-			  buddy<-receiveTextMessage(msg, object: {
+			  buddy<-receiveTextMessage(msg, 
+				singleCallLease: seconds(30) for: ( object: {
 				  def resolve() {
 					  listener<-printMessage(msg);
 				  }
-			  });
+			  }));
 		 };
     };
   };
@@ -58,7 +62,7 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
   export: remoteInterface as: InstantMessenger;
   
   whenever: InstantMessenger discovered: { |messenger|
-	  messenger<-getName(object: {
+	  messenger<-getName( singleCallLease: seconds(30) for: ( object: {
 		  def resolve(name) {
 			  if: (nil == buddyList.get(name)) then: {
 				  buddyList.put(name, messenger);
@@ -71,7 +75,7 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
 				  };
 			  };
 		  };
-	  });
+	  }));
 	};
 	
 	localInterface;

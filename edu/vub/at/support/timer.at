@@ -47,7 +47,7 @@ def scheduleAtFixedRateMethod := theTimer.schedule.cast(TimerTask, long, long);
 def makeLong := /.at.support.symbiosis.long;
 
 def TimerModule := object: {
-	
+	  
 	// convert AmbientTalk number to a Java long representing # millisec
 	def millisec(ms) { makeLong(ms) };
 	def seconds(s) { millisec(s*1000) };
@@ -61,7 +61,15 @@ def TimerModule := object: {
 		});
 		scheduleMethod(ttask, timeout);
 		object: {
-			def cancel() { ttask.cancel() }
+			def cancel() { ttask.cancel() };
+			def getTimeRemaining() { 
+			def time := makeLong(0);
+				def expiredTime := jlobby.java.lang.System.currentTimeMillis() - ttask.scheduledExecutionTime();
+				if: ( expiredTime < timeout) then: {
+					time := timeout - expiredTime;
+				};
+				time 
+			};
 		}
 	};
 	

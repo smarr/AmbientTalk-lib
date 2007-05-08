@@ -84,4 +84,66 @@ public class PrimitiveJavaConversion {
 		return new Short((short) number);
 	}
 	
+	/**
+	 * Auxiliary arithmetic function to symbiotically subtract two longs.
+	 * @param number a long to be subtracted.
+	 * @param other another along.
+	 * @return the long representation of the subtraction.
+	 */
+	public static Long subtractLongs( Long number, Long other) throws IllegalArgumentException{
+		return new Long ( number.longValue() - other.longValue());
+	}
+	/**
+	 * Auxiliary arithmetic function to symbiotically add two longs.
+	 * @param number a long to be added.
+	 * @param other another long.
+	 * @return the long representation of the addition.
+	 */
+	public static Long addLongs( Long number, Long other) throws IllegalArgumentException{
+		return new Long ( number.longValue() + other.longValue());
+	}
+	
+	/**
+	 * Auxiliary arithmetic function to symbiotically multiply two longs.
+	 * @param number a long.
+	 * @param other another long.
+	 * @return the long representation of multiplying the longs
+	 */
+	public static Long multiplyLongs( Long number, Long other) throws IllegalArgumentException{
+		return new Long ( number.longValue() * other.longValue());
+	}
+	
+	/**
+	 * Auxiliary arithmetic function to symbiotically divide two longs.
+	 * @param number a long to be divided.
+	 * @param other another long.
+	 * @return the long representation of the division.
+	 * @throws IllegalArgumentException if the other long is 0
+	 */
+	public static Long divideLongs( Long number, Long other) throws IllegalArgumentException{
+		if (other.longValue() == 0) {
+			throw new IllegalArgumentException("Division by zero: " + other);
+		} 
+		return new Long ( number.longValue() / other.longValue());
+	}
+	/**
+	 * Symbiotic comparision between longs. Returns true if a given long is less than another long passed as second argument.
+	 * @param number a long.
+	 * @param other another long.
+	 * @return boolean resulting of the comparison. 
+	 */
+	public static boolean opltxLongs( Long number, Long other) throws IllegalArgumentException{
+		return ( number.longValue() < other.longValue());
+	}
+	
+	/**
+	 * Symbiotic comparision between longs. Returns true if a given long is greater than another long passed as second argument.
+	 * @param number a long.
+	 * @param other another long.
+	 * @return boolean resulting of the comparison. 
+	 */
+	public static boolean opgtxLongs( Long number, Long other) throws IllegalArgumentException{
+		return ( number.longValue() > other.longValue());
+	}
+	
 }

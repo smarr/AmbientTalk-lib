@@ -427,7 +427,7 @@ def AmbientRefModule := object: {
 				FuturesModule.when: a<-testMethod(5)@FuturesModule.FutureMessage becomes: { |v|
 					self.assertEquals(6,v);
 				};
-		};
+		    };
 	  };
     };
 };

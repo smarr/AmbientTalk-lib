@@ -25,22 +25,24 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
  
+def LibraryTestSuiteModule := object: {
+
  /*
   * Unit test suite that tests the entire AmbientTalk/2 library.
   */
-def StandardTestSuite := /.at.unit.test.TestSuite.new("atlib testsuite", [
-  /.at.collections.vector.VectorTest(),
-  /.at.demo.InstantMessenger.InstantMessengerTest(),
-  /.at.demo.mobiTunes.MobiTunesTest(),
-  /.at.lang.futures.FuturesTest(),
-  /.at.lang.ambientrefs.AmbientRefsTest(),
-  /.at.support.timer.TimerTest() ]);
+  def StandardTestSuite := /.at.unit.test.TestSuite.new("atlib testsuite", [
+    /.at.collections.vector.VectorTest(),
+    /.at.demo.InstantMessenger.InstantMessengerTest(),
+    /.at.demo.mobiTunes.MobiTunesTest(),
+    /.at.lang.futures.FuturesTest(),
+    /.at.lang.ambientrefs.AmbientRefsTest(),
+    /.at.support.timer.TimerTest() ]);
 
-def testATDistribution() {
-  // first perform a self-test to see if unit tests work
-  /.at.unit.test.selfTest();
-  // then perform the standard unit test suite
-  StandardTestSuite.runTest();
-  // also test the tutorial examples
-  /.at.tutorial.tutorialTestSuite.runTest();
+  def testATDistribution() {
+    // first perform a self-test to see if unit tests work
+    /.at.unit.test.selfTest();
+    // then perform the standard unit test suite
+    StandardTestSuite.runTest();
+  };
+  
 };

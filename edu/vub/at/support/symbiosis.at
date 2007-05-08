@@ -32,10 +32,33 @@
  */
  
  def PrimitiveJavaConversion := jlobby.edu.vub.at.support.PrimitiveJavaConversion;
- 
+ def Long := jlobby.java.lang.Long;
+
  def SymbiosisModule := object: {
+ 
    def long(nbr) { PrimitiveJavaConversion.intToLong(nbr) };
    def short(nbr) { PrimitiveJavaConversion.intToShort(nbr) };
    def float(frc) { PrimitiveJavaConversion.doubleToFloat(frc) };
    def byte(nbr) { PrimitiveJavaConversion.intToByte(nbr) };  
- }
+
+	//Arithmetic operations on longs
+	def Long.+(other) {
+  		PrimitiveJavaConversion.addLongs(self, other)
+	};
+	def Long.-(other) {
+  		PrimitiveJavaConversion.subtractLongs(self, other)
+	};
+	def Long.*(other) {
+  		PrimitiveJavaConversion.multiplyLongs(self, other)
+	};
+	def Long./(other) {
+  		PrimitiveJavaConversion.divideLongs(self, other)
+	};
+	def Long.>(other) {
+  		PrimitiveJavaConversion.opgtxLongs(self, other)
+	};
+	def Long.<(other) {
+  		PrimitiveJavaConversion.opltxLongs(self, other)
+	};
+
+}
