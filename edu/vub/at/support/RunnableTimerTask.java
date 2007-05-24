@@ -27,6 +27,7 @@
  */
 package edu.vub.at.support;
 
+import java.util.EventListener;
 import java.util.TimerTask;
 
 /**
@@ -39,9 +40,13 @@ import java.util.TimerTask;
  */
 public class RunnableTimerTask extends TimerTask {
 
-	private final Runnable runnable_;
+	public interface AsyncRunnable extends EventListener {
+		public void run();
+	};
 	
-	public RunnableTimerTask(Runnable r) {
+	private final AsyncRunnable runnable_;
+	
+	public RunnableTimerTask(AsyncRunnable r) {
 		runnable_ = r;
 	}
 
