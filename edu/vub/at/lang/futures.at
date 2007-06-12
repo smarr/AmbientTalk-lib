@@ -267,6 +267,27 @@ def FuturesModule := object: {
 		whenFuture; // when returns a future itself
 	};
 
+  // groups a table of futures into a single future which is resolved
+  // with a table of values or ruined with an exception
+	// when: (group: [ a<-m(), b<-n() ]) becomes: { |values| ... }
+	def group: futures {
+		def [futForAll, res] := makeFuture();
+		def resolutions[futures.length] { nil };
+		def nextUnresolved := 0;
+		futures.each: { |future|
+			when: future becomes: { |val|
+				nextUnresolved := nextUnresolved + 1;
+				resolutions[nextUnresolved] := val;
+				if: (nextUnresolved == futures.length) then: {
+					res.resolve(resolutions);
+				};
+			} catch: { |e|
+				res.ruin(e); // ! only first exception is propagated
+			};
+		};
+		futForAll;
+	};
+
   // make the Future stripe publicly visible
   def Future := Future;
 
@@ -348,9 +369,9 @@ def FuturesModule := object: {
   
   def FuturesTest() {
    extend: /.at.unit.test.UnitTest.new("futures test") with: {
-    
-    def foo() { 5 };
     enableFutures(false);
+
+    def foo() { 5 };    
     
     def testFutureCreation() {
       def [fut,res] := makeFuture();
@@ -370,6 +391,18 @@ def FuturesModule := object: {
         self.assertEquals(5,v);
       };
     };
+
+    def testAsyncGroup() {
+	    def o := object: {
+			  def m() { 5 };
+			  def n() { 6 };
+			};
+			def f := group: [ o<-m()@FutureMessage, o<-n()@FutureMessage ];
+			when: f becomes: { |vals|
+				self.assertEquals(2, vals.length);
+				self.assertEquals(11, vals[1]+vals[2]);
+			};
+    }
    };
   };
 };

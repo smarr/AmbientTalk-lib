@@ -83,3 +83,25 @@ def functor: closure {
   } stripedWith: [ Closure ];
   extend: functorPrototype with: closure;
 };
+
+// infinite asynchronous loop
+def loop: code {
+	code();
+	self<-loop: code;
+	nil;
+};
+
+// asynchronous if-test
+def whenTrue: boolFut then: cons else: alt {
+	boolFut<-ifTrue: cons ifFalse: alt;
+};
+
+// asynchronous while loop over future-type conditional
+// requires futures to be enabled by default!
+def asLongAs: cond do: body {
+	cond()<-ifTrue: {
+		body();
+		asLongAs: cond do: body;
+	};
+	nil;
+};
