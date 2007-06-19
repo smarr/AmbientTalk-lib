@@ -70,7 +70,7 @@ def table: size fill: closure {
 };*/
 
 def functor: closure {
-  defstripe Closure;
+  deftype Closure;
   def functorPrototype := object: {
     // to be overridden by children
     def run(@args) { nil };
@@ -80,7 +80,7 @@ def functor: closure {
     def getMethod() { (reflect: self.run).method };
     def getContext() { (reflect: self.run).context };
     def escape() { self.run.escape() };
-  } stripedWith: [ Closure ];
+  } taggedAs: [ Closure ];
   extend: functorPrototype with: closure;
 };
 

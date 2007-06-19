@@ -1,6 +1,6 @@
 import ~.values;
 
-def isMethodDefinition: statement { is: statement stripedWith: /.at.stripes.MethodDefinition; };
+def isMethodDefinition: statement { is: statement taggedAs: /.at.types.MethodDefinition; };
 
 def restrict: object to: interface {
 	def statements := interface.method.bodyExpression.statements;

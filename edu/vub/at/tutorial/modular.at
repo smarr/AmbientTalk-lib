@@ -135,36 +135,36 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 		self.assertTrue((reflect: Range).respondsTo(`detect:));
 	};
 	
-	/* == Stripes == */
+	/* == Types == */
 	
-	def testStripeTest() {
-		defstripe Indexable;
-		defstripe Enumerable;
-		defstripe Ordered;
-		defstripe Sortable <: Enumerable, Ordered;
-		defstripe Set;
+	def testTypeTagTest() {
+		deftype Indexable;
+		deftype Enumerable;
+		deftype Ordered;
+		deftype Sortable <: Enumerable, Ordered;
+		deftype Set;
 		
 		def Array := object: {
 			nil
-		} stripedWith: [ Indexable, Sortable ];
+		} taggedAs: [ Indexable, Sortable ];
 		
-		self.assertTrue(is: Array stripedWith: Indexable);
-		self.assertTrue(is: Array stripedWith: Ordered);
-		self.assertFalse(is: Array stripedWith: Set);
-		def arrayStripes := stripesOf: Array;
-		self.assertEquals(2, arrayStripes.length);
-		self.assertNotNil(arrayStripes.find: {|s| s == Indexable });
-		self.assertNotNil(arrayStripes.find: {|s| s == Sortable });
+		self.assertTrue(is: Array taggedAs: Indexable);
+		self.assertTrue(is: Array taggedAs: Ordered);
+		self.assertFalse(is: Array taggedAs: Set);
+		def arrayTypes := tagsOf: Array;
+		self.assertEquals(2, arrayTypes.length);
+		self.assertNotNil(arrayTypes.find: {|s| s == Indexable });
+		self.assertNotNil(arrayTypes.find: {|s| s == Sortable });
 	};
 	
-	def testNativeStripes() {
-		self.assertTrue(is: 1 stripedWith: /.at.stripes.Number);
-		self.assertTrue(is: "foo" stripedWith: /.at.stripes.Text);
+	def testNativeTypeTags() {
+		self.assertTrue(is: 1 taggedAs: /.at.types.Number);
+		self.assertTrue(is: "foo" taggedAs: /.at.types.Text);
 	};
 
   /* == Exception Handling == */
 
-	defstripe DivisionByZero <: lobby.at.stripes.Exception;
+	deftype DivisionByZero <: lobby.at.types.Exception;
 	def XDivisionByZero := lobby.at.exceptions.createException(DivisionByZero);
 
   def calculateSomething() {
@@ -192,7 +192,7 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 		} using: (object: {
 		  // this is a first-class handler object
 		  def canHandle(exc) {
-		    is: exc stripedWith: DivisionByZero
+		    is: exc taggedAs: DivisionByZero
 		  };
 		  def handle(exc) {
 		    test.assertEquals("division by zero", exc.message);
@@ -202,7 +202,7 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 
   // test multitple catch blocks
   def testMultipleExceptions() {
-	  defstripe NoSolution;
+	  deftype NoSolution;
 		try: {
 		  calculateSomething();
 		  self.assertFalse(true, "expected exception");

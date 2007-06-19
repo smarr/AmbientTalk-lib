@@ -14,7 +14,7 @@ def createInstantMessenger() {
 
   def username := "anonymous";
 
-  defstripe InstantMessenger;
+  deftype InstantMessenger;
 
   def TextMessage := isolate: {
 	  def from := nil;

@@ -57,7 +57,7 @@
  * @author tvcutsem
  */
  
-defstripe AssertionFailed <: /.at.stripes.Exception;
+deftype AssertionFailed <: /.at.types.Exception;
 def XAssertionFailed := /.at.exceptions.createException(AssertionFailed);
 
 def FuturesModule := /.at.lang.futures;
@@ -166,7 +166,7 @@ def UnitTest := object: {
 					reporter.success(methName);
 					asyncTestFinished();
 				} catch: { |e|
-					if: (is: e stripedWith: AssertionFailed) then: {
+					if: (is: e taggedAs: AssertionFailed) then: {
 						reporter.failure(methName, e);
 					} else: {
 						reporter.error(methName, e);
@@ -183,7 +183,7 @@ def UnitTest := object: {
 					reporter.success(methName);
 				} catch: AssertionFailed using: {|e|
 					reporter.failure(methName, e);
-				} catch: /.at.stripes.Exception using: { |e|
+				} catch: /.at.types.Exception using: { |e|
 					reporter.error(methName, e);
 				};
 			}
@@ -249,7 +249,7 @@ def TestModule := object: {
 		  def testFalse() { self.assertFalse(dow[2]==dow[3]) };
 		  def testNotEquals() { self.assertNotEquals(dow[2],dow[3]) };
 		  def testLessThan() { self.assertLessThan(dow[1].explode().length, dow[2].explode().length) };
-		  def testException() { self.assert: /.at.stripes.IndexOutOfBounds raisedIn: { dow[8] } };
+		  def testException() { self.assert: /.at.types.IndexOutOfBounds raisedIn: { dow[8] } };
       def testAsyncSend() {
 	      FuturesModule.when: dow<-at(1)@FuturesModule.FutureMessage becomes: { |v|
 		      self.assertEquals("mo", v);

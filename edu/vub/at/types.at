@@ -1,0 +1,72 @@
+/* definition of native AmbientTalk/2 types */
+
+// defines whether an object is an isolate or not
+deftype Isolate;
+
+// defines whether a message is directed to the base object or its mirror
+deftype Meta;
+
+deftype Boolean;
+deftype Closure;
+deftype Context;
+deftype Field;
+deftype Handler;
+deftype Method;
+deftype Message;
+deftype MethodInvocation <: Message;
+deftype Delegation <: Message;
+deftype AsyncMessage <: Message;
+deftype Mirror;
+deftype ActorMirror;
+deftype TypeTag <: Isolate;
+deftype FarReference;
+
+// abstract grammar
+deftype AbstractGrammar;
+deftype Statement <: AbstractGrammar; // TODO: still need to tag those AG elements
+deftype Expression <: Statement;
+
+// literal values
+deftype Table <: Expression;
+deftype Text <: Expression;
+deftype Numeric <: Expression;
+deftype Number <: Numeric;
+deftype Fraction <: Numeric;
+deftype Symbol <: Expression;
+deftype Begin <: AbstractGrammar;
+deftype Splice <: Expression;
+deftype UnquoteSplice <: Expression;
+deftype MessageCreation <: Expression;
+deftype Definition <: Statement;
+deftype MethodDefinition <: Definition;
+
+
+// exception types
+deftype Exception;
+deftype ArityMismatch <: Exception;
+deftype ClassNotFound <: Exception;
+deftype DuplicateSlot <: Exception;
+deftype IllegalApplication <: Exception;
+deftype IllegalArgument <: Exception;
+deftype IllegalIndex <: Exception;
+deftype IllegalOperation <: Exception;
+deftype IllegalParameter <: Exception;
+deftype IllegalQuote <: Exception;
+deftype IllegalSplice <: Exception;
+deftype IllegalUnquote <: Exception;
+deftype IndexOutOfBounds <: Exception;
+deftype IOProblem <: Exception;
+deftype NotInstantiatable <: Exception;
+deftype ParseError <: Exception;
+deftype ReflectionFailure <: Exception;
+deftype SelectorNotFound <: Exception;
+deftype SymbiosisFailure <: Exception;
+deftype TypeMismatch <: Exception;
+deftype UnassignableField <: Exception;
+deftype UndefinedSlot <: Exception;
+deftype JavaException <: Exception;
+deftype ImportConflict <: Exception;
+deftype ObjectOffline <: Exception;
+
+// make all definitions in this file public
+self

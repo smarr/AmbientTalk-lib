@@ -52,10 +52,10 @@ def debug(@args) {
  * reference: it points to a single remote object, and does not
  * break the bond with its principal upon disconnection.
  */
-def createSturdyUniRef(stripe) {
+def createSturdyUniRef(type) {
 	def [arFuture, arResolver] := FuturesModule.makeFuture();
 	
-	when: stripe discovered: { |remoteRef|
+	when: type discovered: { |remoteRef|
 		arResolver.resolve(remoteRef)
 	};
 	
@@ -71,13 +71,13 @@ def createSturdyUniRef(stripe) {
  *  into more high-level, ambient reference-related events
  */
 
-defstripe AmbientRef; // stripe of a base-level ambient reference
-defstripe ARefMessage <: OneWayMessage; // stripe signifying that the message is destined for the AR itself
+deftype AmbientRef; // type of a base-level ambient reference
+deftype ARefMessage <: OneWayMessage; // type signifying that the message is destined for the AR itself
 
 def makeAmbientRef(serviceType, TCardinality, TElasticity) {
 	object: {
 		nil // an ambient reference is an empty proxy object
-	} stripedWith: [AmbientRef] mirroredBy: makeAmbientRefMirror(serviceType, TCardinality, TElasticity);
+	} taggedAs: [AmbientRef] mirroredBy: makeAmbientRefMirror(serviceType, TCardinality, TElasticity);
 };
 
 // create a new ambient reference mirror.
@@ -171,7 +171,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 		
 		// received messages are either processed by mirror itself or delegated to TCardinality
 		def receive(msg) {
-			if: (is: msg stripedWith: ARefMessage) then: {
+			if: (is: msg taggedAs: ARefMessage) then: {
 				self <+ msg;
 			} else: {
 				self.acceptMessage(msg); // provided by cardinality trait
@@ -200,18 +200,18 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 		// TODO: ensure that an ambient ref has the same elasticity/cardinality at the remote end
 		// does a passed AR remain bound to same principals?
 		def pass() {
-			object: { nil } stripedWith: [/.at.stripes.Isolate] mirroredBy: (
+			object: { nil } taggedAs: [/.at.types.Isolate] mirroredBy: (
 				extend: defaultMirror with: { |serviceType|
 					def resolve() {
 						// when arriving at the remote host, create a new local ambient reference
 						/.at.lang.ambientrefs.ambient: serviceType
 					};
-				} stripedWith: [ /.at.stripes.Isolate ]);
+				} taggedAs: [ /.at.types.Isolate ]);
 		};
 	};
 };
 
-defstripe XUnimplemented <: /.at.stripes.Exception;
+deftype XUnimplemented <: /.at.types.Exception;
 def abstractMethod(name) {
 	raise: /.at.exceptions.createException(XUnimplemented).new("Invoked abstract method: "+name);
 };
@@ -390,7 +390,7 @@ def AmbientRefModule := object: {
 	// if ambientRef is indeed an ambient reference, add an observer,
 	// otherwise perform the default behaviour
 	def when: ambientRef disconnected: code {
-		if: (is: ambientRef stripedWith: AmbientRef) then: {
+		if: (is: ambientRef taggedAs: AmbientRef) then: {
 			(reflect: ambientRef).addDisconnectionObserver(code);
 		} else: {
 			nativeWhen: ambientRef disconnected: code
@@ -400,7 +400,7 @@ def AmbientRefModule := object: {
 	// if ambientRef is indeed an ambient reference, add an observer,
 	// otherwise perform the default behaviour
 	def when: ambientRef reconnected: code {
-		if: (is: ambientRef stripedWith: AmbientRef) then: {
+		if: (is: ambientRef taggedAs: AmbientRef) then: {
 			(reflect: ambientRef).addConnectionObserver(code);
 		} else: {
 			nativeWhen: ambientRef reconnected: code
@@ -409,9 +409,9 @@ def AmbientRefModule := object: {
 	
 	def AmbientRefsTest() {
 	  extend: /.at.unit.test.UnitTest.new("AmbientRefTest") with: {
-			defstripe Foo;
+			deftype Foo;
 			def providerHost := actor: {
-				defstripe Foo;
+				deftype Foo;
 				def service := object: {
 					def testMethod(x) { system.println("testMethod invoked with x = " + x); x+1 };
 				};

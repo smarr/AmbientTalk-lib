@@ -42,7 +42,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
 
   def testAIsFarReference() {
-    self.assertTrue(is: a stripedWith: /.at.stripes.FarReference)
+    self.assertTrue(is: a taggedAs: /.at.types.FarReference)
   };
 
   def testSayHello() {
@@ -60,7 +60,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
 
   def testCalcIsFarReference() {
-    self.assertTrue(is: calculator stripedWith: /.at.stripes.FarReference);
+    self.assertTrue(is: calculator taggedAs: /.at.types.FarReference);
   };
 
   def testAsyncAddSimpleNumbers() {
@@ -70,7 +70,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
       def result(sum) {
         try: {
           res.resolve(test.assertEquals(3, sum));
-        } catch: /.at.stripes.Exception using: { |e|
+        } catch: /.at.types.Exception using: { |e|
           res.ruin(e);
         }
       };
@@ -91,7 +91,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
   
   def testComplexNumberIsIsolate() {
-    self.assertTrue(is: complexNumber stripedWith: /.at.stripes.Isolate);
+    self.assertTrue(is: complexNumber taggedAs: /.at.types.Isolate);
   };
   
   def testComplexnumberAdd() {
@@ -106,7 +106,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
             test.assertEquals(sum.re, 3);
             test.assertEquals(sum.im, 3);
             res.resolve(true);
-          } catch: /.at.stripes.Exception using: { |e|
+          } catch: /.at.types.Exception using: { |e|
             res.ruin(e);
           }
         };
@@ -119,7 +119,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
     def adder := isolate: {
       def add(n) { x + n };
     };
-    self.assert: /.at.stripes.UndefinedSlot raisedIn: {
+    self.assert: /.at.types.UndefinedSlot raisedIn: {
       adder.add(3)
     };
   };
@@ -134,7 +134,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 
   def testFuture() {
 	def sum := calculator<-add(1,2)@FutureMessage;
-	self.assertTrue(is: sum stripedWith: Future);
+	self.assertTrue(is: sum taggedAs: Future);
   };
 
   def testAsyncWhenBecomes() {
@@ -143,7 +143,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
     def fut := when: sumFuture becomes: { |sum|
       test.assertEquals(3, sum);
     };
-    self.assertTrue(is: fut stripedWith: Future);
+    self.assertTrue(is: fut taggedAs: Future);
     fut;
   };
 
@@ -151,10 +151,10 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 		def divFuture := calculator<-divide(5,0)@FutureMessage;
 		def fut := when: divFuture becomes: { |div|
 		  self.assertFalse(true); // force exception, expected exception
-		} catch: /.at.stripes.IllegalArgument using: { |exc|
+		} catch: /.at.types.IllegalArgument using: { |exc|
 		  nil // ok, division by zero
 		};
-		self.assertTrue(is: fut stripedWith: Future);
+		self.assertTrue(is: fut taggedAs: Future);
 		fut;
 	};
 
@@ -175,7 +175,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 		def fut := when: calculator<-add(1,2)@FutureMessage becomes: { |sum|
 		  calculator<-add(sum,3)
 		};
-		self.assertTrue(is: fut stripedWith: Future);
+		self.assertTrue(is: fut taggedAs: Future);
 	};
 	
 	def testExplicitFutures() {

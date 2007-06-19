@@ -33,7 +33,7 @@ def DEFAULTCAPACITY := 10;
 def DEFAULTCOMPARATOR := {|e1,e2| e1 == e2};
 
 def XIndexOutOfBounds := /.at.exceptions.XIndexOutOfBounds;
-defstripe StackUnderflow <: /.at.stripes.Exception;
+deftype StackUnderflow <: /.at.types.Exception;
 def XStackUnderflow := /.at.exceptions.createException(StackUnderflow).new("Cannot pop empty stack");
 
 def VectorPrototype := object: {
@@ -288,7 +288,7 @@ def VectorPrototype := object: {
 		elements.select(1,free);
 	};
 	
-} stripedWith: [/.at.stripes.Table];
+} taggedAs: [/.at.types.Table];
 
 def VectorModule := object: {
 

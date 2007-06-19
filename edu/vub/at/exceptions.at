@@ -25,20 +25,20 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-def Stripes := /.at.stripes;
+def Types := /.at.types;
 
 def createException(ofType) {
 	object: {
-		def stackTrace := "unknown trace for " + ofType.stripeName;
-		def message := ofType.stripeName.text + " exception";
+		def stackTrace := "unknown trace for " + ofType.typeName;
+		def message := ofType.typeName.text + " exception";
 		def getMessage() { message };
 		def init(msg := "no message given") {
 			message := msg;
 		};
-	} stripedWith: [ofType];
+	} taggedAs: [ofType];
 };
 
-def IndexOutOfBoundsPrototype := extend: createException(Stripes.IndexOutOfBounds) with: {
+def IndexOutOfBoundsPrototype := extend: createException(Types.IndexOutOfBounds) with: {
 	def min;
 	def max;
 	def idx;
@@ -48,11 +48,11 @@ def IndexOutOfBoundsPrototype := extend: createException(Stripes.IndexOutOfBound
 		self.max := max;
 		self.idx := idx;
 	}; 
-} stripedWith: [ Stripes.IndexOutOfBounds ];
+} taggedAs: [ Types.IndexOutOfBounds ];
 
 def ExceptionModule := object: {
 	def createException := createException;
-	def XException := createException(Stripes.Exception);
+	def XException := createException(Types.Exception);
 
 	def XArityMismatch := 
 		jlobby.edu.vub.at.exceptions.XArityMismatch.new("object:", 1, 0);

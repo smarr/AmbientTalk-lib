@@ -72,7 +72,7 @@ def Vector := jlobby.java.util.Vector;
 def THRESHOLD := 25;
 
 // music players are exported using this service type
-defstripe MusicPlayer;
+deftype MusicPlayer;
 
 // this prototype is the result of loading the mobiTunes file
 def MobiTunesPrototype := object: {
@@ -206,8 +206,8 @@ def MobiTunesPrototype := object: {
 		     // future with an exception
 		     /*rebind: session to: (object: { nil } mirroredBy: (mirror: {
 			     def doesNotUnderStand(selector) {
-				     defstripe DisconnectedException <: /.at.stripes.Exception;
-				     raise: object: { nil } stripedWith: [ DisconnectedException ]
+				     deftype DisconnectedException <: /.at.types.Exception;
+				     raise: object: { nil } taggedAs: [ DisconnectedException ]
 			     };
 		     }));*/
 		

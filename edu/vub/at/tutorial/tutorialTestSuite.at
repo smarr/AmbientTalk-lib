@@ -36,5 +36,6 @@ def tut := /.at.tutorial;
  */
 def TutorialTestSuite := /.at.unit.test.TestSuite.new("tutorial testsuite", [
   tut.basic,
+  tut.multiparadigm,
   tut.modular,
   tut.concurrency ]);

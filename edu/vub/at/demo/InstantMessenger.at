@@ -21,7 +21,7 @@ def IMListener := object: {
 def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user.name"),
                            listener := IMListener) {
   
-  defstripe InstantMessenger;
+  deftype InstantMessenger;
 
   def TextMessage := isolate: {
     def from := nil;

@@ -317,7 +317,7 @@ def ObjectListing := object: {
 			printedForm.setText( jlobby.java.lang.String.new(valueMirror.print()));
 			listForm.setListData(listContents); 
 
-		} catch: /.at.stripes.Exception using: { | e |
+		} catch: /.at.types.Exception using: { | e |
 			swing.JOptionPane.showMessageDialog(
 				super.thisDialog,
 				"Could not inspect "+value,

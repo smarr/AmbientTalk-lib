@@ -8,9 +8,9 @@ def Vector := /.at.collections.vector.Vector;
 def RENEWALONCALL := millisec(10); // default call time renewal 
 def LEASETIME := millisec(15); // default lease time
 
-defstripe LeasedRef;
-defstripe ClientLeasedRef;
-def Isolate := /.at.stripes.Isolate;
+deftype LeasedRef;
+deftype ClientLeasedRef;
+def Isolate := /.at.types.Isolate;
 
 def createLeasingMirror(principal, timeout := LEASETIME) { mirror: {
 	
@@ -83,14 +83,14 @@ def createLeasingMirror(principal, timeout := LEASETIME) { mirror: {
 		if: !(expired) then: {
 			def remoteLease := self;
 		    def timeout := getTimeLeft();
-			object: { nil } stripedWith: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout|
+			object: { nil } taggedAs: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout|
 				
-				defstripe ClientLeasedRef;
+				deftype ClientLeasedRef;
 				def resolve() {	
 					import /.at.lang.clientleasedrefs;	
-					object: {nil} stripedWith: [ClientLeasedRef] mirroredBy: createClientLeasingMirror(remoteLease, timeout);
+					object: {nil} taggedAs: [ClientLeasedRef] mirroredBy: createClientLeasingMirror(remoteLease, timeout);
 				};
-			} stripedWith: [Isolate]);
+			} taggedAs: [Isolate]);
 		} else: { system.println("pass:expired")}	
 	};
 	
@@ -116,13 +116,13 @@ def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := t
 			if: !(self.expired) then: {
 				def remoteLease := self;
 			    def timeout := super^getTimeLeft();
-				object: { nil } stripedWith: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout, renewal|	
-					defstripe ClientLeasedRef;
+				object: { nil } taggedAs: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout, renewal|	
+					deftype ClientLeasedRef;
 					def resolve() {	
 						import /.at.lang.clientleasedrefs;		
-						object: {nil} stripedWith: [ClientLeasedRef] mirroredBy: createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal);
+						object: {nil} taggedAs: [ClientLeasedRef] mirroredBy: createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal);
 					};
-				} stripedWith: [Isolate]);
+				} taggedAs: [Isolate]);
 			} else: { system.println("pass:expired")}
 	};
 		
@@ -151,13 +151,13 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 		    def timeout := super^getTimeLeft();
 			def selectors := forSelectors;
 		
-			object: { nil } stripedWith: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout, selectors|
-				defstripe ClientLeasedRef;
+			object: { nil } taggedAs: [Isolate] mirroredBy: (extend: defaultMirror with: { |remoteLease, timeout, selectors|
+				deftype ClientLeasedRef;
 				def resolve() {	
 					import /.at.lang.clientleasedrefs;		
-					object: {nil} stripedWith: [ClientLeasedRef] mirroredBy: createLeasingWithSingleUseMirror(remoteLease, timeout, selectors);			
+					object: {nil} taggedAs: [ClientLeasedRef] mirroredBy: createLeasingWithSingleUseMirror(remoteLease, timeout, selectors);			
 				};
-			} stripedWith: [Isolate]);
+			} taggedAs: [Isolate]);
 		} else: { system.println("pass:expired")}	
 	};
 
@@ -168,14 +168,14 @@ def LeasingModule := object: {
 	
 	//Construct a lease that lasts for a given period of time.
 	def lease: timeout for: obj  {
-		object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingMirror(obj, timeout)
+		object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingMirror(obj, timeout)
 	};
 	
 	/* Construct a lease for only a single call. The lease is alive for the given period unless
 	it has processed a single message. This is a useful lease for callback objects, such as futures.
 	*/
 	def singleCallLease: timeout for: obj {
-		object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout)
+		object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout)
 	};
 	
 	/* Customizable version of singleCallLeasee where one can determine
@@ -184,7 +184,7 @@ def LeasingModule := object: {
 	the same effect than singleCallLease construct.
 	*/
 	def singleCallLease: timeout revokedOn: selectors for: obj {
-		object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout, selectors)
+		object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout, selectors)
 	};
 	
 	/* Construct a lease which keeps the object alive for the given period. 
@@ -193,14 +193,14 @@ def LeasingModule := object: {
     the given period, its access expires. The lease can always be explicitely revoked earlier.
     */
 	def renewOnCallLease: timeout for: obj {
-	    object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout)
+	    object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout)
 	};
 	
 	/* Customizable version of renewedOnCallLease where one can determine
 	the renewal time instead of using timeout. 
 	*/
 	def renewOnCallLease: timeout renewedWith: renewalTime for: obj {
-	    object: { nil } stripedWith: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout, renewalTime)
+	    object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout, renewalTime)
 	};
 			 
 	// Tries to renew explicitly the lease.		
@@ -223,10 +223,10 @@ def LeasingModule := object: {
 		//Note that when:expired: on lease references places an observer on the server side while
 		//when:expired: of remote far references on the client side.
 		
-		if: ((is: leasedRef stripedWith: LeasedRef) & !(is: leasedRef stripedWith: /.at.stripes.FarReference)) then: {
+		if: ((is: leasedRef taggedAs: LeasedRef) & !(is: leasedRef taggedAs: /.at.types.FarReference)) then: {
 			(reflect: leasedRef).addExpiredObserver(code) 
 		} else: {
-			if: (is: leasedRef stripedWith: ClientLeasedRef) then: { 
+			if: (is: leasedRef taggedAs: ClientLeasedRef) then: { 
 				(reflect: leasedRef).addExpiredObserver(code) 
 			} else: {
 			//call the native when:takenOffline: of remote far references. 
