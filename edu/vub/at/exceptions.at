@@ -51,7 +51,7 @@ def IndexOutOfBoundsPrototype := extend: createException(Types.IndexOutOfBounds)
 } taggedAs: [ Types.IndexOutOfBounds ];
 
 def ExceptionModule := object: {
-	def createException := createException;
+	def createException := &createException;
 	def XException := createException(Types.Exception);
 
 	def XArityMismatch := 

@@ -151,6 +151,8 @@ def FutureMirror := mirror: {
 		};
 	};
 
+    def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
+
 	// it is illegal to invoke methods synchronously on a future
 	def invoke(rcv, sel, arg) {
 		// the only legal operation on futures is '=='
@@ -231,7 +233,7 @@ def FuturesModule := object: {
 	// support for first-class futures: returns a pair
 	// [ future, resolver]. The resolver can be used to easily resolve
 	// or ruin the corresponding future
-  def makeFuture := makeFuture;
+    def makeFuture := &makeFuture;
 
 	// when-catch support, version without a catch block
 	def when: future becomes: resolvedBlock {
@@ -309,7 +311,7 @@ def FuturesModule := object: {
 		// can only change this default from 'false' to 'true'
 		// once set to 'true', the default may no longer change
 		// (as it may break existing code that relies on implicit futures)
-		if: ((!enableFuturesOnDefaultMessages) & enabledByDefault) then: {
+		if: ((!enableFuturesOnDefaultMessages).and: {enabledByDefault}) then: {
 			system.println("[futures.at] futures are now enabled by default on " + actor);
 			enableFuturesOnDefaultMessages := enabledByDefault;
 		};
@@ -387,7 +389,7 @@ def FuturesModule := object: {
     };
     
     def testAsyncWhen() {
-      when: (foo<-apply([])@FutureMessage) becomes: { |v|
+      when: &foo<-apply([])@FutureMessage becomes: { |v|
         self.assertEquals(5,v);
       };
     };

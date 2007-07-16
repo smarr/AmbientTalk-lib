@@ -103,7 +103,7 @@ def VectorPrototype := object: {
 		def cloned := self.new(elements.length, comparator);
 		cloned.free := free;
 		1.to: free do: { |i| cloned.atPut(i, fun(elements[i])) };
-    cloned
+        cloned
 	};
 	
 	def inject: init into: accum {
@@ -179,10 +179,11 @@ def VectorPrototype := object: {
 		tmp
   };
 
-  // push adds elements to the back of the vector
-  def push(element) { add(element) };
-  // pop deletes elements from the back of the vector
-  def pop() {
+    // push adds elements to the back of the vector
+    def push(element) { add(element) };
+    
+    // pop deletes elements from the back of the vector
+    def pop() {
 	  if: (self.isEmpty()) then: { raise: XStackUnderflow };
 	  delete(free-1);
 	};

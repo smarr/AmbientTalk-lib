@@ -57,7 +57,7 @@ def Song := object: {
 	// override equality of songs to be based on their artist and title
 	// rather than on their object identity
 	def ==(other) {
-		(artist == other.artist) & (title == other.title);
+		(artist == other.artist).and: {title == other.title};
 	};
 	def play() {
 		timesPlayed := timesPlayed + 1;

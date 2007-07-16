@@ -41,10 +41,10 @@ def TimerTask := jlobby.java.util.TimerTask;
 def long := jlobby.java.lang.Long.TYPE;
 
 def theTimer := Timer.new();
-def scheduleMethod := theTimer.schedule.cast(TimerTask, long);
-def scheduleAtFixedRateMethod := theTimer.schedule.cast(TimerTask, long, long);
+def scheduleMethod := theTimer.&schedule.cast(TimerTask, long);
+def scheduleAtFixedRateMethod := theTimer.&schedule.cast(TimerTask, long, long);
 
-def makeLong := /.at.support.symbiosis.long;
+def makeLong := /.at.support.symbiosis.&long;
 
 def TimerModule := object: {
 	  

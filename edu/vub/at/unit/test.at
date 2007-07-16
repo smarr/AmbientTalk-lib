@@ -70,7 +70,7 @@ def assert(bln, reason) {
 def retrieveTestMethodNames(obj) {
 	def methodNames := [];
 	while: { !(nil == obj) } do: {
-		def localTestMethods := ((reflect: obj).listMethods().filter: { |mth| mth.name.text ~= "test.*" });
+		def localTestMethods := ((reflect: obj).listMethods().filter: { |mth| mth.name.text ~= "\\Atest.*" });
 		methodNames := methodNames + (localTestMethods.map: { |mth| mth.name });
 		obj := obj.super;
 	};
@@ -157,11 +157,11 @@ def UnitTest := object: {
 		reporter.start(self.name, testMethods.length);
 		
 		testMethods.each: { |methName|
-			if: (methName.text ~= "testAsync.*") then: {
+			if: (methName.text ~= "\\AtestAsync.*") then: {
 				// asynchronous unit test
 				numAsyncTests := numAsyncTests + 1;
 				self.setUp();
-				def fut := (reflect: self).select(self, methName).apply([]);
+				def fut := (reflect: self).invoke(self, methName, []);
 				FuturesModule.when: fut becomes: { |val|
 					reporter.success(methName);
 					asyncTestFinished();
@@ -178,7 +178,7 @@ def UnitTest := object: {
 				// synchronous unit test
 				try: {
 					self.setUp();
-					(reflect: self).select(self, methName).apply([]);
+					(reflect: self).invoke(self, methName, []);
 					self.tearDown();
 					reporter.success(methName);
 				} catch: AssertionFailed using: {|e|
@@ -268,7 +268,7 @@ def TestModule := object: {
 			def failure(@args) { fail := fail + 1 };
 			def error(@args) { err := err + 1 };
 			def stop(@args) {
-				if: !((succ == 7) & (fail == 1) & (err == 1)) then: {
+				if: !((succ == 7).and: { fail == 1 }.and: { err == 1}) then: {
 					system.println("Unit Test self-checking test failed!");
 				} else: {
 					system.println("Unit test module ok");

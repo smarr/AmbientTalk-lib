@@ -101,7 +101,7 @@ extend: /.at.unit.test.UnitTest.new("MultiParadigmTest") with: {
 		  def square(x) { x*x };
 		};
 
-		def squareClo := Math.square;
+		def squareClo := Math.&square;
 		self.assertEquals(4,squareClo(2));
 		
 		def Adder := object: {
@@ -114,7 +114,7 @@ extend: /.at.unit.test.UnitTest.new("MultiParadigmTest") with: {
 		  };
 		};
 		self.assertEquals(print: [2,3,4],
-			                print: [1,2,3].map: Adder.new(1).addTo);
+			                print: [1,2,3].map: Adder.new(1).&addTo);
   };
 
   def testFirstClassMessages() {

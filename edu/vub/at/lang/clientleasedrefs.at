@@ -1,7 +1,7 @@
 def TimerModule := /.at.support.timer;
 import TimerModule;
  
-def maxMethod := jlobby.java.lang.Math.max;
+def maxMethod := jlobby.java.lang.Math.&max;
 def Vector := /.at.collections.vector.Vector;
 
 // TODO: Note that these definitions should have the same value as in the server leased references. 

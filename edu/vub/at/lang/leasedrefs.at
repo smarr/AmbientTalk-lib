@@ -2,7 +2,7 @@ def TimerModule := /.at.support.timer;
 import TimerModule;
 
 def long := jlobby.java.lang.Long.TYPE;
-def maxMethod := jlobby.java.lang.Math.max;
+def maxMethod := jlobby.java.lang.Math.&max;
 def Vector := /.at.collections.vector.Vector;
 
 def RENEWALONCALL := millisec(10); // default call time renewal 
@@ -223,7 +223,7 @@ def LeasingModule := object: {
 		//Note that when:expired: on lease references places an observer on the server side while
 		//when:expired: of remote far references on the client side.
 		
-		if: ((is: leasedRef taggedAs: LeasedRef) & !(is: leasedRef taggedAs: /.at.types.FarReference)) then: {
+		if: ((is: leasedRef taggedAs: LeasedRef).and: { !(is: leasedRef taggedAs: /.at.types.FarReference) }) then: {
 			(reflect: leasedRef).addExpiredObserver(code) 
 		} else: {
 			if: (is: leasedRef taggedAs: ClientLeasedRef) then: { 
