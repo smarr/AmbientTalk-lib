@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package edu.vub.at.support;
+package at.support;
 
 /**
  * Auxiliary class to enable less painful construction of Long, Byte, Char and Float

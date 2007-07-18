@@ -54,7 +54,7 @@ extend: /.at.unit.test.UnitTest.new("SymbiosisTutorial") with: {
 		def testJavaOverloading() {
 			setupAccess();
 			1.to: 10 do: { |i| aVector.add(i) };
-			def remove := aVector.remove;
+			def remove := aVector.&remove;
 			self.assertEquals( print: remove, "<java closure:remove>");	
 			def result := remove.cast(jlobby.java.lang.Integer.TYPE)(0);
 		  self.assertEquals(result, 1);

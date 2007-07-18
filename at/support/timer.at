@@ -35,7 +35,7 @@
 
 // support class that allows you to create a TimerTask by means of a Runnable
 // this is necessary because AT objects can only be passed as interface types.
-def RunnableTimerTask := jlobby.edu.vub.at.support.RunnableTimerTask;
+def RunnableTimerTask := jlobby.at.support.RunnableTimerTask;
 def Timer := jlobby.java.util.Timer;
 def TimerTask := jlobby.java.util.TimerTask;
 def long := jlobby.java.lang.Long.TYPE;

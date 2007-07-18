@@ -196,7 +196,7 @@ extend: /.at.unit.test.UnitTest.new("BasicProgTutorial") with: {
 				if: (high>left) then: { quickSort(table,left,high) };
 				table;
 		     };
-			 quickSort(table, 1, table.getLength());
+			 quickSort(table, 1, table.length);
 		  };
 		  self.assertEquals( "[2, 4, 5, 6, 8, 37]", print: sort([2,37,6,4,5,8]));
 		};

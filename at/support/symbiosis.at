@@ -31,7 +31,7 @@
  * @author tvcutsem
  */
  
- def PrimitiveJavaConversion := jlobby.edu.vub.at.support.PrimitiveJavaConversion;
+ def PrimitiveJavaConversion := jlobby.at.support.PrimitiveJavaConversion;
  def Long := jlobby.java.lang.Long;
 
  def SymbiosisModule := object: {

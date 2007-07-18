@@ -6,7 +6,7 @@
  * @author tvcutsem
  */
  
-def IMGUI := jlobby.edu.vub.at.demo.IMGUI;
+def IMGUI := jlobby.at.demo.IMGUI;
 
 network.online();
  

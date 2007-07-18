@@ -1,4 +1,4 @@
-package edu.vub.at.demo;
+package at.demo;
 
 import java.awt.BorderLayout;
 import java.awt.Button;
