@@ -69,6 +69,10 @@ def UtilTest() {
       };
     };
     
+    /**
+     * Test the uponArrivalBecome function by serializing the object
+     * 'movableObj' as an object with a 'z' slot.
+     */
     def testAsyncUponArrivalBecome() {
       def y := 42;
       def receiver := actor: {

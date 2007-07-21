@@ -102,7 +102,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 		
   def disconnectionObservers; // to store when:disconnected: observers
   def connectionObservers; // to store when:connected: observers
-	
+
 	def init(base) {
 		super^init(base); // initialize root mirror's base field
 		TCardinality^init(); // initialize cardinality state
@@ -174,7 +174,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 	    def cancel() { connectionObservers.remove(obs) }
 	  };
 	};
-	
+
 	def notifyObservers(observers, newPrincipal) {
 	  observers.each: { |o| o<-apply([newPrincipal])@OneWayMessage }
 	};
@@ -201,34 +201,27 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity) {
 	  }
 	};
 	
-	// invocation of fields is equally disallowed
-	def invokeField(rcv, sel) {
-	  self.invoke(rcv,sel,[]);
-	};
+	  // invocation of fields is equally disallowed
+	  def invokeField(rcv, sel) {
+	    self.invoke(rcv,sel,[]);
+	  };
 	
-	def print() {
-	  "<ambient "+serviceType+": "+self+">";
-	};
-		
-	/*def clone() {
-	  makeAmbientRef(serviceType, TCardinality.new(), TElasticity.new());
-	};*/
-		
-	// TODO: abstract boilerplate isolate/mirror code
-	// TODO: ensure that an ambient ref has the same elasticity/cardinality at the remote end
-	// does a passed AR remain bound to same principals?
-	def pass() {
-		object: { nil } taggedAs: [/.at.types.Isolate] mirroredBy: (
-			extend: defaultMirror with: { |serviceType,TCardinality,TElasticity|
-				def resolve() {
-					// when arriving at the remote host, create a new local ambient reference
-					/.at.lang.ambientrefs.ambient: serviceType
-					withCardinality: TCardinality
-					withElasticity: TElasticity;
-				};
-			} taggedAs: [ /.at.types.Isolate ]);
+	  def print() {
+	    "<ambient "+serviceType+": "+self+">";
+	  };
+	
+		// TODO: does a passed AR remain bound to same principals?
+		// TODO: support all kinds of ARs!
+		def pass() {
+			/.at.support.util.uponArrivalBecome: { |serviceType|
+				// when arriving at the remote host, create a new local ambient reference
+				/.at.lang.ambientrefs.ambient: serviceType
+				                      withCardinality: /.at.lang.ambientrefs.uni()
+				                      withElasticity: /.at.lang.ambientrefs.fragile();
+			}
 		};
-	};
+	
+  };
 };
 
 deftype XUnimplemented <: /.at.types.Exception;
@@ -465,6 +458,14 @@ def AmbientRefModule := object: {
 				def to := TimerModule.seconds(5);
 				FuturesModule.when: a<-testMethod(5)@[SustainedMessage(to),FuturesModule.FutureMessage] becomes: { |v|
 					self.assertEquals(6,v);
+				};
+			};
+			def testAsyncParamPassing() {
+				def a := ambient: Foo withCardinality: uni() withElasticity: fragile();
+				def act := actor: { def rcv(ar) { ar } };
+
+				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
+					self.assertTrue(is: newAR taggedAs: AmbientRef);
 				};
 			};
 		};
