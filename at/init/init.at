@@ -105,3 +105,30 @@ def asLongAs: cond do: body {
 	};
 	nil;
 };
+
+/**
+ * Defines a pass-by-copy lambda.
+ * Example:
+ * def x := 5;
+ * def l := isolatelambda: { |x| x + 2 }
+ *
+ * In this example, l is a function object which can
+ * be passed to remote actors and applied. All of the arguments
+ * specified in the isolate lambda are lexically visible variables
+ * which are copied inside the by-copy function object and which
+ * will hence be serialized together with the function object.
+ *
+ * Implementation-wise, defining an isolate lambda is equal to
+ * defining an isolate object with an apply method and tagged
+ * as a Closure.
+ */
+def isolatelambda: clo {
+  deftype Closure;
+  deftype Isolate;
+  def mth := clo.method;
+  eval: `(object: { |#@(mth.parameters)|
+    def apply(@args) {
+      #@(mth.bodyExpression.statements)
+    }
+  } taggedAs: [#Closure,#Isolate]) in: clo.context.lexicalScope;
+};

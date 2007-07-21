@@ -1,0 +1,98 @@
+/**
+ * Retrieves the actual type tag object of a given object
+ * matching a given type. Most often, the object will be
+ * a message whose type tag must be retrieved for its properties.
+ * If no type tag is found, nil is returned.
+ */
+def getAnnotationOfType(obj, type) {
+  def anns;
+  def idx;
+  while: { (idx == nil).and: { !(obj == nil) } } do: {
+    anns := tagsOf: obj;
+    idx := anns.find: { |tag|
+      tag.isSubtypeOf(type)
+    };
+    obj := obj.super;
+  };
+  if: !(idx == nil) then: {
+    anns[idx];
+  }
+};
+
+/**
+ * This method creates a transporter object which can be used in 'pass' meta-methods
+ * to execute code upon deserialization. The closure passed to this function
+ * should return the object with which the transported object should be replaced.
+ * Example:
+ * //inside a mirror
+ * def instancevar := ...;
+ * def pass(@args) {
+ *   uponArrivalBecome: { |instancevar|
+ *     // return object to become here
+ *   }
+ * }
+ *
+ * Implementation-wise, uponArrivalBecome: is a macro which expands into
+ * the definition of a mirrored isolate whose resolve meta-method invokes
+ * the body of the given closure.
+ */
+def uponArrivalBecome: clo {
+  deftype Isolate;
+  def mth := clo.method;
+  eval: `(object: {
+    nil
+  } taggedAs: [#Isolate] mirroredBy: (extend: defaultMirror with: { |#@(mth.parameters)|
+    def resolve() {
+      #@(mth.bodyExpression.statements)
+    }
+  } taggedAs: [#Isolate])) in: clo.context.lexicalScope;
+};
+
+def UtilTest() {
+  extend: /.at.unit.test.UnitTest.new("UtilTest") with: {
+    import /.at.lang.futures; enableFutures(false);
+  
+    def testGetAnnotationOfType() {
+      def bar := extend: /.at.types.Number with: { nil } taggedAs: [/.at.types.TypeTag];
+      def o := object: { nil } taggedAs: [/.at.types.Closure,bar];
+      def ann := getAnnotationOfType(o, /.at.types.Number);
+      self.assertEquals(bar, ann);
+    };
+    
+    def testAsyncIsolateLambda() {
+      def x := 5;
+      def executor := actor: {
+        def exec(fun) { fun() }
+      };
+      when: executor<-exec(isolatelambda: { |x| x + 2 })@FutureMessage becomes: { |v|
+        self.assertEquals(7, v);
+      };
+    };
+    
+    def testAsyncUponArrivalBecome() {
+      def y := 42;
+      def receiver := actor: {
+        def receive(o) { system.println(o.z); o }
+      };
+      def movableObj := object: {
+        nil
+      } mirroredBy: (mirror: {
+        def pass(@args) {
+          uponArrivalBecome: { |y|
+            isolate: { |y|
+              def z := y;
+            }
+          }
+        }
+      });
+      
+      when: receiver<-receive(movableObj)@FutureMessage becomes: { |val|
+        self.assertTrue((reflect: val).respondsTo(`z), "movable object has no z slot");
+        self.assertEquals(42, val.z);
+      };
+    };
+    
+  };
+};
+
+self

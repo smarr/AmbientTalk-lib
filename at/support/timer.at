@@ -91,8 +91,8 @@ def TimerModule := object: {
 		
 	  def testAsyncWhenElapsed() {
 		def [fut,res] := FuturesModule.makeFuture();
-		when: seconds(3) elapsed: {
-		  system.println("when:elapsed: works (3 sec)");
+		when: seconds(1) elapsed: {
+		  system.println("when:elapsed: works (1 sec)");
 		  res.resolve(true);
 	    };
 		fut;
@@ -100,9 +100,9 @@ def TimerModule := object: {
 	  def testAsyncWhenEverElapsed() {
 	    def run := 0;
 		def [fut,res] := FuturesModule.makeFuture();
-		def sub := whenever: seconds(2) elapsed: {
+		def sub := whenever: seconds(1) elapsed: {
 		  run := run + 1;
-		  system.println("whenever:elapsed: works (2 sec) (run "+run+")");
+		  system.println("whenever:elapsed: works (1 sec) (run "+run+")");
 		  if: (run == 3) then: {
 			sub.cancel();
 			res.resolve(true);

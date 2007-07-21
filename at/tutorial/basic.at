@@ -134,8 +134,12 @@ extend: /.at.unit.test.UnitTest.new("BasicProgTutorial") with: {
 		  self.assertEquals( 1, 1.8.floor());
 		  self.assertEquals( 2, 1.4.ceiling());
 		  self.assertEquals( -1, -1.abs());
-		  6.to: 0 step: 2 do: { |i| system.println(i) };
-		  3.doTimes: { |i| system.println(i) };
+		  def output := "";
+		  6.to: 0 step: 2 do: { |i| output := output + i };
+		  self.assertEquals("642", output);
+		  output := "";
+		  3.doTimes: { |i| output := output + i };
+		  self.assertEquals("123", output);
 		  //Texts
 		  self.assertEquals( print: ["a", "m", "b", "i", "e", "n", "t", "t", "a", "l", "k"], print: "ambienttalk".explode());
 		  self.assertEquals( print: ["one", "two", "three"], print: "one,two,three".split(","));
@@ -166,7 +170,9 @@ extend: /.at.unit.test.UnitTest.new("BasicProgTutorial") with: {
 	      self.assertEquals( 1, (3 != 5).ifTrue: { 1 } ifFalse: { 0 });
       	  def [i, j] := [1,3];
           self.assertEquals( "[1, 3]", print: [i,j]);
-          {i < j}.whileTrue: { system.println(i); i := i + 1 };
+          output := "";
+          {i < j}.whileTrue: { output := output + i; i := i + 1 };
+          self.assertEquals("12", output);
 		};
 		
 		def testControlFlowConstructs(){

@@ -19,7 +19,7 @@ deftype AsyncMessage <: Message;
 deftype FieldSelection <: Message;
 deftype Mirror;
 deftype ActorMirror;
-deftype TypeTag <: Isolate;
+deftype TypeTag;
 deftype FarReference;
 
 // abstract grammar

@@ -36,7 +36,8 @@ def LibraryTestSuiteModule := object: {
     /.at.demo.mobiTunes.MobiTunesTest(),
     /.at.lang.futures.FuturesTest(),
     /.at.lang.ambientrefs.AmbientRefsTest(),
-    /.at.support.timer.TimerTest() ]);
+    /.at.support.timer.TimerTest(),
+    /.at.support.util.UtilTest() ]);
 
   def testATDistribution() {
     // first perform a self-test to see if unit tests work

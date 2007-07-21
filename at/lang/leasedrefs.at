@@ -70,6 +70,8 @@ def createLeasingMirror(principal, timeout := LEASETIME) { mirror: {
 		} else: { system.println("receive:expired")}
 	};
 	
+	def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
+	
 	def invoke(rcv, sel, arg) {
 		//the only legal operation on leased references is '==' 
 		if: (`(==) == sel) then: {

@@ -29,6 +29,7 @@
 
 // import Exception type, used for catching exceptions
 def Exception := /.at.types.Exception;
+def Isolate := /.at.types.Isolate;
 
 // a future can be in one of these three states
 def UNRESOLVED := 0;
@@ -159,8 +160,8 @@ def FutureMirror := mirror: {
 		if: (`(==) == sel) then: {
 			super^invoke(rcv, sel, arg);
 		} else: {
-			// TODO: creating your own exceptions is not yet supported properly...
-			raise: (object: { nil } taggedAs: [/.at.types.IllegalOperation]);
+			/.at.exceptions.createException(/.at.types.IllegalOperation).new(
+			  "Cannot synchronously invoke method " + sel + " on future");
 		}
 	};
 
@@ -209,12 +210,9 @@ def futurize(msg) {
 
 				result;
 
-			// note that we needed to qualify the full path to the Exception type:
+			// note that we need to qualify the full path to the Exception type:
 			// the Exception variable defined above is out of scope since this message is an isolate!
 			} catch: /.at.types.Exception using: { |e|
-				// note that we needed to qualify the full path to the Exception type:
-				// the Exception variable defined above is out of scope since this message is an isolate!
-
 				resolver<-ruin(e)@OneWayMessage;
 
 				// re-raise the caught exception
@@ -329,7 +327,6 @@ def FuturesModule := object: {
 				def createMessage(sel, args, types) {
 					// first, create a regular message
 					def msg := super^createMessage(sel, args, types);
-					
 					// do we need to support futures by default on all messages?
 					if: enableFuturesOnDefaultMessages then: {
 						// if the message was annotated with OneWayMessage type, override this behaviour
@@ -383,7 +380,7 @@ def FuturesModule := object: {
     };
     
     def testFutureSend() {
-      def fut := foo<-apply([])@FutureMessage;
+      def fut := &foo<-apply([])@FutureMessage;
       self.assertNotNil(fut);
       self.assertTrue(is: fut taggedAs: Future);
     };
@@ -404,7 +401,7 @@ def FuturesModule := object: {
 				self.assertEquals(2, vals.length);
 				self.assertEquals(11, vals[1]+vals[2]);
 			};
-    }
+      }
    };
   };
 };

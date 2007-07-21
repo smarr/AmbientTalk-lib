@@ -72,6 +72,8 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 			} else: { system.println("client:receive:expired")}
 		};
 		
+		def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
+		
 		def invoke(rcv, sel, arg) {
 			//the only legal operation on client leased references is '==' 
 			if: (`(==) == sel) then: {
