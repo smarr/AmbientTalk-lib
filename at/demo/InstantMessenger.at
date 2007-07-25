@@ -1,27 +1,53 @@
-/*
- * This program demonstrates an extremely simple peer-to-peer instant messenger
- * written in AmbientTalk/2. It demonstrates peer discovery and how to deal with
- * disconnections.
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
  *
- * @author tvcutsem
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-import /.at.lang.leasedrefs;  
+/*
+ * The instant messenger is an extremely simple peer-to-peer instant messenger program
+ * meant to be deployed on mobile ad hoc networks. When peers join the ad hoc network, 
+ * the instant messenger should issue a warning to the user that a new buddy is available 
+ * for chatting. The user can then send simple text message to that buddy. When peers leave 
+ * the ad hoc network, the user should also be notified. 
+ *
+ * More detailed information can be found at http://prog.vub.ac.be/amop/at/introduction
+ *
+ * @author tvcutsem
+ * latest update: egonzale
+ */
 
-def IMListener := object: {
-  def unknownBuddy(name) { system.println("Unknown buddy: " + to); };
-  def printMessage(textMsg) {
-    system.println(textMsg.from + ": " + textMsg.content);
-  };
-  def addBuddy(name) { system.println("Added buddy: " + name); };
-  def buddyOffline(name) { system.println("Buddy offline: " + name); };
-  def buddyOnline(name) { system.println("Buddy online: " + name); };
-};
+import /.at.lang.futures;
+enableFutures(true);
 
-def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user.name"),
-                           listener := IMListener) {
-  
-  deftype InstantMessenger;
+//def IMGUI := jlobby.at.demo.IMGUI;
+//def IMGUI := /.at.demo.IMConsole;
+
+def createIM( IMGUI := /.at.demo.IMConsole) {
+
+  def username := jlobby.java.lang.System.getProperty("user.name");
+  def buddyList := jlobby.java.util.HashMap.new();
 
   def TextMessage := isolate: {
     def from := nil;
@@ -32,76 +58,92 @@ def createInstantMessenger(username := jlobby.java.lang.System.getProperty("user
     };
   };
 
-  def buddyList := jlobby.java.util.HashMap.new();
-
-  def localInterface := object: {
-    def sendTextMessage(to, string) {
+	// the facade object to the IM for local objects, i.e. IMGUI object.
+  def localFacade := object: {
+		def setUsername(un) { username := un; startIM()};
+    def talk(to, string) {
 		  def buddy := buddyList.get(to);
 		  if: (nil == buddy) then: {
-			  listener<-unknownBuddy(to);
+			  listener.display("Unknown buddy: " + to);
 		  } else: {
 		      def msg := TextMessage.new(username, string);
-			  buddy<-receiveTextMessage(msg, 
-				singleCallLease: seconds(30) for: ( object: {
-				  def resolve() {
-					  listener<-printMessage(msg);
-				  }
-			  }));
+			  when: buddy<-receive(msg)@DueTo(seconds(10)) becomes: { |ack|
+			     listener.display( msg.content + " sent to: " + to);
+			  } catch: TimeoutException using: { |e|
+				 	listener.display("message: " + msg.content + " timed out.");
+			  };
 		 };
     };
   };
 
-  def remoteInterface := object: {
-    def receiveTextMessage(textMessage, future) {
-      listener<-printMessage(textMessage);
-      future<-resolve();
+  // the facade to the IM for remote objects
+  def remoteFacade := object: {
+    def receive(textMsg) {
+      listener.display(textMsg.from + ": " + textMsg.content);
     };
-    def getName(future) { future<-resolve(username) };
+    def getName() { 
+			username 
+		};
   };
-  
-  export: remoteInterface as: InstantMessenger;
-  
-  whenever: InstantMessenger discovered: { |messenger|
-	  messenger<-getName( singleCallLease: seconds(30) for: ( object: {
-		  def resolve(name) {
-			  if: (nil == buddyList.get(name)) then: {
-				  buddyList.put(name, messenger);
-				  listener<-addBuddy(name);
-				  when: messenger disconnected: {
-					  listener<-buddyOffline(name);
-				  };
-				  when: messenger reconnected: {
-					  listener<-buddyOnline(name);
-				  };
-			  };
-		  };
-	  }));
-	};
+
+  deftype InstantMessenger;
+
+  // engage in peer-to-peer service discovery
+  def startIM() {
 	
-	localInterface;
+	export: remoteFacade as: InstantMessenger;
+  
+    whenever: InstantMessenger discovered: { |messenger|
+      when: messenger<-getName() becomes: { |name|
+    		if: (nil == buddyList.get(name)) then: {
+		  		buddyList.put(name, messenger);
+		  		listener.display("Added buddy: " + name);
+		  		when: messenger disconnected: {
+			  		listener.display("Buddy offline:" +name);
+		  		};
+		  		when: messenger reconnected: {
+			  		listener.display("Buddy online:" +name);
+		  		};
+				};
+	  	}; 
+    };
+  };
+
+  def listener := IMGUI.new(localFacade);
+
+  localFacade;
 };
 
 def InstantMessengerTest() {
  extend: /.at.unit.test.UnitTest.new("InstantMessenger test") with: {
   def test := self;
-  
+  network.online();
+
   def testAsyncMessageSend() {
-    def [fut,res] := /.at.lang.futures.makeFuture();
-    
-    def A := createInstantMessenger("A", extend: IMListener with: {
-      def addBuddy(name) {
-        A<-sendTextMessage(name, "hello");
-      };
-      def printMessage(txt) {
-        test.assertEquals("hello", txt.content);
-        res.resolve(true); // only make test pass when message was successfully transmitted to B
-      }
-    });
-    def Bact := actor: { def B := /.at.demo.InstantMessenger.createInstantMessenger("B") };
-    
-    fut;
+	 
+	  def [fut,res] := /.at.lang.futures.makeFuture();
+
+			def IMGUI := object: {
+				def init(im) { im.setUsername("Aact") };
+				def display(text) {
+					test.assertEquals("Added buddy: Bact", text); 
+					system.println(text);	
+					res.resolve(true);
+				};
+			};
+			def A := createIM(IMGUI);
+
+    def Bact := actor: {
+			def IMGUI := object: {
+				def init(im) { im.setUsername("Bact") };
+				def display(text) { system.println(text) };
+			};
+			def B := /.at.demo.InstantMessenger.createIM(IMGUI);
+	  };
+	 fut;  
   };
  }; 
 };
 
+network.online();
 self

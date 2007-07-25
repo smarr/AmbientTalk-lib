@@ -29,6 +29,7 @@ public class IMGUI extends Frame {
     private TextArea inTextArea_;
     private TextArea outTextArea_;
     private TextField inputArea_;
+	private TextField receiver_;
     private Button sendMessageBtn_;
     private String lineSeparator_;
     private ATInstantMessenger atIm_;
@@ -37,7 +38,7 @@ public class IMGUI extends Frame {
       // used by the GUI to notify the instant messenger that the user changed the username
       public void setUsername(String username) throws Exception;
       // used by the GUI to notify the instant messenger that a message should be sent
-      public void sendTextMessage(String content) throws Exception;
+      public void talk(String to, String content) throws Exception;
     }
 
     public IMGUI(ATInstantMessenger atIm) {
@@ -62,8 +63,11 @@ public class IMGUI extends Frame {
         
         topcontainer.setLayout(new BorderLayout(2,2));
         inTextArea_ = new TextArea(2,20);
-        topcontainer.add(inTextArea_);
-        
+        topcontainer.add(inTextArea_, BorderLayout.CENTER);
+		
+        receiver_ = new TextField(16);
+		topcontainer.add(receiver_, BorderLayout.NORTH);
+		receiver_.setText("receiver");
         
 /*      c.ipady = 20;      //make this component tall
         c.ipadx = 30;      //make this component tall
@@ -118,7 +122,8 @@ public class IMGUI extends Frame {
             toEval = inTextArea_.getText();
         else
             toEval = inTextArea_.getSelectedText();
-        IMGUI.this.sendTextMessage(toEval);
+		String receiver = receiver_.getText();
+        IMGUI.this.talk(receiver, toEval);
     }           
     
     public void initMenu() {
@@ -161,9 +166,9 @@ public class IMGUI extends Frame {
         this.setMenuBar(mb);
     }
     
-    public void sendTextMessage(String text) {
+    public void talk(String to, String text) {
         try {
-          atIm_.sendTextMessage(text);
+          atIm_.talk(to, text);
         } catch (Exception e) {
           e.printStackTrace(System.out);
         }
@@ -192,10 +197,9 @@ public class IMGUI extends Frame {
      * Called by the process to display a value to the screen.
      * @param output the string to be displayed.
      *
-     * Now includes JohanF's trick to make sure the screen scrolls
-     * down when excessive output is displayed
+     * The screen scrolls down when excessive output is displayed.
      */
-    public void printTextMessage(String output) {
+    public void display(String output) {
        int begapp = outTextArea_.getText().length();
        outTextArea_.append(output + "\n");
        if (this.isVisible()) {

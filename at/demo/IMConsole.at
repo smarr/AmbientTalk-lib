@@ -1,0 +1,13 @@
+
+def IMConsole := object: {
+
+	def init(im){
+		system.println("What is your name?");
+		def u := system.readln();
+		im.setUsername(u);
+	};
+
+	def display(text){
+      system.println(text);		
+	};
+};
