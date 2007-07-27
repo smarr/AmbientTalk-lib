@@ -208,7 +208,8 @@ public class IMGUI extends Frame {
          outTextArea_.setSelectionStart(begapp);
          outTextArea_.setSelectionEnd(endapp);
        }
-       this.repaint();
+      // this.repaint();
+			this.pack();
     }
     
     /**
