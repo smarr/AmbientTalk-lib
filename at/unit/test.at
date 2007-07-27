@@ -138,7 +138,7 @@ def UnitTest := object: {
 	};
 	
 	def fail(reason) {
-		 raise: XAssertionFailed.new(reason);
+	  raise: XAssertionFailed.new("Failed unit test: " + reason);
 	};
 	
 	def setUp() { nil };
