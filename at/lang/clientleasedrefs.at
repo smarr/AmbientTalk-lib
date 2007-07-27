@@ -55,6 +55,7 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 			expired := false;
 			expiredObservers := Vector.new();			  	
 			timerSubscription := when: timeout elapsed: {
+				retractMessages();
 				expired := true;
 				notifyExpiredObservers();
 		  	};
@@ -66,10 +67,16 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 			}
 	    };
 
+		 def retractMessages(){
+				def messages := retract: remoteLease;
+				//messages.each: { |msg| system.println(msg)};
+		 };
+		
 		def revoke(){ 
 			//if client wanna revoke the lease, this should be transmitted to server lease.
 			timerSubscription.cancel();
 			expired := true;
+			retractMessages();
 		};
 
 		def renew(renewalTime := RENEWALONCALL) {
@@ -78,6 +85,7 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 			def interval := maxMethod(timerSubscription.getTimeRemaining(), renewalTime);
 			timerSubscription.cancel();
 			timerSubscription := when: interval elapsed: {
+				retractMessages();
 				expired := true;
 				self.notifyExpiredObservers();
 			};
@@ -96,13 +104,14 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 		def notifyExpiredObservers(){ expiredObservers.each: { |o| o<-apply([]) }};
 
 		def receive(msg) {
+		
 			//all mesages received are forwarded to server lease. 
 			//the base object of a leased ref is an empty object => it does not understand any async msg.
 			if: !(expired) then: { 
 				// clearing the receiver otherwise the client lease will be passed.
 				msg.receiver := nil;
 				remoteLease<-receive(msg);
-			} else: { system.println("client:receive:expired")}
+			};
 		};
 		
 		def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
@@ -137,7 +146,7 @@ def createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal) { extend
 			// clearing the receiver otherwise the client lease will be passed.
 			msg.receiver := nil;
 			remoteLease<-receive(msg);
-		} else: { system.println("client:receive:expired")}
+		};
 	};
 }};
 
@@ -157,7 +166,7 @@ def createLeasingWithSingleUseMirror(remoteLease, timeout, forSelectors) { exten
 			// clearing the receiver otherwise the client lease will be passed.
 			msg.receiver := nil;
 			remoteLease<-receive(msg);
-		} else: { system.println("client:receive:expired")}
+		};
 	};
 }};
 

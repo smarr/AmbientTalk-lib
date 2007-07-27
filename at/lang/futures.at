@@ -51,16 +51,24 @@ deftype OneWayMessage;
 // Addition for the integration of leasing and futures:
 
 // type that signifies that futures objects are leased for a given timeout
-deftype DueToType <: FutureMessage; 
+deftype DueType <: FutureMessage; 
 
-def DueTo(timeout) {
-	extend: DueToType with: { |timeout|
+def Due(timeout) {
+	extend: DueType with: { |timeout|
 		nil;
 	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };
 //create TimeoutException used for notifying the ruining of a future when its lease expires. 
 deftype TimeoutException <: Exception;
-def XTimeoutException := /.at.exceptions.createException(TimeoutException);
+def XTimeoutException := extend: /.at.exceptions.createException(TimeoutException) with: {
+	 def future := nil;
+	 def init(fut){ 
+		super^init("Future: " + fut + " timed out");
+		future := fut
+	 };
+	 def getFuture() { future };
+};
+
 
 // To register a when-observer on a future, a message needs to be sent to its mirror
 // This would only be possible on far references to futures if an explicit additional
@@ -201,14 +209,14 @@ def makeFuture(timeout := nil) {
 	def fut := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
 	def resolver := nil;
 	if: !(nil == timeout) then: {
-		// future that has been annotated with the DueToType
+		// future that has been annotated with the DueType
 		resolver := LeasingModule.singleCallLease: timeout for: (object: {
 			def resolve(val) { (reflect: fut).resolve(val) };
 			def ruin(exc) { (reflect: fut).ruin(exc) };
 			def future := fut;
 		});
 		LeasingModule.when: resolver expired: {
-			(reflect: fut).ruin(XTimeoutException.new("Future timed out"));
+			(reflect: fut).ruin(XTimeoutException.new(fut));
 		};
 		
 	}else:{
@@ -229,9 +237,9 @@ def futurize(msg) {
 	def type := FutureMessage;
 	def [future, resolver];
 	// integration of futures with leasing
-	if: (is: msg taggedAs: DueToType) then: {
-		type := DueToType;
-		def ann := /.at.support.util.getAnnotationOfType(msg, DueToType);
+	if: (is: msg taggedAs: DueType) then: {
+		type := DueType;
+		def ann := /.at.support.util.getAnnotationOfType(msg, DueType);
 		[future, resolver] := makeFuture(ann.timeout);
 	}
 	else: {
@@ -341,8 +349,8 @@ def FuturesModule := object: {
   // make the FutureMessage type publicly visible
   def FutureMessage := FutureMessage;
 
-  //make the DueTo function publicly visible 
-  def DueTo := &DueTo;
+  //make the Due function publicly visible 
+  def Due := &Due;
 
   //make visible the exception raised when futures are ruined by timeout.
   def TimeoutException := TimeoutException;
@@ -385,14 +393,14 @@ def FuturesModule := object: {
 							// default = FutureMessage, overridden by OneWayMessage, so return normal message
 							msg;
 						} else: {
-							// default= FutureMessage or overriden by DueToType, so attach future behaviour
+							// default= FutureMessage or overriden by DueType, so attach future behaviour
 							futurize(msg);
 						}
 					} else: {
 						// if the message was explicitly annotated with FutureMessage type, activate
 						// the futures behaviour
 						if: (is: msg taggedAs: FutureMessage) then: {
-							// default = OneWayMessage, overridden by FutureMessage or DueToType, so attach future behaviour
+							// default = OneWayMessage, overridden by FutureMessage or DueType, so attach future behaviour
 							futurize(msg);
 						} else: {
 							// default = OneWayMessage, so return the normal message
@@ -406,7 +414,7 @@ def FuturesModule := object: {
 				  // for a future message, the return value now becomes the message's future
 				  if: (is: msg taggedAs: FutureMessage) then: {
 					  //for a future message tagged with a timeout, the return value has to be accessed via the leased reference  
-					  if: (is: msg taggedAs: DueToType) then: {
+					  if: (is: msg taggedAs: DueType) then: {
 						  (reflect:  msg.resolver).getPrincipal().future;
 					  } else: {
 					    msg.resolver.future;
@@ -462,7 +470,7 @@ def FuturesModule := object: {
 			};
     };
 
-		def testDueTo(){
+		def testAsyncDue(){
 			
 			def a := actor: {
 				deftype Test;
@@ -481,14 +489,14 @@ def FuturesModule := object: {
 			};
 			
 			deftype Test;
-
-			when: Test discovered: { |ref|
-				when: ref<-test()@DueTo(LeasingModule.seconds(1)) becomes: { |v|
-			  	raise:  /.at.exceptions.XIllegalOperation.new("Unexpected resolved future");
-			  } catch: TimeoutException using: { |e|
-					self.assertEquals(e.getMessage, "Future timed out");
-	      };
-			};	
+      
+		  def ref := /.at.lang.ambientrefs.ambient: Test;
+			def future := ref<-test()@Due(LeasingModule.seconds(1));
+			when: future becomes: { |v|
+		  	fail("Unexpected resolved future");
+		  } catch: TimeoutException using: { |e|
+				self.assertEquals(e.getFuture(), future);
+      };
 		};
    };
   };

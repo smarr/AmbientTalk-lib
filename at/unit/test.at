@@ -137,6 +137,10 @@ def UnitTest := object: {
 		}.escape();
 	};
 	
+	def fail(reason) {
+		 raise: XAssertionFailed.new(reason);
+	};
+	
 	def setUp() { nil };
 	def tearDown() { nil };
 	

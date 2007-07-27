@@ -67,7 +67,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 			takeOffline: self;
 	  };
   };
-  
+
 	def getPrincipal() {
 	    principal;	
 	};
@@ -110,7 +110,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 		//the base object of a leased ref is an empty object => it does not understand any async msg.
 		if: !(expired) then: {
 			principal <+ msg 
-		} else: { system.println("receive:expired")}
+		}
 	};
 	
 	def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
@@ -136,7 +136,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 					object: {nil} taggedAs: [ClientLeasedRef] mirroredBy: createClientLeasingMirror(remoteLease, timeout);
 				};
 			} taggedAs: [Isolate]);
-		} else: { system.println("pass:expired")}	
+		} 	
 	};
 	
 	def print() {
@@ -168,7 +168,7 @@ def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := t
 						object: {nil} taggedAs: [ClientLeasedRef] mirroredBy: createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal);
 					};
 				} taggedAs: [Isolate]);
-			} else: { system.println("pass:expired")}
+			} 
 	};
 		
 }};
@@ -183,7 +183,7 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 		def res := super^receive(msg);
 		if: !(self.expired) then: {		
 		  	if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
-				super^revoke();
+				  super^revoke();
 			  	takeOffline: self;
 		  	}
 		}; 
@@ -203,7 +203,7 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 					object: {nil} taggedAs: [ClientLeasedRef] mirroredBy: createLeasingWithSingleUseMirror(remoteLease, timeout, selectors);			
 				};
 			} taggedAs: [Isolate]);
-		} else: { system.println("pass:expired")}	
+		}
 	};
 
 }};

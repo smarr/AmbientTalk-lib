@@ -49,14 +49,14 @@ def createIM( IMGUI := /.at.demo.IMConsole) {
   def username := jlobby.java.lang.System.getProperty("user.name");
   def buddyList := jlobby.java.util.HashMap.new();
 
-  def TextMessage := isolate: {
+  def TextMessage := object: {
     def from := nil;
     def content := nil;
     def init(f,c) {
       from := f;
       content := c;
     };
-  };
+  } taggedAs: [/.at.types.Isolate];
 
 	// the facade object to the IM for local objects, i.e. IMGUI object.
   def localFacade := object: {
@@ -66,8 +66,8 @@ def createIM( IMGUI := /.at.demo.IMConsole) {
 		  if: (nil == buddy) then: {
 			  listener.display("Unknown buddy: " + to);
 		  } else: {
-		      def msg := TextMessage.new(username, string);
-			  when: buddy<-receive(msg)@DueTo(seconds(10)) becomes: { |ack|
+		    def msg := TextMessage.new(username, string);
+			  when: buddy<-receive(msg)@Due(seconds(10)) becomes: { |ack|
 			     listener.display( msg.content + " sent to: " + to);
 			  } catch: TimeoutException using: { |e|
 				 	listener.display("message: " + msg.content + " timed out.");
@@ -91,7 +91,7 @@ def createIM( IMGUI := /.at.demo.IMConsole) {
   // engage in peer-to-peer service discovery
   def startIM() {
 	
-	export: remoteFacade as: InstantMessenger;
+		export: remoteFacade as: InstantMessenger;
   
     whenever: InstantMessenger discovered: { |messenger|
       when: messenger<-getName() becomes: { |name|
