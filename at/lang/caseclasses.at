@@ -1,0 +1,104 @@
+/** 
+ * Language support to support the introduction of case classes, 
+ * to allow Scala-like pattern matching in AmbientTalk.
+ */
+
+import /.at.types;
+
+// Creates a new case object with the given name, the fields which
+// need to be inserted in the object and the context in which the 
+// case object needs to be introduced.
+def createCaseObject(name, fields, mirror, context) {
+	
+	def parsetree := `{ object: {
+			#@(fields.map: { | field | `{ def #field; } });
+			
+			def init(#@fields) {
+				#@(fields.map: { | field | `{ self . #field := #field; } })
+			};
+			
+			def ==(caseObject) {
+				def myMirror := (reflect: self);
+				def itsMirror := (reflect: caseObject);
+				
+				// Escaping continuation to exit when the first error is encountered
+				{ | return |
+					def caseFields := myMirror.grabMethod(`init).parameters;
+					
+					// Iterate over all fields of this case object
+					caseFields.each: { | field |
+						try: {
+							def myValueForField  := myMirror.invoke(self, field, []);
+							def itsValueForField := itsMirror.invoke(caseObject, field, []);
+
+							// Fields which have a nil value are ignored when comparing case objects
+							((nil == myValueForField).or: 
+							
+								// Non-nil fields should match with fields in the corresponding object
+								{ myValueForField == itsValueForField })
+							
+								// If none of the above conditions is satisfied, the comparison fails
+								.ifFalse: { return(false); }
+								
+						} catch: SelectorNotFound using: { | exc |
+							// If the caseObject being tested does not have the appropriate field
+							// it cannot match with this object.
+							return( false );
+						}
+					};
+					
+					// If all tests succeeded return true
+					true
+					 
+				}.escape();
+			};
+						
+			def apply(args) {
+				self.new(@args)
+			};
+		} taggedAs: [ Closure ] mirroredBy: #mirror;
+	};
+	
+	(reflect: context.lexicalScope)
+		.defineField(name, (reflect: parsetree).eval(context));
+};
+
+def createCaseMirror(name, fields) {
+	mirror: {
+		def print() {
+			def representation := "<case:" + name;
+			
+			def marker := "(";
+			
+			fields.each: { | fieldName |
+				representation := representation + marker + self.invoke(self.base, fieldName, []);
+				marker := ", ";
+			};
+			
+			representation + ")>";
+		}
+	}
+};
+
+// Simplistic variant which assumes syntactical correctness
+// i.e. a single argument is supplied which is a canonical
+// application.
+def case: closure {
+	def statements := closure.method.bodyExpression.statements;
+
+	if: (statements.length == 1) then: {
+		def name := statements[1].function;
+		def args := statements[1].arguments;
+		
+		createCaseObject(name, args, createCaseMirror(name, args), closure.context);
+	} else: {
+		system.println("expecting a single canonical application as argument");
+	}
+};
+
+case: { Book(author, title); };
+
+// def cases := /.at.lang.caseclasses; def x := cases.Book("Me", "phd"); def y := cases.Book(nil, "phd"); [x, y, x == y, y == x ]
+
+self
+
