@@ -64,6 +64,7 @@
  *
  * @author tvcutsem
  */
+import /.at.collections.vector;
 
 def mutatorAllocator := jlobby.edu.vub.at.objects.natives.grammar.AGAssignmentSymbol.&jAlloc;
 
@@ -102,11 +103,19 @@ def ProtocolPrototype := object: {
 	def name := "<<empty protocol>>";
 	
 	def newFromObject(obj, @args) {
-		def objMirror := (reflect: obj);
-		def methods := objMirror.listMethods().map: { |mth| mth.name };
-		def accessors := objMirror.listFields().map: { |fld| fld.name };
-		def mutators := accessors.map: {|sel| makeMutator(sel)};
-		self.new(methods + accessors + mutators, @args);
+		def allSelectors := Vector.new();
+		while: { !(nil == obj) } do: {
+			def objMirror := (reflect: obj);
+		  objMirror.listMethods().each: { |mth| allSelectors.add(mth.name) };
+			objMirror.listFields().each: { |fld|
+				allSelectors.add(fld.name);
+				allSelectors.add(makeMutator(fld.name));
+			};
+			obj := obj.super;
+		};
+		// remove duplicate selectors (clumsy because selectors have no < operator, so
+		// we have to compare their string representation instead)
+		self.new(allSelectors.uniq({|s1,s2| s1==s2},{|s1,s2| (s1.text <=> s2.text) == -1 }).asTable(), @args);
 	};
 	
 	def init(sel, nam := nil) {
@@ -121,7 +130,7 @@ def ProtocolPrototype := object: {
 		self.selectors.each: { |sel|
 			if: !(objMirror.respondsTo(sel)) then: {
 				if: (nil == errors) then: {
-					 errors := /.at.collections.vector.Vector.new();
+					 errors := Vector.new();
 				};
 				errors.add(sel);
 			};
@@ -238,6 +247,7 @@ def StructuralTypesModule := object: {
 		  def PTest := protocol: { def m(); def n(); };
 		  def conformingInstance := object: { def m(); def n(); };
 		  def nonConformingInstance := object: { def m(); };
+		  def extensionOfConformingInstance := extend: conformingInstance with: { def p() };
 		
 		  def testObjectAlwaysConformsToSelf() {
 			  ensure: conformingInstance implements: (protocolOf: conformingInstance);
@@ -245,6 +255,9 @@ def StructuralTypesModule := object: {
 		
 		  def testProtocolConformance() {
 			  ensure: conformingInstance implements: PTest;
+			  ensure: extensionOfConformingInstance implements: PTest;
+			  ensure: (object: { def m(); def n(); def p(); })
+			    implements: (protocolOf: extensionOfConformingInstance);
 		  };
 		
 		  def testFailingProtocolConformance() {

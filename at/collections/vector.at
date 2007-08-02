@@ -285,6 +285,33 @@ def VectorPrototype := object: {
 	  self;
 	};
 	
+	// turn the vector into a set without duplicates
+	// runtime O(nlogn + n)
+	// the vector's ordering is lost (it becomes sorted)
+	def uniq(cmp := comparator, ordercmp := {|e1,e2| e1 < e2 }) {
+		if: (self.isEmpty()) then: {
+			self
+		} else: {
+			// sort the vector, then remove the duplicates
+		  self.sort(ordercmp);
+		
+		  // remove subsequent duplicates
+		  def removeDuplicates(pos, prev) {
+			  if: (pos < free) then: {
+				  if: cmp(prev,elements[pos]) then: {
+			      self.delete(pos);
+			      removeDuplicates(pos, prev)
+				  } else: {
+					  removeDuplicates(pos+1, elements[pos])
+				  }
+				}
+		  };
+		  // this object equals none in the vector
+		  removeDuplicates(2, elements[1]);
+		  self;
+		}
+	};
+	
 	def asTable() {
 		elements.select(1,free);
 	};
@@ -449,6 +476,14 @@ def VectorModule := object: {
 				v.addAll(["4444", "1", "22", "333"]);
 				v.sort({|e1,e2| e1.explode().length < e2.explode().length });
 				self.assertEquals("1223334444", v.implode());
+			};
+			def testUniq() {
+				v.addAll([5,1,1,5,6]);
+				v.uniq();
+				self.assertEquals(3, v.length());
+				self.assertTrue(v.contains(1));
+				self.assertTrue(v.contains(5));
+				self.assertTrue(v.contains(6));
 			};
 	  };
 	};
