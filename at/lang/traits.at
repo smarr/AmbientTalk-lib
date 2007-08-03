@@ -103,7 +103,7 @@ def TraitModule := object: {
 			def trait := (reflect: importstmt.importedObjectExpression).eval(closure.context);
 			if: (is: trait taggedAs: Trait) then: {
 				`{ import #(trait.provides) alias #(importstmt.aliasedSymbols) exclude #(importstmt.excludedSymbols);
-				   ensure: self implements: #(trait.requires) }.statements
+				   /.at.lang.structuraltypes.ensure: self implements: #(trait.requires) }.statements
 			} else: {
 				// make sure that importing 'normal' objects is still allowed
 				// by returning the original statement
