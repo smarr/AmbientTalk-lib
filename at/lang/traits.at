@@ -47,8 +47,12 @@
  *    }
  *  }
  *
- * Where the use block can only include "import" statements where
- * all of the objects being imported is are traits as defined previously.
+ * Where the use block can *only* include "import" statements.
+ *
+ * Note that the place where use: is used inside an object matters:
+ * if one of the traits requires a method m() that is defined only
+ * later in the composite, the check will fail. To avoid this, place
+ * the use: block at the bottom of the object.
  *
  * @author tvcutsem
  */
@@ -71,8 +75,16 @@ def TraitModule := object: {
 		TraitPrototype.new(object: closure, protocolOf: nil);
 	};
 	
+	def traitFrom: obj {
+		TraitPrototype.new(obj, protocolOf: nil);
+	};
+	
 	def trait: closure requiring: protocol {
 		TraitPrototype.new(object: closure, protocol);
+	};
+	
+	def traitFrom: obj requiring: protocol {
+		TraitPrototype.new(obj, protocol);
 	};
 	
 	/* Transform:
@@ -152,6 +164,21 @@ def TraitModule := object: {
 					  };
 				  };
 			  };
+			};
+			
+			// check whether use works with regular objects as well
+			def testCompositionWithRegularImport() {
+				def T1 := object: {
+					def a() { nil };
+			  };
+			
+				def composite := object: {
+					use: { 
+					 import T1;
+				  };
+				};
+				
+				self.assertEquals(nil, composite.a());
 			};
 		};
 	};
