@@ -1,0 +1,66 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * Implements an AmbientTalk chat client for the M2MI Chat demo.
+ * This chat fully interoperates with the M2MI edu.rit.chat1.Chat
+ * demo application.
+ *
+ * @author tvcutsem
+ */
+
+def M2MI := /.at.m2mi.api;
+def ChatRef := jlobby.edu.rit.chat1.ChatRef;
+
+def startChat() {
+	def myGUI;
+	def allChats := M2MI.omnihandle: ChatRef;
+	
+	def chat := object: {
+		def myUsername := "anonymous";
+		// implement callbacks for IM GUI
+		def setUsername(un) { myUsername := un };
+		def talk(to, content) {
+			// broadcast message to all chatters out there
+			allChats.putMessage(myUsername + " > " + content);
+		};
+		// implement edu.rit.chat.ChatRef
+		def putMessage(line) {
+			// when this method is invoked, somebody has just
+			// entered some text
+			myGUI.display(line);
+		};
+	};
+	
+	// make this object available as a Chat object to other
+	// AmbientTalk and M2MI chatters
+	M2MI.export: chat asM2MI: ChatRef;
+	// render the GUI
+	myGUI := jlobby.at.demo.IMGUI.new(chat);
+};
+
+self

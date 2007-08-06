@@ -1,0 +1,3 @@
+#!/bin/sh
+
+java -cp m2mi.jar edu.rit.m2mp.Daemon

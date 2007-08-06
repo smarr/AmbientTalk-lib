@@ -1,0 +1,15 @@
+In order to correctly initialize M2MI, do the following first:
+1) copy the *.properties file in the conf directory to your home directory.
+   (this allows both the M2MP Daemon (see below) and the M2MI API to
+   access the properties)
+2) in the device.properties file, change the ID to the MAC address
+   of your network card (or a similar UNIQUE identifier)
+3) If you want to use M2MI to contact objects running in other VMS
+   (either local or remote), you need to set up the M2MP Daemon.
+   In a separate console, run the 'runm2mpdaemon' script included
+   in this directory.
+
+
+M2MI is published under the GNU General Public License.
+All original Java M2MI sources are (c) 2001-2004 by Alan Kaminsky.
+See http://www.cs.rit.edu/~ark/m2mi.shtml for an overview of M2MI

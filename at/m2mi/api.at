@@ -1,0 +1,157 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * Implementation of a bridge between AmbientTalk and M2MI.
+ *
+ * M2MI is published under the GNU General Public License.
+ * All original Java M2MI sources are (c) 2001-2004 by Alan Kaminsky.
+ * See http://www.cs.rit.edu/~ark/m2mi.shtml for an overview of M2MI
+ *
+ * In order to correctly initialize M2MI, do the following first:
+ * 1) copy the *.properties file in this directory to your home directory.
+ *    (this allows both the M2MP Daemon (see below) and the M2MI API to
+ *    access the properties)
+ * 2) in the device.properties file, change the ID to the MAC address
+ *    of your network card (or a similar UNIQUE identifier)
+ * 3) If you want to use M2MI to contact objects running in other VMS
+ *    (either local or remote), you need to set up the M2MP Daemon.
+ *    In a separate console, run the 'runm2mpdaemon' script included
+ *    in this directory.
+ *
+ * @author tvcutsem
+ */
+
+def M2MIClass := jlobby.edu.rit.m2mi.M2MI;
+def M2MI_export := M2MIClass.&export;
+def M2MI_getMultihandle := M2MIClass.&getMultihandle;
+def M2MI_getOmnihandle := M2MIClass.&getOmnihandle;
+def M2MI_getUnihandle := M2MIClass.&getUnihandle;
+def M2MI_unexport := M2MIClass.&unexport;
+
+def Coercer_coerce := jlobby.edu.vub.at.objects.coercion.Coercer.&coerce;
+def cast: obj into: interface {
+	Coercer_coerce(obj, interface);
+};
+
+// initialize the M2MI layer
+M2MIClass.initialize();
+
+def M2MIModule := object: {
+	
+	def export: obj asM2MI: interface {
+		// force the AmbientTalk object to implement
+		// the given Java interface type
+		def wrappedObj := cast: obj into: interface;
+		M2MI_export(wrappedObj, interface);
+		object: {
+			def unexport() { M2MI_unexport(wrappedObj) };
+		};
+	};
+	
+	def multihandle: if {
+		M2MI_getMultihandle(if);
+	};
+	
+	def omnihandle: if {
+		M2MI_getOmnihandle(if);
+	};
+	
+	def unihandle: if for: obj {
+		M2MI_getUnihandle(cast: obj into: if, if);
+	};
+	
+	def attach: obj to: multiOrUniHandle {
+		multiOrUniHandle.attach(cast: obj into: (multiOrUniHandle.getInterface()));
+	};
+	
+	def detach: obj from: multiHandle {
+		multiHandle.detach(cast: obj into: (multiHandle.getInterface()));
+	};
+	
+	def detach: uniHandle {
+		uniHandle.detach();
+	};
+	
+	def M2MITest() {
+		extend: /.at.unit.test.UnitTest.new("M2MITest") with: {
+			
+			def RunnableI := jlobby.java.lang.Runnable;
+
+			def testAsyncUnihandleInvocation() {
+				def [fut, res] := /.at.lang.futures.makeFuture();
+				def pub;
+				def aRunnable := object: {
+					def run() {
+						system.println("aRunnable invoked via uniref!");
+						pub.unexport();
+						res.resolve(true);
+					};
+				};
+				pub := export: aRunnable asM2MI: RunnableI;
+				def uh := unihandle: RunnableI for: aRunnable;
+				uh.run(); // asynchronously invoke run via the unihandle
+				fut
+			};
+			
+			def testAsyncOmnihandleInvocation() {
+				def [fut, res] := /.at.lang.futures.makeFuture();
+				def pub;
+				def aRunnable := object: {
+					def run() {
+						system.println("aRunnable invoked via omniref!");
+						pub.unexport();
+						res.resolve(true);
+					};
+				};
+				pub := export: aRunnable asM2MI: RunnableI;
+				def oh := omnihandle: RunnableI;
+				oh.run(); // asynchronously invoke run via the omnihandle
+				fut
+			};
+			
+			def testAsyncMultihandleInvocation() {
+				def [fut, res] := /.at.lang.futures.makeFuture();
+				def pub;
+				def aRunnable := object: {
+					def run() {
+						system.println("aRunnable invoked via multiref!");
+						pub.unexport();
+						res.resolve(true);
+					};
+				};
+				pub := export: aRunnable asM2MI: RunnableI;
+				def mh := multihandle: RunnableI;
+				attach: aRunnable to: mh;
+				mh.run(); // asynchronously invoke run via the multihandle
+				fut
+			};
+			
+		};
+	};
+	
+}
