@@ -33,8 +33,20 @@
  
  def PrimitiveJavaConversion := jlobby.at.support.PrimitiveJavaConversion;
  def Long := jlobby.java.lang.Long;
+ def Coercer_coerce := jlobby.edu.vub.at.objects.coercion.Coercer.&coerce;
 
  def SymbiosisModule := object: {
+ 
+   /**
+    * for the returned ambienttalk object, it holds that
+    * obj instanceof interface
+    * @param obj an AmbientTalk object to cast into a Java interface type
+    * @param interface a java.lang.Class object denoting a Java interface type
+    */
+   def cast: obj into: interface {
+	 Coercer_coerce(obj, interface);
+   };
+   
  
    def long(nbr) { PrimitiveJavaConversion.intToLong(nbr) };
    def short(nbr) { PrimitiveJavaConversion.intToShort(nbr) };
