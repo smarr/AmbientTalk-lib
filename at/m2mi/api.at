@@ -102,53 +102,39 @@ def M2MIModule := object: {
 			
 			def RunnableI := jlobby.java.lang.Runnable;
 
-			def testAsyncUnihandleInvocation() {
+			def performInvocationTest(handleConstructor) {
 				def [fut, res] := /.at.lang.futures.makeFuture();
 				def pub;
 				def aRunnable := object: {
 					def run() {
-						system.println("aRunnable invoked via uniref!");
 						pub.unexport();
 						res.resolve(true);
 					};
 				};
 				pub := export: aRunnable asM2MI: RunnableI;
-				def uh := unihandle: RunnableI for: aRunnable;
-				uh.run(); // asynchronously invoke run via the unihandle
+				def handle := handleConstructor(aRunnable, RunnableI);
+				handle.run(); // asynchronously invoke run via the handle
 				fut
+			};
+
+			def testAsyncUnihandleInvocation() {
+				performInvocationTest({|obj, if|
+				  unihandle: if for: obj;
+				});
 			};
 			
 			def testAsyncOmnihandleInvocation() {
-				def [fut, res] := /.at.lang.futures.makeFuture();
-				def pub;
-				def aRunnable := object: {
-					def run() {
-						system.println("aRunnable invoked via omniref!");
-						pub.unexport();
-						res.resolve(true);
-					};
-				};
-				pub := export: aRunnable asM2MI: RunnableI;
-				def oh := omnihandle: RunnableI;
-				oh.run(); // asynchronously invoke run via the omnihandle
-				fut
+				performInvocationTest({|obj, if|
+				  omnihandle: if;
+				});
 			};
 			
 			def testAsyncMultihandleInvocation() {
-				def [fut, res] := /.at.lang.futures.makeFuture();
-				def pub;
-				def aRunnable := object: {
-					def run() {
-						system.println("aRunnable invoked via multiref!");
-						pub.unexport();
-						res.resolve(true);
-					};
-				};
-				pub := export: aRunnable asM2MI: RunnableI;
-				def mh := multihandle: RunnableI;
-				attach: aRunnable to: mh;
-				mh.run(); // asynchronously invoke run via the multihandle
-				fut
+				performInvocationTest({|obj, if|
+				  def mh := multihandle: if;
+				  attach: obj to: mh;
+				  mh;
+				});
 			};
 			
 		};

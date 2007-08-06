@@ -30,6 +30,11 @@
  * This chat fully interoperates with the M2MI edu.rit.chat1.Chat
  * demo application.
  *
+ * To run this chat application in conjunction with an M2MI chat client,
+ * create a new M2MI chat client in a new console as follows:
+ * > java edu.rit.chat1.Chat
+ * Provided the m2mi.jar is on the JVM's classpath.
+ *
  * @author tvcutsem
  */
 
