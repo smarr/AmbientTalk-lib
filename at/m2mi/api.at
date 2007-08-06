@@ -58,8 +58,27 @@ def cast: obj into: interface {
 	Coercer_coerce(obj, interface);
 };
 
+def TypeTagToInterfaceConverter := jlobby.at.m2mi.TypeTagToInterfaceConverter;
+def TTTIC_TYPETAGLOADER := TypeTagToInterfaceConverter._TYPETAGLOADER_;
+def TTTIC_convert := TypeTagToInterfaceConverter.&convert;
+
 // initialize the M2MI layer
-M2MIClass.initialize();
+try: {
+	M2MIClass.initialize(TTTIC_TYPETAGLOADER);
+} catch: /.at.types.JavaException using: { |e|
+	system.println("Cound not load M2MI library: " + e.message);
+};
+
+// creates a method invoker object that turns generic 'invoke'
+// invocations into more specific invocations (needed only when
+// using {omni|muli|uni}references, not with handles directly)
+def createInvokerFor(obj) {
+	object: {
+		def invoke(msg) {
+			obj <+ msg;
+		};
+	};
+};
 
 def M2MIModule := object: {
 	
@@ -97,9 +116,77 @@ def M2MIModule := object: {
 		uniHandle.detach();
 	};
 	
+	// turns an AT type tag into a Java interface type
+	def toInterface: typetag {
+	  TTTIC_convert(typetag);
+	};
+	
+	// ambienttalk-enabled handles
+	
+	/**
+	 * An ambientTalkHandle wraps an M2MI handle.
+	 * It turns every AmbientTalk invocation on a type T
+	 * into an M2MI invocation of the method 'invoke' on the Java interface
+	 * type T', where T' is automatically generated from T.
+	 */
+	def makeAmbientTalkHandle(typetag, m2miHandleCreator) {
+		def m2miHandle := m2miHandleCreator(toInterface: typetag);
+		object: {
+			def new(@args) { makeAmbientTalkHandle(typetag, m2miHandleCreator) };
+		} mirroredBy: (mirror: {
+			def invoke(slf, sel, args) {
+				raise: /.at.exceptions.createException(/.at.types.IllegalOperation).new(
+					"Cannot synchronously invoke " + sel + " on an omnireference for " + typetag);
+			};
+			def invokeField(slf, sel) { self.invoke(slf, sel, []) };
+			def receive(msg) {
+				system.println("invoking " + msg + " on " + m2miHandle);
+				msg.receiver := nil; // ensures this proxy is not serialized along
+				m2miHandle.invoke(msg);
+			};
+			// ensure that an ambienttalk handle does not become a far reference
+			// when passed remotely. Rather it implements its own by-reference parameter
+			// passing semantics
+			def pass() {
+				/.at.support.util.uponArrivalBecome: { |typetag, m2miHandle|
+					/.at.m2mi.api.makeAmbientTalkHandle(typetag, { |type| m2miHandle });
+				};
+			};
+			def attach(obj) {
+				attach: createInvokerFor(obj) to: m2miHandle;
+				object: {
+					def detach() {
+						m2miHandle.detach(obj)
+					}
+				};
+			};
+		});
+	};
+	
+	def omnireference: typetag {
+		makeAmbientTalkHandle(typetag, &omnihandle: );
+	};
+	def multireference: typetag {
+		makeAmbientTalkHandle(typetag, &multihandle: );
+	};
+	def unireference: typetag for: obj {
+		makeAmbientTalkHandle(typetag, { |if| unihandle: if for: createInvokerFor(obj) });
+	};
+	
+	/**
+	 * When an AmbientTalk object is exported as a type tag, a special invocation
+	 * handler object is exported instead. This invocation handler transforms the
+	 * 'invoke' messages which carry the real AT message into an actual AT message
+	 * send on the real object.
+	 */
+	def export: obj asTypeTag: typetag {
+		export: createInvokerFor(obj) asM2MI: (toInterface: typetag);
+	};
+	
+	
 	def M2MITest() {
 		extend: /.at.unit.test.UnitTest.new("M2MITest") with: {
-			
+
 			def RunnableI := jlobby.java.lang.Runnable;
 
 			def performInvocationTest(handleConstructor) {
@@ -136,6 +223,87 @@ def M2MIModule := object: {
 				  mh;
 				});
 			};
+			
+			def testTypeTagToInterfaceConversion() {
+			  deftype Foo;
+			  def interface := toInterface: Foo;
+			  def outer := self;
+			  def invoker := object: {
+			    def invoke(msg) {
+			      outer.assertEquals("test", msg);
+			    };
+			  };
+			  def coerced := cast: invoker into: interface;
+			  // will be a synchronous invocation as invoker and invokee
+			  // are shared by the same actor thread
+			  self.assertEquals(nil, coerced.invoke("test"));
+			};
+			
+			def testAsyncInvocationOnCustomInterface() {
+				// future used to synchronize both actors:
+				// the unit test actor can only broadcast the message via the
+				// omnireference when it is sure that the other actor has
+				// exported its Bar object
+				def [fut, res] := /.at.lang.futures.makeFuture();
+				def peer := actor: { |res|
+					import /.at.m2mi.api;
+					deftype Bar;
+					export: (object: {
+						def invoke(msg) {
+							system.println("invoker asynchronously invoked with arg " + msg);
+						};
+					}) asM2MI: (toInterface: Bar);
+					res<-resolve(true);
+				};
+				
+				/.at.lang.futures.when: fut becomes: { |ack|
+					deftype Bar;
+					def allBars := omnihandle: (toInterface: Bar);
+					allBars.invoke("test");
+				}
+			};
+
+			deftype FooBar; // describes objects with a tralala method
+						
+			// tests the behaviour of {omni|multi|uni}references
+			def performInvocationOnATReferenceTest(arg, refConstructor) {
+				def [fut, res] := /.at.lang.futures.makeFuture();
+				def pub;
+				def aFooBar := object: {
+					def tralala(a) {
+						system.println("tralala asynchronously invoked with arg " + a + " on " + aFooBar);
+						pub.unexport();
+						res.resolve(true);
+					};
+				};
+				pub := export: aFooBar asTypeTag: FooBar;
+				def ref := refConstructor(aFooBar, FooBar);
+				ref<-tralala(arg); // asynchronously invoke tralala via the ref
+				fut
+			};
+			
+			def testAsyncUnireferenceInvocation() {
+				performInvocationOnATReferenceTest("uniref", {|obj, tag|
+				  unireference: tag for: obj;
+				});
+			};
+			
+			def testAsyncMultireferenceInvocation() {
+				performInvocationOnATReferenceTest("multiref", {|obj, tag|
+				  def mr := multireference: tag;
+				  (reflect: mr).attach(obj);
+				  mr;
+				});
+			};
+
+      // TODO: there is a race condition when invoking the omniref
+      // in parallel with a uni or multiref, and there is also an invocation
+      // too many
+			/*def testAsyncOmnireferenceInvocation() {
+				performInvocationOnATReferenceTest("omniref", {|obj, tag|
+				  omnireference: tag;
+				});
+			};*/
 			
 		};
 	};
