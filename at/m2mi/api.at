@@ -79,15 +79,7 @@ def createInvokerFor(obj) {
 	  def obj.invoker := object: {
 			def invoke(msg) {
 				system.println("invoker for " + obj + " received invokation of " + msg.selector);
-				system.println("msg.arguments = " + msg.arguments + ", msg.receiver = " + msg.receiver);
-				
-				// apparently, the M2MI layer deserializes arguments to its handles once
-				// such that actual arguments to handle calls are *shared*
-				// this means we have to explicitly clone the message, because it may already
-				// have a receiver.
-				
-				def msgcopy := clone: msg;
-				obj <+ msgcopy;
+				obj <+ msg;
 			};
 		};
 		obj.invoker;
@@ -158,7 +150,7 @@ def M2MIModule := object: {
 			def invokeField(slf, sel) { self.invoke(slf, sel, []) };
 			def receive(msg) {
 				system.println("meta_receive " + msg.selector + " on M2MI handle: " + m2miHandle);
-				msg.receiver := nil; // ensures the receiver (this proxy) is not serialized along with msg
+				// msg.receiver := nil; // ensures the receiver (this proxy) is not serialized along with msg
 				m2miHandle.invoke(msg);
 			};
 			// ensure that an ambienttalk handle does not become a far reference

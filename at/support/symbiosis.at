@@ -44,7 +44,7 @@
     * @param interface a java.lang.Class object denoting a Java interface type
     */
    def cast: obj into: interface {
-	 Coercer_coerce(obj, interface);
+	   Coercer_coerce(obj, interface);
    };
    
  

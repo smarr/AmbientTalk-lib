@@ -39,7 +39,8 @@ def LibraryTestSuiteModule := object: {
     /.at.lang.structuraltypes.StructuralTypeTest(),
     /.at.lang.traits.TraitsTest(),
     /.at.support.timer.TimerTest(),
-    /.at.support.util.UtilTest() ]);
+    /.at.support.util.UtilTest(),
+    /.at.unit.bugfixes.BugFixTest() ]);
 
   def testATDistribution() {
     // first perform a self-test to see if unit tests work

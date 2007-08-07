@@ -30,7 +30,9 @@ package at.m2mi;
 import edu.rit.classfile.NamedClassReference;
 import edu.rit.classfile.SynthesizedInterfaceDescription;
 import edu.rit.classfile.SynthesizedInterfaceMethodDescription;
+import edu.rit.m2mi.M2MI;
 import edu.vub.at.exceptions.InterpreterException;
+import edu.vub.at.objects.ATObject;
 import edu.vub.at.objects.ATTypeTag;
 import edu.vub.at.objects.mirrors.Reflection;
 import edu.vub.at.objects.symbiosis.XJavaException;
@@ -38,6 +40,7 @@ import edu.vub.at.util.logging.Logging;
 
 import java.io.ByteArrayOutputStream;
 import java.util.EventListener;
+import java.util.HashSet;
 
 /**
  * Converts AmbientTalk type tag objects into Java interface class objects
@@ -112,5 +115,30 @@ public class TypeTagToInterfaceConverter {
 			throw new XJavaException(e);
 		}
 	}
+	
+	public static HashSet alreadyExported = new HashSet();
+	
+	// DEBUG CODE
+	/*public static void export(ATObject obj, Class type) {
+		System.out.println("EXPORTING OBJECT TO M2MI: " + obj + " hashcode: " + obj.hashCode() + " type = " + type);
+		if (alreadyExported.contains(obj)) {
+			System.out.println("The object " + obj + " was already previously exported");
+		} else {
+			System.out.println("The object " + obj + " was NOT previously exported");
+		}
+		alreadyExported.add(obj);
+		M2MI.export(obj, type);
+	}
+	
+	public static Object makeUni(ATObject obj, Class type) {
+		System.out.println("EXPORTING OBJECT TO M2MI FOR UNIHDL: " + obj + " hashcode: " + obj.hashCode() + " type = " + type);
+		if (alreadyExported.contains(obj)) {
+			System.out.println("The object " + obj + " was already previously exported");
+		} else {
+			System.out.println("The object " + obj + " was NOT previously exported");
+		}
+		alreadyExported.add(obj);
+		return M2MI.getUnihandle(obj, type);
+	}*/
 	
 }

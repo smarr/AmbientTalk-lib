@@ -1,0 +1,24 @@
+def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
+	
+	// Tests whether the same async message can be sent multiple times.
+	def testAsyncMultipleAsyncMessages() {
+		import /.at.lang.futures;
+		def [f1, res1] := makeFuture();
+		def o1 := object: {
+			def m() { res1.resolve(1) };
+		};
+		def [f2, res2] := makeFuture();
+		def o2 := object: {
+			def m() { res2.resolve(2) };
+		};
+		def msg := <-m();
+		o1 <+ msg;
+		o2 <+ msg;
+		when: (group: [ f1, f2 ]) becomes: { |values|
+			self.assertEquals(1, values[1]);
+			self.assertEquals(2, values[2]);
+		};
+	}
+};
+
+self

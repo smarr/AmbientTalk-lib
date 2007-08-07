@@ -108,8 +108,9 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 			//all mesages received are forwarded to server lease. 
 			//the base object of a leased ref is an empty object => it does not understand any async msg.
 			if: !(expired) then: { 
+				// cleaning receiver no longer necessary (receiver is no longer included in async msg)
 				// clearing the receiver otherwise the client lease will be passed.
-				msg.receiver := nil;
+				//msg.receiver := nil;
 				remoteLease<-receive(msg);
 			};
 		};
@@ -143,8 +144,9 @@ def createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal) { extend
 			//ATENCIO: this renewal should not be transmitted to the server lease! 
 			//Just renews the client lease to keep it in sync with the server lease.
 			super^renew(renewal);
+			// cleaning receiver no longer necessary (receiver is no longer included in async msg)
 			// clearing the receiver otherwise the client lease will be passed.
-			msg.receiver := nil;
+			//msg.receiver := nil;
 			remoteLease<-receive(msg);
 		};
 	};
@@ -163,8 +165,9 @@ def createLeasingWithSingleUseMirror(remoteLease, timeout, forSelectors) { exten
 				//Just renews the client lease to keep it in sync with the server lease.
 		 		super^renew();
 			};
+			// cleaning receiver no longer necessary (receiver is no longer included in async msg)
 			// clearing the receiver otherwise the client lease will be passed.
-			msg.receiver := nil;
+			//msg.receiver := nil;
 			remoteLease<-receive(msg);
 		};
 	};

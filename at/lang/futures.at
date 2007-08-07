@@ -409,8 +409,8 @@ def FuturesModule := object: {
 					}
 				};
 			
-			  def send(msg) {
-				  def result := super^send(msg);
+			  def send(rcv, msg) {
+				  def result := super^send(rcv, msg);
 				  // for a future message, the return value now becomes the message's future
 				  if: (is: msg taggedAs: FutureMessage) then: {
 					  //for a future message tagged with a timeout, the return value has to be accessed via the leased reference  
