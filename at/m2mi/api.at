@@ -73,11 +73,25 @@ try: {
 // invocations into more specific invocations (needed only when
 // using {omni|muli|uni}references, not with handles directly)
 def createInvokerFor(obj) {
-	object: {
-		def invoke(msg) {
-			obj <+ msg;
+	if: (reflect: obj).respondsTo(`invoker) then: {
+		obj.invoker;
+	} else: {
+	  def obj.invoker := object: {
+			def invoke(msg) {
+				system.println("invoker for " + obj + " received invokation of " + msg.selector);
+				system.println("msg.arguments = " + msg.arguments + ", msg.receiver = " + msg.receiver);
+				
+				// apparently, the M2MI layer deserializes arguments to its handles once
+				// such that actual arguments to handle calls are *shared*
+				// this means we have to explicitly clone the message, because it may already
+				// have a receiver.
+				
+				def msgcopy := clone: msg;
+				obj <+ msgcopy;
+			};
 		};
-	};
+		obj.invoker;
+	}
 };
 
 def M2MIModule := object: {
@@ -86,6 +100,7 @@ def M2MIModule := object: {
 		// force the AmbientTalk object to implement
 		// the given Java interface type
 		def wrappedObj := cast: obj into: interface;
+		system.println("OBJECT " + obj + " EXPORTED TO M2MI LAYER via export:asM2MI:");
 		M2MI_export(wrappedObj, interface);
 		object: {
 			def unexport() { M2MI_unexport(wrappedObj) };
@@ -101,10 +116,12 @@ def M2MIModule := object: {
 	};
 	
 	def unihandle: if for: obj {
+		system.println("OBJECT " + obj + " EXPORTED TO M2MI LAYER via unihandle:for:");
 		M2MI_getUnihandle(cast: obj into: if, if);
 	};
 	
 	def attach: obj to: multiOrUniHandle {
+		system.println("OBJECT " + obj + " EXPORTED TO M2MI LAYER via attach:to:");
 		multiOrUniHandle.attach(cast: obj into: (multiOrUniHandle.getInterface()));
 	};
 	
@@ -136,12 +153,12 @@ def M2MIModule := object: {
 		} mirroredBy: (mirror: {
 			def invoke(slf, sel, args) {
 				raise: /.at.exceptions.createException(/.at.types.IllegalOperation).new(
-					"Cannot synchronously invoke " + sel + " on an omnireference for " + typetag);
+					"Cannot synchronously invoke " + sel + " on a reference for " + typetag);
 			};
 			def invokeField(slf, sel) { self.invoke(slf, sel, []) };
 			def receive(msg) {
-				system.println("invoking " + msg + " on " + m2miHandle);
-				msg.receiver := nil; // ensures this proxy is not serialized along
+				system.println("meta_receive " + msg.selector + " on M2MI handle: " + m2miHandle);
+				msg.receiver := nil; // ensures the receiver (this proxy) is not serialized along with msg
 				m2miHandle.invoke(msg);
 			};
 			// ensure that an ambienttalk handle does not become a far reference
@@ -153,10 +170,11 @@ def M2MIModule := object: {
 				};
 			};
 			def attach(obj) {
-				attach: createInvokerFor(obj) to: m2miHandle;
+			  def invoker := createInvokerFor(obj);
+				attach: invoker to: m2miHandle;
 				object: {
 					def detach() {
-						m2miHandle.detach(obj)
+						m2miHandle.detach(invoker)
 					}
 				};
 			};
@@ -180,7 +198,8 @@ def M2MIModule := object: {
 	 * send on the real object.
 	 */
 	def export: obj asTypeTag: typetag {
-		export: createInvokerFor(obj) asM2MI: (toInterface: typetag);
+		def invoker := createInvokerFor(obj);
+		export: invoker asM2MI: (toInterface: typetag);
 	};
 	
 	
@@ -250,7 +269,7 @@ def M2MIModule := object: {
 					deftype Bar;
 					export: (object: {
 						def invoke(msg) {
-							system.println("invoker asynchronously invoked with arg " + msg);
+							nil //system.println("invoker asynchronously invoked with arg " + msg);
 						};
 					}) asM2MI: (toInterface: Bar);
 					res<-resolve(true);
@@ -272,11 +291,10 @@ def M2MIModule := object: {
 				def aFooBar := object: {
 					def tralala(a) {
 						system.println("tralala asynchronously invoked with arg " + a + " on " + aFooBar);
-						pub.unexport();
+						//pub.unexport();
 						res.resolve(true);
 					};
-				};
-				pub := export: aFooBar asTypeTag: FooBar;
+				} mirroredBy: (mirror: { def print() { "<object:"+arg+">" } });
 				def ref := refConstructor(aFooBar, FooBar);
 				ref<-tralala(arg); // asynchronously invoke tralala via the ref
 				fut
@@ -299,11 +317,14 @@ def M2MIModule := object: {
       // TODO: there is a race condition when invoking the omniref
       // in parallel with a uni or multiref, and there is also an invocation
       // too many
-			/*def testAsyncOmnireferenceInvocation() {
+      // maybe it has to do with unexport() being invoked prematurely by an
+      // omniref invocation, causing the other uni/multi invocations to fail?
+			def testAsyncOmnireferenceInvocation() {
 				performInvocationOnATReferenceTest("omniref", {|obj, tag|
+					export: obj asTypeTag: FooBar;
 				  omnireference: tag;
 				});
-			};*/
+			};
 			
 		};
 	};
