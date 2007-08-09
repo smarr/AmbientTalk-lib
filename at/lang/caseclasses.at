@@ -31,14 +31,14 @@ def createCaseObject(name, fields, mirror, context) {
 							def myValueForField  := myMirror.invoke(self, field, []);
 							def itsValueForField := itsMirror.invoke(caseObject, field, []);
 
-							// Fields which have a nil value are ignored when comparing case objects
-							((nil == myValueForField).or: 
+							// Fields which have their own name as value are ignored when comparing case objects
+							((field == myValueForField).or: 
 							
 								// Non-nil fields should match with fields in the corresponding object
 								{ myValueForField == itsValueForField })
 							
 								// If none of the above conditions is satisfied, the comparison fails
-								.ifFalse: { return(false); }
+								.ifFalse: { return( false ); };
 								
 						} catch: SelectorNotFound using: { | exc |
 							// If the caseObject being tested does not have the appropriate field
@@ -51,6 +51,13 @@ def createCaseObject(name, fields, mirror, context) {
 					true
 					 
 				}.escape();
+			};
+			
+			def freeVariables() {
+				def myMirror := (reflect: self);
+				def caseFields := myMirror.grabMethod(`init).parameters;
+				
+				caseFields.filter: { | field | field == myMirror.invoke(self, field, []); };
 			};
 						
 			def apply(args) {
@@ -96,9 +103,72 @@ def case: closure {
 	}
 };
 
-case: { Book(author, title); };
+def match: matchedObject with: caseExpression {
+	{ | return |
+		
+		def Closure := jlobby.edu.vub.at.objects.natives.NATClosure;
+		def Method := jlobby.edu.vub.at.objects.natives.NATMethod;
 
-// def cases := /.at.lang.caseclasses; def x := cases.Book("Me", "phd"); def y := cases.Book(nil, "phd"); [x, y, x == y, y == x ]
+		def bindings: parameterTable {
+			def mirror := reflect: matchedObject;
+			parameterTable.map: { | param |
+				mirror.invoke(matchedObject, param, []);
+			};
+		};
+
+		def e := extend: matchedObject with: {
+			def case: object do: action {
+				def method     := action.method;
+				def parameters := object.freeVariables;
+				def extendedClosure := Closure.new(
+						Method.new(
+							method.name,
+							parameters,
+							method.bodyExpression),
+						action.context);
+				if: (object == super) then: {
+					return( extendedClosure.apply(bindings: parameters) );
+				};
+			};
+		};
+		
+		caseExpression.apply([ e ]);
+	}.escape()
+};
+
+def testIt() {
+	case: { Book(author, title); };
+	case: { Movie(director, title); };
+	case: { Album(artist, title); };
+
+	def loan(mediaItem) {
+		match: mediaItem with: { | e |
+			e.case: Book("George R.R. Martin", `title) do: { 
+				system.println("This guy wrote my favorite fantasy series: A song of Ice and Fire. Hope you like " + title); };
+			e.case: Book("Frank Herbert", `title) do: {
+				system.println("Sci-fi at its best is what Frank Herbert produced with Dune. Hope you enjoy reading " + title); };
+			e.case: Book("David Eddings", `title) do: {
+				system.println("This guy was the author of one of the first real fantasy books I read, I hope you enjoy " + title); };
+
+			def recentlySeen := { system.println("I've recently seen this movie, and I found it to be more than just OK. Let me know if you agree."); };
+			e.case: Movie(`director, "The Illusionist") do: recentlySeen;
+			e.case: Movie(`director, "Fracture") do: recentlySeen;
+
+			e.case: Album("Muse", `title) do: {
+				system.println("You may not be a fan yet, but believe me, you soon will be ;-). Enjoy the noise on " + title); };
+				
+			system.println("You have loaned " + mediaItem);
+		}
+	};
+	
+	loan(Book("George R.R. Martin", "Windhaven"));	
+	loan(Album("Muse", "Origin of Symmetry"));	
+	loan(Album("Manic Street Preachers", "This Is My Truth Tell Me Yours"));	
+};
+
+/* 
+def cases := /.at.lang.caseclasses; cases.testIt(); 
+def x := cases.Book("Me", "phd"); def y := cases.Book(nil, "phd"); [x, y, x == y, y == x ]
+*/
 
 self
-
