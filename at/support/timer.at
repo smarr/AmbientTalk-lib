@@ -44,6 +44,8 @@ def theTimer := Timer.new();
 def scheduleMethod := theTimer.&schedule.cast(TimerTask, long);
 def scheduleAtFixedRateMethod := theTimer.&schedule.cast(TimerTask, long, long);
 
+def currentTimeMillis := jlobby.java.lang.System.&currentTimeMillis;
+
 def makeLong := /.at.support.symbiosis.&long;
 
 def TimerModule := object: {
@@ -52,6 +54,8 @@ def TimerModule := object: {
 	def millisec(ms) { makeLong(ms) };
 	def seconds(s) { millisec(s*1000) };
 	def minutes(m) { seconds(m*60) };
+	
+	def now() { currentTimeMillis() };
 	
 	// when the timeout has elapsed, invoke the given code block
 	// returns a subscription object that can be used to cancel execution of the block
@@ -63,8 +67,8 @@ def TimerModule := object: {
 		object: {
 			def cancel() { ttask.cancel() };
 			def getTimeRemaining() { 
-			def time := makeLong(0);
-				def expiredTime := jlobby.java.lang.System.currentTimeMillis() - ttask.scheduledExecutionTime();
+			  def time := makeLong(0);
+			  def expiredTime := now() - ttask.scheduledExecutionTime();
 				if: ( expiredTime < timeout) then: {
 					time := timeout - expiredTime;
 				};
@@ -85,6 +89,10 @@ def TimerModule := object: {
 		}
 	};
 	
+	def has: period passedSince: timestamp {
+	  now() - timestamp > period
+	};
+	
 	def TimerTest() {
 	 extend: /.at.unit.test.UnitTest.new("TimerTest") with: {
       def FuturesModule := /.at.lang.futures; FuturesModule.enableFutures(false);
@@ -97,20 +105,20 @@ def TimerModule := object: {
 	    };
 		fut;
 	  };
-	  def testAsyncWhenEverElapsed() {
-	    def run := 0;
-		def [fut,res] := FuturesModule.makeFuture();
-		def sub := whenever: seconds(1) elapsed: {
-		  run := run + 1;
-		  system.println("whenever:elapsed: works (1 sec) (run "+run+")");
-		  if: (run == 3) then: {
-			sub.cancel();
-			res.resolve(true);
-		  };
+		def testAsyncWhenEverElapsed() {
+			def run := 0;
+			def [fut,res] := FuturesModule.makeFuture();
+			def sub := whenever: seconds(1) elapsed: {
+				run := run + 1;
+				system.println("whenever:elapsed: works (1 sec) (run "+run+")");
+				if: (run == 3) then: {
+					sub.cancel();
+					res.resolve(true);
+				};
+			};
+			fut;
 		};
-		fut;
-	  };
 	};
-   };
+ };
 	
 };

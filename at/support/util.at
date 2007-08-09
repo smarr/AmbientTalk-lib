@@ -48,6 +48,19 @@ def uponArrivalBecome: clo {
   } taggedAs: [#Isolate])) in: clo.context.lexicalScope;
 };
 
+def myRand := nil;
+def RandomNumberGenerator() {
+	if: (nil == myRand) then: {
+		myRand := jlobby.java.util.Random.new();
+	};
+	myRand
+};
+
+// generate a random integer in the interval [min, max[
+def randomNumberBetween(min, max) {
+	RandomNumberGenerator.nextInt(max - min) + min
+};
+
 def UtilTest() {
   extend: /.at.unit.test.UnitTest.new("UtilTest") with: {
     import /.at.lang.futures; enableFutures(false);
@@ -94,6 +107,14 @@ def UtilTest() {
         self.assertTrue((reflect: val).respondsTo(`z), "movable object has no z slot");
         self.assertEquals(42, val.z);
       };
+    };
+
+    def testRandomBetween() {
+	    1.to: 50 do: { |i|
+		    def rnd := randomNumberBetween(5, 30);
+		    self.assertLessThanOrEquals(5, rnd);
+		    self.assertLessThan(rnd, 30);
+		  };
     };
     
   };
