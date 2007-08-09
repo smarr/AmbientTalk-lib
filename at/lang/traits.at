@@ -70,6 +70,17 @@ def TraitPrototype := object: {
 	};
 } taggedAs: [ Trait ];
 
+deftype BadRequiringProtocolStatement;
+def XBadRequiringProtocolStatement := extend: /.at.exceptions.createException(BadRequiringProtocolStatement) with: {
+	def protocol;
+	def missingSelectors;
+	def init(statement) {
+		def msg := "object " + statement + " does not define a protocol or trait to require\n";
+		super^init(msg);
+	}; 
+} taggedAs: [ BadRequiringProtocolStatement ];
+
+
 def TraitModule := object: {
 	def trait: closure {
 		TraitPrototype.new(object: closure, protocolOf: nil);
@@ -79,12 +90,33 @@ def TraitModule := object: {
 		TraitPrototype.new(obj, protocolOf: nil);
 	};
 	
-	def trait: closure requiring: protocol {
-		TraitPrototype.new(object: closure, protocol);
+	def traitFrom: obj requiring: requireExpression {
+		// get a protocol object from either a protocol object or trait, raise an exception otherwise
+		def retrieveProtocol(requireStatement) {
+			if: (is: requireStatement taggedAs: Protocol) then: {
+				requireStatement;
+			} else: {
+				if: (is: requireStatement taggedAs: Trait) then: {
+					protocolOf: requireStatement.provides
+				} else: {
+					raise: XBadRequiringProtocolStatement.new(requireStatement);
+				}
+			}
+		};
+		def protocol := (protocolOf: nil);
+		if: (is: requireExpression taggedAs: /.at.types.Table) then: {
+			protocol := requireExpression.inject: (protocolOf: nil) into: { 
+				|protocol, requireStatement|
+				protocol + retrieveProtocol(requireStatement)
+			}
+		} else: {
+			protocol := retrieveProtocol(requireExpression);
+		};
+		TraitPrototype.new(obj, protocol);
 	};
 	
-	def traitFrom: obj requiring: protocol {
-		TraitPrototype.new(obj, protocol);
+	def trait: closure requiring: requireExpression {
+		traitFrom: (object: closure) requiring: requireExpression;
 	};
 	
 	/* Transform:
@@ -179,6 +211,56 @@ def TraitModule := object: {
 				};
 				
 				self.assertEquals(nil, composite.a());
+			};
+			
+			// check the behavior of trait: requiring: ... checks when its second argument is a protocol, trait or table of both
+			def testTraitRequiringExpression() {
+				def T1 := trait: {
+					def a()
+				};
+				def T2 := trait: {
+					def b()
+				} requiring: T1;
+				def P1 := protocol: {
+					def c()
+				};
+				def P2 := protocol: {
+					def d()
+				};
+				trait: {
+					nil
+				} requiring: P1;
+				trait: {
+					nil
+				} requiring: T2;
+				trait: { 
+					nil
+				} requiring: [T1, T2];
+				trait: {
+					nil
+				} requiring: [P1, P2];
+				def T3 := trait: { 
+					nil
+				} requiring: [P1, T2, T1, P2];
+				def C := object: {
+					def a();
+					def b();
+					def c();
+					def d();
+					use: {
+						import T3;
+					}
+				};
+				self.assert: BadRequiringProtocolStatement raisedIn: {
+					trait: {
+						nil
+					} requiring: nil
+				};
+				self.assert: BadRequiringProtocolStatement raisedIn: {
+					trait: {
+						nil
+					} requiring: object: { def a() }
+				};
 			};
 		};
 	};
