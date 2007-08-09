@@ -29,18 +29,19 @@ package at.m2mi;
 
 import edu.rit.classfile.NamedClassReference;
 import edu.rit.classfile.SynthesizedInterfaceDescription;
-import edu.rit.classfile.SynthesizedInterfaceMethodDescription;
-import edu.rit.m2mi.M2MI;
 import edu.vub.at.exceptions.InterpreterException;
 import edu.vub.at.objects.ATObject;
 import edu.vub.at.objects.ATTypeTag;
 import edu.vub.at.objects.mirrors.Reflection;
+import edu.vub.at.objects.natives.NATTypeTag.OBJRootType;
 import edu.vub.at.objects.symbiosis.XJavaException;
 import edu.vub.at.util.logging.Logging;
 
 import java.io.ByteArrayOutputStream;
+import java.util.Collections;
 import java.util.EventListener;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Converts AmbientTalk type tag objects into Java interface class objects
@@ -51,18 +52,52 @@ import java.util.HashSet;
 public class TypeTagToInterfaceConverter {
 
 	private static final class TypeTagClassLoader extends ClassLoader {
+
+		private static final Map registeredTypes = Collections.synchronizedMap(new HashMap());
 		
-		// all generated interface class files belong to this package
-		private static final String _PKG_PREFIX_ = "typetags.";
+		/**
+		 * Register a type tag with this custom class loader.
+		 * When requested for a name matching one of the registered type tags,
+		 * the class loader will return a synthesized interface class for it.
+		 */
+		public void register(String typeName, ATTypeTag typeTag) {
+			registeredTypes.put(typeName, typeTag);
+		}
 		
-		private static final String _INVOKE_NAME_ = "invoke";
-		private static final NamedClassReference _EVENTLISTENER_ = 
-			new NamedClassReference(EventListener.class.getName());
+		/**
+		 * The manually generated interface for the root type tag.
+		 * This root interface extends EventListener such that all of
+		 * the generated interfaces will be regarded as event listener
+		 * interfaces by the AmbientTalk symbiosis layer.
+		 * This ensures that invoke is regarded as an asynchronous invocation
+		 * on the AmbientTalk object it wraps.
+		 */
+		public interface Type extends EventListener {
+			/**
+			 * The generic method serving as the asynchronous entry point
+			 * for all M2MI calls that are forwarded to an actual AmbientTalk
+			 * object by means of an "invoker" proxy object.
+			 */
+			public void invoke(Object message);
+		}
 		
 		protected Class findClass(String name) throws ClassNotFoundException {
-			if (name.startsWith(_PKG_PREFIX_)) {
+			ATTypeTag type = (ATTypeTag) registeredTypes.get(name);
+			if (type != null) {
 				try {
-					byte[] code = synthesizeClass(name);
+					// first, convert all of the typetag's supertypes to classes
+					ATObject[] supertags = type.base_superTypes().asNativeTable().elements_;
+					Class[] supertypes = new Class[supertags.length];
+					for (int i = 0; i < supertypes.length; i++) {
+						ATTypeTag typetag = supertags[i].asTypeTag();
+						if (typetag.base_typeName().equals(OBJRootType._INSTANCE_.base_typeName())) {
+							supertypes[i] = Type.class;
+						} else {
+							supertypes[i] = this.loadClass(Reflection.upSelector(typetag.base_typeName()));
+						}	
+					}
+					
+					byte[] code = synthesizeClass(name, supertypes);
 					return super.defineClass(null, code, 0, code.length);
 				} catch (Exception e) {
 					Logging.VirtualMachine_LOG.fatal(e.getMessage());
@@ -73,19 +108,16 @@ public class TypeTagToInterfaceConverter {
 			}
 		}
 		
-		private byte[] synthesizeClass(String name) throws Exception {
+		private byte[] synthesizeClass(String name, Class[] superinterfaces) throws Exception {
 			// create a new inteface named name
 			SynthesizedInterfaceDescription interfaceDesc = new SynthesizedInterfaceDescription(name);
 			// make it public
 			interfaceDesc.setPublic(true);
-			// add EventListener as superinterface such that AT's symbiosis recognizes
-			// the invocation as being asynchronous
-			interfaceDesc.addSuperinterface(_EVENTLISTENER_);
 			
-			// add a method void invoke(Object);
-			SynthesizedInterfaceMethodDescription invokeMth =
-				new SynthesizedInterfaceMethodDescription(interfaceDesc, _INVOKE_NAME_);
-			invokeMth.addArgumentType(NamedClassReference.JAVA_LANG_OBJECT);
+			// add all superinterfaces to this interface
+			for (int i = 0; i < superinterfaces.length; i++) {
+				interfaceDesc.addSuperinterface(new NamedClassReference(superinterfaces[i].getName()));
+			}
 			
 			// write the interface description out into a byte array
 			ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -99,46 +131,20 @@ public class TypeTagToInterfaceConverter {
 	
 	/**
 	 * Converts the AmbientTalk type tag:
-	 * <code>deftype T</code>
+	 * <code>deftype T <: T2</code>
 	 * To the Java interface type:
 	 * <code>
-	 * public interface tyeptags.T extends java.util.EventListener {
-	 *   public void invoke(Object msg);
-	 * }
+	 * public interface T extends T2 { }
 	 * </code>
 	 */
 	public static Class convert(ATTypeTag tag) throws InterpreterException {
 		try {
 			String tagName = Reflection.upSelector(tag.base_typeName());
-			return _TYPETAGLOADER_.loadClass(TypeTagClassLoader._PKG_PREFIX_ + tagName);
+			_TYPETAGLOADER_.register(tagName, tag);
+			return _TYPETAGLOADER_.loadClass(tagName);
 		} catch (Exception e) {
 			throw new XJavaException(e);
 		}
 	}
-	
-	public static HashSet alreadyExported = new HashSet();
-	
-	// DEBUG CODE
-	/*public static void export(ATObject obj, Class type) {
-		System.out.println("EXPORTING OBJECT TO M2MI: " + obj + " hashcode: " + obj.hashCode() + " type = " + type);
-		if (alreadyExported.contains(obj)) {
-			System.out.println("The object " + obj + " was already previously exported");
-		} else {
-			System.out.println("The object " + obj + " was NOT previously exported");
-		}
-		alreadyExported.add(obj);
-		M2MI.export(obj, type);
-	}
-	
-	public static Object makeUni(ATObject obj, Class type) {
-		System.out.println("EXPORTING OBJECT TO M2MI FOR UNIHDL: " + obj + " hashcode: " + obj.hashCode() + " type = " + type);
-		if (alreadyExported.contains(obj)) {
-			System.out.println("The object " + obj + " was already previously exported");
-		} else {
-			System.out.println("The object " + obj + " was NOT previously exported");
-		}
-		alreadyExported.add(obj);
-		return M2MI.getUnihandle(obj, type);
-	}*/
 	
 }
