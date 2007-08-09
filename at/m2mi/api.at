@@ -178,6 +178,10 @@ def M2MIModule := object: {
 		makeAmbientTalkHandle(typetag, { |if| unihandle: if for: createInvokerFor(obj) });
 	};
 	
+	def attach: object toRef: multiRef {
+		(reflect: multiRef).attach(object);
+	};
+	
 	/**
 	 * When an AmbientTalk object is exported as a type tag, a special invocation
 	 * handler object is exported instead. This invocation handler transforms the
@@ -294,7 +298,7 @@ def M2MIModule := object: {
 			def testAsyncMultireferenceInvocation() {
 				performInvocationOnATReferenceTest("multiref", {|obj, tag|
 				  def mr := multireference: tag;
-				  (reflect: mr).attach(obj);
+				  attach: obj toRef: mr;
 				  mr;
 				});
 			};
