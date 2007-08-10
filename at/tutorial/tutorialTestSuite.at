@@ -40,4 +40,5 @@ def TutorialTestSuite := /.at.unit.test.TestSuite.new("tutorial testsuite", [
   tut.multiparadigm,
   tut.modular,
   tut.concurrency,
+  tut.metaprogramming,
   tut.symbiosis ]);
