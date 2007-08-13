@@ -54,6 +54,8 @@ def ExceptionModule := object: {
 	def createException := &createException;
 	def XException := createException(Types.Exception);
 
+  def error(msg) { raise: XException.new(msg) };
+
 	def XArityMismatch := 
 		jlobby.edu.vub.at.exceptions.XArityMismatch.new("object:", 1, 0);
 	def XIllegalOperation := 
