@@ -1,0 +1,359 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/* Meta-circular implementation of service discovery by means
+ * of the M2MI network library.
+ *
+ * Abstractions:
+ *  when: type discovered: { |serviceDesc| ... } -> subscription
+ *  whenever: type discovered: { |serviceDesc| ... } -> subscription
+ *  export: object as: type -> publication
+ *
+ * It is also possible to define so-called service trackers which
+ * can be parameterized with a discovery rate and recall period:
+ * def tracker := ServiceTracker.new(type, rate, recall);
+ * tracker.wheneverDiscovered: { |service| ... }
+ * tracker.wheneverLost: { |service| ... }
+ *
+ * @author tvcutsem
+ */
+import /.at.m2mi.api;
+import /.at.support.timer;
+
+// minimum amount of time in between discovery broadcasts
+def DISCOVER_RATE := seconds(2);
+def RECALL_PERIOD := seconds(5);
+
+// service type under which tracker response gatherer objects are published
+deftype Tracker;
+
+// compare [serviceDescr, timestamp] entries in the discoveredServices
+// vector by their service descriptions
+def ServiceEntryComparator := { |e1, e2| e1[1] == e2[1] };
+
+/** @see description of ServiceTracker in the module below */
+def ServiceTrackerPrototype := object: {
+	
+	// the type of objects that I should discover
+	def typeToTrack;
+	
+	// an omnireference for the type of objects that I track
+	def trackedServices;
+	
+	// rate at which I perform discovery broadcasts
+	def discoveryRate;
+	
+	// the maximum amount of time that I remember a previously discovered
+	// service. Previously discovered services do not trigger my discovery
+	// handlers.
+	def recallPeriod;
+	
+	// Vector<[serviceDescription, timeLastSeen]> for previously discovered services
+	def discoveredServices;
+	
+	// Vector<Closure> for when:discovered: observers
+	def oneShotSubscriptions;
+	
+	// Vector<Closure> for whenever:discovered: observers
+	def permanentSubscriptions;
+	
+	// Vector<Closure> for whenever:lost: observers
+	def lostServiceSubscriptions;
+
+  // contains the object to cancel the periodic broadcast
+  def broadcast;
+
+  // this object listens for and gathers replies of all tracked service objects
+  def reportGatherer;
+
+	def init(type, rate := DISCOVER_RATE, recall := RECALL_PERIOD) {
+		typeToTrack := type;
+		trackedServices := omnireference: type;
+	  discoveryRate := rate;
+		recallPeriod := recall;
+		discoveredServices := /.at.collections.vector.Vector.new(2, ServiceEntryComparator);
+		oneShotSubscriptions := /.at.collections.vector.Vector.new(2);
+		permanentSubscriptions := /.at.collections.vector.Vector.new(2);
+		lostServiceSubscriptions := /.at.collections.vector.Vector.new(2);
+	};
+	
+	// start the discovery broadcast loop only when the tracker needs
+	// to start tracking
+	def startBroadcastIfNecessary() {
+		if: (nil == broadcast) then: {			
+			// initialize the object responsible for gathering replies
+			reportGatherer := unireference: Tracker for: (object: {
+			  def respond(serviceDescription) {
+					if: alreadySeen(serviceDescription) then: {
+						updateTimeLastSeen(serviceDescription)
+					} else: {
+						trackNewService(serviceDescription)
+					}
+			  };
+		  });
+			
+			// start a periodic 'discovery beacon' requesting all
+			// available services to respond to this tracker
+			broadcast := whenever: discoveryRate elapsed: {
+				trackedServices<-reportTo(reportGatherer);
+				removeStaleServices();
+			};
+		}
+	};
+	
+	// stop the discovery broadcast loop when there are no more open
+	// subscriptions
+	def stopBroadcastIfNecessary() {
+		if: (oneShotSubscriptions.isEmpty.and: { permanentSubscriptions.isEmpty }
+			                                and: { lostServiceSubscriptions.isEmpty }) then: {
+			if: (nil != broadcast) then: {
+				// stop the periodic discovery beacon
+				broadcast.cancel();
+			  broadcast := nil;
+
+			  // unexport the report gatherer
+			  detachUniRef: reportGatherer;
+			  reportGatherer := nil;	
+			}
+		};
+	};
+	
+	def registerHandler(hdl, subscriptionType) {
+		subscriptionType.add(hdl);
+		startBroadcastIfNecessary();
+		// return a subscription object
+		object: {
+			def serviceType := typeToTrack;
+			def handler := hdl;
+			def cancel() {
+				subscriptionType.remove(hdl);
+				stopBroadcastIfNecessary();
+			};
+		}
+	};
+	
+	def alreadySeen(service) {
+		discoveredServices.contains([service,0]);
+	};
+
+	def updateTimeLastSeen(descr) {
+		def entryIdx := discoveredServices.indexOf([descr,0]);
+		if: (nil != entryIdx) then: {
+			// update the service's time stamp
+			def entry := discoveredServices[entryIdx];
+			entry[2] := now();	
+		};
+	};
+
+	def trackNewService(service) {
+		discoveredServices.add([service, now()]);
+		oneShotSubscriptions.each: { |sub| sub<-apply([service]) };
+		// remove all one-shot subscriptions
+		oneShotSubscriptions.clear();
+		permanentSubscriptions.each: { |sub| sub<-apply([service]) };
+		// maybe I only had oneShotSubscriptions, check if I can stop tracking
+		stopBroadcastIfNecessary();
+	};
+	
+	def removeStaleServices() {
+		// check for obsolete services no longer reporting themselves
+		discoveredServices.removeAll: { |entry|
+			(has: recallPeriod passedSince: entry[2]).ifTrue: {
+				// notify lost service subscribers
+				lostServiceSubscriptions.each: { |sub| sub<-apply([entry[1]]) };
+				true;
+			} ifFalse: { false };
+		};
+	};
+	
+	// == Public Interface ==
+	
+	def whenDiscovered: hdl {
+		// if the tracker already discovered services,
+		// apply the handler immediately on the first discovered
+		// service, and don't register it
+		if: (!discoveredServices.isEmpty) then: {
+			hdl<-apply([discoveredServices[1][1]]);
+			// return a dummy subscription object
+			object: {
+				def serviceType := typeToTrack;
+				def handler := hdl;
+				def cancel() { true };
+			};
+		} else: {
+			registerHandler(hdl, oneShotSubscriptions);
+		}
+	};
+	def wheneverDiscovered: hdl {
+		// apply the handler immediately to all previously discovered services
+		discoveredServices.each: { |entry| hdl<-apply([entry[1]]) };
+		registerHandler(hdl, permanentSubscriptions);
+	};
+	def wheneverLost: hdl {
+		registerHandler(hdl, lostServiceSubscriptions);
+	};
+	
+}; // end ServiceTrackerPrototype
+
+
+// every actor has a set of default trackers that can be used implicitly
+def _DEFAULT_TRACKERS_ := jlobby.java.util.HashMap.new();
+def trackerFor(type) {
+	def tracker := _DEFAULT_TRACKERS_.get(type);
+	if: (nil == tracker) then: {
+		tracker := ServiceTrackerPrototype.new(type);
+		_DEFAULT_TRACKERS_.put(type, tracker);
+	};
+	tracker
+};
+
+def DiscoveryModule := object: {
+	
+	/**
+	 * Creates a service tracker or 'sniffer' object that can
+	 * search the ambient for services of a given type.
+	 * The tracker can optionally be parameterized with the discovery
+	 * rate (amount of time between discovery beacons) and with a
+	 * recall period, which is the maximum amount of time it should 'remember'
+	 * previously seen services, such that it can filter those out.
+	 *
+	 * def tracker := ServiceTracker.new(Type, Rate, Recall);
+	 * tracker.whenDiscovered: { |svc| ... } -> sub
+	 * tracker.wheneverDiscovered: { |svc| ... } -> sub
+	 * tracker.wheneverLost: { |svc| ... } -> pub
+	 */
+	def ServiceTracker := ServiceTrackerPrototype;
+	
+	/**
+	 * Invokes the handler with a discovered service matching the
+	 * given type. If multiple discovered services are present,
+	 * a non-deterministically chosen service is provided.
+	 * Once the handler was triggered, it is automatically
+	 * cancelled, such that it cannot be applied more than once.
+	 *
+	 * Returns a subscription object which can be used to cancel
+	 * the registration of the handler. Note that canceling the
+	 * handler does not guaruantee that it will never be invoked
+	 * (an apply message for the handler might be pending in the
+	 *  actor's inbox at the time cancel is invoked)
+	 */
+	def when: type discovered: handler {
+		trackerFor(type).whenDiscovered: handler;
+	};
+	
+	/**
+	 * Invokes the handler with a discovered service matching the
+	 * given type. The handler is triggered for every discovered
+	 * service. It may be invoked for the same service, but only
+	 * when that same service has been unavailable for longer than
+	 * the discovery manager's recall period.
+	 *
+	 * Returns a subscription object which can be used to cancel
+	 * the registration of the handler. Note that canceling the
+	 * handler does not guaruantee that it will never be invoked
+	 * (an apply message for the handler might be pending in the
+	 *  actor's inbox at the time cancel is invoked)
+	 */
+	def whenever: type discovered: handler {
+		trackerFor(type).wheneverDiscovered: handler;
+	};
+	
+	/**
+	 * Invokes the handler with a discovered service matching the
+	 * given type. The handler is triggered every time that a
+	 * previously discovered service is 'forgotten' by the tracker.
+	 * That is: the handler is triggered if a previously discovered
+	 * service now becomes unresponsive.
+	 *
+	 * Returns a subscription object which can be used to cancel
+	 * the registration of the handler. Note that canceling the
+	 * handler does not guaruantee that it will never be invoked
+	 * (an apply message for the handler might be pending in the
+	 *  actor's inbox at the time cancel is invoked)
+	 */
+	def whenever: type lost: handler {
+		trackerFor(type).wheneverLost: handler;
+	};
+	
+	/**
+	 * Make a service object available for discovery.
+	 *
+	 * Returns a publication object which can be used to unexport
+	 * the object. Note that unexporting the object only makes
+	 * the object unavailable for new discovery requests, it
+	 * does not take the object itself offline.
+	 */
+	def export: obj as: type {
+		def trackerResponder := object: {
+			def reportTo(serviceTracker) {
+				serviceTracker<-respond(obj);
+			}
+		};
+		export: trackerResponder asTypeTag: type;
+	};
+	
+	def DiscoveryModuleTest() {
+		extend: /.at.unit.test.UnitTest.new("DiscoveryModuleTest") with: {
+			
+			def testAsyncTypedDiscoveryViaDefaultTracker() {
+				deftype DiscoveryTest;
+				
+				def peer := actor: {
+					deftype DiscoveryTest;
+					import /.at.ambient.discovery;
+					import /.at.support.timer;
+					def pub := export: (object: {
+						def add(x,y) { x + y };
+					}) as: DiscoveryTest; 
+					when: seconds(2) elapsed: {
+						pub.unexport();
+					}
+				};
+
+				import /.at.lang.futures;				
+				def [fut1, res1] := makeFuture();
+				def [fut2, res2] := makeFuture();
+				
+				def sub := when: DiscoveryTest discovered: { |service|
+					when: service<-add(1,2)@FutureMessage becomes: { |val|
+						self.assertEquals(3, val);
+						sub.cancel();
+						res1.resolve(true);
+					};
+					nil
+				};
+				
+				def sub2 := whenever: DiscoveryTest lost: { |service|
+					sub2.cancel();
+					res2.resolve(true);
+				};
+				group: [fut1,fut2]
+			};
+		};
+	};
+	
+} // end DiscoveryModule
