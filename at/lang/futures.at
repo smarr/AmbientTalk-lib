@@ -133,8 +133,13 @@ def FutureMirror := mirror: {
 				};
 			};
 			inbox := [];
-			subscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
-			subscribers := [];
+			if: (subscribers.isEmpty) then: {
+				// warning to ease debugging when something goes wrong in a future that's never accessed
+				system.println("[futures.at] Warning: future has no listeners to catch exception: " + exception);
+			} else: {
+				subscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
+				subscribers := [];	
+			}
 		};
 		nil;
 	};
@@ -287,7 +292,9 @@ def FuturesModule := object: {
 
 	// when-catch support, version without a catch block
 	def when: future becomes: resolvedBlock {
-		when: future becomes: resolvedBlock catch: Exception using: { |e| nil }
+		when: future becomes: resolvedBlock catch: Exception using: { |e|
+			system.println("[futures.at] Warning: uncaught exception because no catch-clause specified: " + e);
+		}
 	};
 
   // when-catch support, version with one generic catch-all block
@@ -300,7 +307,7 @@ def FuturesModule := object: {
 		def [whenFuture,resolver] := makeFuture();
 		def notify(block, val) {
 			try: {
-				resolver.resolve(block(val));
+				resolver.resolve(block(val));				
 			} catch: Exception using: {|e|
 				resolver.ruin(e);
 			};
@@ -311,6 +318,8 @@ def FuturesModule := object: {
 			def notifyRuined(exc) {
 				if: (is: exc taggedAs: excType) then: {
 					notify(excBlock, exc);
+				} else: {
+					system.println("[futures.at] Warning: uncaught exception: " + exc + ". Can only cath: " + excType);
 				};
 			};
 		// note that <-addResolutionListener is a message directed to the future's mirror
