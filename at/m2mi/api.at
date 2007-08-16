@@ -165,6 +165,10 @@ def M2MIModule := object: {
 					}
 				};
 			};
+			// only works for unireferences!!!
+			def detach() {
+				detach: m2miHandle;
+			};
 		});
 	};
 	
@@ -180,6 +184,10 @@ def M2MIModule := object: {
 	
 	def attach: object toRef: multiRef {
 		(reflect: multiRef).attach(object);
+	};
+	
+	def detachUniRef: uniref {
+		(reflect: uniref).detach();
 	};
 	
 	/**
