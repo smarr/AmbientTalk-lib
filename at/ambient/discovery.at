@@ -354,6 +354,6 @@ def DiscoveryModule := object: {
 				group: [fut1,fut2]
 			};
 		};
-	};
+	}; // end DiscoveryModuleTest
 	
 } // end DiscoveryModule
