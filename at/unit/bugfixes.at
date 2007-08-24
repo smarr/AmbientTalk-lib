@@ -1,8 +1,9 @@
 def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
-	
+
+  import /.at.lang.futures;
+		
 	// Tests whether the same async message can be sent multiple times.
 	def testAsyncMultipleAsyncMessages() {
-		import /.at.lang.futures;
 		def [f1, res1] := makeFuture();
 		def o1 := object: {
 			def m() { res1.resolve(1) };
@@ -18,7 +19,24 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 			self.assertEquals(1, values[1]);
 			self.assertEquals(2, values[2]);
 		};
-	}
+	};
+	
+	// Tests whether using import in isolates still makes them pass-by-copy
+	// and allows the imported methods to be invoked on the copied isolate
+	def testAsyncIsolatesAndImports() {
+		def i := isolate: {
+			def m() { "foo" }
+		};
+		def j := isolate: { |i|
+			import i;
+		};
+		def a := actor: {
+			def accept(obj) { obj.m() }
+		};
+		when: a<-accept(j)@FutureMessage becomes: { |v|
+			self.assertEquals("foo", v)
+		}
+	};
 };
 
 self
