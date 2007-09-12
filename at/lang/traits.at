@@ -60,15 +60,12 @@ import /.at.lang.structuraltypes;
 
 deftype Trait;
 
-def TraitPrototype := object: {
-	def provides := object: { nil };
-	def requires := protocolOf: nil;
-	
-	def init(prov, req) {
-		provides := prov;
-		requires := req;
-	};
-} taggedAs: [ Trait ];
+def makeTraitProviding: prov requiring: req taggedAs: tags {
+	object: {
+		def provides := prov;
+		def requires := req;
+	} taggedAs: tags + [Trait];
+};
 
 deftype BadRequiringProtocolStatement;
 def XBadRequiringProtocolStatement := extend: /.at.exceptions.createException(BadRequiringProtocolStatement) with: {
@@ -83,14 +80,26 @@ def XBadRequiringProtocolStatement := extend: /.at.exceptions.createException(Ba
 
 def TraitModule := object: {
 	def trait: closure {
-		TraitPrototype.new(object: closure, protocolOf: nil);
+		makeTraitProviding: (object: closure) requiring: (protocolOf: nil) taggedAs: [];
+	};
+	
+	def trait: closure taggedAs: tags{
+		makeTraitProviding: (object: closure) requiring: (protocolOf: nil) taggedAs: tags;
 	};
 	
 	def traitFrom: obj {
-		TraitPrototype.new(obj, protocolOf: nil);
+		makeTraitProviding: obj requiring: (protocolOf: nil) taggedAs: [];
+	};
+	
+	def traitFrom: obj taggedAs: tags {
+		makeTraitProviding: obj requiring: (protocolOf: nil) taggedAs: tags;
 	};
 	
 	def traitFrom: obj requiring: requireExpression {
+		traitFrom: obj requiring: requireExpression taggedAs: []
+	};
+	
+	def traitFrom: obj requiring: requireExpression taggedAs: tags {
 		// get a protocol object from either a protocol object or trait, raise an exception otherwise
 		def retrieveProtocol(requireStatement) {
 			if: (is: requireStatement taggedAs: Protocol) then: {
@@ -112,11 +121,15 @@ def TraitModule := object: {
 		} else: {
 			protocol := retrieveProtocol(requireExpression);
 		};
-		TraitPrototype.new(obj, protocol);
+		makeTraitProviding: obj requiring: protocol taggedAs: tags;
 	};
 	
 	def trait: closure requiring: requireExpression {
 		traitFrom: (object: closure) requiring: requireExpression;
+	};
+	
+	def trait: closure requiring: requireExpression taggedAs: tags {
+		traitFrom: (object: closure) requiring: requireExpression taggedAs: tags;
 	};
 	
 	/* Transform:
