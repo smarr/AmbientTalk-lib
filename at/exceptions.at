@@ -57,13 +57,13 @@ def ExceptionModule := object: {
   def error(msg) { raise: XException.new(msg) };
 
 	def XArityMismatch := 
-		jlobby.edu.vub.at.exceptions.XArityMismatch.new("object:", 1, 0);
+		jlobby.edu.vub.at.exceptions.XArityMismatch.new("uninitialized arity mismatch", 0, 0);
 	def XIllegalOperation := 
-		jlobby.edu.vub.at.exceptions.XIllegalOperation.new("Synchronous communication over a far reference");
+		jlobby.edu.vub.at.exceptions.XIllegalOperation.new("uninitialized illegal op");
 	def XParseError := 
-		jlobby.edu.vub.at.exceptions.XParseError.new("def x:=nil -> did you mean: def x := nil", nil);
+		jlobby.edu.vub.at.exceptions.XParseError.new("uninitialized parse error", nil);
 	def XSelectorNotFound := 
-		jlobby.edu.vub.at.exceptions.XSelectorNotFound.new(`at, root);
+		jlobby.edu.vub.at.exceptions.XSelectorNotFound.new(`uninitialized, root);
 
 	def XIndexOutOfBounds := IndexOutOfBoundsPrototype;
 };
