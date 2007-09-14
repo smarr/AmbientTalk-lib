@@ -47,7 +47,7 @@
  * special 'wildcard' value, '*', which is a simple alias for nil. Hence,
  * nil matches everything. Constraints are represented as closures
  * where the parameter '_' is bound to the runtime value of the field.
- * They should return a boolean value.
+ * They should return a boolean value and otherwise be side-effect-free.
  *
  * @author tvcutsem
  */
