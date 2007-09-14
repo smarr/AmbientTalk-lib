@@ -64,7 +64,7 @@ def makeTraitProviding: prov requiring: req taggedAs: tags {
 	object: { |prov,req|
 		def provides := prov;
 		def requires := req;
-	} taggedAs: tags + [Trait];
+	} taggedAs: tags + [/.at.types.Isolate, Trait];
 };
 
 deftype BadRequiringProtocolStatement;
