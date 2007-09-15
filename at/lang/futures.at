@@ -348,6 +348,27 @@ def FuturesModule := object: {
 		};
 		futForAll;
 	};
+	
+	/**
+	 * future: { |return|
+	 *   // some computation
+	 *   return(val)
+	 * }
+	 *
+	 * is equivalent to the slightly more verbose
+	 * def [fut,res] := makeFuture();
+	 * try: { // some computation
+	 *        res.resolve(val);
+	 * } catch: Exception using: { |e| res.ruin(e) }
+	 * fut;
+	 */
+	def future: closure {
+		def [fut,res] := makeFuture();
+		try: {
+			closure({|val| res.resolve(val)});
+	  } catch: /.at.types.Exception using: { |e| res.ruin(e) };
+		fut;
+	};
 
   // make the Future type publicly visible
   def Future := Future;

@@ -58,7 +58,7 @@ import /.at.lang.structuralTypes;
 // matching super with anything
 def WILDCARD := nil; //object: { nil };
 
-deftype MatchError;
+deftype MatchError <: /.at.types.Exception;
 def XMatchError := /.at.exceptions.createException(MatchError);
 
 def OOMatchModule := object: {

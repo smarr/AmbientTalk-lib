@@ -1,0 +1,154 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/* This module implements service discovery composition functions.
+ *
+ * @author tvcutsem
+ */
+
+import /.at.lang.futures;
+import /.at.ambient.discovery;
+
+def newTrackerFor(type) {
+	(if: (is: type taggedAs: /.at.ambient.oomatching.ObjectTemplate) then: {
+		/.at.ambient.templatediscovery.TemplateServiceTracker
+	} else: {
+		ServiceTracker
+	}).new(type);
+};
+
+def DiscoveryCompositionModule := object: {
+
+	// parallel discovery of N services. Returns: a future that
+	// will be resolved by a table of size N of services of the
+	// appropriate type. Note that the future will only be resolved
+	// after all N services have been discovered.
+	def discoverOneOfEach(@types) {
+		group: (types.map: { |Type|
+			future: { |reply|
+				newTrackerFor(Type).whenDiscovered: { |s|
+					reply(s)
+				}
+			}
+		})
+	};
+
+	// discovery of N distinct services of the same type.
+	// Returns: a future that will be resolved by a table
+	// of size N containing services of the given type
+	// n should be > 0
+	def discover: n ofType: Type {
+		future: { |reply|
+			def foundServices := [];
+			def numFound := 0;
+			def sub := newTrackerFor(Type).wheneverDiscovered: { |service|
+				if: !(foundServices.contains(service)) then: {
+					foundServices := foundServices + [service];
+					numFound := numFound + 1;
+					if: (numFound == n) then: {
+						sub.cancel(); // stop searching
+						reply(foundServices);
+					};
+				};
+			}	
+		}
+	};
+	
+	
+	// variant of discover:ofType: using a higher-order function
+	// that abstracts from the counting behaviour
+	
+	/*def after: n invocationsOf: closure do: finalizer {
+		def numInvocations := 0;
+	  { |@args|
+		  if: (numInvocations < n) then: {
+			  def val := closure(@args);
+			  numInvocations := numInvocations + 1;
+			  if: (numInvocations == n) then: finalizer;
+			  val;
+		  };
+		};
+  };
+
+	def discover: n ofType: Type {
+		future: { |reply|
+			def foundServices := [];
+			def sub;
+			
+			def addService := after: n invocationsOf: { |service|
+				foundServices := foundServices + [service];
+			} do: { sub.cancel(); reply(foundServices) };
+			
+			sub := ServiceTracker.new(Type).wheneverDiscovered: { |service|
+				if: !(foundServices.contains(service)) then: { addService(service) }
+			};
+		}
+	};*/
+	
+	def DiscoveryCompositionModuleTest() {
+		extend: /.at.unit.test.UnitTest.new("DiscoveryCompositionModuleTest") with: {
+			
+			def testAsyncDiscoverOneOfEach() {
+				deftype Apple;
+				deftype Pear;
+				
+				def peer := actor: { |Apple,Pear|
+					import /.at.ambient.discovery;
+					export: (isolate: { def color() { "red" } }) as: Apple;
+					export: (isolate: { def color() { "green" } }) as: Pear;
+				};
+				
+				def futureForAppleAndPear := discoverOneOfEach(Apple, Pear);
+				when: futureForAppleAndPear becomes: { |fruits|
+					def [apple,pear] := fruits;
+					self.assertEquals("red", apple.color());
+					self.assertEquals("green", pear.color());
+				};
+			};
+			
+			def testAsyncDiscoverNOfType() {
+				deftype Shape;
+				
+				def peer := actor: { |Shape|
+					import /.at.ambient.discovery;
+					export: (isolate: { def kind() { "rectangle" } }) as: Shape;
+					export: (isolate: { def kind() { "circle" } }) as: Shape;
+				};
+				
+				def futureFor2Shapes := discover: 2 ofType: Shape;
+				when: futureFor2Shapes becomes: { |shapes|
+					self.assertEquals(2, shapes.length);
+					shapes.each: { |shape|
+						self.assertTrue((shape.kind() == "rectangle").or: { shape.kind() == "circle" });
+					};
+				};
+			};
+			
+		}
+	}; // end DiscoveryCompositionModuleTest
+	
+} // end DiscoveryCompositionModule

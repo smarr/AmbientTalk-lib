@@ -252,9 +252,10 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
   };
 };
 
-deftype XUnimplemented <: /.at.types.Exception;
+deftype Unimplemented <: /.at.types.Exception;
+def XUnimplemented := /.at.exceptions.createException(Unimplemented);
 def abstractMethod(name) {
-	raise: /.at.exceptions.createException(XUnimplemented).new("Invoked abstract method: "+name);
+	raise: XUnimplemented.new("Invoked abstract method: "+name);
 };
 
 def TAbstractCardinality := object: {
@@ -526,6 +527,7 @@ def AmbientRefModule := object: {
 
 				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
 					self.assertTrue(is: newAR taggedAs: AmbientRef);
+					self.assertFalse(is: newAR taggedAs: /.at.types.FarReference);
 				};
 			};
 			def testAsyncWhereOnSturdyUni() {

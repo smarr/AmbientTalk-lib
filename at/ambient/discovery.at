@@ -244,7 +244,7 @@ def DiscoveryModule := object: {
 	 * def tracker := ServiceTracker.new(Type, Rate, Recall);
 	 * tracker.whenDiscovered: { |svc| ... } -> sub
 	 * tracker.wheneverDiscovered: { |svc| ... } -> sub
-	 * tracker.wheneverLost: { |svc| ... } -> pub
+	 * tracker.wheneverLost: { |svc| ... } -> sub
 	 */
 	def ServiceTracker := ServiceTrackerPrototype;
 	

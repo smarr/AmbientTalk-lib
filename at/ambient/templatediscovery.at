@@ -44,6 +44,9 @@ def ServiceTracker := /.at.ambient.discovery.ServiceTracker;
 
 deftype TemplateMatchableObject;
 
+// a TemplateServiceTracker is a ServiceTracker of static type TemplateMatchableObject
+// which upon service discovery performs an additional template match before notifying
+// any handlers
 def TemplateServiceTrackerPrototype := extend: ServiceTracker with: {
 	def template;
 
@@ -62,6 +65,7 @@ def TemplateServiceTrackerPrototype := extend: ServiceTracker with: {
 		}
 	};
 
+  // only notify the handler if the object discovered or lost matches the template
   def makeTemplateHandler(handler) {
 		{ |service|
 			if: (does: service match: template) then: {
@@ -113,10 +117,10 @@ def TemplateDiscoveryModule := object: {
 		}
 	};
 
-  /** export an object by-copy such that it can be matched against a template */
+  /** export an object 'by copy' such that it can be matched against a template */
 	def export: obj {
 		if: !(is: obj taggedAs: /.at.types.Isolate) then: {
-			raise: XIllegalOperation.new("Can only export isolate objects without a type");
+			raise: XIllegalOperation.new("Can only export isolate objects without a type tag");
 		};
 		/.at.ambient.discovery.export: obj as: TemplateMatchableObject;
 	};
@@ -132,6 +136,9 @@ def TemplateDiscoveryModule := object: {
 					def pub := export: (isolate: {
 						def name := "TestName";
 						def age := 24;
+						// TODO: actually an exported isolate should override '==' such
+						// that it can be compared to copies of itself. Otherwise, the service
+						// tracker will regard each new copy as a distinct discovered service!
 					});
 					when: seconds(2) elapsed: {
 						pub.unexport();
@@ -162,5 +169,5 @@ def TemplateDiscoveryModule := object: {
 				group: [fut1,fut2]
 			};
 		};
-	}; // end DiscoveryModuleTest
+	}; // end TemplateDiscoveryModuleTest
 }; // end TemplateDiscoveryModule
