@@ -34,6 +34,8 @@
 
 def XIllegalOperation := /.at.exceptions.XIllegalOperation;
 
+def Vector := /.at.collections.vector.Vector;
+
 def FirstClassRefModule := object: {
 
   // an annotation identifying messages destined for the mirror itself
@@ -108,7 +110,39 @@ def FirstClassRefModule := object: {
 		  raise: XIllegalOperation.new("Cannot add method "+mth.name+" in " + self.toString);
 	  };
 		
-  };
+  }; // end TFarRef
 
-};
+  // a stateful trait encapsulating the behaviour for storing and notifying observers
+  def TObservable := object: {
+	  def self.observerCatalog;
+
+     def init(@observerTypes) {
+      self.observerCatalog := object: { };
+
+		  // rather than dynamically storing each type -> listOfObservers binding in
+		  // a hashmap, we generate an observerCatalog object that stores the bindings
+		  // as field bindings (you got to love reflection :-)
+		  def catalogMirror := (reflect: self.observerCatalog);
+		  observerTypes.each: { |type|
+			  catalogMirror.defineField(type, Vector.new(2))
+			};
+    };
+
+		// == observer management ==
+
+		def addObserver: observer to: observers {
+		  observers.add(observer);
+		  // return a subscription object that can be used to remove the observer
+		  object: {
+		    def cancel() { observers.remove(observer) }
+		  };
+		};
+
+		def notify: observers withArgs: args {
+		  observers.each: { |o| o<-apply(args)@/.at.lang.futures.OneWayMessage; }
+		};
+	
+  }; // end TObservable
+
+}; // end FirstClassRefModule
 

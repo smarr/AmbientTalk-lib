@@ -44,7 +44,8 @@ def FuturesModule := /.at.lang.futures;
 def TimerModule := /.at.support.timer;
 def OneWayMessage := FuturesModule.OneWayMessage;
 def Vector := /.at.collections.vector.Vector;
-def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+
+import /.at.lang.firstclassrefs;
 
 FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
 
@@ -100,7 +101,7 @@ def defaultFilter := { |props| true };
 
 def makeAmbientRef(serviceType, TCardinality, TElasticity, contentFilter) {
   object: {
-    nil // an ambient reference is an empty proxy object
+    // an ambient reference is an empty proxy object
   } taggedAs: [AmbientRef]
     mirroredBy: makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter);
 };
@@ -110,117 +111,111 @@ def makeAmbientRef(serviceType, TCardinality, TElasticity, contentFilter) {
 def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) {
   mirror: {
 
-  // this mirror is a far reference
-  import TFarRef;
+	  // this mirror is a far reference
+	  import TFarRef exclude newInstance;
 
-  // import cardinality and elasticity behaviour
-	import TCardinality;
-	import TElasticity;
+	  // import cardinality and elasticity behaviour
+		import TCardinality;
+		import TElasticity;
 		
-	def inbox; // to store messages sent to an unbound AR
-	def joinedbox; // to store available matching objects
+		def inbox := Vector.new(); // to store messages sent to an unbound AR
+		def joinedbox := Vector.new(); // to store available matching objects
 		
-  def disconnectionObservers; // to store when:disconnected: observers
-  def connectionObservers; // to store when:connected: observers
+		// an ambient reference has two kinds of observers: disconnection
+		// and reconnection observers
+		import TObservable;
+		
+		// creating a new instance of the base-level AR means creating
+		// a new proxy object + a new mirror
+		def newInstance(initargs) {
+			makeAmbientRef(@initargs);
+		};
+		
+		def init(base) {
+			super^init(base); // initialize root mirror's base field
+			TCardinality^init(); // initialize cardinality state
+			TElasticity^init(); // initialize elasticity state
+			// initialize the observable trait, this will provide
+			// the 'observerCatalog' object with two fields storing this
+			// object'is observers
+			TObservable^init(`disconnection, `reconnection);
+			
+			// When an Ambient Reference mirror is created, start the
+			// service discovery
 
-	def init(base) {
-		super^init(base); // initialize root mirror's base field
-		TCardinality^init(); // initialize cardinality state
-		TElasticity^init(); // initialize elasticity state
-		
-		inbox := Vector.new();
-		joinedbox := Vector.new();
+			// register discovery observers
+		  whenever: serviceType discovered: { |potentialPrincipal|
+			  def properties := isolate: { nil };
+			  if: (is: potentialPrincipal taggedAs: /.at.types.Table) then: {
+				  // service exported as [ properties, reference ]
+				  properties := potentialPrincipal[1];
+				  potentialPrincipal := potentialPrincipal[2];
+			  };
 
-	  disconnectionObservers := Vector.new();
-	  connectionObservers := Vector.new();
-		
-		// register discovery observers
-	  whenever: serviceType discovered: { |potentialPrincipal|
-		  def properties := isolate: { nil };
-		  if: (is: potentialPrincipal taggedAs: /.at.types.Table) then: {
-			  // service exported as [ properties, reference ]
-			  properties := potentialPrincipal[1];
-			  potentialPrincipal := potentialPrincipal[2];
+			  // check whether the properties match the content filter
+			  if: (contentFilter(properties)) then: {
+				  debug("Base: potential principal discovered: ", potentialPrincipal);
+			    joinedbox.add(potentialPrincipal);
+			    if: !(self.isBoundPrincipal(potentialPrincipal)) then: {
+			      // dispatch to cardinality mixin
+			      self.foundPrincipal(potentialPrincipal);
+			    };
+
+			    def sub := when: potentialPrincipal disconnected: {
+			      debug("Base: potential principal disconnected: ", potentialPrincipal);
+			      joinedbox.remove(potentialPrincipal);
+			      if: (self.isBoundPrincipal(potentialPrincipal)) then: {
+			        // dispatch to elasticity mixin
+			        self.disconnected(potentialPrincipal);
+			      };
+			      sub.cancel();
+			    };
+			  } else: {
+				  debug("Base: discovered object did not satisfy properties: "+potentialPrincipal);
+			  };
 		  };
-		  
-		  // check whether the properties match the content filter
-		  if: (contentFilter(properties)) then: {
-			  debug("Base: potential principal discovered: ", potentialPrincipal);
-		    joinedbox.add(potentialPrincipal);
-		    if: !(self.isBoundPrincipal(potentialPrincipal)) then: {
-		      // dispatch to cardinality mixin
-		      self.foundPrincipal(potentialPrincipal);
-		    };
+		};
 
-		    def sub := when: potentialPrincipal disconnected: {
-		      debug("Base: potential principal disconnected: ", potentialPrincipal);
-		      joinedbox.remove(potentialPrincipal);
-		      if: (self.isBoundPrincipal(potentialPrincipal)) then: {
-		        // dispatch to elasticity mixin
-		        self.disconnected(potentialPrincipal);
-		      };
-		      sub.cancel();
-		    };
-		  } else: {
-			  debug("Base: discovered object did not satisfy properties: "+potentialPrincipal);
-		  };
-	  };
-	};
+    def addConnectionObserver(obs) {
+	    self.addObserver: obs to: self.observerCatalog.connection;
+    };
 
-	// forward all messages in the inbox to the given principal
-	def forwardInbox(toPrincipal) {
-		inbox.each: { |msg| toPrincipal <+ msg };
-		nil;
-	};
+    def addDisconnectionObserver(obs) {
+	    self.addObserver: obs to: self.observerCatalog.disconnection;
+    };
 
-	// forward all messages in the inbox to the given principal
-	def flushInbox(toPrincipal) {
-		self.forwardInbox(toPrincipal);
-		inbox.clear();
-		nil;
-	};
+		// forward all messages in the inbox to the given principal
+		def forwardInbox(toPrincipal) {
+			inbox.each: { |msg| toPrincipal <+ msg };
+			nil;
+		};
+
+		// forward all messages in the inbox to the given principal
+		def flushInbox(toPrincipal) {
+			self.forwardInbox(toPrincipal);
+			inbox.clear();
+			nil;
+		};
 	
-	// return all untransmitted messages that were sent to principal
-	// back to the inbox
-	def retractOutbox(ofPrincipal) {
-	  def out := (retract: ofPrincipal);
-	  // add untransmitted messages to the front of the inbox
-	  out.each: { |msg| inbox.insert(1,msg) };
-	  nil;
-	};
+		// return all untransmitted messages that were sent to principal
+		// back to the inbox
+		def retractOutbox(ofPrincipal) {
+		  def out := (retract: ofPrincipal);
+		  // add untransmitted messages to the front of the inbox
+		  out.each: { |msg| inbox.insert(1,msg) };
+		  nil;
+		};
 	
-	// == observer management ==
-
-	def addDisconnectionObserver(obs) {
-	  disconnectionObservers.add(obs);
-	  // return a subscription object that can be used to remove the observer
-	  object: {
-	    def cancel() { disconnectionObservers.remove(obs) }
-	  };
-	};
-	
-	def addConnectionObserver(obs) {
-	  connectionObservers.add(obs);
-	  // return a subscription object that can be used to remove the observer
-	  object: {
-	    def cancel() { connectionObservers.remove(obs) }
-	  };
-	};
-
-	def notifyObservers(observers, newPrincipal) {
-	  observers.each: { |o| o<-apply([newPrincipal])@OneWayMessage }
-	};
-	
-	// == provide required methods for TFarRef trait ==
+		// == provide required methods for TFarRef trait ==
 		
-	// received base-level messages are delegated to TCardinality
-	def intercept(msg) {
-	  self.acceptMessage(msg); // provided by cardinality trait
-	};
+		// received base-level messages are delegated to TCardinality
+		def intercept(msg) {
+		  self.acceptMessage(msg); // provided by cardinality trait
+		};
 	
-	def toString() {
-	  "ambient "+serviceType+": "+self;
-	};
+		def toString() {
+		  "ambient "+serviceType+": "+self;
+		};
 	
     // TODO: does a passed AR remain bound to same principals?
 	  // TODO: support all kinds of ARs!
@@ -278,7 +273,7 @@ def TUniRef := extend: TAbstractCardinality with: {
 		if: (nil == self.principal) then: {
 			debug("Uniref: foundPrincipal: binding to ", p);
 			self.principal := p;
-			self.notifyObservers(self.connectionObservers, p);
+			self.notify: self.observerCatalog.reconnection withArgs: [p];
 			// flush stored messages
 			self.flushInbox(p);
 			} else: {
@@ -289,7 +284,7 @@ def TUniRef := extend: TAbstractCardinality with: {
 	def lostPrincipal(p) {
 		debug("Uniref: lostPrincipal: unbound due to loss of ",p);
 		self.principal := nil;
-		self.notifyObservers(self.disconnectionObservers, p);
+		self.notify: self.observerCatalog.disconnection withArgs: [p];
 		// retract all unsent messages back to the inbox
 		self.retractOutbox(p);
 	};
@@ -330,7 +325,7 @@ def TOmniRef := extend: TAbstractCardinality with: {
   def foundPrincipal(p) {
     debug("Omniref: foundPrincipal: adding ", p);
     self.principals.add(p);
-    self.notifyObservers(self.connectionObservers, p);
+		self.notify: self.observerCatalog.reconnection withArgs: [p];
     // forward all pending messages to the principal
     self.forwardInbox(p);
     // TODO: add support for sustained and enduring messages
@@ -340,7 +335,7 @@ def TOmniRef := extend: TAbstractCardinality with: {
   def lostPrincipal(p) {
     debug("Omniref: lostPrincipal: removing ",p);
     self.principals.remove(p);
-    self.notifyObservers(self.disconnectionObservers, p);
+		self.notify: self.observerCatalog.disconnection withArgs: [p];
     nil;
   };
 };

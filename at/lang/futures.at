@@ -206,28 +206,24 @@ def makeFuture(timeout := nil) {
 	// futures are empty objects mirrored by a future mirror
 	// note that the future mirror is implicitly instantiated for each new future!
 	def fut := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
-	def resolver := nil;
+
+	//by default futures are not leased.
+	def resolver := object: {
+		def resolve(val) { (reflect: fut).resolve(val) };
+		def ruin(exc) { (reflect: fut).ruin(exc) };
+		def future := fut;
+	};
+
+	// has the future been annotated with DueType?
 	if: !(nil == timeout) then: {
-		// future that has been annotated with the DueType
-		resolver := LeasingModule.singleCallLease: timeout for: (object: {
-			def resolve(val) { (reflect: fut).resolve(val) };
-			def ruin(exc) { (reflect: fut).ruin(exc) };
-			def future := fut;
-		});
+		// if so, wrap resolver into a single-call lease
+		resolver := LeasingModule.singleCallLease: timeout for: resolver;
 		LeasingModule.when: resolver expired: {
 			(reflect: fut).ruin(XTimeoutException.new(fut));
 		};
-		
-	}else:{
-		//by default futures are not leased.
-		resolver := object: {
-			def resolve(val) { (reflect: fut).resolve(val) };
-			def ruin(exc) { (reflect: fut).ruin(exc) };
-			def future := fut;
-		};
-	 };
+	};
 
-	[ fut, resolver];
+	[ fut, resolver ];
 };
 
 // extend a regular asynchronous message with futures behaviour
