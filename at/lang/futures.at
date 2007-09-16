@@ -75,7 +75,8 @@ def XTimeoutException := extend: /.at.exceptions.createException(TimeoutExceptio
 // far reference to its mirror would be passed. This restriction is avoided through the
 // introduction of a MetaMessage type: messages typed with it will be handled by the
 // future's mirror rather than being forwarded to the actual principal when the future is resolved.
-deftype MetaMessage;
+def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
+def TFarRef := /.at.lang.firstclassrefs.TFarRef;
 
 // the mirror of a Future object
 def FutureMirror := mirror: {
@@ -84,6 +85,12 @@ def FutureMirror := mirror: {
 	def resolvedValue := nil;
 	def inbox := [];
 	def subscribers := [];
+
+  // a future is a special kind of far reference
+  // therefore, this mirror mixes in the 'far reference' behaviour
+  // Because a future is pass-by-reference, we do not inherit the
+  // parameter-passing behaviour of the far ref trait
+  import TFarRef exclude pass;
 
 	// constructor: used to initialize the state of the new future
 	def init(@args) {
@@ -160,52 +167,39 @@ def FutureMirror := mirror: {
 		nil;
 	};
 
-	// hook into the meta-object protocol by overriding meta_receive
-	def receive(msg) {
-		if: (is: msg taggedAs: MetaMessage) then: {
-			self <+ msg;
-		} else: {
-			// msg received by a resolved future? forward the message
-			if: (state == RESOLVED) then: {
-				resolvedValue <+ msg;
-			} else: {
-				if: (state == RUINED) then: {
-					(is: msg taggedAs: FutureMessage).ifTrue: {
-						msg.resolver<-ruin(exception)@OneWayMessage;
-					};
-				}	else: {
-					// accumulate message in this future's inbox
-					inbox := inbox + [msg];
-					nil;
-				};
-			};
-		};
-	};
-
-    def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
-
-	// it is illegal to invoke methods synchronously on a future
-	def invoke(rcv, sel, arg) {
-		// the only legal operation on futures is '=='
-		if: (`(==) == sel) then: {
-			super^invoke(rcv, sel, arg);
-		} else: {
-			/.at.exceptions.createException(/.at.types.IllegalOperation).new(
-			  "Cannot synchronously invoke method " + sel + " on future");
-		}
-	};
-
-	def print() {
+	// provide the required methods for the TFarRef trait
+	
+	def intercept(msg) {
+		// msg received by a resolved future? forward the message
 		if: (state == RESOLVED) then: {
-			  "<resolved future:" + resolvedValue +">";
+			resolvedValue <+ msg;
 		} else: {
 			if: (state == RUINED) then: {
-				"<ruined future:" + resolvedValue +">";
+				(is: msg taggedAs: FutureMessage).ifTrue: {
+					msg.resolver<-ruin(exception)@OneWayMessage;
+				};
 			}	else: {
-				"<unresolved future>";
+				// accumulate message in this future's inbox
+				inbox := inbox + [msg];
+				nil;
 			};
 		};
 	};
+
+	def toString() {
+		if: (state == RESOLVED) then: {
+			  "resolved future:" + resolvedValue;
+		} else: {
+			if: (state == RUINED) then: {
+				"ruined future:" + resolvedValue;
+			}	else: {
+				"unresolved future";
+			};
+		};
+	};
+	
+	// to satisfy the required interface of TFarRef, not really required
+	def transportStrategy := { };
 };
 
 def makeFuture(timeout := nil) {

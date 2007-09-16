@@ -1,0 +1,114 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * This trait factors out the common behaviour of first-class
+ * (far) reference objects in AmbientTalk.
+ *
+ * @author tvcutsem
+ */
+
+def XIllegalOperation := /.at.exceptions.XIllegalOperation;
+
+def FirstClassRefModule := object: {
+
+  // an annotation identifying messages destined for the mirror itself
+  deftype MetaMessage <: /.at.types.Message;
+
+  /**
+   * This trait is meant to be mixed into a mirror definition
+   * to make the mirror behave as a far reference.
+   *
+   * Trait requires:
+   *  def transportStrategy; // a closure describing how to parameter-pass the reference
+   *  def intercept(msg); // a method defining how to intercept base-level messages
+   *  def toString(); // a method defining how to print the ref (without "<" ">")
+   */
+  def TFarRef := object: {
+	
+	  // disallow synchronous access to the object
+	  def invoke(slf, sel, args) {
+		  // the only legal operation on references is '=='
+		  if: (`(==) == sel) then: {
+			  // don't use the trait's parent but the composite's parent
+		    (self.super)^invoke(slf, sel, args);
+		  } else: {
+				raise: XIllegalOperation.new("Cannot synchronously invoke " + sel + " on " + self.toString());
+		  }
+		};
+		
+		def invokeField(slf, sel) { self.invoke(slf, sel, []) };
+		
+		def receive(msg) {
+			if: (is: msg taggedAs: MetaMessage) then: {
+			  self <+ msg;
+		  } else: {
+			  self.intercept(msg); // provided by composite
+		  }
+		};
+		
+		// ensure that a reference object does not become a far reference
+		// when passed remotely. Rather it implements its own by-reference
+		// parameter passing semantics
+		def pass() {
+			/.at.support.util.uponArrivalBecome: self.transportStrategy;
+		};
+		
+		def print() {
+			"<" + self.toString() + ">";
+		};
+		
+		def typeTags() {
+			(self.super)^typeTags() + [/.at.types.FarReference];
+		};
+		
+		// disallow meta-level operations on far references
+	
+	  def clone() {
+		  raise: XIllegalOperation.new("Cannot clone " + self.toString);
+	  };
+	
+	  def newInstance(initargs) {
+		  raise: XIllegalOperation.new("Cannot create new instance of " + self.toString);
+	  };
+	
+	  def defineField(sym, obj) {
+		  raise: XIllegalOperation.new("Cannot define field "+sym+" in " + self.toString);
+	  };
+	
+	  def addField(fld) {
+		  raise: XIllegalOperation.new("Cannot add field "+fld.name+" in " + self.toString);
+	  };
+	
+	  def addMethod(mth) {
+		  raise: XIllegalOperation.new("Cannot add method "+mth.name+" in " + self.toString);
+	  };
+		
+  };
+
+};
+

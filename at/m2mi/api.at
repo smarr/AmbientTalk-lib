@@ -62,6 +62,8 @@ def TypeTagToInterfaceConverter := jlobby.at.m2mi.TypeTagToInterfaceConverter;
 def TTTIC_TYPETAGLOADER := TypeTagToInterfaceConverter._TYPETAGLOADER_;
 def TTTIC_convert := TypeTagToInterfaceConverter.&convert;
 
+def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+
 // initialize the M2MI layer
 try: {
 	M2MIClass.initialize(TTTIC_TYPETAGLOADER);
@@ -138,24 +140,37 @@ def M2MIModule := object: {
 	def makeAmbientTalkHandle(typetag, m2miHandleCreator) {
 		def m2miHandle := m2miHandleCreator(toInterface: typetag);
 		object: {
-			def new(@args) { makeAmbientTalkHandle(typetag, m2miHandleCreator) };
+			nil
 		} mirroredBy: (mirror: {
-			def invoke(slf, sel, args) {
-				raise: /.at.exceptions.createException(/.at.types.IllegalOperation).new(
-					"Cannot synchronously invoke " + sel + " on a reference for " + typetag);
-			};
-			def invokeField(slf, sel) { self.invoke(slf, sel, []) };
-			def receive(msg) {
+			
+			// the reference wrappers around the M2MI handles are
+			// first-class far references, so mix in the far reference
+			// behaviour into this mirror
+			import TFarRef exclude newInstance;
+			
+			// implement the required interface of TFarRef
+			
+			def intercept(msg) {
 				m2miHandle.invoke(msg);
 			};
+			
 			// ensure that an ambienttalk handle does not become a far reference
 			// when passed remotely. Rather it implements its own by-reference parameter
 			// passing semantics
-			def pass() {
-				/.at.support.util.uponArrivalBecome: { |typetag, m2miHandle|
+			def transportStrategy := { |typetag, m2miHandle|
 					/.at.m2mi.api.makeAmbientTalkHandle(typetag, { |type| m2miHandle });
-				};
 			};
+			
+			def toString() {
+				"m2mi ref for interface "+typetag;
+			};
+			
+			def newInstance(initargs) {
+				makeAmbientTalkHandle(typetag, m2miHandleCreator);
+			};
+			
+			// additional meta-level functionality
+			
 			def attach(obj) {
 			  def invoker := createInvokerFor(obj);
 				attach: invoker to: m2miHandle;
@@ -165,6 +180,7 @@ def M2MIModule := object: {
 					}
 				};
 			};
+			
 			// only works for unireferences!!!
 			def detach() {
 				detach: m2miHandle;

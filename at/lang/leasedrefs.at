@@ -49,12 +49,18 @@ deftype LeasedRef;
 deftype ClientLeasedRef;
 def Isolate := /.at.types.Isolate;
 
+def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+
 def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 	
 	def timerSubscription := nil;
 	def expiredObservers := Vector.new();
 	def expired := false;
 	def principal := nil;
+	
+	// a leased reference is a special kind of far reference, hence
+	// mix in the far reference meta-level behaviour into this mirror
+	import TFarRef;
 	
   def init(base) {
   	super^init(base);
@@ -105,26 +111,34 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 	
 	def notifyExpiredObservers(){ expiredObservers.each: { |o| o<-apply([]) }};
 	
-	def receive(msg) {
+	// implement TFarRef's required interface
+	
+	def intercept(msg) {
 		//all mesages received are forwarded to principal 
-		//the base object of a leased ref is an empty object => it does not understand any async msg.
+		//the base object of a leased ref is an empty object =>
+		// it does not understand any async msg.
 		if: !(expired) then: {
 			principal <+ msg 
 		}
 	};
-	
-	def invokeField(rcv, sel) { self.invoke(rcv, sel, []) };
-	
-	def invoke(rcv, sel, arg) {
-		//the only legal operation on leased references is '==' 
-		if: (`(==) == sel) then: {
-			super^invoke(rcv,sel,arg);
+
+  def transportStrategy() {
+		def remoteLease := self;
+		if: !(expired) then: {
+		  def timeout := getTimeLeft();
+		  { |remoteLease, timeout|
+			  import /.at.lang.clientleasedrefs;	
+		    object: {nil} taggedAs: [ClientLeasedRef]
+		    mirroredBy: createClientLeasingMirror(remoteLease, timeout);
+		  }
 		} else: {
-			raise: /.at.exceptions.XIllegalOperation.new("cannot synchronously invoke operation " +sel+ " on leased reference "+self.base);
-		}
-	};
-	
-	def pass(){
+			// TODO: if I'm passed when expired, what should I be at the receiver side?
+			{ |remoteLease| remoteLease }
+		};
+  };
+
+	/* This is the old code for pass, before introducing the TFarRef
+	def pass() {
 		if: !(expired) then: {
 			def remoteLease := self;
 		    def timeout := getTimeLeft();
@@ -137,26 +151,42 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 				};
 			} taggedAs: [Isolate]);
 		} 	
-	};
+	};*/
 	
-	def print() {
+	def toString() {
 		if: (expired) then: {
-			"<expired lease: " + super^print() + ">";
+			"expired lease: " + super^print();
 		} else: {
-			"<lease: " + super^print() + ">";
+			"lease: " + super^print();
 		};
 	}
 }};	
 
 def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := timeout) {  extend: createLeasingMirror( principal, timeout) with: {
 
-	def receive(msg) {
+	def intercept(msg) {
 		//automatically renew the lease upon mesage reception. 
 		//By default, renewal time = leasetime. 
 		super^renew(renewal);
-		super^receive(msg);
-	};	
+		super^intercept(msg);
+	};
 	
+	def transportStrategy() {
+		def remoteLease := self;
+		if: !(expired) then: {
+		  def timeout := super^getTimeLeft();
+		  { |remoteLease, timeout, renewal|
+			  import /.at.lang.clientleasedrefs;	
+		    object: {nil} taggedAs: [ClientLeasedRef]
+		    mirroredBy: createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal);
+		  }
+		} else: {
+			// TODO: if I'm passed when expired, what should I be at the receiver side?
+			{ |remoteLease| remoteLease }
+		};
+  };
+	
+	/* This is the old code for pass, before introducing the TFarRef
 	def pass(){
 			if: !(self.expired) then: {
 				def remoteLease := self;
@@ -169,7 +199,7 @@ def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := t
 					};
 				} taggedAs: [Isolate]);
 			} 
-	};
+	};*/
 		
 }};
 
@@ -179,8 +209,8 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 	  super^init(base);
 	};
 
-	def receive(msg){
-		def res := super^receive(msg);
+	def intercept(msg){
+		def res := super^intercept(msg);
 		if: !(self.expired) then: {		
 		  	if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
 				  super^revoke();
@@ -190,6 +220,23 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 		res;
 	};
 	
+	def transportStrategy() {
+		def remoteLease := self;
+		if: !(expired) then: {
+		  def timeout := super^getTimeLeft();
+			def selectors := forSelectors;
+		  { |remoteLease, timeout, selectors|
+			  import /.at.lang.clientleasedrefs;	
+		    object: {nil} taggedAs: [ClientLeasedRef]
+		    mirroredBy: createLeasingWithSingleUseMirror(remoteLease, timeout, selectors);
+		  }
+		} else: {
+			// TODO: if I'm passed when expired, what should I be at the receiver side?
+			{ |remoteLease| remoteLease }
+		};
+  };
+	
+	/* This is the old code for pass, before introducing the TFarRef
 	def pass(){
 		if: !(self.expired) then: {
 			def remoteLease := self;
@@ -204,7 +251,7 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 				};
 			} taggedAs: [Isolate]);
 		}
-	};
+	};*/
 
 }};
 
