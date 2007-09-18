@@ -59,17 +59,12 @@ def cast: obj into: interface {
 };
 
 def TypeTagToInterfaceConverter := jlobby.at.m2mi.TypeTagToInterfaceConverter;
-def TTTIC_TYPETAGLOADER := TypeTagToInterfaceConverter._TYPETAGLOADER_;
 def TTTIC_convert := TypeTagToInterfaceConverter.&convert;
 
 def TFarRef := /.at.lang.firstclassrefs.TFarRef;
 
 // initialize the M2MI layer
-try: {
-	M2MIClass.initialize(TTTIC_TYPETAGLOADER);
-} catch: /.at.types.JavaException using: { |e|
-	system.println("Cound not load M2MI library: " + e.message);
-};
+TypeTagToInterfaceConverter.initializeM2MI();
 
 // creates a method invoker object that turns generic 'invoke'
 // invocations into more specific invocations (needed only when

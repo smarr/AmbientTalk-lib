@@ -29,6 +29,7 @@ package at.m2mi;
 
 import edu.rit.classfile.NamedClassReference;
 import edu.rit.classfile.SynthesizedInterfaceDescription;
+import edu.rit.m2mi.M2MI;
 import edu.vub.at.exceptions.InterpreterException;
 import edu.vub.at.objects.ATObject;
 import edu.vub.at.objects.ATTypeTag;
@@ -37,7 +38,11 @@ import edu.vub.at.objects.natives.NATTypeTag.OBJRootType;
 import edu.vub.at.objects.symbiosis.XJavaException;
 import edu.vub.at.util.logging.Logging;
 
+import java.io.BufferedInputStream;
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.EventListener;
 import java.util.HashMap;
@@ -51,6 +56,44 @@ import java.util.Map;
  */
 public class TypeTagToInterfaceConverter {
 
+	private static final String _M2MP_DAEMON_CLASS_ = "edu.rit.m2mp.Daemon";
+	
+	private static boolean _alreadyInitialized = false;
+	
+	/**
+	 * A quite heavy initialization procedure for M2MI. The procedure is heavy because we have to
+	 * fork an M2MP Daemon process in the background. Note that this method is static such that
+	 * it is shared by all actors. M2MI can only be initialized once.
+	 * @throws IOException if there is a problem forking the M2MP process.
+	 */
+	public static final synchronized void initializeM2MI() throws IOException {
+		if (!_alreadyInitialized) {
+			Runtime currentRuntime = Runtime.getRuntime();
+			
+			// construct a full path name to the M2MI.jar file such that we can fire up the M2MP Daemon
+			String pathToM2MIJarFile = TypeTagToInterfaceConverter.class.getResource("m2mi.jar").getPath();
+			// the M2MP Daemon is a stand-alone Java executable, fork a process
+			final Process daemon = currentRuntime.exec("java -cp "+pathToM2MIJarFile+" "+_M2MP_DAEMON_CLASS_);
+			
+			// be sure to shut down the M2MP daemon when the VM quits
+			currentRuntime.addShutdownHook(new Thread() {
+				public void run() {
+					System.out.println("Stopping M2MP Daemon...");
+					daemon.destroy();
+				}
+			});
+			
+			// print status line of the M2MP Daemon
+			BufferedReader output = new BufferedReader(new InputStreamReader(daemon.getErrorStream()));
+			System.err.println(output.readLine());
+			System.out.println("M2MP Daemon started");
+			
+			// finally, when the Daemon has ran, initialize M2MI
+			M2MI.initialize(_TYPETAGLOADER_);
+			_alreadyInitialized = true;
+		}
+	}
+	
 	private static final class TypeTagClassLoader extends ClassLoader {
 
 		private static final Map registeredTypes = Collections.synchronizedMap(new HashMap());
