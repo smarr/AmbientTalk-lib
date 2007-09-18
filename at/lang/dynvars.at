@@ -28,128 +28,82 @@
 /*
  * Dynamic Variables. Usage:
  * - defining a dynamic variable:
- *   <tt>defdynamic: `name init: value</tt>
- *  If the variable already exists, a DuplicateDynamicVariable exception is raised.
+ *   <tt>def name := dynamicVariable: value</tt>
  * - reading the value of a dynamic variable:
- *   <tt>? `name</tt>
- *  If the variable does not exist, an UndefinedDynamicVariable exception is raised.
+ *   <tt>?name</tt> or <tt>name.value</tt>
  * - setting the value of a dynamic variable within a limited scope:
- *   <tt>with: `name is: newval do: { code }</tt>
+ *   <tt>with: name is: newval do: { code }</tt> or
+ *   <tt>name.is: newval in: { code }</tt>
  *  When the code terminates (normally or via an exception), the dynamic variable is
  *  automatically reset to its previous value.
- *  If the variable does not exist, an UndefinedDynamicVariable exception is raised.
+ *
+ * Note: for clarity, it is advised that you prefix your dynamic variables
+ * with a 'd', e.g. '?dTimeoutPeriod'. This makes it easier to remember to access
+ * these variables by means of '?'.
+ *
  * @author tvcutsem
  */
 
-// The store of dynamic variables. Note that this is an actor-local map,
-// so race conditions will never occur. Because of our actor paradigm,
-// dynamic variables are automatically 'thread-local'.
-def DynVars := jlobby.java.util.HashMap.new();
-
 def DynamicVariable := object: {
-	def values := nil;
+	// this dynamic variable's current value
+	def value := nil;
+	
 	def init(initVal) {
-		values := [initVal]
+		value := initVal;
 	};
-	def get() { values[1] };
-	def set(newVal) {
-		def oldValues := values;
-		values := [newVal, oldValues];
-		object: {
-			def unset() { values := oldValues }
+	
+	// scoped assignment of the dynamic variable
+	def is: newval in: closure {
+		def oldVal := value;
+		value := newval;
+		try: closure finally: {
+			value := oldVal;
 		};
 	};
 };
 
-deftype UndefinedDynamicVariable <: /.at.types.Exception;
-def XUndefinedDynamicVariable := extend: /.at.exceptions.createException(UndefinedDynamicVariable) with: {
-	def variableName := `none;
-  def init(var) {
-	  variableName := var;
-	  super^init("Undefined dynamic variable: " + var);
-  };
-};
-
-deftype DuplicateDynamicVariable <: /.at.types.Exception;
-def XDuplicateDynamicVariable := extend: /.at.exceptions.createException(DuplicateDynamicVariable) with: {
-	def variableName := `none;
-  def init(var) {
-	  variableName := var;
-	  super^init("Duplicate dynamic variable: " + var);
-  };
-};
-
-def getDynamicVar(nam) {
-	def dynVar := DynVars.get(nam);
-	if: (nil != dynVar) then: {
-		dynVar
-	} else: {
-		raise: XUndefinedDynamicVariable.new(nam)
-	}
-};
-
-def setDynamicVar(nam, dynvar) {
-	def dynVar := DynVars.get(nam);
-	if: (nil == dynVar) then: {
-		DynVars.put(nam, dynvar);
-	} else: {
-		raise: XDuplicateDynamicVariable.new(nam)
-	}
-};
-
 def DynVarModule := object: {
 
-  def UndefinedDynamicVariable := UndefinedDynamicVariable;
-  def DuplicateDynamicVariable := DuplicateDynamicVariable;
+  def dynamicVariable: value { DynamicVariable.new(value) };
 
-  def defdynamic: nameSymbol init: value {
-	  setDynamicVar(nameSymbol, DynamicVariable.new(value));
+  def ?(dynVar) { dynVar.value };
+
+  def with: dynVar is: newval do: closure {
+	  dynVar.is: newval in: closure;
   };
 
-  def ?(name) {
-	  getDynamicVar(name).get()
-  };
-
-  def with: name is: newval do: closure {
-	  def unsetter := getDynamicVar(name).set(newval);
-	  try: closure finally: unsetter.&unset;
+  def with: dynVar1 is: newval1 and: dynVar2 is: newval2 do: closure {
+	  dynVar1.is: newval1 in: {
+		  dynVar2.is: newval2 in: closure
+		};
   };
 
   def DynVarTest() {
 	  extend: /.at.unit.test.UnitTest.new("DynamicVariablesTest") with: {
 		  def testBasicAccess() {
-			  defdynamic: `foo init: 5;
-			  self.assertEquals(5, ?`foo);
-		  };
-		  def testUndefinedVar() {
-			  self.assert: UndefinedDynamicVariable raisedIn: { ?`bla };
-		  };
-		  def testDuplicateVar() {
-			  self.assert: DuplicateDynamicVariable raisedIn: {
-				  defdynamic: `baz init: 1;
-				  defdynamic: `baz init: 2;
-			  };
+			  def foo := dynamicVariable: 5;
+			  self.assertEquals(5, ?foo);
 		  };
 		  def testScopedAssignment() {
-			  defdynamic: `testVar init: 1;
-			  self.assertEquals(1, ?`testVar);
-			  with: `testVar is: 2 do: {
-				  self.assertEquals(2, ?`testVar);
+			  def testVar := dynamicVariable: 1;
+			  self.assertEquals(1, ?testVar);
+			  with: testVar is: 2 do: {
+				  self.assertEquals(2, ?testVar);
 			  };
-			  self.assertEquals(1, ?`testVar);
+			  self.assertEquals(1, ?testVar);
 		  };
 		  def testScopedAssignmentWithException() {
-			  defdynamic: `testVar2 init: 1;
-			  self.assertEquals(1, ?`testVar2);
+			  def testVar2 := dynamicVariable: 1;
+			  self.assertEquals(1, ?testVar2);
 			  
 			  deftype EscapeException;
 			  try: {
-				  with: `testVar2 is: 2 do: {
-				    self.assertEquals(2, ?`testVar2);
+				  with: testVar2 is: 2 do: {
+				    self.assertEquals(2, ?testVar2);
 				    raise: /.at.exceptions.createException(EscapeException);
 			    };
 			  } catch: EscapeException using: { |e|
-				  self.assertEquals(1, ?`testVar2);
+				  self.assertEquals(1, ?testVar2);
 				}
 		  };
 	  };
