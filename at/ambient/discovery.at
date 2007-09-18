@@ -43,6 +43,7 @@
  */
 import /.at.m2mi.api;
 import /.at.support.timer;
+import /.at.lang.dynvars;
 
 // minimum amount of time in between discovery broadcasts
 def DISCOVER_RATE := seconds(2);
@@ -54,6 +55,10 @@ deftype Tracker;
 // compare [serviceDescr, timestamp] entries in the discoveredServices
 // vector by their service descriptions
 def ServiceEntryComparator := { |e1, e2| e1[1] == e2[1] };
+
+// the discovery rate and recall period are made available as dynamically scoped variables
+def dDiscoveryRate := dynamicVariable: DISCOVER_RATE;
+def dRecallPeriod := dynamicVariable: RECALL_PERIOD;
 
 /** @see description of ServiceTracker in the module below */
 def ServiceTrackerPrototype := object: {
@@ -90,11 +95,11 @@ def ServiceTrackerPrototype := object: {
   // this object listens for and gathers replies of all tracked service objects
   def reportGatherer;
 
-	def init(type, rate := DISCOVER_RATE, recall := RECALL_PERIOD) {
+	def init(type) {
 		typeToTrack := type;
 		trackedServices := omnireference: type;
-	  discoveryRate := rate;
-		recallPeriod := recall;
+	  discoveryRate := ?dDiscoveryRate; // permanently use current value of the dynamic variable
+		recallPeriod := ?dRecallPeriod; // permanently use current value of the dynamic variable
 		discoveredServices := /.at.collections.vector.Vector.new(2, ServiceEntryComparator);
 		oneShotSubscriptions := /.at.collections.vector.Vector.new(2);
 		permanentSubscriptions := /.at.collections.vector.Vector.new(2);
@@ -247,6 +252,20 @@ def DiscoveryModule := object: {
 	 * tracker.wheneverLost: { |svc| ... } -> sub
 	 */
 	def ServiceTracker := ServiceTrackerPrototype;
+	
+	/**
+	 * The rate of (i.e. amount of time between) performing discovery
+	 * broadcast beacons. This variable is read only during the *initialization*
+	 * of a service tracker, not while it is tracking!
+	 */
+	def dDiscoveryRate := dDiscoveryRate;
+	
+	/**
+	 * The amount of time to remember a previously seen service before
+	 * removing it. This variable is read only during the *initialization*
+	 * of a service tracker, not while it is tracking!
+	 */
+	def dRecallPeriod := dRecallPeriod;
 	
 	/**
 	 * Invokes the handler with a discovered service matching the

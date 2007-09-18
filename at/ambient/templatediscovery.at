@@ -50,19 +50,9 @@ deftype TemplateMatchableObject;
 def TemplateServiceTrackerPrototype := extend: ServiceTracker with: {
 	def template;
 
-	def init(templ, rate := nil, recall := nil) {
+	def init(templ) {
+		super^init(TemplateMatchableObject);
 		template := templ;
-		// extremely ugly case-analysis to reconstruct a proper parameter list
-		// without having to duplicate the default values for rate and recall
-		if: (recall == nil) then: {
-			if: (rate == nil) then: {
-				super^init(TemplateMatchableObject)
-			} else: {
-				super^init(TemplateMatchableObject, rate)				
-			}
-		} else: {
-			super^init(TemplateMatchableObject, rate, recall)
-		}
 	};
 
   // only notify the handler if the object discovered or lost matches the template

@@ -56,6 +56,10 @@ def DiscoveryCompositionModule := object: {
 			}
 		})
 	};
+	
+	def whenAll: types discovered: handler {
+		when: discoverOneOfEach(@types) becomes: handler;
+	};
 
 	// discovery of N distinct services of the same type.
 	// Returns: a future that will be resolved by a table
@@ -78,6 +82,9 @@ def DiscoveryCompositionModule := object: {
 		}
 	};
 	
+	def when: n ofType: Type discovered: handler {
+		when: (discover: n ofType: Type) becomes: handler;
+	};
 	
 	// variant of discover:ofType: using a higher-order function
 	// that abstracts from the counting behaviour
