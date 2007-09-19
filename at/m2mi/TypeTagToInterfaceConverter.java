@@ -64,6 +64,12 @@ public class TypeTagToInterfaceConverter {
 	 * A quite heavy initialization procedure for M2MI. The procedure is heavy because we have to
 	 * fork an M2MP Daemon process in the background. Note that this method is static such that
 	 * it is shared by all actors. M2MI can only be initialized once.
+	 *
+	 * If ran on multiple Java VMs, only the first will succeed in starting the Daemon.
+	 * All subsequent VMs will start a Daemon that crashes because its socket port is
+	 * already bound. However, this does not make this process raise an IOException,
+	 * so if the M2MP Daemon is already running, this method call will succeed.
+	 *
 	 * @throws IOException if there is a problem forking the M2MP process.
 	 */
 	public static final synchronized void initializeM2MI() throws IOException {
@@ -83,12 +89,13 @@ public class TypeTagToInterfaceConverter {
 				}
 			});
 			
-			// print status line of the M2MP Daemon
+			// print status line of the M2MP Daemon (this also serves to synchronize
+			// with the M2MP daemon, waiting for it to be started)
 			BufferedReader output = new BufferedReader(new InputStreamReader(daemon.getErrorStream()));
 			System.err.println(output.readLine());
 			System.out.println("M2MP Daemon started");
 			
-			// finally, when the Daemon has ran, initialize M2MI
+			// finally, when the Daemon is running, initialize M2MI
 			M2MI.initialize(_TYPETAGLOADER_);
 			_alreadyInitialized = true;
 		}
