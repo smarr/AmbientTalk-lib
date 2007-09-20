@@ -26,7 +26,13 @@
  */
 
 /*
- * Dynamic Variables. Usage:
+ * A module for defining and using 'Dynamic Variables'.
+ * Dynamic variables 'simulate' dynamically scoped variables and are often used
+ * to parameterize large parts of code. For example, the 'current output stream'.
+ * A dynamic variable has the advantage over a simple global variable that
+ * it can only be assigned a value for the extent of a block of code.
+ *
+ * Usage:
  * - defining a dynamic variable:
  *   <tt>def name := dynamicVariable: value</tt>
  * - reading the value of a dynamic variable:

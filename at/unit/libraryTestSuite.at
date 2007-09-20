@@ -39,6 +39,7 @@ def LibraryTestSuiteModule := object: {
     /.at.lang.structuraltypes.StructuralTypeTest(),
     /.at.lang.traits.TraitsTest(),
     /.at.lang.dynvars.DynVarTest(),
+    /.at.lang.multivalues.MultivalueTest(),
     /.at.support.timer.TimerTest(),
     /.at.support.util.UtilTest(),
     /.at.unit.bugfixes.BugFixTest() ]);

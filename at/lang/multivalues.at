@@ -1,0 +1,97 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * A small module to implement 'multivalues': values consisting
+ * of multiple values who forward and collect all return values
+ * of received messages to their constituent parts. Example:
+ *
+ * def mv := multivalueOf: [1,2,3]
+ * def mv2 := mv + 1;
+ * multivalueAsTable: mv2 => [2,3,4]
+ *
+ * @author tvcutsem
+ */
+
+def makeMultivalue(values) {
+	object: { } mirroredBy: (mirror: {
+  	def invoke(@args) { forall: .invoke(@args) };
+		def receive(@args) { forall: .receive(@args) };
+		def print(@args) { forall: .print(@args) };
+	  def forall: msg {
+		  makeMultivalue(values.map: { |v| (reflect: v) <+ msg })
+	  };
+	  def asTable := values;
+  });
+};
+
+/*
+Abstract the above repetition in the mirror itself by going meta-meta
+and by intercepting all meta-level operations on the mirror itself using
+a mirror on the mirror.
+
+def makeMultiValue: table {
+	object: { } mirroredBy: (extend: defaultMirror with: { } taggedAs: [/.at.types.Mirror] mirroredBy: (mirror: {
+		// a meta-level operation is invoked on the mirror
+		def invoke(mself, msel, margs) {
+			system.println("invoked " + msel);
+			if: ((msel == `new).or: { msel == `init }) then: {
+				super^invoke(mself, msel, margs);
+			} else: {
+				makeMultiValue: (table.map: { |elt| (reflect: (reflect: elt)).invoke(mself, msel, margs) })				
+			}
+		};
+		def asTable := table;
+	}))
+};
+*/
+
+// turns a future that should be resolved by a table of values
+// into a future for all those values
+// TODO: not yet tested!
+def makeMultiFuture: future {
+	/.at.lang.futures.when: future becomes: { |tbl|
+		makeMultivalue(tbl)
+	};
+};
+
+def MultivalueModule := object: {
+
+  def multivalueOf: tbl { makeMultivalue(tbl) };
+	def multivalueAsTable: mv { (reflect: mv).asTable };
+	
+  def MultivalueTest() {
+	  extend: /.at.unit.test.UnitTest.new("MultivalueTest") with: {
+		  def testInvocation() {
+				def mv := multivalueOf: [1,2,3];
+				def mv2 := mv + 1;
+				self.assertEquals("[2, 3, 4]", print: (multivalueAsTable: mv2));			
+		  };
+	  };
+  };
+
+};

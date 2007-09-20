@@ -32,6 +32,7 @@
 
 import /.at.lang.futures;
 import /.at.ambient.discovery;
+def TimerModule := /.at.support.timer;
 
 def newTrackerFor(type) {
 	(if: (is: type taggedAs: /.at.ambient.oomatching.ObjectTemplate) then: {
@@ -116,6 +117,32 @@ def DiscoveryCompositionModule := object: {
 		}
 	};*/
 	
+	/**
+	 * Collects all services of a certain type discovered
+	 * within a certain timeout period. Returns a future that
+	 * will be resolved with a table of services when the given
+	 * period has elapsed.
+	 */
+	def snapshotFor: Type after: period {
+		future: { |reply|
+			def tracker := newTrackerFor(Type);
+			def found := /.at.collections.vector.Vector.new(2);
+			def snapshotTaken := false;
+			def foundSub := tracker.wheneverDiscovered: { |obj|
+				snapshotTaken.ifFalse: { found.add(obj) };
+			};
+			def lostSub := tracker.wheneverLost: { |obj|
+				snapshotTaken.ifFalse: { found.remove(obj) };
+			};
+			TimerModule.when: period elapsed: {
+				snapshotTaken := true;
+				foundSub.cancel();
+				lostSub.cancel();
+				reply(found.asTable());
+			};
+		};
+	};
+	
 	def DiscoveryCompositionModuleTest() {
 		extend: /.at.unit.test.UnitTest.new("DiscoveryCompositionModuleTest") with: {
 			
@@ -152,6 +179,28 @@ def DiscoveryCompositionModule := object: {
 					shapes.each: { |shape|
 						self.assertTrue((shape.kind() == "rectangle").or: { shape.kind() == "circle" });
 					};
+				};
+			};
+			
+			def testAsyncSnapshot() {
+				deftype Bird;
+				
+				def makePeer(nam) {
+					actor: { |nam,Bird|
+					  import /.at.ambient.discovery;
+					  export: (isolate: { |nam| def name() { nam } }) as: Bird;
+				  };
+				};
+				
+				def snapshotF := snapshotFor: Bird after: seconds(3);
+				
+				TimerModule.when: seconds(1) elapsed: { makePeer("tweety") };
+				TimerModule.when: millisec(1500) elapsed: { makePeer("woody") };
+				
+				when: snapshotF becomes: { |birds|
+					self.assertEquals(2, birds.length);
+					self.assertEquals(1, (birds.filter: { |b| b.name == "tweety" }).length);
+					self.assertEquals(1, (birds.filter: { |b| b.name == "woody" }).length);					
 				};
 			};
 			
