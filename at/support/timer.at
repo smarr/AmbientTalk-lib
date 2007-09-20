@@ -93,14 +93,27 @@ def TimerModule := object: {
 	  now() - timestamp > period
 	};
 	
+	def every: period until: condClosure do: body {
+		def pub := whenever: period elapsed: {
+			if: condClosure() then: {
+				pub.cancel();
+			} else: {
+				body()	
+			};
+		};
+	};
+	
+	def every: period while: condClosure do: body {
+		every: period until: { !condClosure() } do: body;
+	};
+	
 	def TimerTest() {
 	 extend: /.at.unit.test.UnitTest.new("TimerTest") with: {
       def FuturesModule := /.at.lang.futures; FuturesModule.enableFutures(false);
 		
 	  def testAsyncWhenElapsed() {
 		def [fut,res] := FuturesModule.makeFuture();
-		when: seconds(1) elapsed: {
-		  system.println("when:elapsed: works (1 sec)");
+		when: millisec(200) elapsed: {
 		  res.resolve(true);
 	    };
 		fut;
@@ -108,15 +121,27 @@ def TimerModule := object: {
 		def testAsyncWhenEverElapsed() {
 			def run := 0;
 			def [fut,res] := FuturesModule.makeFuture();
-			def sub := whenever: seconds(1) elapsed: {
+			def sub := whenever: millisec(200) elapsed: {
 				run := run + 1;
-				system.println("whenever:elapsed: works (1 sec) (run "+run+")");
 				if: (run == 3) then: {
 					sub.cancel();
 					res.resolve(true);
 				};
 			};
 			fut;
+		};
+		def testAsyncEveryUntil() {
+			FuturesModule.future: { |reply|
+				def stop := false;
+				def run := 0;
+				every: millisec(200) until: { stop } do: {
+					run := run + 1;
+					if: (run == 2) then: {
+						stop := true;
+						reply(true);
+					};
+				};
+			};
 		};
 	};
  };

@@ -138,9 +138,9 @@ def DiscoveryCompositionModule := object: {
 				snapshotTaken := true;
 				foundSub.cancel();
 				lostSub.cancel();
-				reply(found.asTable());
+				reply(found.asTable);
 			};
-		};
+		};		
 	};
 	
 	def DiscoveryCompositionModuleTest() {

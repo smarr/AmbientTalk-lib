@@ -1,0 +1,209 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * Implementation of 'far references' supporting exactly-once message
+ * passing semantics. These references wrap any other kind of far reference
+ * and only require the reference to point to a 'receptor' object.
+ *
+ * Example:
+ *   def unihandle := unirefReceptorFor: obj;
+ *   def ref := exactlyonceRef: unihandle;
+ *   ref<-msg() // msg will be buffered while unihandle disconnected
+ *
+ * In short:
+ *  - messages are delivered from sender to receiver one by one
+ *  - message sending is retried until message reception is acknowledged
+ *  - the remote receptor filters out any duplicate messages to avoid
+ *    delivering retried messages to its subject
+ *
+ * @author tvcutsem
+ */
+
+import /.at.support.timer;
+import /.at.m2mi.api;
+
+def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+
+// time to wait between retries for sending or acknowledging messages
+def SND_INTERVAL := seconds(2);
+def ACK_INTERVAL := seconds(2);
+
+/**
+ * A receptor wraps an object such that all incoming messages
+ * are properly filtered for duplicates (i.e. idempotent).
+ * Moreover, the receptor acknowledges receipt of a message
+ * until the sender explicitly tells it to forget about the message.
+ */
+def makeReceptor(forObject) {
+	// maps sender refs to last known message Id of that sender
+	def lastIdReceivedFrom := jlobby.java.util.HashMap.new();
+	
+	object: {
+		def incoming(fromSender, message, id) {
+			def lastId := lastIdReceivedFrom.get(fromSender);
+			if: ((nil == lastId).or: { !(lastId == id) }) then: {
+				// store id such that the message is not delivered twice
+				lastIdReceivedFrom.put(fromSender, id);
+				// deliver the message to the actual object
+				forObject <+ message;
+				// acknowledge receipt of the message
+				fromSender<-acknowledge(self, id);
+				// persist in sending an acknowledgement to the sender
+				// until we are sure the acknowledgement has been sent
+				every: ACK_INTERVAL until: {
+					!(lastIdReceivedFrom.get(fromSender) == id)
+				} do: {
+					fromSender<-acknowledge(self, id)
+				};
+			}
+		};
+		def forget(sender, id) {
+			def lastId := lastIdReceivedFrom.get(sender);
+			if: (lastId == id) then: {
+				lastIdReceivedFrom.remove(sender);
+			};
+		};
+	};
+};
+
+
+def makeExactlyOnceAdaptor(receptor) {
+	object: { } mirroredBy: (mirror: {
+	  import TFarRef;
+	
+	  // unique identifier for each outgoing message sent by me
+	  def uniqueId := 0;
+	
+	  // pending outgoing messages without an acknowledgement
+	  def outbox := [];
+		
+		// if not nil, we're waiting for an acknowledgement
+		def currentMessageId := nil;
+		
+	  // === implement TFarRef's required interface ===
+	
+		/**
+		 * This far ref implements exactly-once message delivery,
+		 * assuming a reliable network, a connection at some point in time,
+		 * and assuming messages are sent sequentially from sender to receiver
+		 */
+	  def intercept(msg) {
+		  // store the message in the outbox
+		  outbox := outbox + [msg];
+		  // if it's the only message in the outbox, try to send it
+		  if: (outbox.length == 1) then: {
+			  sendNext(msg);
+		  }
+	  };
+	
+	  /** sent by receptor upon successful message delivery */
+	  def acknowledge(rcv, id) {
+		  // always reply to an ack message by telling the receptor
+		  // to forget about bookkeeping data for this message
+		  rcv<-forget(self, id);
+		  // only clear message ID if it matches (could be a stale ack message
+			// referring to previous ids)
+		  if: (currentMessageId == id) then: {
+			  currentMessageId := nil;
+			  // remove message from outbox
+			  outbox := outbox.select(2,outbox.length+1);
+			  // if more messages pending, send the next one
+			  if: (outbox.length > 0) then: {
+				  sendNext(outbox[1]);
+			  }
+		  }
+	  };
+	
+	  /**
+	   * To send the message, send a composite 'incoming' message
+	   * to the receptor encapsulating a unique message ID. The ID
+	   * is used to check in the acknowledge method whether message
+	   * transmission was succesful. Persist in sending the message
+	   * until an acknowledgement was received. 
+	   */
+	  def sendNext(msg) {
+		  currentMessageId := uniqueId;
+		  uniqueId := uniqueId + 1;
+		  receptor<-incoming(self, msg, currentMessageId);
+		  every: SND_INTERVAL until: { nil == currentMessageId } do: {
+			  receptor<-incoming(self, msg, currentMessageId)
+		  };
+	  };
+	
+	  def toString() {
+		  "MC far ref to: " + principal;
+	  };
+	
+	  def transportStrategy := { |principal|
+		  /.at.lang.mcfarrefs.farref: principal;
+	  };
+  });
+};
+
+deftype Receptor;
+
+def ExactlyOnceAdaptorModule := object: {
+
+  def exactlyonceRef: refToReceptor {
+	  makeExactlyOnceAdaptor(refToReceptor);
+  };
+
+  def unirefReceptorFor: obj {
+	  unireference: Receptor for: makeReceptor(obj);
+  };
+
+  def ExactlyOnceAdaptorModuleTest() {
+	  extend: /.at.unit.test.UnitTest.new("ExactlyOnceAdaptorModuleTest") with: {
+		
+		  def testAsyncSimpleMessageSend() {
+			  /.at.lang.futures.future: { |reply|
+				  def subject := object: {
+				    def m() { reply(true) };
+			    };
+			    def ref := exactlyonceRef: (unirefReceptorFor: subject);
+			    ref<-m();
+			  }
+		  };
+		
+		  def testAsyncMultipleMessageSends() {
+			  /.at.lang.futures.future: { |reply|
+				  def subject := object: {
+					  def i := 0;
+				    def m() { i := i + 1; if: (i == 2) then: { reply(true) } };
+			    };
+			    def ref := exactlyonceRef: (unirefReceptorFor: subject);
+			    ref<-m();
+			    ref<-m();
+			  }
+		  };
+		
+	  };
+  };
+
+};
+
