@@ -84,6 +84,18 @@ def DynVarModule := object: {
 		};
   };
 
+  // example: let: [foo,bar,baz] be: [1,2,3] in: { ... }
+  def let: dynVars be: values in: closure {
+	  def set(i) {
+		  if: (i == dynVars.length) then: {
+			  with: dynVars[i] is: values[i] do: closure;
+		  } else: {
+			  with: dynVars[i] is: values[i] do: { set(i+1) };
+		  }
+	  };
+	  if: (dynVars.length == 0) then: closure else: { set(1) };
+  };
+
   def DynVarTest() {
 	  extend: /.at.unit.test.UnitTest.new("DynamicVariablesTest") with: {
 		  def testBasicAccess() {
