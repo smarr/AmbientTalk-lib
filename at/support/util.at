@@ -61,6 +61,18 @@ def randomNumberBetween(min, max) {
 	RandomNumberGenerator.nextInt(max - min) + min
 };
 
+def randomFractionBetween(min, max) {
+	RandomNumberGenerator.nextDouble() * (max - min) + min
+};
+
+def uniformRandomNumberInRange: range {
+	randomNumberBetween(range[1], range[2]);
+};
+
+def uniformRandomFractionInRange: range {
+	randomFractionBetween(range[1], range[2]);
+};
+
 def UtilTest() {
   extend: /.at.unit.test.UnitTest.new("UtilTest") with: {
     import /.at.lang.futures; enableFutures(false);
