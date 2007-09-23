@@ -177,7 +177,7 @@ def VectorPrototype := object: {
   def delete(atPos) {
 	  checkBounds(1,free-1,atPos);
 		def tmp := elements[atPos];
-		atPos.to: free do: { |i|
+		atPos.to: (free-1) do: { |i|
 			elements[i] := elements[i+1]
 		};
 		free := free - 1;
@@ -443,6 +443,12 @@ def VectorModule := object: {
 				self.assertEquals("b", v.delete(2));
 				self.assertEquals("ac", v.implode());
 				self.assertEquals(2, v.length());
+			};
+			def testDeleteSingle() {
+				def v := Vector.new(1);
+			  v.add(2);
+			  v.remove(2);
+			  self.assertTrue(v.isEmpty);
 			};
 			def testPop() {
 				v.add("b").add("a");
