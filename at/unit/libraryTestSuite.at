@@ -32,6 +32,7 @@ def LibraryTestSuiteModule := object: {
   */
   def StandardTestSuite := /.at.unit.test.TestSuite.new("atlib testsuite", [
     /.at.collections.vector.VectorTest(),
+    /.at.collections.list.ListTest(),
     /.at.demo.InstantMessenger.InstantMessengerTest(),
     /.at.demo.mobiTunes.MobiTunesTest(),
     /.at.lang.futures.FuturesTest(),
