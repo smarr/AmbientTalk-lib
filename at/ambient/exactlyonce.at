@@ -53,6 +53,8 @@ def TFarRef := /.at.lang.firstclassrefs.TFarRef;
 def SND_INTERVAL := seconds(2);
 def ACK_INTERVAL := seconds(2);
 
+deftype Receptor;
+
 /**
  * A receptor wraps an object such that all incoming messages
  * are properly filtered for duplicates (i.e. idempotent).
@@ -66,7 +68,7 @@ def makeReceptor(forObject) {
 	object: {
 		def incoming(fromSender, message, id) {
 			def lastId := lastIdReceivedFrom.get(fromSender);
-			if: ((nil == lastId).or: { !(lastId == id) }) then: {
+			if: !(lastId == id) then: {
 				// store id such that the message is not delivered twice
 				lastIdReceivedFrom.put(fromSender, id);
 				// deliver the message to the actual object
@@ -83,12 +85,11 @@ def makeReceptor(forObject) {
 			}
 		};
 		def forget(sender, id) {
-			def lastId := lastIdReceivedFrom.get(sender);
-			if: (lastId == id) then: {
+			if: (lastIdReceivedFrom.get(sender) == id) then: {
 				lastIdReceivedFrom.remove(sender);
 			};
 		};
-	};
+	} taggedAs: [Receptor];
 };
 
 
@@ -147,25 +148,24 @@ def makeExactlyOnceAdaptor(receptor) {
 	   * until an acknowledgement was received. 
 	   */
 	  def sendNext(msg) {
-		  currentMessageId := uniqueId;
+		  def thisMessageId := uniqueId;
+		  currentMessageId := thisMessageId;
 		  uniqueId := uniqueId + 1;
 		  receptor<-incoming(self, msg, currentMessageId);
-		  every: SND_INTERVAL until: { nil == currentMessageId } do: {
+		  every: SND_INTERVAL until: { !(thisMessageId == currentMessageId) } do: {
 			  receptor<-incoming(self, msg, currentMessageId)
 		  };
 	  };
 	
 	  def toString() {
-		  "MC far ref to: " + principal;
+		  "MC far ref to: " + receptor;
 	  };
 	
-	  def transportStrategy := { |principal|
-		  /.at.lang.mcfarrefs.farref: principal;
+	  def transportStrategy := { |receptor|
+		  /.at.lang.mcfarrefs.farref: receptor;
 	  };
   });
 };
-
-deftype Receptor;
 
 def ExactlyOnceAdaptorModule := object: {
 
