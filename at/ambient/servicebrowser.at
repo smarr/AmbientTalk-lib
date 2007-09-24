@@ -30,7 +30,7 @@
  *
  * @author tvcutsem
  */
-def awt := jlobby.java.awt;
+/*def awt := jlobby.java.awt;
 def Frame := awt.Frame;
 def List := awt.List;
 
@@ -79,9 +79,9 @@ def makeServiceBrowser(DiscoveryProtocol) {
 	window.setLayout(GridLayout.new(8,1));
 	window.add(Label.new("Provider name: "));
 	window.add(providerField);
-	window.add(Label.new("Provided Services: "));
+	window.add(Label.new("Services provided by me: "));
 	window.add(providedServices);
-	window.add(Label.new("Required Services: "));
+	window.add(Label.new("Discovered Services: "));
 	window.add(discoveredServices);
 	window.add(Label.new("Provide new service: "));
 	window.add(serviceDescriptionField);
@@ -100,3 +100,20 @@ def makeServiceBrowser(DiscoveryProtocol) {
 };
 
 def browser := makeServiceBrowser(/.at.ambient.deapspace);
+*/
+deftype ServiceDescription;
+
+def servicebrowserModule(maxTTL, DiscoveryProtocol) {
+	def command := object: {
+		def provide(provider, description) {
+			def serviceDescr := isolate: { |provider,description|
+				def toString() { description + " provided by " + provider };
+		  	def ==(other) { description == other.description };
+			};
+			DiscoveryProtocol.export: serviceDescr as: ServiceDescription;
+			//providedServices.add(serviceDescr.toString);
+		};
+	};
+
+	jlobby.at.ambient.ServiceBrowser.new(maxTTL, command)	
+}
