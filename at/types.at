@@ -1,5 +1,9 @@
 /* definition of native AmbientTalk/2 types */
 
+// every type tag is implicitly also tagged as Type
+// i.e. Type is the root type
+deftype Type;
+
 // defines whether an object is an isolate or not
 deftype Isolate;
 
