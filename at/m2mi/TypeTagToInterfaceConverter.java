@@ -30,6 +30,7 @@ package at.m2mi;
 import edu.rit.classfile.NamedClassReference;
 import edu.rit.classfile.SynthesizedInterfaceDescription;
 import edu.rit.m2mi.M2MI;
+import edu.vub.at.actors.natives.Packet;
 import edu.vub.at.exceptions.InterpreterException;
 import edu.vub.at.objects.ATObject;
 import edu.vub.at.objects.ATTypeTag;
@@ -61,6 +62,12 @@ public class TypeTagToInterfaceConverter {
 	private static boolean _alreadyInitialized = false;
 	
 	/**
+	 * Initializes the M2MI runtime. The runtime is only started once per JVM
+	 * and not for each separate actor.
+	 * 
+	 * The following comments are obsolete: a separate M2MP Daemon is currently not
+	 * started with the JVM anymore.
+	 * 
 	 * A quite heavy initialization procedure for M2MI. The procedure is heavy because we have to
 	 * fork an M2MP Daemon process in the background. Note that this method is static such that
 	 * it is shared by all actors. M2MI can only be initialized once.
@@ -74,6 +81,18 @@ public class TypeTagToInterfaceConverter {
 	 */
 	public static final synchronized void initializeM2MI() throws IOException {
 		if (!_alreadyInitialized) {
+			
+			// === README =====================
+			// This piece of code automatically starts and stops the M2MP Daemon
+			// with this JVM. However, I'm currently disabling it because of the following problem:
+			// when creating two JVMs to run AmbientTalk, the first will successfully set up the
+			// M2MP Daemon. The second receives an error that the port is already bound. This is OK.
+			// However, when shutting down the first VM, it kills the M2MP Daemon, leaving all other
+			// running JVMs without a Daemon and breaking the M2MI layer.
+			// To avoid issues like this, I propose to manage the M2MP Daemon totally separate
+			// from the AmbientTalk runtime.
+			// ================================
+			/*
 			Runtime currentRuntime = Runtime.getRuntime();
 			
 			// construct a full path name to the M2MI.jar file such that we can fire up the M2MP Daemon
@@ -93,7 +112,7 @@ public class TypeTagToInterfaceConverter {
 			// with the M2MP daemon, waiting for it to be started)
 			BufferedReader output = new BufferedReader(new InputStreamReader(daemon.getErrorStream()));
 			System.err.println(output.readLine());
-			System.out.println("M2MP Daemon started");
+			System.out.println("M2MP Daemon started"); */
 			
 			// finally, when the Daemon is running, initialize M2MI
 			M2MI.initialize(_TYPETAGLOADER_);
@@ -127,8 +146,13 @@ public class TypeTagToInterfaceConverter {
 			 * The generic method serving as the asynchronous entry point
 			 * for all M2MI calls that are forwarded to an actual AmbientTalk
 			 * object by means of an "invoker" proxy object.
+			 * 
+			 * Note that the message being sent is an opaque, already serialized,
+			 * AmbientTalk payload. It is important that the AmbientTalk value
+			 * is already serialized, because otherwise serialization/deserialization
+			 * will be performed by an M2MI thread rather than an AT actor thread.
 			 */
-			public void invoke(Object message);
+			public void invoke(Packet message);
 		}
 		
 		protected Class findClass(String name) throws ClassNotFoundException {

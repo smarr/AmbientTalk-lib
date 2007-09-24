@@ -38,10 +38,18 @@
  *    access the properties)
  * 2) in the device.properties file, change the ID to the MAC address
  *    of your network card (or a similar UNIQUE identifier)
- * 3) If you want to use M2MI to contact objects running in other VMS
+ * [ the following step is in principle no longer necessary: the M2MP
+ *   daemon is now automatically started when the M2MI API is loaded
+ *   in AT. The daemon is automatically killed when the JVM quits. ]
+ * [3) If you want to use M2MI to contact objects running in other VMS
  *    (either local or remote), you need to set up the M2MP Daemon.
  *    In a separate console, run the 'runm2mpdaemon' script included
- *    in this directory.
+ *    in this directory.]
+ *
+ * AmbientTalk programmers are advised to use the 'reference' variants
+ * of the M2MI handles, because they enforce asynchronous access and
+ * ensure (de)serialization is done in the right thread. When accessing
+ * the bare M2MI handles, these issues have to be dealt with manually.
  *
  * @author tvcutsem
  */
@@ -63,6 +71,9 @@ def TTTIC_convert := TypeTagToInterfaceConverter.&convert;
 
 def TFarRef := /.at.lang.firstclassrefs.TFarRef;
 
+// re-use the native serialization implementation to (de)serialize M2MI payloads
+def Packet := jlobby.edu.vub.at.actors.natives.Packet;
+
 // initialize the M2MI layer
 TypeTagToInterfaceConverter.initializeM2MI();
 
@@ -74,7 +85,10 @@ def createInvokerFor(obj) {
 		obj.invoker;
 	} else: {
 	  def obj.invoker := object: {
-			def invoke(msg) {
+			def invoke(packet) {
+				// manually deserialize the opaque packet such that
+				// the deserialization happens in the right actor!
+				def msg := packet.unpack();
 				obj <+ msg;
 			};
 		};
@@ -131,6 +145,9 @@ def M2MIModule := object: {
 	 * It turns every AmbientTalk invocation on a type T
 	 * into an M2MI invocation of the method 'invoke' on the Java interface
 	 * type T', where T' is automatically generated from T.
+	 *
+	 * Moreover, it ensures that all arguments to the M2MI invocation
+	 * are serialized and deserialized by AT actors and not by M2MI threads.
 	 */
 	def makeAmbientTalkHandle(typetag, m2miHandleCreator) {
 		def m2miHandle := m2miHandleCreator(toInterface: typetag);
@@ -146,7 +163,11 @@ def M2MIModule := object: {
 			// implement the required interface of TFarRef
 			
 			def intercept(msg) {
-				m2miHandle.invoke(msg);
+				// it is important that the AmbientTalk language value
+				// is first serialized into an opaque Packet object. This
+				// ensures that serialization is performed by the current
+				// actor and not by the M2MI library
+				m2miHandle.invoke(Packet.new(msg));
 			};
 			
 			// ensure that an ambienttalk handle does not become a far reference
@@ -278,8 +299,8 @@ def M2MIModule := object: {
 					import /.at.m2mi.api;
 					deftype Bar;
 					export: (object: {
-						def invoke(msg) {
-							nil //system.println("invoker asynchronously invoked with arg " + msg);
+						def invoke(pkt) {
+							nil //system.println("invoker asynchronously invoked with arg " + pkt);
 						};
 					}) asM2MI: (toInterface: Bar);
 					res<-resolve(true);
@@ -288,7 +309,7 @@ def M2MIModule := object: {
 				/.at.lang.futures.when: fut becomes: { |ack|
 					deftype Bar;
 					def allBars := omnihandle: (toInterface: Bar);
-					allBars.invoke("test");
+					allBars.invoke(Packet.new("test"));
 				}
 			};
 
