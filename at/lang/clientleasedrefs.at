@@ -121,7 +121,7 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 			};
 		};
 		
-		def print() {
+		def toString() {
 			if: (expired) then: {
 				"expired client lease " + super^print()  + " on:" +remoteLease;
 			} else: {

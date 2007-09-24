@@ -126,7 +126,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 		def remoteLease := self;
 		if: !(expired) then: {
 		  def timeout := getTimeLeft();
-		  { |remoteLease, timeout|
+		  { |remoteLease, timeout, ClientLeasedRef|
 			  import /.at.lang.clientleasedrefs;	
 		    object: {nil} taggedAs: [ClientLeasedRef]
 		    mirroredBy: createClientLeasingMirror(remoteLease, timeout);
@@ -173,10 +173,10 @@ def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := t
 	
 	def transportStrategy() {
 		def remoteLease := self;
-		if: !(expired) then: {
+		if: !(self.expired) then: {
 		  def timeout := super^getTimeLeft();
-		  { |remoteLease, timeout, renewal|
-			  import /.at.lang.clientleasedrefs;	
+		  { |remoteLease, timeout, renewal, ClientLeasedRef|
+			  import /.at.lang.clientleasedrefs;
 		    object: {nil} taggedAs: [ClientLeasedRef]
 		    mirroredBy: createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal);
 		  }
@@ -222,10 +222,10 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 	
 	def transportStrategy() {
 		def remoteLease := self;
-		if: !(expired) then: {
+		if: !(self.expired) then: {
 		  def timeout := super^getTimeLeft();
 			def selectors := forSelectors;
-		  { |remoteLease, timeout, selectors|
+		  { |remoteLease, timeout, selectors, ClientLeasedRef|
 			  import /.at.lang.clientleasedrefs;	
 		    object: {nil} taggedAs: [ClientLeasedRef]
 		    mirroredBy: createLeasingWithSingleUseMirror(remoteLease, timeout, selectors);
