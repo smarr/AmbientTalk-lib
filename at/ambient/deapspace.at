@@ -168,7 +168,6 @@ def onTimeOut() {
 	// it's my turn to broadcast my world view to all nearby DEAPspaceDevices
 	log("" + myDEAPspaceListener + " timed out and will broadcast his own local world view");
 	omnirefToDEAPspaceListeners<-accept(myDEAPspaceListener, localWorldView);
-	
 	// schedule a new broadcast within the normal timeout range
 	scheduleTimeoutIn(dNormalBackoffRange.value);
 };
@@ -199,6 +198,7 @@ def startRefreshingMyView() {
 			log(""+serviceDescription.type+ " -> " + serviceDescription.timeToLive, DEBUG);
 			
 			if: !(serviceDescription.isProvidedBy(myDEAPspaceListener)) then: {
+				log("!!! sD.timeToLive is a " + serviceDescription.timeToLive.getClass);
 				serviceDescription.timeToLive := serviceDescription.timeToLive - REFRESH_RATE;
 				if: (serviceDescription.timeToLive < seconds(0)) then: {
 						// TRIGGER LOST EVENT: notify lost service subscribers
