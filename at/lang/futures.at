@@ -143,6 +143,7 @@ def FutureMirror := mirror: {
 			if: (subscribers.isEmpty) then: {
 				// warning to ease debugging when something goes wrong in a future that's never accessed
 				system.println("[futures.at] Warning: future has no listeners to catch exception: " + exception);
+				system.println(exception.stackTrace);
 			} else: {
 				subscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
 				subscribers := [];	
@@ -230,16 +231,22 @@ def makeFuture(timeout := nil) {
 def futurize(msg) {  
 	// attach the resolver for a future to the message
 	def type := FutureMessage;
-	def [future, resolver];
-	// integration of futures with leasing
-	if: (is: msg taggedAs: DueType) then: {
+	def [future, resolver] :=	if: (is: msg taggedAs: DueType) then: {
+		// integration of futures with leasing
 		type := DueType;
 		def ann := /.at.support.util.getAnnotationOfType(msg, DueType);
-		[future, resolver] := makeFuture(ann.timeout);
-	}
-	else: {
-		// by default, make a future without timeout
-		[future, resolver] := makeFuture();
+		makeFuture(ann.timeout);
+	} else: {
+		// support for multifutures: messages tagged with the @Gather(n)
+		// type tag receive a multifuture bounded by n
+		def MFModule := /.at.lang.multifutures;
+		if: (is: msg taggedAs: MFModule.GatherType) then: {
+			def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
+			MFModule.makeMultiFuture(ann.upperBound);
+		} else: {
+			// by default, make a future without timeout
+			makeFuture();	
+		}
 	};
 
 	// extend default message with FutureMessage behaviour

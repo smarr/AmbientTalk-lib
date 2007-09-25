@@ -36,6 +36,7 @@ def LibraryTestSuiteModule := object: {
     /.at.demo.InstantMessenger.InstantMessengerTest(),
     /.at.demo.mobiTunes.MobiTunesTest(),
     /.at.lang.futures.FuturesTest(),
+    /.at.lang.multifutures.MultiFuturesTest(),
     /.at.lang.ambientrefs.AmbientRefsTest(),
     /.at.lang.structuraltypes.StructuralTypeTest(),
     /.at.lang.traits.TraitsTest(),

@@ -272,7 +272,7 @@ def TestModule := object: {
 			def failure(@args) { fail := fail + 1 };
 			def error(@args) { err := err + 1 };
 			def stop(@args) {
-				if: !((succ == 7).and: { fail == 1 }.and: { err == 1}) then: {
+				if: !((succ == 7).and: { fail == 1 } and: { err == 1}) then: {
 					system.println("Unit Test self-checking test failed!");
 				} else: {
 					system.println("Unit test module ok");

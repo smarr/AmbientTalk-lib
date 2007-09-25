@@ -70,15 +70,6 @@ def makeMultiValue: table {
 };
 */
 
-// turns a future that should be resolved by a table of values
-// into a future for all those values
-// TODO: not yet tested!
-def makeMultiFuture: future {
-	/.at.lang.futures.when: future becomes: { |tbl|
-		makeMultivalue(tbl)
-	};
-};
-
 def MultivalueModule := object: {
 
   def multivalueOf: tbl { makeMultivalue(tbl) };

@@ -103,7 +103,7 @@ def browser := makeServiceBrowser(/.at.ambient.deapspace);
 */
 deftype ServiceDescription;
 
-def servicebrowserModule(maxTTL, DiscoveryProtocol) {
+def servicebrowserModule(DiscoveryProtocol) {
 	def command := object: {
 		def provide(provider, description) {
 			/*def serviceDescr := isolate: { |provider,description|
@@ -113,6 +113,5 @@ def servicebrowserModule(maxTTL, DiscoveryProtocol) {
 			DiscoveryProtocol.export: (description + " provided by " + provider) as: ServiceDescription;
 		};
 	};
-
-	jlobby.at.ambient.ServiceBrowser.new(maxTTL, command)	
+	jlobby.at.ambient.ServiceBrowser.new(/.at.ambient.deapspace.dNormalExpiry.value, command)	
 }
