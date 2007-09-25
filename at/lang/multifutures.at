@@ -420,6 +420,8 @@ def MultiFutureModule := object: {
       };
 
       def testAsyncForkedMessage() {
+	      /.at.lang.futures.enableFutures(false);
+	
 	      def receivers := [object: {
 		       def m() { 24 }
 	      }, object: {
@@ -438,6 +440,30 @@ def MultiFutureModule := object: {
 			    self.assertEquals(42, vals[2]);
 			  };
 			  FuturesModule.group: [f1,f2];
+      };
+     
+      def testAsyncSendToOmniRef() {
+				/.at.lang.futures.enableFutures(false);
+				import /.at.m2mi.api;
+				deftype Foo;
+				def omni := omnireference: Foo;
+				def makeObj(i) {
+				  object: {
+						def m() { i + 1 }
+					}
+				};
+				def pub1 := export: makeObj(1) asTypeTag: Foo;
+				def pub2 := export: makeObj(2) asTypeTag: Foo;
+				def mf := omni<-m()@Gather(2);
+				def mf2 := whenEach: mf becomes: { |val|
+					val * 10;
+				};
+				def futs := whenAll: mf2 resolved: { |vals|
+					self.assertEquals(2, vals.length);
+					self.assertEquals(20, vals[1]);
+					self.assertEquals(30, vals[2]);
+				};
+				FuturesModule.group: futs;
       };
 
 	  };
