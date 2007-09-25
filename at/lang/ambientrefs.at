@@ -137,7 +137,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 			TElasticity^init(); // initialize elasticity state
 			// initialize the observable trait, this will provide
 			// the 'observerCatalog' object with two fields storing this
-			// object'is observers
+			// object's observers
 			TObservable^init(`disconnection, `reconnection);
 			
 			// When an Ambient Reference mirror is created, start the

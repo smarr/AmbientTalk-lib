@@ -513,7 +513,7 @@ def FuturesModule := object: {
 		  def ref := /.at.lang.ambientrefs.ambient: Test;
 			def future := ref<-test()@Due(LeasingModule.seconds(1));
 			when: future becomes: { |v|
-		  	fail("Unexpected resolved future");
+		  	self.fail("Unexpected resolved future");
 		  } catch: TimeoutException using: { |e|
 				self.assertEquals(e.getFuture(), future);
       };
