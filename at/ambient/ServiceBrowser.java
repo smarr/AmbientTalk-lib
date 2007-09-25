@@ -40,6 +40,7 @@ import javax.swing.DefaultListModel;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -47,13 +48,15 @@ import javax.swing.JViewport;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListModel;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 /**
  * Graphical User Interface to display provided and discovered services.
  * 
  * @author tvcutsem
  */
-public class ServiceBrowser extends JFrame implements DSObserver {
+public class ServiceBrowser extends JFrame /*implements DSObserver*/ {
 
 	private static long maxTTL_; 
 	
@@ -68,23 +71,30 @@ public class ServiceBrowser extends JFrame implements DSObserver {
 	         boolean isSelected,
 	         boolean cellHasFocus) {
 
-	         long ttl = ((ServiceDescription) value).timeToLive();
+	    	 ServiceDescription sd = (ServiceDescription) value;
+	         long ttl = sd.timeToLive();
 	         
 	         Color bgcolor = Color.black;
 	         float frc = 0f;
 	         if (ttl > 0) {
 		         // gradient fill green -> red
 		         frc = (float) (1.0 * ttl) / maxTTL_;
-		         float r = 1 - frc;
-		         float g = frc;
-		         bgcolor = new Color(r, g, 0f);
+		         bgcolor = new Color(1 - frc /*red*/, frc /*green*/, 0f /*blue*/);
 	         }
-	         setText(value.toString() + "(" + frc*100 + "% fresh)");
+	         setText(sd.type() + " - " + sd.service().toString() + "(" + frc*100 + "% fresh)");
 	         setBackground(bgcolor);
 	         return this;
 	     }
 	 }
-		 
+	
+	// Java representation of an AmbientTalk service description object
+	public interface ServiceDescription {
+		 public Object publisher();
+		 public long timeToLive();
+		 public Object type();
+		 public Object service();
+	}
+	 
 	public interface DSCommand extends EventListener {
 		public void provide(String provider, String description);
 	}
@@ -118,13 +128,28 @@ public class ServiceBrowser extends JFrame implements DSObserver {
 				};
 			};
 		});
-		providerField.addActionListener(new ActionListener() {
+		providerField.getDocument().addDocumentListener(new DocumentListener() {
+			public void changedUpdate(DocumentEvent e) {
+				update();
+			}
+			public void insertUpdate(DocumentEvent e) {
+				update();
+			}
+			public void removeUpdate(DocumentEvent e) {
+				update();
+			}
+			public void update() {
+			    provider = providerField.getText();
+                setTitle("Service Browser of " + provider);
+			}
+		});
+		/*providerField.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 			    // new text entered in the provider field
 			    provider = providerField.getText();
                 setTitle("Service Browser of " + provider);
 			};
-		});
+		});*/
 		
 		statusArea.setEditable(false);
 		
@@ -150,7 +175,7 @@ public class ServiceBrowser extends JFrame implements DSObserver {
 		box.add(new JScrollPane(discoveredServiceList));
 		box.add(new JLabel("Provide new service: "));
 		box.add(serviceDescriptionField);
-		box.add(new JLabel("Status: "));
+		box.add(new JLabel("Status log: "));
 		box.add(statusScrollPane);
 		pack();
 		setVisible(true);
@@ -159,6 +184,7 @@ public class ServiceBrowser extends JFrame implements DSObserver {
 
 	private void log(String message) {
 		statusArea.append(message + "\n");
+		// make the log scroll to the last event
 		statusArea.moveCaretPosition(statusArea.getText().length());
 	}
 	
@@ -203,7 +229,7 @@ public class ServiceBrowser extends JFrame implements DSObserver {
 		SwingUtilities.invokeLater(new Runnable() {
 			public void run() {
 				// modify the GUI only in the GUI's own thread to prevent races
-				providedServices.addElement(serviceItem);	
+				providedServices.addElement(serviceItem);
 			}
 		});
 	}

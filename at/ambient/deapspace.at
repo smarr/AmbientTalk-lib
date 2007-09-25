@@ -69,7 +69,7 @@ def Vector := /.at.collections.vector.Vector;
 // default observer of the DEAPspace protocol:
 def makeLogObserver(owner) {
   object: {
-		def log := makeLogger("[deapspace.at][" + owner + "]: ", DEBUG);
+		def log := makeLogger("[deapspace.at][" + owner + "]: ", INFO); // <- set to DEBUG for more output
 		def starting() { log("starting deapspace protocol") };
 		def stopping() { log("stopping deapspace protocol") };
 		def discovered(serviceItem) { log("discovered item: " + serviceItem.service) };
@@ -93,20 +93,22 @@ def makeLogObserver(owner) {
 
 // amount of time before a service advertisement times out (i.e. advertisement
 // must be refreshed before this timeout period)
-def dNormalExpiry := dynamicVariable: seconds(20);
+def dNormalExpiry := dynamicVariable: seconds(30);
 // a range X from which a timeout is uniformly selected. This timeout denotes
 // the time for this device to wait before re-broadcasting. Thanks to the use
 // of intervals, the algorithm becomes adaptive: devices will avoid 'broadcast
 // storms' by scheduling their own broadcast within a random timeout interval.
-def dNormalBackoffRange := dynamicVariable: [seconds(6), seconds(9)];
+def dNormalBackoffRange := dynamicVariable: [seconds(5), seconds(8)];
 // if the time-to-live of a provided service becomes smaller than dMinExpiry,
 // the device will perform a broadcast sooner to make sure its service does not expire
-def dMinExpiry := dynamicVariable: seconds(5);
+def dMinExpiry := dynamicVariable: seconds(6);
 // short broadcast timeout range, used when a device sees that one of
 // its own provided services is about to time out (i.e. its time-to-live
 // is smaller than dMinExpiry)
 def dMinBackoffRange := dynamicVariable: [seconds(1), seconds(2)];
 
+// convert longs -> ints, then take random between [int1, int2], then convert
+// the resulting random number to a long again
 def long := /.at.support.symbiosis.&long;
 def uniformRandomLongInRange: range {
 	long(UtilModule.randomNumberBetween(range[1].intValue,range[2].intValue))
@@ -143,7 +145,7 @@ deftype DEAPspaceListener;
 // unreliable broadcasts to all nearby DEAPspace participants
 def omnirefToDEAPspaceListeners := omnireference: DEAPspaceListener;
 
-// compares a [Type,Closure] with another [Type,Closure] entry
+// compares a [Type,Closure] with another [Type,Closure] entry based on the closures
 def subscriptionComparator := { |s1,s2| s1[2] == s2[2] };
 
 // Vector<[Type,Closure]> for when:discovered: observers
@@ -184,7 +186,7 @@ def myDEAPspaceListener := object: {
 def onTimeOut() {
 	// before I broadcast, I update the time-to-live of my own service descriptions
 	// (don't think this is necessary because refresher does not decrement TTL of
-	// local services)
+	// local services, so the TTL of local services will always be the max. value)
 	/*localWorldView.each: { |serviceDescription|
 		if: (serviceDescription.isProvidedBy(myDEAPspaceListener)) then: {
 			serviceDescription.timeToLive := dNormalExpiry.value;
@@ -236,7 +238,7 @@ def startRefreshingMyView() {
 				true; // never delete one of my own services
 			}
 		}
-	}
+	};
 };
 
 // update my current local world view with a newly received remote world

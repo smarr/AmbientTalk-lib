@@ -106,12 +106,11 @@ deftype ServiceDescription;
 def servicebrowserModule(maxTTL, DiscoveryProtocol) {
 	def command := object: {
 		def provide(provider, description) {
-			def serviceDescr := isolate: { |provider,description|
+			/*def serviceDescr := isolate: { |provider,description|
 				def toString() { description + " provided by " + provider };
 		  	def ==(other) { description == other.description };
-			};
-			DiscoveryProtocol.export: serviceDescr as: ServiceDescription;
-			//providedServices.add(serviceDescr.toString);
+			};*/
+			DiscoveryProtocol.export: (description + " provided by " + provider) as: ServiceDescription;
 		};
 	};
 
