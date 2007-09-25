@@ -38,13 +38,12 @@
  *    access the properties)
  * 2) in the device.properties file, change the ID to the MAC address
  *    of your network card (or a similar UNIQUE identifier)
- * [ the following step is in principle no longer necessary: the M2MP
- *   daemon is now automatically started when the M2MI API is loaded
- *   in AT. The daemon is automatically killed when the JVM quits. ]
- * [3) If you want to use M2MI to contact objects running in other VMS
+ * 3) If you want to use M2MI to contact objects running in other VMS
  *    (either local or remote), you need to set up the M2MP Daemon.
  *    In a separate console, run the 'runm2mpdaemon' script included
- *    in this directory.]
+ *    in this directory. [there is a version of the TTTIC class that
+ *    automates this, but automating startup/shutdown of the Daemon
+ *    is currently disabled.]
  *
  * AmbientTalk programmers are advised to use the 'reference' variants
  * of the M2MI handles, because they enforce asynchronous access and
