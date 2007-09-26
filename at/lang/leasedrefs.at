@@ -78,13 +78,13 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 	    principal;	
 	};
 
-	def revoke(){ 
+	def revoke() {
 		timerSubscription.cancel();
 		expired := true;
 	};
 	
 	def renew(renewalTime := RENEWALONCALL) {
-		if: !(expired) then:{
+		if: !(expired) then: {
 			def interval := maxMethod(timerSubscription.getTimeRemaining(), renewalTime);
 			timerSubscription.cancel();
 			timerSubscription := when: interval elapsed: {
@@ -257,6 +257,8 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 
 //Public interface of leased object references
 def LeasingModule := object: {
+	
+	def LeasedRef := LeasedRef;
 	
 	//Construct a lease that lasts for a given period of time.
 	def lease: timeout for: obj  {

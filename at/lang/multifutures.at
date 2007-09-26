@@ -66,6 +66,7 @@ import /.at.lang.firstclassrefs;
 def log := makeLogger("[multifutures.at]", DEBUG);
 
 def FuturesModule := /.at.lang.futures;
+def LeasingModule := /.at.lang.leasedrefs;
 
 def OneWayMessage := FuturesModule.OneWayMessage;
 
@@ -78,8 +79,8 @@ deftype MultiFuture <: FuturesModule.Future;
 // type that signifies that the multifuture expires after the given timeout
 deftype GatherType <: FuturesModule.FutureMessage; 
 
-def Gather(upperBound := nil) {
-	extend: GatherType with: { |upperBound|
+def Gather(upperBound := nil, timeout := nil) {
+	extend: GatherType with: { |upperBound, timeout|
 		nil;
 	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };
@@ -191,6 +192,18 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 			};
 			nil;
 		};
+		
+		// TODO: semantics of a multifuture upon timeout are not yet totally fixed
+		// the current behaviour is still subject to major changes!
+		def timeout() {
+			// set maxSize to current number of registered results such that isFullyResolved
+			// will always return true
+			maxSize := resolvedValues.length + ruinedValues.length;
+			// prematurely invoke all whenAll subscribers
+			whenAllSubscribers.each: { |sub| sub<-notify(resolvedValues, ruinedValues)@OneWayMessage };
+			// de-register all listeners
+			finalize();
+		};
 
 		// provide the required methods for the TFarRef trait
 
@@ -226,14 +239,18 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		def future := multifut;
 	};
 
-	// has the future been annotated with DueType?
-	/*if: !(nil == timeout) then: {
+	// has the multifuture been annotated with a timeout?
+	if: (nil != timeout) then: {
 		// if so, wrap resolver into a single-call lease
 		resolver := LeasingModule.singleCallLease: timeout for: resolver;
 		LeasingModule.when: resolver expired: {
-			(reflect: fut).ruin(XTimeoutException.new(fut));
+			// behaviour for multifutures upon timeout:
+			// they notify their whenAll listeners with returned values / exceptions
+			// upon timeout and then de-register all listeners such that the listeners
+			// can no longer be invoked subsequently
+			(reflect: multifut).timeout();
 		};
-	};*/
+	};
 
 	[ multifut, resolver ];
 }; // end makeMultiFuture
@@ -291,9 +308,10 @@ def MultiFutureModule := object: {
 	// whenAll observers:
 	
 	def whenAll: multiFuture resolved: resolvedBlock {
-		whenAll: multiFuture resolved: resolvedBlock ruined: { |excs|
+		def [f1,f2] := whenAll: multiFuture resolved: resolvedBlock ruined: { |excs|
 			log("uncaught exceptions in whenAll expression: " + excs, WARNING);
 		};
+		f1;
 	};
 	
 	// whenAll: mf resolved: { |tableOfValues| ... } ruined: { |tableOfExceptions| ... }
@@ -411,12 +429,11 @@ def MultiFutureModule := object: {
 
       def testAsyncMultiFuture() {
 	      def mf := multi: 2 future: { |i, reply| reply(i) };
-		    def [f1,f2] := whenAll: mf resolved: { |vals|
+		    whenAll: mf resolved: { |vals|
 			    self.assertEquals(2, vals.length);
 			    self.assertEquals(1, vals[1]);
 			    self.assertEquals(2, vals[2]);
 			  };
-			  FuturesModule.group: [f1,f2];
       };
 
       def testAsyncForkedMessage() {
@@ -434,12 +451,11 @@ def MultiFutureModule := object: {
 	      // send one single message to multiple receivers
 	      receivers.each: { |rcv| rcv <+ msg };
 	
-		    def [f1,f2] := whenAll: msg.resolver.future resolved: { |vals|
+		    whenAll: msg.resolver.future resolved: { |vals|
 			    self.assertEquals(2, vals.length);
 			    self.assertEquals(24, vals[1]);
 			    self.assertEquals(42, vals[2]);
 			  };
-			  FuturesModule.group: [f1,f2];
       };
      
       def testAsyncSendToOmniRef() {
@@ -458,12 +474,24 @@ def MultiFutureModule := object: {
 				def mf2 := whenEach: mf becomes: { |val|
 					val * 10;
 				};
-				def futs := whenAll: mf2 resolved: { |vals|
+				whenAll: mf2 resolved: { |vals|
 					self.assertEquals(2, vals.length);
-					self.assertEquals(20, vals[1]);
-					self.assertEquals(30, vals[2]);
+					// values may be arbitrarily ordered, so test the sum
+					self.assertEquals(50, vals[1]+vals[2]);
 				};
-				FuturesModule.group: futs;
+      };
+
+      def testAsyncMultifutureTimeout() {
+	      /.at.lang.futures.enableFutures(false);
+	
+	      // construct a timeoutable multifuture
+	      def msg := <-m()@Gather(2, FuturesModule.seconds(1));
+	      self.assertTrue(does: msg respondTo: `resolver, "msg not equipped with a future");
+	      self.assertTrue(is: msg.resolver taggedAs: LeasingModule.LeasedRef, "resolver is not a lease");
+
+		    whenAll: (reflect: msg.resolver).getPrincipal.future resolved: { |vals|
+			    self.assertEquals(0, vals.length);
+			  };
       };
 
 	  };

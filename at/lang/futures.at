@@ -242,7 +242,7 @@ def futurize(msg) {
 		def MFModule := /.at.lang.multifutures;
 		if: (is: msg taggedAs: MFModule.GatherType) then: {
 			def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
-			MFModule.makeMultiFuture(ann.upperBound);
+			MFModule.makeMultiFuture(ann.upperBound, ann.timeout);
 		} else: {
 			// by default, make a future without timeout
 			makeFuture();	
@@ -440,8 +440,9 @@ def FuturesModule := object: {
 				  def result := super^send(rcv, msg);
 				  // for a future message, the return value now becomes the message's future
 				  if: (is: msg taggedAs: FutureMessage) then: {
-					  //for a future message tagged with a timeout, the return value has to be accessed via the leased reference  
-					  if: (is: msg taggedAs: DueType) then: {
+					  // if the resolver is wrapped in a leased reference,
+					  // the future has to be accessed via the leased reference  
+					  if: (is: msg.resolver taggedAs: LeasingModule.LeasedRef) then: {
 						  (reflect:  msg.resolver).getPrincipal().future;
 					  } else: {
 					    msg.resolver.future;
