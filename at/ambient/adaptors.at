@@ -1,0 +1,348 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/**
+ * Implementation of adaptors for far references supporting different
+ * kinds of message passing semantics. These references wrap any other
+ * kind of far reference and only require the reference to point to a
+ * matching 'receptor' object.
+ *
+ * The following adaptors are defined:
+ * === Exactly-once Adaptor ===
+ * Example:
+ *   def unihandle := exactlyonceReceptorFor: obj;
+ *   def ref := exactlyonceAdaptor: unihandle;
+ *   ref<-msg() // msg will be buffered while unihandle disconnected
+ *
+ * In short:
+ *  - messages are delivered from sender to receiver one by one
+ *  - message sending is retried until message reception is acknowledged
+ *  - the remote receptor filters out any duplicate messages to avoid
+ *    delivering retried messages to its subject
+ *
+ * In addition, methods/messages whose name starts with 'idempotent' are
+ * treated by this adaptor as 'idempotent operations'. An idempotent
+ * operation is an operation that can be performed multiple times without
+ * changing the state of the system. This means that for idempotent
+ * messages/operations, filtering out duplicates is not necessary.
+ *
+ * === Batched message Adaptor ===
+ * This adaptor batches outgoing messages until a certain timeout period
+ * has elapsed. When the timeout fires, it batches all messages received
+ * within the timeout period and delivers them in a single message to a
+ * dedicated receptor object. The receptor unpacks the batched message and
+ * forwards each individual message to its principal.
+ *
+ * @author tvcutsem
+ */
+
+import /.at.support.timer;
+import /.at.m2mi.api;
+
+def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+
+// time to wait between retries for sending or acknowledging messages
+def SND_INTERVAL := seconds(2);
+def ACK_INTERVAL := seconds(2);
+
+deftype Receptor;
+deftype ExactlyOnceReceptor <: Receptor;
+
+/**
+ * A receptor wraps an object such that all incoming messages
+ * are properly filtered for duplicates (i.e. idempotent).
+ * Moreover, the receptor acknowledges receipt of a message
+ * until the sender explicitly tells it to forget about the message.
+ */
+def makeExactlyOnceReceptor(forObject) {
+	// maps sender refs to last known message Id of that sender
+	def lastIdReceivedFrom := jlobby.java.util.HashMap.new();
+	
+	object: {
+		def incoming(fromSender, message, id) {
+			// if the message triggers an idempotent operation, no additional
+			// bookkeeping is necessary to prevent duplicates
+			// messages are regarded as 'idempotent' via the naming convention that
+			// their names start with the noun 'idempotent'.
+			if: (message.selector.text ~= "\\Aidempotent.*") then: {
+				// just forward the message
+				forObject <+ message;
+				// and acknowledge receipt (if receipt does not get through, the sender will resend the message)
+				fromSender<-acknowledge(self, id);
+			} else: {
+				// check for duplicates
+				def lastId := lastIdReceivedFrom.get(fromSender);
+				if: !(lastId == id) then: {
+					// store id such that the message is not delivered twice
+					lastIdReceivedFrom.put(fromSender, id);
+					// deliver the message to the actual object
+					forObject <+ message;
+					// acknowledge receipt of the message
+					fromSender<-acknowledge(self, id);
+					// persist in sending an acknowledgement to the sender
+					// until we are sure the acknowledgement has been sent
+					every: ACK_INTERVAL until: {
+						!(lastIdReceivedFrom.get(fromSender) == id)
+					} do: {
+						fromSender<-acknowledge(self, id)
+					};
+				}
+			};
+		};
+		def forget(sender, id) {
+			if: (lastIdReceivedFrom.get(sender) == id) then: {
+				lastIdReceivedFrom.remove(sender);
+			};
+		};
+	} taggedAs: [ExactlyOnceReceptor];
+};
+
+def makeExactlyOnceAdaptor(receptor) {
+	object: { } mirroredBy: (mirror: {
+	  import TFarRef;
+	
+	  // unique identifier for each outgoing message sent by me
+	  def uniqueId := 0;
+	
+	  // pending outgoing messages without an acknowledgement
+	  def outbox := [];
+		
+		// if not nil, we're waiting for an acknowledgement
+		def currentMessageId := nil;
+		
+	  // === implement TFarRef's required interface ===
+	
+		/**
+		 * This far ref implements exactly-once message delivery,
+		 * assuming a reliable network, a connection at some point in time,
+		 * and assuming messages are sent sequentially from sender to receiver
+		 */
+	  def intercept(msg) {
+		  // store the message in the outbox
+		  outbox := outbox + [msg];
+		  // if it's the only message in the outbox, try to send it
+		  if: (outbox.length == 1) then: {
+			  sendNext(msg);
+		  }
+	  };
+	
+	  /** sent by receptor upon successful message delivery */
+	  def acknowledge(rcv, id) {
+		  // always reply to an ack message by telling the receptor
+		  // to forget about bookkeeping data for this message
+		  rcv<-forget(self, id);
+		  // only clear message ID if it matches (could be a stale ack message
+			// referring to previous ids)
+		  if: (currentMessageId == id) then: {
+			  currentMessageId := nil;
+			  // remove message from outbox
+			  outbox := outbox.select(2,outbox.length+1);
+			  // if more messages pending, send the next one
+			  if: (outbox.length > 0) then: {
+				  sendNext(outbox[1]);
+			  }
+		  }
+	  };
+	
+	  /**
+	   * To send the message, send a composite 'incoming' message
+	   * to the receptor encapsulating a unique message ID. The ID
+	   * is used to check in the acknowledge method whether message
+	   * transmission was succesful. Persist in sending the message
+	   * until an acknowledgement was received. 
+	   */
+	  def sendNext(msg) {
+		  def thisMessageId := uniqueId;
+		  currentMessageId := thisMessageId;
+		  uniqueId := uniqueId + 1;
+		  receptor<-incoming(self, msg, currentMessageId);
+		  every: SND_INTERVAL until: { !(thisMessageId == currentMessageId) } do: {
+			  receptor<-incoming(self, msg, currentMessageId)
+		  };
+	  };
+	
+	  def toString() {
+		  "exactly-once adaptor for: " + receptor;
+	  };
+	
+	  def transportStrategy := { |receptor|
+		  /.at.ambient.adaptors.exactlyonceAdaptor: receptor;
+	  };
+  });
+};
+
+// time to wait before sending a message
+// (= max amount of time to accumulate and batch messages)
+def BATCH_INTERVAL := seconds(2);
+
+/**
+ * This far ref implements batched message delivery. When it receives
+ * a message, rather than sending it immediately, it batches all
+ * outgoing messages received within a timeout period, then bundles
+ * all of those messages into one batched message.
+ */
+def makeBatchAdaptor(batchReceptor, batchInterval := BATCH_INTERVAL) {
+	object: { } mirroredBy: (mirror: {
+	  import TFarRef;
+	
+	  // currently batched outgoing messages
+	  def outbox := [];
+		
+		// if not nil, we've scheduled a flush timeout
+		def flushTask := nil;
+		
+	  // === implement TFarRef's required interface ===
+	
+	  def intercept(msg) {
+		  // store the message in the outbox
+		  outbox := outbox + [msg];
+		  // if we have not already scheduled a flush task,
+		  // schedule one now to actually send the message
+		  // at a later point in time
+		  if: (nil == flushTask) then: {
+			  flushTask := when: batchInterval elapsed: {
+				  // re-set the flag to nil to indicate that the flush
+				  // task is no longer scheduled
+				  flushTask := nil;
+				  // send the entire contents of the outbox to the recipient
+				  batchReceptor<-batchReceive(outbox);
+				  // flush the outbox
+				  outbox := [];
+			  };
+		  };
+	  };
+	
+	  def toString() {
+		  "batch adaptor for: " + receptor;
+	  };
+	
+	  def transportStrategy := { |receptor|
+		  /.at.ambient.adaptors.batchAdaptor: receptor;
+	  };
+  });
+};
+
+deftype BatchReceptor <: Receptor;
+
+def makeBatchReceptor(forObject) {
+	object: {
+		def batchReceive(tableOfMessages) {
+			tableOfMessages.each: { |msg|
+				forObject <+ msg;
+			};
+		};
+	} taggedAs: [BatchReceptor];
+};
+
+def AdaptorModule := object: {
+
+  def exactlyonceAdaptor: refToReceptor {
+	  makeExactlyOnceAdaptor(refToReceptor);
+  };
+
+  def exactlyonceReceptorFor: obj {
+	  unireference: Receptor for: makeExactlyOnceReceptor(obj);
+  };
+
+  def batchAdaptor: refToReceptor {
+	  makeBatchAdaptor(refToReceptor);
+  };
+
+  def batchReceptorFor: obj {
+	  unireference: Receptor for: makeBatchReceptor(obj);
+  };
+
+  def AdaptorModuleTest() {
+	  extend: /.at.unit.test.UnitTest.new("AdaptorModuleTest") with: {
+		
+		  def testAsyncSimpleMessageSend() {
+			  /.at.lang.futures.future: { |reply|
+				  def subject := object: {
+				    def m() { reply(true) };
+			    };
+			    def ref := exactlyonceAdaptor: (exactlyonceReceptorFor: subject);
+			    ref<-m();
+			  }
+		  };
+		
+		  def testAsyncMultipleMessageSends() {
+			  /.at.lang.futures.future: { |reply|
+				  def subject := object: {
+					  def i := 0;
+				    def m() { i := i + 1; if: (i == 2) then: { reply(true) } };
+			    };
+			    def ref := exactlyonceAdaptor: (exactlyonceReceptorFor: subject);
+			    ref<-m();
+			    ref<-m();
+			  }
+		  };
+		
+		  def testAsyncDifferentMessageSends() {
+		    import /.at.lang.futures;
+		    def [f1,r1] := makeFuture();
+		    def [f2,r2] := makeFuture();
+			  def subject := object: {
+				  def m() { r1.resolve(true) };
+				  def n() { r2.resolve(true) };
+			  };
+			  def ref := exactlyonceAdaptor: (exactlyonceReceptorFor: subject);
+			  ref<-m();
+			  ref<-n();
+			  group: [f1, f2]
+		  };
+		
+		  def testAsyncIdempotentSend() {
+			  /.at.lang.futures.future: { |reply|
+				  def subject := object: {
+					  // prefix is 'idempotent', so this operation can be ran multiple times
+				    def idempotentOperation() { reply(true) };
+			    };
+			    def ref := exactlyonceAdaptor: (exactlyonceReceptorFor: subject);
+			    ref<-idempotentOperation();
+			  };
+		  };
+
+		  def testAsyncBatchedMessageDelivery() {
+		    import /.at.lang.futures;
+		    def [f1,r1] := makeFuture();
+		    def [f2,r2] := makeFuture();
+			  def subject := object: {
+				  def m() { r1.resolve(true) };
+				  def n() { r2.resolve(true) };
+			  };
+			  def batchRef := batchAdaptor: (batchReceptorFor: subject);
+			  // the following messages should be sent in batch
+			  batchRef<-m();
+			  batchRef<-n();
+			  group: [f1, f2]
+		  };
+		
+	  };
+  };
+
+};
+
