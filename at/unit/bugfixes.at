@@ -37,6 +37,32 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 			self.assertEquals("foo", v)
 		}
 	};
+	
+	// test following bug #49 in which the discovery actor failed
+	// to access 'system' and 'lobby' slots in deserialized code
+	def testAsyncDeserializationInDiscoveryActor() {
+		def peer := actor: {
+			def obj := object: { } taggedAs: [/.at.types.Isolate] mirroredBy: (extend: defaultMirror with: {
+				def x := 5;
+			  def pass() {
+				  /.at.support.util.uponArrivalBecome: { |x|
+					  system; // ensure we can access system and the root
+					  /.at;
+					  x
+					}
+			  }
+			} taggedAs: [/.at.types.Isolate]);
+			deftype Foo;
+			export: obj as: Foo;
+		};
+
+		deftype Foo;
+		future: { |reply|
+			when: Foo discovered: { |o|
+			  reply(o);
+		  };
+		};
+	};
 };
 
 self
