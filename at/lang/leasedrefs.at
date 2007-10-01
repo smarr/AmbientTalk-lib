@@ -70,7 +70,15 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 	  timerSubscription := when: timeout elapsed: {
 		  expired := true;
 		  self.notifyExpiredObservers();
-			takeOffline: self;
+			self.takeLeasedObjectOffline;
+	  };
+  };
+
+  def takeLeasedObjectOffline() {
+		try: {
+	    takeOffline: self;
+	  } catch: /.at.types.IllegalOperation using: { |e|
+		  system.println("[leasedrefs.at] WARNING: taking object offline that was not online: "+e.message);
 	  };
   };
 
@@ -90,7 +98,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 			timerSubscription := when: interval elapsed: {
 				expired := true;
 				self.notifyExpiredObservers();
-				takeOffline: self;
+				self.takeLeasedObjectOffline;
 			};
 		} else: {
 			raise: /.at.exceptions.XIllegalOperation.new("cannot renew an expired leased reference " +self.base);
@@ -214,7 +222,7 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 		if: !(self.expired) then: {		
 		  	if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
 				  super^revoke();
-			  	takeOffline: self;
+			  	self.takeLeasedObjectOffline;
 		  	}
 		}; 
 		res;

@@ -68,8 +68,8 @@ extend: /.at.unit.test.UnitTest.new("SymbiosisTutorial") with: {
 			def SymbiosisDemo := jlobby.at.tutorial.SymbiosisDemo;
 			def javaDemo := SymbiosisDemo.new();
 			def atObject := object: {
-				def ping() { system.println("ping!"); javaDemo.run2(self); };
-				def pong() { system.println("pong!"); 42 }
+				def ping() { javaDemo.run2(self); };
+				def pong() { 42 }
 			};
 			def result := javaDemo.run(atObject);	
 		  self.assertEquals(result, 42);					

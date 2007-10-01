@@ -467,39 +467,39 @@ def AmbientRefModule := object: {
 	
 	def AmbientRefsTest() {
 		extend: /.at.unit.test.UnitTest.new("AmbientRefTest") with: {
-			deftype Foo;
-			deftype Bar;
+			deftype ARFooTest;
+			deftype ARBarTest;
 			
 			def providerHost := actor: {
-				deftype Foo;
+				deftype ARFooTest;
 				def service := object: {
 					def testMethod(x) { x+1 };
 				};
-				export: service as: Foo;
+				export: service as: ARFooTest;
 				
-				deftype Bar;
+				deftype ARBarTest;
 				def service2 := object: {
 					def testContent(x) { x*x };
 				};
 				def y := 42;
-				/.at.lang.ambientrefs.export: service2 as: Bar with: { |y| def z := 5 };
+				/.at.lang.ambientrefs.export: service2 as: ARBarTest with: { |y| def z := 5 };
 			};
 
 			def testAsyncFragileUni() {
-				def a := ambient: Foo withCardinality: uni() withElasticity: fragile();
+				def a := ambient: ARFooTest withCardinality: uni() withElasticity: fragile();
 				FuturesModule.when: a<-testMethod(5)@FuturesModule.FutureMessage becomes: { |v|
 					self.assertEquals(6,v);
 				};
 			};
 			def testAsyncFragileOmni() {
-				def a := ambient: Foo withCardinality: omni() withElasticity: fragile();
+				def a := ambient: ARFooTest withCardinality: omni() withElasticity: fragile();
 				def to := TimerModule.seconds(5);
 				FuturesModule.when: a<-testMethod(5)@[SustainedMessage(to),FuturesModule.FutureMessage] becomes: { |v|
 					self.assertEquals(6,v);
 				};
 			};
 			def testAsyncParamPassing() {
-				def a := ambient: Foo withCardinality: uni() withElasticity: fragile();
+				def a := ambient: ARFooTest withCardinality: uni() withElasticity: fragile();
 				def act := actor: { def rcv(ar) { ar } };
 
 				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
@@ -508,15 +508,15 @@ def AmbientRefModule := object: {
 				};
 			};
 			def testAsyncWhereOnSturdyUni() {
-				def a := ambient: Bar where: { |props| props.y > 40 };
+				def a := ambient: ARBarTest where: { |props| props.y > 40 };
 				FuturesModule.when: a<-testContent(5)@FuturesModule.FutureMessage becomes: { |v|
 					self.assertEquals(25,v);
 				};
 			};
 			def testAsyncWhereOnFragileUni() {
-				def a := ambient: Bar withCardinality: uni()
-				                      withElasticity: fragile()
-				                      where: { |props| props.z == 5 };
+				def a := ambient: ARBarTest withCardinality: uni()
+				                            withElasticity: fragile()
+				                            where: { |props| props.z == 5 };
 				FuturesModule.when: a<-testContent(5)@FuturesModule.FutureMessage becomes: { |v|
 					self.assertEquals(25,v);
 				};

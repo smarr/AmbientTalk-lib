@@ -102,29 +102,34 @@ def FutureMirror := mirror: {
 	};
 
 	def resolve(value) {
-		// is the future resolved by another future?
-		if: (is: value taggedAs: Future) then: {
-			// register this future as a listener with the resolved future value
-			value<-addResolutionListener(object: {
-				def notifyResolved(val) {
-					// re-resolve this future with the actual value
-					resolve(val);
-				};
-				def notifyRuined(exc) {
-					// ruin this future
-					ruin(exc);
-				}
-		  // note that <-addResolutionListener is a message directed to the future's mirror
-		  // and that no future return value is required
-			})@[MetaMessage, OneWayMessage];
-		} else: {
-			if: (state == UNRESOLVED) then: {
-				state := RESOLVED;
-				resolvedValue := value;
-				inbox.each: { |msg| value <+ msg };
-				inbox := [];
-				subscribers.each: { |sub| sub<-notifyResolved(value)@OneWayMessage };
-				subscribers := [];
+		// if value == myself, don't do anything (can happen when forwarding messages)
+		// (check not strictly necessary: otherwise I would just register
+		//  a listener on myself)
+		if: !(self == value) then: {
+			// is the future resolved by another future?
+			if: (is: value taggedAs: Future) then: {
+				// register this future as a listener with the resolved future value
+				value<-addResolutionListener(object: {
+					def notifyResolved(val) {
+						// re-resolve this future with the actual value
+						resolve(val);
+					};
+					def notifyRuined(exc) {
+						// ruin this future
+						ruin(exc);
+					}
+			  // note that <-addResolutionListener is a message directed to the future's mirror
+			  // and that no future return value is required
+				})@[MetaMessage, OneWayMessage];
+			} else: {
+				if: (state == UNRESOLVED) then: {
+					state := RESOLVED;
+					resolvedValue := value;
+					inbox.each: { |msg| value <+ msg };
+					inbox := [];
+					subscribers.each: { |sub| sub<-notifyResolved(value)@OneWayMessage };
+					subscribers := [];
+				};	
 			};	
 		};
 		nil;
@@ -136,7 +141,7 @@ def FutureMirror := mirror: {
 			resolvedValue := exception;
 			inbox.each: { |msg|
 				if: (is: msg taggedAs: FutureMessage) then: {
-					msg.resolver<-ruin(exception)@OneWayMessage;
+					msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
 				};
 			};
 			inbox := [];
@@ -177,7 +182,7 @@ def FutureMirror := mirror: {
 		} else: {
 			if: (state == RUINED) then: {
 				(is: msg taggedAs: FutureMessage).ifTrue: {
-					msg.resolver<-ruin(exception)@OneWayMessage;
+					msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
 				};
 			}	else: {
 				// accumulate message in this future's inbox
@@ -206,25 +211,25 @@ def FutureMirror := mirror: {
 def makeFuture(timeout := nil) {
 	// futures are empty objects mirrored by a future mirror
 	// note that the future mirror is implicitly instantiated for each new future!
-	def fut := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
+	def future := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
 
-	//by default futures are not leased.
-	def resolver := object: {
-		def resolve(val) { (reflect: fut).resolve(val) };
-		def ruin(exc) { (reflect: fut).ruin(exc) };
-		def future := fut;
+	def resolver := isolate: { |future|
+		def resolve(val) { future<-resolve(val)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
+		def ruin(exc) { future<-ruin(exc)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
 	};
 
 	// has the future been annotated with DueType?
 	if: !(nil == timeout) then: {
-		// if so, wrap resolver into a single-call lease
-		resolver := LeasingModule.singleCallLease: timeout for: resolver;
-		LeasingModule.when: resolver expired: {
-			(reflect: fut).ruin(XTimeoutException.new(fut));
+		// if so, wrap the future into a single-call lease
+		def futureLease := LeasingModule.singleCallLease: timeout for: future;
+		LeasingModule.when: futureLease expired: {
+			(reflect: future).ruin(XTimeoutException.new(future));
 		};
+		[ futureLease, resolver ];
+	} else: {
+		//by default futures are not leased.
+		[ future, resolver ];
 	};
-
-	[ fut, resolver ];
 };
 
 // extend a regular asynchronous message with futures behaviour
@@ -250,7 +255,7 @@ def futurize(msg) {
 	};
 
 	// extend default message with FutureMessage behaviour
-	extend: msg with: { |resolver, OneWayMessage|
+	extend: msg with: { |future|
 
 		// the process method is invoked when an async message arrives
 	  def process(behaviour) {
@@ -260,14 +265,14 @@ def futurize(msg) {
 
 				// if everything goes right, resolve the attached future
 				// replace the placeholder symbol with the actual result
-				resolver<-resolve(result)@OneWayMessage;
+				future<-resolve(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
 
 				result;
 
 			// note that we need to qualify the full path to the Exception type:
 			// the Exception variable defined above is out of scope since this message is an isolate!
 			} catch: /.at.types.Exception using: { |e|
-				resolver<-ruin(e)@OneWayMessage;
+				future<-ruin(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
 
 				// re-raise the caught exception
 				raise: e;
@@ -290,7 +295,8 @@ def FuturesModule := object: {
 	// when-catch support, version without a catch block
 	def when: future becomes: resolvedBlock {
 		when: future becomes: resolvedBlock catch: Exception using: { |e|
-			system.println("[futures.at] Warning: uncaught exception because no catch-clause specified: " + e);
+			system.println("[futures.at] Warning: re-raising uncaught exception in when:becomes: because no catch-clause specified: " + e, WARNING);
+			raise: e; // raise the uncaught exception
 		}
 	};
 
@@ -440,12 +446,12 @@ def FuturesModule := object: {
 				  def result := super^send(rcv, msg);
 				  // for a future message, the return value now becomes the message's future
 				  if: (is: msg taggedAs: FutureMessage) then: {
-					  // if the resolver is wrapped in a leased reference,
+					  // if the future is wrapped in a leased reference,
 					  // the future has to be accessed via the leased reference  
-					  if: (is: msg.resolver taggedAs: LeasingModule.LeasedRef) then: {
-						  (reflect:  msg.resolver).getPrincipal().future;
+					  if: (is: msg.future taggedAs: LeasingModule.LeasedRef) then: {
+						  (reflect:  msg.future).getPrincipal();
 					  } else: {
-					    msg.resolver.future;
+					    msg.future;
 					  }
 				  } else: {
 					   result;
@@ -467,11 +473,13 @@ def FuturesModule := object: {
 
     def foo() { 5 };    
     
-    def testFutureCreation() {
+    def testAsyncFutureCreation() {
       def [fut,res] := makeFuture();
       self.assertEquals("<unresolved future>", print: fut);
       res.resolve(5);
-      self.assertEquals("<resolved future:5>", print: fut);
+      when: fut becomes: { |val|
+	      self.assertEquals("<resolved future:5>", print: fut);
+	    };
     };
     
     def testFutureSend() {

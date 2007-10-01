@@ -52,13 +52,13 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 					}
 			  }
 			} taggedAs: [/.at.types.Isolate]);
-			deftype Foo;
-			export: obj as: Foo;
+			deftype DeserializationBugfixTest;
+			export: obj as: DeserializationBugfixTest;
 		};
 
-		deftype Foo;
+		deftype DeserializationBugfixTest;
 		future: { |reply|
-			when: Foo discovered: { |o|
+			when: DeserializationBugfixTest discovered: { |o|
 			  reply(o);
 		  };
 		};

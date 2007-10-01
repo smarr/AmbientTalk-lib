@@ -134,7 +134,7 @@ def UtilTest() {
     def testAsyncUponArrivalBecome() {
       def y := 42;
       def receiver := actor: {
-        def receive(o) { system.println(o.z); o }
+        def receive(o) { o }
       };
       def movableObj := object: {
         nil

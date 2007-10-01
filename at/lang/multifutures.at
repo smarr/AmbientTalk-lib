@@ -146,7 +146,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 				inbox.each: { |msg|
 					// only propagate exceptions back along multifutures
 					if: (is: msg taggedAs: GatherType) then: {
-						msg.resolver<-ruin(exception)@OneWayMessage;
+						msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
 					};
 				};
 				whenEachSubscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
@@ -213,7 +213,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 			// propagate the exception along a multifuture pipeline
 			(is: msg taggedAs: GatherType).ifTrue: {
 				ruinedValues.each: { |exc|
-				  msg.resolver<-ruin(exception)@OneWayMessage;
+				  msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
 				};
       };
 			// accumulate message in this future's inbox
@@ -241,18 +241,19 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 
 	// has the multifuture been annotated with a timeout?
 	if: (nil != timeout) then: {
-		// if so, wrap resolver into a single-call lease
-		resolver := LeasingModule.singleCallLease: timeout for: resolver;
-		LeasingModule.when: resolver expired: {
+		// if so, wrap future into a single-call lease
+		def multifutLease := LeasingModule.singleCallLease: timeout for: multifut;
+		LeasingModule.when: multifutLease expired: {
 			// behaviour for multifutures upon timeout:
 			// they notify their whenAll listeners with returned values / exceptions
 			// upon timeout and then de-register all listeners such that the listeners
 			// can no longer be invoked subsequently
-			(reflect: multifut).timeout();
+			(reflect: multifut).timeout();			
 		};
+		[ multifutLease, resolver ];
+	} else: {
+		[ multifut, resolver ];
 	};
-
-	[ multifut, resolver ];
 }; // end makeMultiFuture
 
 def MultiFutureModule := object: {
@@ -268,7 +269,8 @@ def MultiFutureModule := object: {
   // whenEach observers without catch blocks
 	def whenEach: multiFuture becomes: resolvedBlock {
 		whenEach: multiFuture becomes: resolvedBlock catch: Exception using: { |e|
-			log("uncaught exception because no catch-clause specified: " + e, WARNING);
+			log("re-raising uncaught exception in whenEach:becomes: because no catch-clause specified: " + e, WARNING);
+			raise: e; // no exception block specified, raise the exception in original context
 		}
 	};
 
@@ -446,19 +448,20 @@ def MultiFutureModule := object: {
 	      } ];
 	
 	      def msg := <-m()@Gather(2);
-	      self.assertTrue(does: msg respondTo: `resolver, "msg not equipped with a future");
-	      self.assertTrue(is: msg.resolver.future taggedAs: MultiFuture, "resolver is not a multifuture");
+	      self.assertTrue(does: msg respondTo: `future, "msg not equipped with a future");
+	      self.assertTrue(is: msg.future taggedAs: MultiFuture, "resolver is not a multifuture");
 	      // send one single message to multiple receivers
 	      receivers.each: { |rcv| rcv <+ msg };
 	
-		    whenAll: msg.resolver.future resolved: { |vals|
+		    whenAll: msg.future resolved: { |vals|
 			    self.assertEquals(2, vals.length);
 			    self.assertEquals(24, vals[1]);
 			    self.assertEquals(42, vals[2]);
 			  };
       };
      
-      def testAsyncSendToOmniRef() {
+      /* UNIT TEST MOVED TO /.at.m2mi.api because it depends on M2MI
+        def testAsyncSendToOmniRef() {
 				/.at.lang.futures.enableFutures(false);
 				import /.at.m2mi.api;
 				deftype Foo;
@@ -479,17 +482,17 @@ def MultiFutureModule := object: {
 					// values may be arbitrarily ordered, so test the sum
 					self.assertEquals(50, vals[1]+vals[2]);
 				};
-      };
+      };*/
 
       def testAsyncMultifutureTimeout() {
 	      /.at.lang.futures.enableFutures(false);
 	
 	      // construct a timeoutable multifuture
 	      def msg := <-m()@Gather(2, FuturesModule.seconds(1));
-	      self.assertTrue(does: msg respondTo: `resolver, "msg not equipped with a future");
-	      self.assertTrue(is: msg.resolver taggedAs: LeasingModule.LeasedRef, "resolver is not a lease");
+	      self.assertTrue(does: msg respondTo: `future, "msg not equipped with a future");
+	      self.assertTrue(is: msg.future taggedAs: LeasingModule.LeasedRef, "resolver is not a lease");
 
-		    whenAll: (reflect: msg.resolver).getPrincipal.future resolved: { |vals|
+		    whenAll: (reflect: msg.future).getPrincipal resolved: { |vals|
 			    self.assertEquals(0, vals.length);
 			  };
       };

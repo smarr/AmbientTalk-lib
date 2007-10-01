@@ -159,7 +159,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 	};
 
   def testAsyncOrdering() {
-        def [fut,res] := makeFuture();
+    def [fut,res] := makeFuture();
 		def flag := true;
 		def sumFuture := calculator<-add(1,2)@FutureMessage;
 		when: sumFuture becomes: { |sum|
@@ -178,11 +178,13 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 		self.assertTrue(is: fut taggedAs: Future);
 	};
 	
-	def testExplicitFutures() {
+	def testAsyncExplicitFutures() {
 		def [future, resolver] := makeFuture();
 		def val := 1; // calculate useful value
 		resolver.resolve(val);
-		self.assertEquals("<resolved future:1>", (print: future));
+		when: future becomes: { |val|
+			self.assertEquals("<resolved future:1>", (print: future));
+		};
 	};
 	
 	def testActorMirror() {
