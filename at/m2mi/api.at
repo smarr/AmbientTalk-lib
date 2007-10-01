@@ -59,6 +59,7 @@ def M2MI_getMultihandle := M2MIClass.&getMultihandle;
 def M2MI_getOmnihandle := M2MIClass.&getOmnihandle;
 def M2MI_getUnihandle := M2MIClass.&getUnihandle;
 def M2MI_unexport := M2MIClass.&unexport;
+def M2MI_getClassLoader := M2MIClass.&getClassLoader;
 
 def Coercer_coerce := jlobby.edu.vub.at.objects.coercion.Coercer.&coerce;
 def cast: obj into: interface {
@@ -87,7 +88,10 @@ def createInvokerFor(obj) {
 			def invoke(packet) {
 				// manually deserialize the opaque packet such that
 				// the deserialization happens in the right actor!
-				def msg := packet.unpack();
+				// note that the packet must be deserialized using the M2MI class
+				// loader such that any M2MI handles in the packet are correctly
+				// deserialized!
+				def msg := packet.unpackUsingClassLoader(M2MI_getClassLoader());
 				obj <+ msg;
 			};
 		};
@@ -162,6 +166,12 @@ def M2MIModule := object: {
 			// implement the required interface of TFarRef
 			
 			def intercept(msg) {
+				// TODO: what about adapting parameter-passing rules? (cannot deal with return val wrapping here)
+				/*def m2miargs := msg.args.map: { |arg|
+					if: (is: arg taggedAs: Isolate) then: { arg } else: {
+						uniref: arg forType: ?Type // but unirefs also accept omni casts... (ie not private)
+					}
+				}*/
 				// it is important that the AmbientTalk language value
 				// is first serialized into an opaque Packet object. This
 				// ensures that serialization is performed by the current
@@ -204,10 +214,10 @@ def M2MIModule := object: {
 	};
 	
 	def omnireference: typetag {
-		makeAmbientTalkHandle(typetag, &omnihandle: );
+		makeAmbientTalkHandle(typetag, &omnihandle:);
 	};
 	def multireference: typetag {
-		makeAmbientTalkHandle(typetag, &multihandle: );
+		makeAmbientTalkHandle(typetag, &multihandle:);
 	};
 	def unireference: typetag for: obj {
 		makeAmbientTalkHandle(typetag, { |if| unihandle: if for: createInvokerFor(obj) });
@@ -274,8 +284,8 @@ def M2MIModule := object: {
 			};
 			
 			def testTypeTagToInterfaceConversion() {
-			  deftype Foo;
-			  def interface := toInterface: Foo;
+			  deftype TypeTagToInterfaceConversionT;
+			  def interface := toInterface: TypeTagToInterfaceConversionT;
 			  def outer := self;
 			  def invoker := object: {
 			    def invoke(msg) {
@@ -292,27 +302,28 @@ def M2MIModule := object: {
 				// future used to synchronize both actors:
 				// the unit test actor can only broadcast the message via the
 				// omnireference when it is sure that the other actor has
-				// exported its Bar object
+				// exported its AsyncInvocationOnCustomInterfaceT object
 				def [fut, res] := /.at.lang.futures.makeFuture();
 				def peer := actor: { |res|
 					import /.at.m2mi.api;
-					deftype Bar;
+					deftype AsyncInvocationOnCustomInterfaceT;
 					export: (object: {
 						def invoke(pkt) {
-							nil //system.println("invoker asynchronously invoked with arg " + pkt);
+							pkt.unpack;
+							nil
 						};
-					}) asM2MI: (toInterface: Bar);
+					}) asM2MI: (toInterface: AsyncInvocationOnCustomInterfaceT);
 					res<-resolve(true);
 				};
 				
 				/.at.lang.futures.when: fut becomes: { |ack|
-					deftype Bar;
-					def allBars := omnihandle: (toInterface: Bar);
+					deftype AsyncInvocationOnCustomInterfaceT;
+					def allBars := omnihandle: (toInterface: AsyncInvocationOnCustomInterfaceT);
 					allBars.invoke(Packet.new("test"));
 				}
 			};
 
-			deftype FooBar; // describes objects with a tralala method
+			deftype InvocationOnATReferenceTestT; // describes objects with a tralala method
 						
 			// tests the behaviour of {omni|multi|uni}references
 			def performInvocationOnATReferenceTest(arg, refConstructor) {
@@ -323,7 +334,7 @@ def M2MIModule := object: {
 						res.resolve(true);
 					};
 				};
-				def ref := refConstructor(aFooBar, FooBar);
+				def ref := refConstructor(aFooBar, InvocationOnATReferenceTestT);
 				ref<-tralala(arg); // asynchronously invoke tralala via the ref
 				fut
 			};
@@ -344,9 +355,66 @@ def M2MIModule := object: {
 
 			def testAsyncOmnireferenceInvocation() {
 				performInvocationOnATReferenceTest("omniref", {|obj, tag|
-					export: obj asTypeTag: FooBar;
+					export: obj asTypeTag: InvocationOnATReferenceTestT;
 				  omnireference: tag;
 				});
+			};
+			
+			def testAsyncSendToOmniRef() {
+				/.at.lang.futures.enableFutures(false);
+				import /.at.lang.multifutures;
+				deftype AsyncSendToOmniRefT;
+				def omni := omnireference: AsyncSendToOmniRefT;
+				def makeObj(i) {
+				  object: {
+						def m() { i + 1 }
+					}
+				};
+				def pub1 := export: makeObj(1) asTypeTag: AsyncSendToOmniRefT;
+				def pub2 := export: makeObj(2) asTypeTag: AsyncSendToOmniRefT;
+				def mf := omni<-m()@Gather(2);
+				def mf2 := whenEach: mf becomes: { |val|
+					val * 10;
+				};
+				whenAll: mf2 resolved: { |vals|
+					self.assertEquals(2, vals.length);
+					// values may be arbitrarily ordered, so test the sum
+					self.assertEquals(50, vals[1]+vals[2]);
+				};
+      };
+
+			def testAsyncHandleParameterPassing() {
+				// future used to synchronize both actors:
+				// the unit test actor can only broadcast the message via the
+				// omnireference when it is sure that the other actor has
+				// exported its object
+				def [fut, res] := /.at.lang.futures.makeFuture();
+				def peer := actor: { |res|
+					import /.at.m2mi.api;
+					deftype HandleParameterPassingT;
+					export: (object: {
+						def invoke(pkt) {
+							def M2MI := jlobby.edu.rit.m2mi.M2MI;
+							// deserialize the unihandle using the M2MI class loader
+							def content := pkt.unpackUsingClassLoader(M2MI.getClassLoader());
+							// invoke the run method on the bare unihandle
+							content.run();
+							nil
+						};
+					}) asM2MI: (toInterface: HandleParameterPassingT);
+					res<-resolve(true);
+				};
+				
+				/.at.lang.futures.when: fut becomes: { |ack|
+					deftype HandleParameterPassingT;
+					def omnihdl := omnihandle: (toInterface: HandleParameterPassingT);
+					/.at.lang.futures.future: { |reply|
+						def unihdl := unihandle: jlobby.java.lang.Runnable for: (object: {
+							def run() { reply(true) };
+						});
+						omnihdl.invoke(Packet.new(unihdl));
+					}
+				}
 			};
 			
 		};

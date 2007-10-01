@@ -151,6 +151,7 @@ public class TypeTagToInterfaceConverter {
 			 * AmbientTalk payload. It is important that the AmbientTalk value
 			 * is already serialized, because otherwise serialization/deserialization
 			 * will be performed by an M2MI thread rather than an AT actor thread.
+			 * (moreover, M2MI does not serialize its arguments for intra-JVM calls!)
 			 */
 			public void invoke(Packet message);
 		}

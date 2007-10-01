@@ -199,6 +199,18 @@ def makeExactlyOnceAdaptor(receptor) {
 // (= max amount of time to accumulate and batch messages)
 def BATCH_INTERVAL := seconds(2);
 
+/* Note on choosing an adaptive batch interval timeout period:
+ *
+ * Programmer could specify a desired output rate (= the ratio #sent messages per millisec)
+ * Then, the adaptor could calculate the effective output rate
+ * (= the ratio #received messages per millisec for the duration of the timeout period)
+ * If the effective output rate is > the desired output rate, this means more messages
+ * are transmitted than is desirable and we can increase the timeout period to lower
+ * the effective output rate (batch more messages). Otherwise, there are less messages
+ * transmitted than desirable. To increase this number, shorten the timeout period
+ * such that less messages are buffered.
+ */
+
 /**
  * This far ref implements batched message delivery. When it receives
  * a message, rather than sending it immediately, it batches all

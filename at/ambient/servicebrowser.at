@@ -113,5 +113,14 @@ def servicebrowserModule(DiscoveryProtocol) {
 			DiscoveryProtocol.export: (description + " provided by " + provider) as: ServiceDescription;
 		};
 	};
-	jlobby.at.ambient.ServiceBrowser.new(/.at.ambient.deapspace.dNormalExpiry.value, command)	
-}
+	
+	object: {
+		def ServiceBrowser := jlobby.at.ambient.ServiceBrowser.new(/.at.ambient.deapspace.dNormalExpiry.value, command);
+
+		def startServiceBrowserWithDEAPSpace() {
+			// requires this protocol to be loaded with /.at.ambient.deapspace
+			def DeapSpace := /.at.ambient.deapspace;
+			DeapSpace.observer := ServiceBrowser;
+		};	
+	}
+}; // end servicebrowserModule
