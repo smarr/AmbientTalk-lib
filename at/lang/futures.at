@@ -295,7 +295,7 @@ def FuturesModule := object: {
 	// when-catch support, version without a catch block
 	def when: future becomes: resolvedBlock {
 		when: future becomes: resolvedBlock catch: Exception using: { |e|
-			system.println("[futures.at] Warning: re-raising uncaught exception in when:becomes: because no catch-clause specified: " + e, WARNING);
+			system.println("[futures.at] Warning: re-raising uncaught exception in when:becomes: because no catch-clause specified: " + e);
 			raise: e; // raise the uncaught exception
 		}
 	};
