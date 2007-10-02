@@ -288,31 +288,23 @@ def update(remoteWorldView) {
 };
 
 def isMissingLocalService(remoteWorldView) {
-	{ |return|
-		localWorldView.each: { |serviceDescription|
-			if: (serviceDescription.isProvidedBy(myDEAPspaceListener)) then: {
-			  do: {
-				  myObserver<-noticedMissingService();
-				  return(true)
-				} unless: remoteWorldView.contains(serviceDescription);				
-			}
-	  };
-	  false;
-	}.escape();
+	if: (nil != localWorldView.find: { |serviceDescription|
+	  (serviceDescription.isProvidedBy(myDEAPspaceListener)).and: {
+		  !(remoteWorldView.contains(serviceDescription)) } }) then: {
+		
+		myObserver<-noticedMissingService();
+		true
+	} else: { false };
 };
 
 def isLocalServiceAboutToExpire(remoteWorldView) {
-	{ |return|
-		remoteWorldView.each: { |serviceDescription|
-			if: (serviceDescription.isProvidedBy(myDEAPspaceListener)) then: {
-				if: (serviceDescription.timeToLive < dMinExpiry.value) then: {
-					myObserver<-noticedAboutToExpire();
-					return(true)
-				}
-			}
-		};
-		false;
-	}.escape()
+	if: (nil != remoteWorldView.find: { |serviceDescription|
+		(serviceDescription.isProvidedBy(myDEAPspaceListener)).and: {
+			(serviceDescription.timeToLive < dMinExpiry.value) } }) then: {
+				
+		myObserver<-noticedAboutToExpire();
+		true
+	} else: { false };
 };
 
 def startProtocol() {	
