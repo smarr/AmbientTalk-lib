@@ -27,15 +27,17 @@
 
 def Types := /.at.types;
 
+// an exception object is an isolate encapsulating
+// a text message and a stack trace
 def createException(ofType) {
-	object: {
-		def stackTrace := "unknown trace for " + ofType.typeName;
-		def message := ofType.typeName.text + " exception";
+	def stackTrace := "unknown trace for " + ofType.typeName;
+	def message := ofType.typeName.text + " exception";
+	object: { |stackTrace, message|
 		def getMessage() { message };
 		def init(msg := "no message given") {
 			message := msg;
 		};
-	} taggedAs: [ofType];
+	} taggedAs: [ofType, Types.Isolate];
 };
 
 def IndexOutOfBoundsPrototype := extend: createException(Types.IndexOutOfBounds) with: {
