@@ -75,7 +75,7 @@ def makeMutator(selector) {
 
 // -- exception declarations --
 
-deftype StructuralTypeMismatch;
+deftype StructuralTypeMismatch <: /.at.types.Exception;
 def XStructuralTypeMismatch := extend: /.at.exceptions.createException(StructuralTypeMismatch) with: {
 	def protocol;
 	def missingSelectors;
