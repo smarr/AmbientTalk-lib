@@ -63,6 +63,19 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		  };
 		};
 	};
+	
+	// test whether invocation on a far ref fails with an illegal
+	// operation exception
+	def testAsyncInvocationOnFarRefFails() {
+		enableFutures(false);
+		(actor: {
+			// ref is a far reference
+			def get(ref) {
+			  /.at.unit.test.UnitTest.assert: /.at.types.IllegalOperation raisedIn: { ref.m() };
+		  };
+		})<-get(object: { def m() { 42 } })@FutureMessage;
+	};
+	
 };
 
 self
