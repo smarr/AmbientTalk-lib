@@ -79,12 +79,13 @@ def XBadRequiringProtocolStatement := extend: /.at.exceptions.createException(Ba
 
 
 def TraitModule := object: {
+	
 	def trait: closure {
-		makeTraitProviding: (object: closure) requiring: (protocolOf: nil) taggedAs: [];
+		makeTraitProviding: (isolate: closure) requiring: (protocolOf: nil) taggedAs: [];
 	};
 	
 	def trait: closure taggedAs: tags{
-		makeTraitProviding: (object: closure) requiring: (protocolOf: nil) taggedAs: tags;
+		makeTraitProviding: (isolate: closure) requiring: (protocolOf: nil) taggedAs: tags;
 	};
 	
 	def traitFrom: obj {
@@ -125,11 +126,11 @@ def TraitModule := object: {
 	};
 	
 	def trait: closure requiring: requireExpression {
-		traitFrom: (object: closure) requiring: requireExpression;
+		traitFrom: (isolate: closure) requiring: requireExpression;
 	};
 	
 	def trait: closure requiring: requireExpression taggedAs: tags {
-		traitFrom: (object: closure) requiring: requireExpression taggedAs: tags;
+		traitFrom: (isolate: closure) requiring: requireExpression taggedAs: tags;
 	};
 	
 	/* Transform:
