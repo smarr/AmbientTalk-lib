@@ -342,9 +342,9 @@ def DiscoveryModule := object: {
 				deftype DiscoveryTest;
 				
 				def peer := actor: {
+					import /.at.support.timer;
 					deftype DiscoveryTest;
 					import /.at.ambient.discovery;
-					import /.at.support.timer;
 					def pub := export: (object: {
 						def add(x,y) { x + y };
 					}) as: DiscoveryTest; 
@@ -371,8 +371,46 @@ def DiscoveryModule := object: {
 					res2.resolve(true);
 				};
 				group: [fut1,fut2]
-			};
-		};
+		  };
+		
+		  // tests whether the discovery protocol does not discover
+		  // the same exported object twice
+			def testAsyncSimpleDiscovery() {
+				import /.at.lang.futures;	
+		    deftype SimpleDiscoveryTestT;
+	
+		    def peer := actor: {
+			    import /.at.ambient.discovery;
+			    deftype SimpleDiscoveryTestT;
+			    def pub := export: (object: {
+				    def answer := 42;
+				    def m() { def prevAnswer := answer; answer := 24; prevAnswer }
+			    }) as: SimpleDiscoveryTestT;
+			    import /.at.support.timer;
+			    when: seconds(10) elapsed: {
+				    // stop the discovery
+				    pub.unexport();
+			    };
+		    };
+	
+			  future: { |reply|
+			    def sub := whenever: SimpleDiscoveryTestT discovered: { |ref|
+				    enableFutures(false);
+				    reply(when: ref<-m()@FutureMessage becomes: { |val|
+					    self.assertEquals(42, val);
+					  });
+			    };
+	
+				  import /.at.support.timer;
+			    when: seconds(10) elapsed: {
+				    // stop the discovery
+				    sub.cancel();
+			    };
+		    };
+		  };
+	
+	  };
+		
 	}; // end DiscoveryModuleTest
 	
 } // end DiscoveryModule
