@@ -57,13 +57,22 @@
  * dedicated receptor object. The receptor unpacks the batched message and
  * forwards each individual message to its principal.
  *
+ * === Rebindable Adaptor ===
+ * A rebindable adaptor automatically searches for unireference objects
+ * published as a given type. Whenever the service discovery mechanism
+ * detects that the object is no longer available, the rebindable adaptor
+ * becomes unbound and tries to connect to a new object. These state
+ * changes can be detected by means of observers. A rebindable adaptor
+ * does not provide any message delivery guarantees, so messages sent
+ * via the adaptor may potentially get lost.
+ *
  * @author tvcutsem
  */
 
 import /.at.support.timer;
 import /.at.m2mi.api;
-
-def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+import /.at.lang.firstclassrefs;
+import /.at.ambient.discovery;
 
 // time to wait between retries for sending or acknowledging messages
 def SND_INTERVAL := seconds(2);
@@ -270,6 +279,112 @@ def makeBatchReceptor(forObject) {
 	} taggedAs: [BatchReceptor];
 };
 
+deftype RebindReceptor <: Receptor;
+
+/**
+ * A rebindable adaptor binds to any unireference exported as the given
+ * type. It forwards messages to whichever unireference it is currently
+ * bound to. Clients can register observers to be notified of disconnection
+ * and reconnection.
+ *
+ * A rebindable adaptor does not offer any message delivery guarantees.
+ * Moreover, a message sent to an unbound rebindable reference is simply
+ * dropped. One can use the exactly once adaptor in combination with this
+ * adaptor to provide the necessary QoS guarantees.
+ *
+ * TODO: need a way to stop the discovery initiated by this reference
+ * (i.e. when can this ref stop searching?)
+ */
+def makeRebindableAdaptorFor(Type) {
+	object: { } taggedAs: [ RebindReceptor ] mirroredBy: (mirror: {
+
+    import TFarRef;
+    import TObservable;
+
+    def principal := nil;
+    def joinedbox := [];
+
+    def alreadyBound() { nil != principal };
+
+    def init(base) {
+	    super^init(base);
+	    // create two types of observers: those for reconnection
+	    // and those for disconnection
+	    TObservable^init(`connection, `disconnection);
+	
+	    // when the correct mirror is instantiated, start the service discovery
+			whenever: Type discovered: { |uniref|
+				// store ref for later binding purposes
+				joinedbox := joinedbox + [uniref];
+				if: (!alreadyBound) then: {
+					foundPrincipal(uniref);
+				}
+			};
+
+			whenever: Type lost: { |uniref|
+				// remove this uniref from the joinedbox, if any
+				joinedbox := joinedbox.filter: { |ref| !(ref == uniref) };
+				if: (principal == uniref) then: {
+					lostPrincipal();
+					// rebind to spare principal, if any
+					if: (joinedbox.length > 0) then: {
+						foundPrincipal(joinedbox[1]);
+					};
+				};
+			};
+    };
+
+    // add when: adaptor disconnected: { |from| ... } observer
+    def addConnectionObserver(obs) {
+	    self.addObserver: obs to: self.observerCatalog.connection;
+    };
+
+    // add when: adaptor reconnected: { |to| ... } observer
+    def addDisconnectionObserver(obs) {
+	    self.addObserver: obs to: self.observerCatalog.disconnection;
+    };
+
+    def foundPrincipal(p) {
+			// found a matching principal, bind to it
+			principal := p;
+			// notify when:reconnected: observers
+			self.notify: self.observerCatalog.connection withArgs: [principal];
+    };
+
+    def lostPrincipal() {
+			// notify when:disconnected: observers
+			self.notify: self.observerCatalog.disconnection withArgs: [principal];
+			// retract all unsent messages back to the inbox
+		  //def out := (retract: principal); // TODO: how to write retract using unirefs?
+		  // add untransmitted messages to the front of the inbox
+		  //inbox := out + inbox;
+			// clear the binding
+			principal := nil;
+    };
+
+		// == provide required methods for TFarRef trait ==
+		
+		// received base-level messages are either forwarded to the
+		// current principal or stored in an outbox while disconnected
+		def intercept(msg) {
+			// if the rebindable ref is currently disconnected, drop the message
+		  if: (alreadyBound) then: {
+			  principal <+ msg;
+		  };
+		};
+	
+		def toString() {
+		  "rebindable adaptor for "+Type+": "+self;
+		};
+	
+		def transportStrategy := { |Type|
+			// when arriving at the remote host, create a new local rebindable reference
+			/.at.ambient.adaptors.makeRebindableAdaptorFor(Type)
+		};
+
+	})
+};
+
 def AdaptorModule := object: {
 
   def exactlyonceAdaptor: refToReceptor {
@@ -288,11 +403,26 @@ def AdaptorModule := object: {
 	  unireference: Receptor for: makeBatchReceptor(obj);
   };
 
+  def rebindableAdaptorFor: Type {
+	  makeRebindableAdaptorFor(Type);
+	};
+	
+	// language constructs for the rebindable adaptor
+	
+	def when: rebindableRef disconnected: code {
+		rebindableRef<-addDisconnectionObserver(code)@MetaMessage;
+	};
+	
+	def when: rebindableRef reconnected: code {
+		rebindableRef<-addConnectionObserver(code)@MetaMessage;
+	};
+
   def AdaptorModuleTest() {
 	  extend: /.at.unit.test.UnitTest.new("AdaptorModuleTest") with: {
+		  import /.at.lang.futures;
 		
 		  def testAsyncSimpleMessageSend() {
-			  /.at.lang.futures.future: { |reply|
+			  future: { |reply|
 				  def subject := object: {
 				    def m() { reply(true) };
 			    };
@@ -302,7 +432,7 @@ def AdaptorModule := object: {
 		  };
 		
 		  def testAsyncMultipleMessageSends() {
-			  /.at.lang.futures.future: { |reply|
+			  future: { |reply|
 				  def subject := object: {
 					  def i := 0;
 				    def m() { i := i + 1; if: (i == 2) then: { reply(true) } };
@@ -314,7 +444,6 @@ def AdaptorModule := object: {
 		  };
 		
 		  def testAsyncDifferentMessageSends() {
-		    import /.at.lang.futures;
 		    def [f1,r1] := makeFuture();
 		    def [f2,r2] := makeFuture();
 			  def subject := object: {
@@ -328,7 +457,7 @@ def AdaptorModule := object: {
 		  };
 		
 		  def testAsyncIdempotentSend() {
-			  /.at.lang.futures.future: { |reply|
+			  future: { |reply|
 				  def subject := object: {
 					  // prefix is 'idempotent', so this operation can be ran multiple times
 				    def idempotentOperation() { reply(true) };
@@ -339,7 +468,6 @@ def AdaptorModule := object: {
 		  };
 
 		  def testAsyncBatchedMessageDelivery() {
-		    import /.at.lang.futures;
 		    def [f1,r1] := makeFuture();
 		    def [f2,r2] := makeFuture();
 			  def subject := object: {
@@ -353,6 +481,29 @@ def AdaptorModule := object: {
 			  group: [f1, f2]
 		  };
 		
+		  def testAsyncRebindableAdaptor() {		
+		    deftype RebindableAdaptorTestT;
+		
+		    def rebindAdaptor := rebindableAdaptorFor: RebindableAdaptorTestT;
+		
+		    def peer := actor: {
+			    deftype RebindableAdaptorTestT;
+			    /.at.ambient.discovery.export: (object: {
+				    def m() { 42 }
+			    }) as: RebindableAdaptorTestT;
+		    };
+		
+		    // wait until adaptor has connected before sending
+		    // the message
+		    future: { |reply|
+			  	when: rebindAdaptor reconnected: { |ref|
+				    enableFutures(false);
+				    reply(when: rebindAdaptor<-m()@FutureMessage becomes: { |val|
+					    self.assertEquals(42, val);
+					  });
+				  };
+			  };
+		  };
 	  };
   };
 
