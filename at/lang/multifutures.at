@@ -57,6 +57,12 @@
  *   invocations of the becomes: or catch: closures.
  * - Like with futures, multifutures can be explicitly created, e.g.:
  *   def [ multifut, resolver ] := makeMultiFuture(upperBound);
+ * - Multifutures can be attached to messages by annotating an
+ *   asynchronous message with the @Gather(n) type tag.
+ * - adding a when:becomes: listener on a multifuture is allowed but
+ *   only triggers for the first value/exception of the multifuture.
+ *   This allows multifutures to be used wherever regular futures
+ *   are expected.
  *
  * @author tvcutsem
  */
@@ -96,6 +102,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		def inbox := [];
 		def whenEachSubscribers := [];
 		def whenAllSubscribers := [];
+		def whenBecomesSubscribers := [];
 
 	  // a multifuture is a special kind of far reference
 	  // therefore, this mirror mixes in the 'far reference' behaviour
@@ -130,7 +137,10 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 				} else: {
 					resolvedValues := resolvedValues + [value];
 					inbox.each: { |msg| value <+ msg };
-					whenEachSubscribers.each: { |sub| sub<-notifyResolved(value)@OneWayMessage };
+					def notification := { |sub| sub<-notifyResolved(value)@OneWayMessage };
+					whenEachSubscribers.each: notification;
+					whenBecomesSubscribers.each: notification;
+					whenBecomesSubscribers := []; // clear the when:becomes: subscribers, they are triggered only once
 					if: isFullyResolved() then: {
 						whenAllSubscribers.each: { |sub| sub<-notify(resolvedValues, ruinedValues)@OneWayMessage };
 						finalize();
@@ -149,7 +159,10 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 						msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
 					};
 				};
-				whenEachSubscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
+				def notification := { |sub| sub<-notifyRuined(exception)@OneWayMessage };
+				whenEachSubscribers.each: notification;
+				whenBecomesSubscribers.each: notification;
+				whenBecomesSubscribers := []; // clear the when:becomes: subscribers, they are triggered only once
 				if: isFullyResolved() then: {
 					whenAllSubscribers.each: { |sub| sub<-notify(resolvedValues, ruinedValues)@OneWayMessage };
 					finalize();
@@ -164,9 +177,29 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 			inbox := [];
 		};
 
-		// adds a whenEach listener to the future
+		// adds a when:becomes: listener to the future
+		// this listener triggers only once (on the first incoming value/exception)
 		// @param sub a resolution listener
 		def addResolutionListener(sub) {
+			// notify the listener immediately if there is already a known resolved/ruined result
+			if: (resolvedValues.length > 0) then: {
+				// a resolved value has already arrived
+				sub<-notifyResolved(resolvedValues[1])@OneWayMessage 
+			} else: {
+				if: (ruinedValues.length > 0) then: {
+					// a ruined value has already arrived
+					sub<-notifyRuined(ruinedValues[1])@OneWayMessage
+				} else: {
+					// multifuture is still totally unresolved
+					whenBecomesSubscribers := whenBecomesSubscribers + [sub];
+				}
+			};
+			nil;
+		};
+		
+		// adds a whenEach listener to the future
+		// @param sub a resolution listener
+		def addWhenEachListener(sub) {
 			// notify the listener immediately for each already
 			// known resolved/ruined result
 			resolvedValues.each: { |val| sub<-notifyResolved(val)@OneWayMessage };
@@ -292,7 +325,7 @@ def MultiFutureModule := object: {
 			};
 			nil;
 		};
-		multiFuture<-addResolutionListener(object: {
+		multiFuture<-addWhenEachListener(object: {
 			def notifyResolved(val) { notify(resolvedBlock, val); };
 			def notifyRuined(exc) {
 				if: (is: exc taggedAs: excType) then: {
@@ -495,6 +528,36 @@ def MultiFutureModule := object: {
 		    whenAll: (reflect: msg.future).getPrincipal resolved: { |vals|
 			    self.assertEquals(0, vals.length);
 			  };
+      };
+
+      def testAsyncWhenBecomesOnMultifuture() {	
+	      // create an unbounded multifuture
+	      def [mf,resolver] := makeMultiFuture();
+	
+	      // resolve the future twice before listener is attached
+			  resolver.resolve(42);
+			  resolver.resolve(24);
+			
+			  // a when:becomes: block should only trigger once
+	      /.at.lang.futures.when: mf becomes: { |val|
+		      self.assertEquals(42, val);
+		    };
+      };
+
+      def testAsyncWhenBecomesOnMultifutureResolvedAfterwards() {	
+	      // create an unbounded multifuture
+	      def [mf,resolver] := makeMultiFuture();			
+	
+			  // a when:becomes: block should only trigger once
+	      def f := /.at.lang.futures.when: mf becomes: { |val|
+		      self.assertEquals(42, val);
+		    };
+		
+		    // resolve the future twice after the listener was attached
+			  resolver.resolve(42);
+			  resolver.resolve(24);
+			
+			  f;
       };
 
 	  };
