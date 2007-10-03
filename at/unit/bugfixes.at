@@ -1,6 +1,7 @@
 def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 
   import /.at.lang.futures;
+	enableFutures(false);
 		
 	// Tests whether the same async message can be sent multiple times.
 	def testAsyncMultipleAsyncMessages() {
@@ -67,13 +68,28 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	// test whether invocation on a far ref fails with an illegal
 	// operation exception
 	def testAsyncInvocationOnFarRefFails() {
-		enableFutures(false);
 		(actor: {
 			// ref is a far reference
 			def get(ref) {
 			  /.at.unit.test.UnitTest.assert: /.at.types.IllegalOperation raisedIn: { ref.m() };
 		  };
 		})<-get(object: { def m() { 42 } })@FutureMessage;
+	};
+	
+	// following bug report #50, test whether an object that is parameter-passed
+	// by far reference twice receives the same globally unique ID such that two
+	// far references to the same object can be properly compared for equality
+	def testAsyncUniqueObjectExport() {
+		def peer := actor: {
+			def first;
+			def receive1(x) { first := x; };
+			def receive2(y) { first == y };
+		};
+		def o := object: { };
+		peer<-receive1(o);
+		when: peer<-receive2(o)@FutureMessage becomes: { |answer|
+			self.assertTrue(answer);
+		};
 	};
 	
 };
