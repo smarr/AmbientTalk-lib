@@ -41,6 +41,12 @@ def FirstClassRefModule := object: {
   // an annotation identifying messages destined for the mirror itself
   deftype MetaMessage <: /.at.types.Message;
 
+  // used to end the asynchronous delegation chain between far refs
+  // at the meta level
+  def NilFarRef := object: { } mirroredBy: (mirror: {
+	  def print() { "<end of far ref delegation chain>" };
+  });
+
   /**
    * This trait is meant to be mixed into a mirror definition
    * to make the mirror behave as a far reference.
@@ -49,9 +55,13 @@ def FirstClassRefModule := object: {
    *  def transportStrategy; // a closure describing how to parameter-pass the reference
    *  def intercept(msg); // a method defining how to intercept base-level messages
    *  def toString(); // a method defining how to print the ref (without "<" ">")
+   *
+   * Optionally, a composite may redefine the 'delegate' field which specifies
+   * the object to which metamessages should be forwarded if they are not understood
+   * by the far ref itself
    */
   def TFarRef := object: {
-	
+		
 	  // disallow synchronous access to the object
 	  def invoke(slf, sel, args) {
 		  // the only legal operation on references is '=='
@@ -67,11 +77,19 @@ def FirstClassRefModule := object: {
 		
 		def receive(msg) {
 			if: (is: msg taggedAs: MetaMessage) then: {
-			  self <+ msg;
+				// have to go meta-meta because we need to know whether the
+				// *mirror* itself can respond to the selector
+				if: ((reflect: self).respondsTo(msg.selector)) then: {
+					self <+ msg; // process meta-message myself
+				} else: {
+					self.delegate <+ msg; // forward meta-message if not understood
+				};
 		  } else: {
 			  self.intercept(msg); // provided by composite
 		  }
 		};
+		
+		def delegate := NilFarRef;
 		
 		// ensure that a reference object does not become a far reference
 		// when passed remotely. Rather it implements its own by-reference

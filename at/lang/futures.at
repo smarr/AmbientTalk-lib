@@ -101,6 +101,7 @@ def FutureMirror := mirror: {
 		subscribers := [];
 	};
 
+  // WARNING: this method actually overrides resolve() in the defaultMirror
 	def resolve(value) {
 		// if value == myself, don't do anything (can happen when forwarding messages)
 		// (check not strictly necessary: otherwise I would just register
@@ -509,7 +510,7 @@ def FuturesModule := object: {
 		def testAsyncDue(){
 			
 			def a := actor: {
-				deftype Test;
+				deftype AsyncDueTestT;
 				def service := object: {
 					def test() { 5 };
 				} mirroredBy: ( mirror:{
@@ -521,12 +522,12 @@ def FuturesModule := object: {
 					 	};
 					};
 				});
-				export: service as: Test;
+				export: service as: AsyncDueTestT;
 			};
 			
-			deftype Test;
+			deftype AsyncDueTestT;
       
-		  def ref := /.at.lang.ambientrefs.ambient: Test;
+		  def ref := /.at.lang.ambientrefs.ambient: AsyncDueTestT;
 			def future := ref<-test()@Due(LeasingModule.seconds(1));
 			when: future becomes: { |v|
 		  	self.fail("Unexpected resolved future");

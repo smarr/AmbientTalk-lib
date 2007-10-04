@@ -61,6 +61,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 	// a leased reference is a special kind of far reference, hence
 	// mix in the far reference meta-level behaviour into this mirror
 	import TFarRef;
+	delegate := objPrincipal;
 	
   def init(base) {
   	super^init(base);

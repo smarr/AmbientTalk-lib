@@ -81,22 +81,17 @@ TypeTagToInterfaceConverter.initializeM2MI();
 // invocations into more specific invocations (needed only when
 // using {omni|muli|uni}references, not with handles directly)
 def createInvokerFor(obj) {
-	if: (reflect: obj).respondsTo(`invoker) then: {
-		obj.invoker;
-	} else: {
-	  def obj.invoker := object: {
-			def invoke(packet) {
-				// manually deserialize the opaque packet such that
-				// the deserialization happens in the right actor!
-				// note that the packet must be deserialized using the M2MI class
-				// loader such that any M2MI handles in the packet are correctly
-				// deserialized!
-				def msg := packet.unpackUsingClassLoader(M2MI_getClassLoader());
-				obj <+ msg;
-			};
+	object: {
+		def invoke(packet) {
+			// manually deserialize the opaque packet such that
+			// the deserialization happens in the right actor!
+			// note that the packet must be deserialized using the M2MI class
+			// loader such that any M2MI handles in the packet are correctly
+			// deserialized!
+			def msg := packet.unpackUsingClassLoader(M2MI_getClassLoader());
+			obj <+ msg;
 		};
-		obj.invoker;
-	}
+	};
 };
 
 def M2MIModule := object: {

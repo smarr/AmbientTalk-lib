@@ -130,9 +130,11 @@ def makeExactlyOnceReceptor(forObject) {
 	} taggedAs: [ExactlyOnceReceptor];
 };
 
+// TODO: check whether mirror-extension works on M2MI-refs
 def makeExactlyOnceAdaptor(receptor) {
 	object: { } mirroredBy: (mirror: {
 	  import TFarRef;
+	  delegate := receptor;
 	
 	  // unique identifier for each outgoing message sent by me
 	  def uniqueId := 0;
@@ -229,6 +231,7 @@ def BATCH_INTERVAL := seconds(2);
 def makeBatchAdaptor(batchReceptor, batchInterval := BATCH_INTERVAL) {
 	object: { } mirroredBy: (mirror: {
 	  import TFarRef;
+	  delegate := batchReceptor;
 	
 	  // currently batched outgoing messages
 	  def outbox := [];
@@ -481,6 +484,26 @@ def AdaptorModule := object: {
 			  group: [f1, f2]
 		  };
 		
+		  // see if the adaptor also works in conjunction with an m2mi handle
+		  def testAsyncBatchedDeliveryToRemoteObject() {
+		    def [f1,r1] := makeFuture();
+		    def [f2,r2] := makeFuture();
+			  def subject := object: {
+				  def m() { r1.resolve(true) };
+				  def n() { r2.resolve(true) };
+			  };
+			  
+			  deftype BatchedDeliveryToRemoteObjectTestT;
+			  def uniRefToReceptor := /.at.m2mi.api.unireference:
+			    BatchedDeliveryToRemoteObjectTestT for: (batchReceptorFor: subject);
+			
+			  def batchRef := batchAdaptor: uniRefToReceptor;
+			  // the following messages should be sent in batch
+			  batchRef<-m();
+			  batchRef<-n();
+			  group: [f1, f2]
+		  };
+		
 		  def testAsyncRebindableAdaptor() {		
 		    deftype RebindableAdaptorTestT;
 		
@@ -525,8 +548,7 @@ def AdaptorModule := object: {
 		    // wait until adaptor has connected before sending
 		    // the message
 		    future: { |reply|
-			    // TODO: when:reconnected: should work on the composite as well!
-			  	when: rebindAdaptor reconnected: { |ref|
+			  	when: compositeAdaptor reconnected: { |ref|
 				    enableFutures(false);
 				    reply(when: compositeAdaptor<-test()@FutureMessage becomes: { |val|
 					    self.assertEquals(42, val);

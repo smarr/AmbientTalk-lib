@@ -46,7 +46,8 @@ def TFarRef := /.at.lang.firstclassrefs.TFarRef;
 def RENEWALONCALL := millisec(10); // default call time renewal 
 def LEASETIME := millisec(15); // default lease time
 	
-def createClientLeasingMirror(remoteLease, timeout) { mirror: {	
+def createClientLeasingMirror(remoteLease, timeout) {
+	mirror: {	
 
 		def expired := false;
 		def timerSubscription := nil;
@@ -54,6 +55,7 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 
     // a client-side leasing mirror is a special kind of far ref
     import TFarRef;
+		delegate := remoteLease;
 
 		def init(base){
 		  	super^init(base);
@@ -128,7 +130,8 @@ def createClientLeasingMirror(remoteLease, timeout) { mirror: {
 				"client lease " + super^print() + " on: " +remoteLease;
 			}
 		}
-}}; 
+  };
+}; 
 
 def createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal) { extend: createClientLeasingMirror( remoteLease, timeout) with: {
 
