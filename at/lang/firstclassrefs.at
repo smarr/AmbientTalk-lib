@@ -56,8 +56,8 @@ def FirstClassRefModule := object: {
 	  def invoke(slf, sel, args) {
 		  // the only legal operation on references is '=='
 		  if: (`(==) == sel) then: {
-			  // don't use the trait's parent but the composite's parent
-		    (self.super)^invoke(slf, sel, args);
+				// two first class refs are equal iff their mirrors are equal
+				self == (reflect: args[1])
 		  } else: {
 				raise: XIllegalOperation.new("Cannot synchronously invoke " + sel + " on " + self.toString());
 		  }

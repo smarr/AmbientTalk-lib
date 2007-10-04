@@ -154,14 +154,22 @@ def M2MIModule := object: {
 	 */
 	def makeAmbientTalkHandle(typetag, m2miHandleCreator) {
 		def m2miHandle := m2miHandleCreator(toInterface: typetag);
-		object: {
-			nil
-		} mirroredBy: (mirror: {
+		object: { } mirroredBy: (mirror: {
 			
 			// the reference wrappers around the M2MI handles are
 			// first-class far references, so mix in the far reference
 			// behaviour into this mirror
 			import TFarRef exclude newInstance;
+			
+			// M2MI reference equality is based on their underlying M2MI handles
+			def ==(otherRef) {
+				otherRef.equals(m2miHandle);
+			};
+			
+			def equals(otherM2MIHandle) {
+				// compare handles based on their EOID
+				m2miHandle.equals(otherM2MIHandle);
+			};
 			
 			// implement the required interface of TFarRef
 			

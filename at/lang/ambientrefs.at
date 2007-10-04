@@ -34,6 +34,7 @@
  *
  * TODO:
  *  - introduce multifutures as the return value of a msg sent to an omnireference
+ *    (should already work but not yet tested, just annotate message with @Gather)
  *  - integrate with leasing
  *  - introduce snapshots for omnireferences
  *
