@@ -420,7 +420,7 @@ def AdaptorModule := object: {
   def AdaptorModuleTest() {
 	  extend: /.at.unit.test.UnitTest.new("AdaptorModuleTest") with: {
 		  import /.at.lang.futures;
-		
+
 		  def testAsyncSimpleMessageSend() {
 			  future: { |reply|
 				  def subject := object: {
@@ -504,8 +504,38 @@ def AdaptorModule := object: {
 				  };
 			  };
 		  };
-	  };
-  };
 
-};
+		  // tests whether the ExactlyOnce adaptor can be combined
+		  // with the rebindable adaptor into a composite adaptor
+		  // providing both rebindable behaviour and strong message
+		  // delivery guarantees
+		  def testAsyncRebindablePlusExactlyOnceAdaptor() {		
+		    deftype RebindablePlusExactlyOnceAdaptorTestT;
+		    def rebindAdaptor := rebindableAdaptorFor: RebindablePlusExactlyOnceAdaptorTestT;
+		    def compositeAdaptor := exactlyonceAdaptor: rebindAdaptor;
+		
+		    def peer := actor: {
+			    deftype RebindablePlusExactlyOnceAdaptorTestT;
+			    /.at.ambient.discovery.export: (
+				    /.at.ambient.adaptors.exactlyonceReceptorFor: (object: {
+				      def test() { 42 }
+			      })) as: RebindablePlusExactlyOnceAdaptorTestT;
+		    };
+		
+		    // wait until adaptor has connected before sending
+		    // the message
+		    future: { |reply|
+			    // TODO: when:reconnected: should work on the composite as well!
+			  	when: rebindAdaptor reconnected: { |ref|
+				    enableFutures(false);
+				    reply(when: compositeAdaptor<-test()@FutureMessage becomes: { |val|
+					    self.assertEquals(42, val);
+					  });
+				  };
+			  };
+		  };
+		
+	  };
+  }; // end AdaptorModuleTest
+}; // end AdaptorModule
 
