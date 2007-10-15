@@ -274,7 +274,7 @@ def ObjectListing := object: {
 				0, 1, 2, 1, 0.0, 0.0, awt.GridBagConstraints.CENTER, 
 				awt.GridBagConstraints.BOTH, awt.Insets.new(0, 0, 0, 0), 0, 0));
 		
-		(super.inspectorTabs.add).cast(awt.Component, jlobby.java.lang.Integer.TYPE)(currentPanel, 0);
+		(super.inspectorTabs.&add).cast(awt.Component, jlobby.java.lang.Integer.TYPE)(currentPanel, 0);
 		super.inspectorTabs.setSelectedComponent(currentPanel);
 	};
 	
