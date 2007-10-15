@@ -64,6 +64,12 @@ def makeTraitProviding: prov requiring: req taggedAs: tags {
 	object: { |prov,req|
 		def provides := prov;
 		def requires := req;
+		def init(@args) {
+			provides^init(@args);
+		};
+		def ==(other) {
+			provides == other
+		};
 	} taggedAs: tags + [/.at.types.Isolate, Trait];
 };
 
