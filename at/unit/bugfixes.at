@@ -92,6 +92,14 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		};
 	};
 	
+	// tests whether fields and methods with the same name cannot
+	// co-exist within the same object (bug #51)
+	def testFieldMethodDuplicates() {
+		self.assert: /.at.types.DuplicateSlot raisedIn: {
+			object: { def m; def m(); }
+		}
+	};
+	
 };
 
 self
