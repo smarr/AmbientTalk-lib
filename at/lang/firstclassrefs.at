@@ -76,13 +76,14 @@ def FirstClassRefModule := object: {
 		def invokeField(slf, sel) { self.invoke(slf, sel, []) };
 		
 		def receive(msg) {
+
 			if: (is: msg taggedAs: MetaMessage) then: {
 				// have to go meta-meta because we need to know whether the
 				// *mirror* itself can respond to the selector
 				if: ((reflect: self).respondsTo(msg.selector)) then: {
 					self <+ msg; // process meta-message myself
 				} else: {
-					self.delegate <+ msg; // forward meta-message if not understood
+					self.delegate<-receive(msg)@MetaMessage; // <+ msg;  // forward meta-message if not understood
 				};
 		  } else: {
 			  self.intercept(msg); // provided by composite

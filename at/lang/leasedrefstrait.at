@@ -1,0 +1,140 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+def TimerModule := /.at.support.timer;
+def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+def TObservable := /.at.lang.firstclassrefs.TObservable;
+
+import TimerModule;
+
+def long := jlobby.java.lang.Long.TYPE;
+def maxMethod := jlobby.java.lang.Math.&max;
+
+/*
+ * This trait factors out the common behaviour of leased
+ * reference objects in AmbientTalk.
+ *
+ * @author egonzale
+ */
+def LeasedRefTraitModule := object: {
+
+	def RENEWALONCALL := millisec(10); // default call time renewal 
+	def LEASETIME := millisec(15); // default lease time
+
+	deftype LeasedRef;
+	deftype ClientLeasedRef;
+	
+	def TLeasedRef := object: {
+		
+		def timerSubscription := nil;
+		def expired := false;
+
+		// a leased reference is a special kind of far reference, hence
+		// mix in the far reference meta-level behaviour into this mirror
+		import TFarRef;
+		// ATTENTION: the implementation of TFarRef's required interface 
+		// is defered to the concrete leased references (except for
+		// transportStrategy which now requires leaseTransportStrategy)
+		
+		// a leased reference has expiration observers
+		import TObservable;
+
+	  def init(objPrincipal, timeout) {
+			// initialize the observable trait, this will provide
+			// the 'observerCatalog' object with one field storing
+			// the expiration observers
+			TObservable^init(`expiration);
+			// delegate is a field defined in TFarRef which specifies the object to which meta messages 
+			// should be forwarded if they are not understood by the far ref itself. 
+			// It is necessary when futures are combined with leased references.
+			// For leases, delegate is also the object to which base messages should be forwarded.
+			self.delegate := objPrincipal;
+			self.expired := false;
+		  self.timerSubscription := when: timeout elapsed: { self.expire };
+	  };
+	  
+		def addExpirationObserver(obs){
+			self.addObserver: obs to: self.observerCatalog.expiration;
+		};
+
+		def takeLeasedObjectOffline() {
+			if: !(expired) then: {
+				//A lease won't be asked more than once to be taken offline.
+			  try: {
+		      takeOffline: self;
+		    } catch: /.at.types.IllegalOperation using: { |e|
+				  // Lease used only locally! Catching this exception means that 
+				  //the lease was never serialized and thus, it was never put online.  
+			    system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);
+		  	};
+		  };
+		};
+
+		def expire(){
+			self.takeLeasedObjectOffline;
+			self.expired := true;
+			self.notify: self.observerCatalog.expiration withArgs: [];
+		};
+
+		def revoke() {
+			//Revoking a lease is analogous to a natural expiration of the lease 
+			//except that expiration observers are not triggered.
+			self.takeLeasedObjectOffline;
+			self.expired := true;
+			self.timerSubscription.cancel();
+		};
+
+		def renew(renewalTime := RENEWALONCALL) {
+			if: !(expired) then: {
+				def interval := maxMethod(timerSubscription.getTimeRemaining(), renewalTime);
+				self.timerSubscription.cancel();
+				self.timerSubscription := when: interval elapsed: { self.expire };
+			} else: {
+				raise: /.at.exceptions.XIllegalOperation.new("cannot renew an expired leased reference on: " +self.base);
+			}
+		};
+
+		def getPrincipal() {
+			self.delegate;	
+		};
+
+		def getTimeLeft() {
+			self.timerSubscription.getTimeRemaining(); 
+		};
+		
+		def transportStrategy() {
+			def remoteLease := self;
+			if: !(self.expired) then: {
+			  self.leaseTransportStrategy(remoteLease, self.getTimeLeft());
+			} else: {	
+				// TODO: if I'm passed when expired, what should I be at the receiver side?
+				{ |remoteLease| remoteLease }
+			};
+	  };
+		
+	};
+}

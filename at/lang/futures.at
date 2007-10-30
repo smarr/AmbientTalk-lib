@@ -33,6 +33,7 @@ def Isolate := /.at.types.Isolate;
 
 // importing leasing constructs, used for automatically ruining futures after certain timeout.
 def LeasingModule := /.at.lang.leasedrefs;
+def TimerModule := /.at.support.timer;
 
 // a future can be in one of these three states
 def UNRESOLVED := 0;
@@ -91,7 +92,7 @@ def FutureMirror := mirror: {
   // Because a future is pass-by-reference, we do not inherit the
   // parameter-passing behaviour of the far ref trait
   import TFarRef exclude pass;
-
+  
 	// constructor: used to initialize the state of the new future
 	def init(@args) {
 		super^init(@args); // initialize this future's base field
@@ -101,8 +102,9 @@ def FutureMirror := mirror: {
 		subscribers := [];
 	};
 
-  // WARNING: this method actually overrides resolve() in the defaultMirror
-	def resolve(value) {
+  // Using resolveWithValue(value) rather than resolve(value) so not to override resolve() in the defaultMirror
+	def resolveWithValue(value) {
+
 		// if value == myself, don't do anything (can happen when forwarding messages)
 		// (check not strictly necessary: otherwise I would just register
 		//  a listener on myself)
@@ -113,11 +115,11 @@ def FutureMirror := mirror: {
 				value<-addResolutionListener(object: {
 					def notifyResolved(val) {
 						// re-resolve this future with the actual value
-						resolve(val);
+						resolveWithValue(val);
 					};
 					def notifyRuined(exc) {
 						// ruin this future
-						ruin(exc);
+						ruinWithException(exc);
 					}
 			  // note that <-addResolutionListener is a message directed to the future's mirror
 			  // and that no future return value is required
@@ -136,13 +138,14 @@ def FutureMirror := mirror: {
 		nil;
 	};
 
-	def ruin(exception) {
+	def ruinWithException(exception) {
+
 		if: (state == UNRESOLVED) then: {
 			state := RUINED;
 			resolvedValue := exception;
 			inbox.each: { |msg|
 				if: (is: msg taggedAs: FutureMessage) then: {
-					msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
+					msg.future<-ruinWithException(exception)@[MetaMessage,OneWayMessage];
 				};
 			};
 			inbox := [];
@@ -183,7 +186,7 @@ def FutureMirror := mirror: {
 		} else: {
 			if: (state == RUINED) then: {
 				(is: msg taggedAs: FutureMessage).ifTrue: {
-					msg.future<-ruin(exception)@[MetaMessage,OneWayMessage];
+					msg.future<-ruinWithException(exception)@[MetaMessage,OneWayMessage];
 				};
 			}	else: {
 				// accumulate message in this future's inbox
@@ -215,8 +218,8 @@ def makeFuture(timeout := nil) {
 	def future := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
 
 	def resolver := isolate: { |future|
-		def resolve(val) { future<-resolve(val)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
-		def ruin(exc) { future<-ruin(exc)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
+		def resolve(val) { future<-resolveWithValue(val)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
+		def ruin(exc) { future<-ruinWithException(exc)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
 	};
 
 	// has the future been annotated with DueType?
@@ -224,7 +227,7 @@ def makeFuture(timeout := nil) {
 		// if so, wrap the future into a single-call lease
 		def futureLease := LeasingModule.singleCallLease: timeout for: future;
 		LeasingModule.when: futureLease expired: {
-			(reflect: future).ruin(XTimeoutException.new(future));
+			(reflect: future).ruinWithException(XTimeoutException.new(future));
 		};
 		[ futureLease, resolver ];
 	} else: {
@@ -247,6 +250,8 @@ def futurize(msg) {
 		// type tag receive a multifuture bounded by n
 		def MFModule := /.at.lang.multifutures;
 		if: (is: msg taggedAs: MFModule.GatherType) then: {
+		//TODO: is this necessary??
+			type := MFModule.GatherType;
 			def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
 			MFModule.makeMultiFuture(ann.upperBound, ann.timeout);
 		} else: {
@@ -254,7 +259,7 @@ def futurize(msg) {
 			makeFuture();	
 		}
 	};
-
+ 
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |future|
 
@@ -266,14 +271,14 @@ def futurize(msg) {
 
 				// if everything goes right, resolve the attached future
 				// replace the placeholder symbol with the actual result
-				future<-resolve(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+				future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
 
 				result;
 
 			// note that we need to qualify the full path to the Exception type:
 			// the Exception variable defined above is out of scope since this message is an isolate!
 			} catch: /.at.types.Exception using: { |e|
-				future<-ruin(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+				future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
 
 				// re-raise the caught exception
 				raise: e;
@@ -464,9 +469,9 @@ def FuturesModule := object: {
 	  };
   };
 
- 	def millisec(ms) { LeasingModule^millisec(ms) };
-	def seconds(s) { LeasingModule^seconds(s) };
-	def minutes(m) { LeasingModule^minutes(m) };
+ 	def millisec(ms) { TimerModule^millisec(ms) };
+	def seconds(s) { TimerModule^seconds(s) };
+	def minutes(m) { TimerModule^minutes(m) };
   
   def FuturesTest() {
    extend: /.at.unit.test.UnitTest.new("futures test") with: {
@@ -506,36 +511,53 @@ def FuturesModule := object: {
 				self.assertEquals(11, vals[1]+vals[2]);
 			};
     };
-
-		def testAsyncDue(){
-			
+		
+		def testAsyncDueResolvingTest(){
+			//TEST 1: Resolving the future within timeout
+			//This test uses the AR future as return value of the test.
 			def a := actor: {
-				deftype AsyncDueTestT;
+				deftype AsyncDueResolvingTestT;
+				def service := object: { def test() { 5 } };
+				export: service as: AsyncDueResolvingTestT;
+			};
+			deftype AsyncDueResolvingTestT;
+			def ref := /.at.lang.ambientrefs.ambient: AsyncDueResolvingTestT;
+			def future := ref<-test()@Due(LeasingModule.seconds(10));
+			when: future becomes: { |v|
+			 	self.assertEquals(5,v);
+			} catch: TimeoutException using: { |e|
+			  self.fail("testAsyncDue1: Unexpected ruined future");
+			};
+   	};
+
+		def testAsyncDueRuiningTest(){
+			//TEST 2: Making the future ruin with a TimeoutException
+			//This test uses the AR future as return value of the test.
+			def a := actor: {
+				deftype AsyncDueRuiningTestT;
 				def service := object: {
 					def test() { 5 };
 				} mirroredBy: ( mirror:{
 					//intercepting the message so that it's never received and thus, 
 					//the future will be eventually ruined.
 					def receive(msg) {
-					 	(msg.selector	== `(test)).ifFalse: {
-					  	super^receive(msg);
-					 	};
+					 	if: !(msg.selector	== `(test)) then: {
+						  super^receive(msg);
+					  };
 					};
 				});
-				export: service as: AsyncDueTestT;
+				export: service as: AsyncDueRuiningTestT;
 			};
-			
-			deftype AsyncDueTestT;
-      
-		  def ref := /.at.lang.ambientrefs.ambient: AsyncDueTestT;
-			def future := ref<-test()@Due(LeasingModule.seconds(1));
+			deftype AsyncDueRuiningTestT;
+      def ref := /.at.lang.ambientrefs.ambient: AsyncDueRuiningTestT;
+			def future := ref<-test()@Due(LeasingModule.seconds(5));
 			when: future becomes: { |v|
-		  	self.fail("Unexpected resolved future");
+		  	self.fail("testAsyncDue2: Unexpected resolved future");
 		  } catch: TimeoutException using: { |e|
 				self.assertEquals(e.getFuture(), future);
       };
-		};
-   };
+		};		
+    };
   };
 };
 
