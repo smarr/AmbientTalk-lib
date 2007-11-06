@@ -393,8 +393,3 @@ def inspector := object: {
 		super^hide();
 	};
 };
-
-def i := inspector.new(nil, ObjectListing);
-i.dive(42);
-i.dive("fortytwo");
-i.show();
