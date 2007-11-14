@@ -50,6 +50,8 @@
  * @author tvcutsem
  */
 
+def FuturesModule := /.at.lang.futures;
+
 def DynamicVariable := object: {
 	// this dynamic variable's current value
 	def value := nil;
@@ -59,11 +61,21 @@ def DynamicVariable := object: {
 	};
 	
 	// scoped assignment of the dynamic variable
+	// if the return value of the closure is a future, the old value
+	// of the dynamic variable will only be reset when the future has
+	// been resolved
 	def is: newval in: closure {
 		def oldVal := value;
 		value := newval;
-		try: closure finally: {
-			value := oldVal;
+		def returnVal;
+		try: { returnVal := closure() } finally: {
+			if: (is: returnVal taggedAs: FuturesModule.Future) then: {
+				FuturesModule.when: returnVal becomes: { |realVal|
+					value := oldVal;
+				}
+			} else: {
+				value := oldVal;
+			}
 		};
 	};
 };
@@ -123,6 +135,22 @@ def DynVarModule := object: {
 			  } catch: EscapeException using: { |e|
 				  self.assertEquals(1, ?testVar2);
 				}
+		  };
+		  def testAsyncAsynchronousWithIsDo() {
+			  def testVar3 := dynamicVariable: 1;
+			  self.assertEquals(1, ?testVar3);
+			
+			  def fut2 := with: testVar3 is: 2 do: {
+				  def fut := FuturesModule.future: { |reply|
+					  reply("ok");
+					};
+					FuturesModule.when: fut becomes: { |val|
+						self.assertEquals(2, ?testVar3, "dynvar's value not captured for postponed code");
+					}
+			  };
+			  FuturesModule.when: fut2 becomes: { |v|
+				  self.assertEquals(1, ?testVar3, "dynvar's value not properly reset after postponed code");
+				};
 		  };
 	  };
   };
