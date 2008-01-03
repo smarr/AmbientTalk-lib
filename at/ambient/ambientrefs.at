@@ -25,8 +25,10 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/*
- * This module implements "ambient references".
+/* This module implements revised ambient references where message delivery
+ * policies are expressed at the messaging level rather than at the
+ * reference level.
+ *
  * An ambient reference is a time, synchronisation and space-decoupled reference.
  * It extends far references with anonymous and group communication.
  *  
@@ -93,9 +95,7 @@ import /.at.ambient.discovery;
 
 FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
 
-def debug(@args) {
-  system.println("[ambientrefs.at] ", @args);
-};
+def debug := /.at.support.logger.makeLogger("[ambientrefs.at]");
 
 deftype MsgArity;
 deftype One <: MsgArity;
@@ -164,7 +164,15 @@ def makeAmbientReference(extensionalRange,
 	                       filter,
 	                       defaultArity,
 	                       defaultLifetime) {
-	object: { } taggedAs: [ AmbientRef ] mirroredBy: (mirror: {
+	object: {
+		
+		// alternative to using mirages to trap async messages:
+		// use higher order messaging
+		/*def toAll: asyncMsg expires: period reply: due {
+			
+		}*/
+		
+	} taggedAs: [ AmbientRef ] mirroredBy: (mirror: {
 
     import TFarRef;
     import TObservable;
@@ -253,6 +261,8 @@ def makeAmbientReference(extensionalRange,
     def addLossObserver(obs) {
 	    self.addObserver: obs to: self.observerCatalog.lost;
     };
+
+    def makeSnapshot() { range };
 
 		// == provide required methods for TFarRef trait ==
 		
@@ -468,6 +478,18 @@ def AmbientRefModule := object: {
 	};
 	def ambient: T where: F withArity: A withLifetime: L initWith: R {
 		makeAmbientReference(R, T, F, A, L);
+	};
+	
+	def snapshot: ref {
+		ref<-makeSnapshot()@[FuturesModule.FutureMessage,MetaMessage];
+	};
+	
+	def snapshot: ref after: period {
+		def [f,r] := FuturesModule.makeFuture();
+		when: period elapsed: {
+			r.resolve(snapshot: ref);
+		};
+		f;
 	};
 	
 	def AmbientRefsTest() {
