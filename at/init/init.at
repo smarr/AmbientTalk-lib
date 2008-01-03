@@ -137,6 +137,20 @@ def isolatelambda: clo {
   } taggedAs: [#Closure,#Isolate]) in: clo.context.lexicalScope;
 };
 
+def isolatelambda: clo scoped: lexclo {
+  deftype Closure;
+  deftype Isolate;
+  def mth := clo.method;
+  eval: `(object: { |#@(lexclo.method.parameters)| 
+    def apply(args) {
+        self.run(@args);
+    };
+    def run(#@(mth.parameters)){        
+      #@(mth.bodyExpression.statements)
+    };
+  } taggedAs: [#Closure,#Isolate]) in: lexclo.context.lexicalScope;
+};
+
 /**
  * Defines an isolate object with a custom serialization strategy.
  * Example:
@@ -156,4 +170,12 @@ def isolate: closure passAs: transportClosure {
 			/.at.support.util.uponArrivalBecome: transportClosure
 		};
 	})
+};
+
+def whenever: remoteRef disconnected: code {
+	when: remoteRef disconnected: code
+};
+
+def whenever: remoteRef reconnected: code {
+	when: remoteRef reconnected: code
 };
