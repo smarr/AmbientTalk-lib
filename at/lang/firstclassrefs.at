@@ -163,5 +163,12 @@ def FirstClassRefModule := object: {
 	
   }; // end TObservable
 
+  def reference: closure taggedAs: tbl {
+	  def farrefMirror := (mirror: { import TFarRef });
+	  object: { nil } taggedAs: tbl mirroredBy: (extend: farrefMirror with: closure);
+  };
+
+  def reference: closure { reference: closure taggedAs: [] };
+
 }; // end FirstClassRefModule
 
