@@ -1,0 +1,706 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * This module implements "ambient references".
+ * An ambient reference is a time, synchronisation and space-decoupled reference.
+ * It extends far references with anonymous and group communication.
+ *  
+ * An ambient reference does not refer to one specific object, but rather
+ * to a set of objects, known as its range. The range can be described
+ * by means of a type tag (and optionally a filter)
+ *
+ * Messages can be sent to one or all objects in range.
+ * Messages can be buffered such that they can be sent to objects
+ * that enter the ambient reference's range at a later point in time.
+ * Such buffered messages can be annotated with an expiration period
+ * such that they can be eventually removed.
+ *
+ * An ambient reference can be considered a little publish/subscribe
+ * engine of its own. The reference can be used by objects to
+ * publish messages into the environment. In order to receive such
+ * messages, objects must register themselves by declaring themselves
+ * to be 'in range' of the appropriate ambient reference.
+ *
+ * An Ambient Reference denotes an abstract set of objects:
+ * - intensional set: (type tag | protocol) + filter closure
+ * - extensional set: table of far references
+ * - a combination of both (?)
+ *
+ * It supports different kinds of messaging strategies:
+ * - message arity:
+ *  - @One: choose a single receiver from the set, returns future [default]
+ *         (what about a ranking policy to determine most suitable service?)
+ *  - @All: broadcast msg to all receivers in set, returns multifuture
+ * - message lifetime:
+ *  - @Transient: potential receivers are the current principals, if no match message is lost
+ *  - @Expires(timeout): potential receivers are current principals +
+ *     all principals in set between now and timeout period. If no match, buffer until timeout
+ *  - @Durable: potential receivers are current principals or any other principal joining
+ *     later. Message can be retracted explicitly via its future. [default]
+ * - message reply destination:
+ *  - @Future: attaches a future to the message to consume result(s) [default]
+ *  - @Oneway: no return values are required
+ *  - @ReplyTo(future): re-use an existing future (?)
+ * Defaults can be changed at the reference level.
+ *
+ * Useful operations:
+ * - snapshot: AR -> table of far refs
+ * - union: AR + AR -> AR (range union, discover multiple kinds of objects) (?)
+ *
+ * Objects are exported:
+ * - by Type
+ * - by Type with properties
+ * - by protocol
+ *
+ * @author tvcutsem
+ */
+
+def FuturesModule := /.at.lang.futures;
+def MFuturesModule := /.at.lang.multifutures;
+def OneWayMessage := FuturesModule.OneWayMessage;
+def Vector := /.at.collections.vector.Vector;
+def Util := /.at.support.util;
+
+import /.at.support.timer;
+import /.at.lang.firstclassrefs;
+//import /.at.m2mi.api;
+import /.at.ambient.discovery;
+
+FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
+
+def debug(@args) {
+  system.println("[ambientrefs.at] ", @args);
+};
+
+deftype MsgArity;
+deftype One <: MsgArity;
+deftype All <: MsgArity;
+
+deftype MsgLifetime;
+deftype Transient <: MsgLifetime;
+deftype Expirable <: MsgLifetime;
+deftype Durable <: MsgLifetime;
+
+def Expires(timeout) {
+	extend: Expirable with: { |timeout|
+		def ==(other) { super == other };
+	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+};
+
+deftype MsgReplyAddress;
+deftype ReplyT <: MFuturesModule.GatherType, MsgReplyAddress;
+deftype Oneway <: FuturesModule.OneWayMessage, MsgReplyAddress;
+
+def Reply(upperBound := nil, timeout := nil) {
+	extend: ReplyT with: { |upperBound, timeout|
+		nil;
+	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+};
+
+def ReplyTo(future) {
+	extend: Reply with: { |future|
+		def ==(other) { super == other };
+	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+};
+
+deftype AmbientRef;
+
+deftype PropertyObjectT;
+def PropertyObject := object: {
+	def service;
+	def properties;
+	def init(svcObject, props) {
+		service := svcObject;
+		properties := props;
+	};
+	def ==(other) {
+		(does: other respondTo: `service).and: { service == other.service };
+	};
+} taggedAs: [/.at.types.Isolate, PropertyObjectT];
+
+def signalTimeout(msg) {
+	if: (does: msg respondTo: `future) then: {
+		(msg.future)<-ruinWithException(
+			FuturesModule.XTimeoutException.new(msg.future))@[OneWayMessage,MetaMessage];
+	}
+};
+
+deftype MessageDropped <: /.at.types.Exception;
+def XMessageDropped := /.at.exceptions.createException(MessageDropped);
+def signalDropped(msg) {
+	if: (does: msg respondTo: `future) then: {
+		(msg.future)<-ruinWithException(
+			XMessageDropped.new("message dropped: "+msg.selector))@[OneWayMessage,MetaMessage];
+	}
+};
+
+def makeAmbientReference(extensionalRange,
+	                       Type,
+	                       filter,
+	                       defaultArity,
+	                       defaultLifetime) {
+	object: { } taggedAs: [ AmbientRef ] mirroredBy: (mirror: {
+
+    import TFarRef;
+    import TObservable;
+
+    def range := extensionalRange;
+
+    def uniOutbox := [];
+    def omniOutbox := [];
+
+    def init(base) {
+	    super^init(base);
+	    // create two types of observers: those for service discovery
+	    // and those for service loss
+	    TObservable^init(`discovered, `lost);
+	
+	    // TODO: should we perform service discovery when the range
+	    // was given as an extensional set?
+	
+	    // when the correct mirror is instantiated, start the service discovery
+			whenever: Type discovered: { |uniref|
+				
+				debug("whenever:discovered: discovered uniref " + uniref);
+				
+				def service := uniref;
+				def props := isolate: { };
+				if: (is: uniref taggedAs: PropertyObjectT) then: {
+					service := uniref.service;
+					props := uniref.properties;
+				};
+				
+				if: filter(props) then: {
+					// add the discovered service to the AR's range
+					debug("whenever:discovered: service added to range: " + service);
+					range := range + [service];
+
+					// forward all @All messages still available
+					omniOutbox.each: { |msg|
+						debug("whenever:discovered: sending @All message " +msg.selector + " to "+ service);
+						service <+ msg };
+
+					// forward all @One messages still available and remove them
+					uniOutbox.each: { |msg|
+						debug("whenever:discovered: sending @One message " +msg.selector + " to "+ service);
+						service <+ msg };
+					debug("whenever:discovered: removing all @One messages: " + uniOutbox.map: {|m|m.selector});	
+					uniOutbox := [];
+
+					// notify when:discovered: observers
+					self.notify: self.observerCatalog.discovered withArgs: [service];	
+				};
+			};
+
+			whenever: Type lost: { |uniref|
+				debug("whenever:lost: lost uniref " + uniref);
+				def service := uniref;
+				def props := isolate: { };
+				if: (is: uniref taggedAs: PropertyObjectT) then: {
+					service := uniref.service;
+					props := uniref.properties;
+				};
+				
+				if: filter(props) then: {			
+					// remove the lost service from the AR's range
+					debug("whenever:lost: service removed from range: " + service);
+					range := range.filter: { |ref| !(ref == service) };
+					
+					// remove all unacknowledged messages from the far ref's native
+					// outbox, chances are high these messages are lost, but it might
+					// be that they were delivered, so sticking with at-most-once semantics
+					// requires that we drop the message
+					def out := retract: service;
+					debug("whenever:lost: retracting and dropping messages from service " + service +": "+out);
+					
+					// notify when:lost: observers
+					self.notify: self.observerCatalog.lost withArgs: [service];
+				};
+			};
+    };
+
+    // add when: adaptor discovered: { |ref| ... } observer
+    def addDiscoveryObserver(obs) {
+	    self.addObserver: obs to: self.observerCatalog.discovery;
+    };
+
+    // add when: adaptor lost: { |ref| ... } observer
+    def addLossObserver(obs) {
+	    self.addObserver: obs to: self.observerCatalog.lost;
+    };
+
+		// == provide required methods for TFarRef trait ==
+		
+		def intercept(msg) {
+			// perform case analysis
+			
+			// ideally, we just ask the message to process itself given our state
+			// msg already pre-processed case-analysis using partial evaluation
+			// msg.acceptedBy(self)
+			
+			def msgArity;			
+			if: (is: msg taggedAs: One) then: {
+				msgArity := One;
+			} else: {
+				if: (is: msg taggedAs: All) then: {
+					msgArity := All;
+				} else: {
+					msgArity := defaultArity;
+				}
+			};
+			
+			def msgLifeTime;
+			if: (is: msg taggedAs: Transient) then: {
+				msgLifeTime := Transient;
+			} else: {
+				if: (is: msg taggedAs: Expirable) then: {
+					msgLifeTime := Util.getAnnotationOfType(msg, Expirable);
+				} else: {
+					if: (is: msg taggedAs: Durable) then: {
+						msgLifeTime := Durable;
+					} else: {
+						msgLifeTime := defaultLifetime;
+					}
+				}
+			};
+			
+			debug(self.print + " <- " + msg.selector + "[A: "+msgArity.typeName+",L: "+msgLifeTime.typeName+"]");
+			
+			if: (msgArity == One) then: {
+				if: (range.length > 0) then: {
+					// send the message to the first available service
+					debug("sending @One msg " + msg.selector + " to " + range[1]);
+					range[1] <+ msg;
+					// don't queue the message
+				} else: {
+					if: !(msgLifeTime == Transient) then: {
+						debug("queueing @One msg " + msg.selector + " in uniOutbox");
+						uniOutbox := uniOutbox + [msg];
+						if: (msgLifeTime == Expirable) then: {
+							when: msgLifeTime.timeout elapsed: {
+								debug("removing @One msg " + msg.selector + " from uniOutbox");
+								uniOutbox := uniOutbox.filter: { |m| !(m==msg) };
+								signalTimeout(msg);
+							}
+						} // else msgLifeTime == DURABLE
+					} else: {
+						// @One, @Transient and no one in range -> message is dropped
+						signalDropped(msg);
+					};
+				}
+			} else: { // else msgArity == ALL
+				range.each: { |receiver|
+					debug("sending @All msg " + msg.selector + " to "+receiver);
+					receiver <+ msg };
+				if: !(msgLifeTime == Transient) then: {
+					debug("queueing @All msg " + msg.selector + " in omniOutbox");
+					omniOutbox := omniOutbox + [msg];
+					if: (msgLifeTime == Expirable) then: {
+						when: msgLifeTime.timeout elapsed: {
+							debug("removing @All msg " + msg.selector + " from omniOutbox");
+							omniOutbox := omniOutbox.filter: { |m| !(m==msg) };
+							signalTimeout(msg);
+						}
+					} // else msgLifeTime == DURABLE
+				};
+			};		
+		};
+	
+		def toString() {
+		  "ambient:"+Type.typeName+"(#"+range.length+")";
+		};
+	
+		def transportStrategy := { |range,Type,filter,defaultArity,defaultLifetime|
+			// when arriving at the remote host, create a new local ambient reference
+			/.at.ambient.ambientrefs.ambient: Type
+															 where: filter
+															 withArity: defaultArity
+															 withLifetime: defaultLifetime
+															 initWith: range;
+															
+		};
+	})
+};
+
+deftype Nothing;
+def dfltRange := [];
+def dfltType := Nothing;
+def dfltFilter := isolatelambda: { |o| true } scoped: {};
+def dfltArity := One;
+def dfltLifetime := Durable;
+
+def nativeWhenever: farref discovered: code {
+	whenever: farref discovered: code
+};
+def nativeWhenever: farref lost: code {
+	whenever: farref lost: code
+};
+def nativeExport: obj as: type {
+	export: obj as: type;
+};
+
+def AmbientRefModule := object: {
+	
+  def One := One;
+  def All := All;
+
+	def Transient := Transient;
+	def Expires := &Expires;
+	def Durable := Durable;
+
+	def Reply := Reply;	
+	def Oneway := Oneway;
+	def ReplyTo := &ReplyTo;
+	
+	def MessageDropped := MessageDropped;
+	
+	// language constructs for connection awareness
+	
+	def whenever: ambientRef discovered: code {
+		if: (is: ambientRef taggedAs: AmbientRef) then: {
+			ambientRef<-addDiscoveryObserver(code)@MetaMessage;
+		} else: {
+			nativeWhenever: ambientRef discovered: code;
+		}
+	};
+	
+	def when: ambientRef discovered: code {
+		def pub := whenever: ambientRef discovered: {
+			pub.cancel();
+			code();
+		};
+	};
+	
+	def whenever: ambientRef lost: code {
+		if: (is: ambientRef taggedAs: AmbientRef) then: {
+		  ambientRef<-addLossObserver(code)@MetaMessage;
+		} else: {
+			nativeWhenever: ambientRef lost: code;
+		}
+	};
+	
+	def when: ambientRef lost: code {
+		def pub := whenever: ambientRef lost: {
+			pub.cancel();
+			code();
+		};
+	};
+	
+	// allow exporting an object together with a set of properties
+	def export: serviceObject as: type with: clo {
+		def props := isolate: clo;
+		nativeExport: PropertyObject.new(serviceObject, props) as: type;
+	};
+
+  // override export:as: to include a property object
+	def export: serviceObject as: type {
+		export: serviceObject as: type with: { nil };
+	};
+	
+	def discover: T {
+		def [fut,res] := FuturesModule.makeFuture();
+		when: T discovered: { |t|
+			res.resolve(t);
+		};
+		fut;
+	};
+	
+	def ambient: T {
+		makeAmbientReference(dfltRange, T, dfltFilter, dfltArity, dfltLifetime);
+	};
+	def ambient: T withArity: A {
+		makeAmbientReference(dfltRange, T, dfltFilter, A, dfltLifetime);
+	};
+	def ambient: T withLifetime: L {
+		makeAmbientReference(dfltRange, T, dfltFilter, dfltArity, L);
+	};
+	def ambient: T withArity: A withLifetime: L {
+		makeAmbientReference(dfltRange, T, dfltFilter, A, L);
+	};
+	def ambient: T where: filter {
+		makeAmbientReference(dfltRange, T, filter, dfltArity, dfltLifetime);
+	};
+	def ambient: T where: filter withArity: A {
+		makeAmbientReference(dfltRange, T, filter, A, dfltLifetime);
+	};
+	def ambient: T where: filter withLifetime: L {
+		makeAmbientReference(dfltRange, T, filter, dfltArity, L);
+	};
+	def ambient: T where: filter withArity: A withLifetime: L {
+		makeAmbientReference(dfltRange, T, filter, A, L);
+	};
+	def ambientalize: range {
+		makeAmbientReference(range, dfltType, dfltFilter, dfltArity, dfltLifetime);
+	};
+	def ambientalize: range withArity: A {
+		makeAmbientReference(range, dfltType, dfltFilter, A, dfltLifetime);
+	};
+	def ambientalize: range withLifetime: L {
+		makeAmbientReference(range, dfltType, dfltFilter, dfltArity, L);
+	};
+	def ambientalize: range withArity: A withLifetime: L {
+		makeAmbientReference(range, dfltType, dfltFilter, A, L);
+	};
+	def ambient: T where: F withArity: A withLifetime: L initWith: R {
+		makeAmbientReference(R, T, F, A, L);
+	};
+	
+	def AmbientRefsTest() {
+		extend: /.at.unit.test.UnitTest.new("RevisedAmbientRefTest") with: {
+			deftype rARFooTest;
+			deftype rARBarTest;
+
+			def providerHost := actor: {
+				deftype rARFooTest;
+				def service := object: {
+					def testMethod(x) { x+1 };
+				};
+				/.at.ambient.ambientrefs.export: service as: rARFooTest;
+
+				deftype rARBarTest;
+				def service2 := object: {
+					def testContent(x) { x*x };
+				};
+				def y := 42;
+				/.at.ambient.ambientrefs.export: service2 as: rARBarTest with: { |y| def z := 5 };
+			};
+			
+			def a := ambient: rARFooTest;
+
+			def testAsyncOneDurable() {
+				FuturesModule.when: a<-testMethod(5)@[One,Durable,Reply] becomes: { |v|
+					self.assertEquals(6,v);
+				};
+			};
+			def testAsyncOneExpirable() {
+				FuturesModule.when: a<-testMethod(5)@[One,Expires(millisec(500)),Reply] becomes: { |v|
+					self.assertEquals(6,v);
+				} catch: { |e|
+					self.assertTrue(is: e taggedAs: FuturesModule.TimeoutException);
+				};
+			};
+			def testAsyncOneTransient() {
+				FuturesModule.when: a<-testMethod(5)@[One,Transient,Reply] becomes: { |v|
+					self.assertEquals(6,v);
+				} catch: { |e|
+					self.assertTrue(is: e taggedAs: MessageDropped);
+				};
+			};
+			def testOneDurableWithoutReply() {
+				self.assertEquals(nil, a<-testMethod(5)@[One,Durable,Oneway]);
+			};
+			def testAsyncMatchingWhere() {
+				def a := ambient: rARBarTest where: { |props| props.y > 40 };
+				FuturesModule.when: a<-testContent(5)@[One,Durable,Reply] becomes: { |v|
+					self.assertEquals(25,v);
+				} catch: { |e| raise: e };
+			};
+			def testAsyncNonMatchingWhere() {
+				def a := ambient: rARBarTest where: { |props| props.z == 6 };
+				FuturesModule.when: a<-testContent(5)@[One,Expires(seconds(4)),Reply] becomes: { |v|
+					// should not happen!
+					self.fail("discovered a non-matching ambient reference");
+				} catch: { |e|
+					self.assertTrue(is: e taggedAs: FuturesModule.TimeoutException);
+				};
+			};
+			def testAsyncParamPassing() {
+				def act := actor: { def rcv(ar) { ar } };
+				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
+					self.assertTrue(is: newAR taggedAs: AmbientRef);
+					self.assertFalse(is: newAR taggedAs: /.at.types.FarReference);
+					self.assertFalse(a == newAR);
+				};
+			};
+		};
+		
+	}; // end AmbientRefsTest
+	
+}; // end AmbientRefModule
+
+/*
+def TAbstractCardinality := object: {
+  def acceptMessage(msg) { abstractMethod(`acceptMessage) };
+  def isBoundPrincipal(p) { abstractMethod(`isBoundPrincipal) };
+  def foundPrincipal(p) { abstractMethod(`foundPrincipal) };
+  def lostPrincipal(p) { abstractMethod(`lostPrincipal) };
+};
+
+def TAbstractElasticity := object: {
+  def disconnected(p) { abstractMethod(`disconnected) };
+};
+
+def TUniRef := extend: TAbstractCardinality with: {
+  // store the single far ref to which the AR can be bound
+  // !! always access this variable using 'self' to access
+  // the field that was 'imported' into the actual AR !!
+  def self.principal;
+
+  // initialize this trait's state
+  // note that the 'self' prefix is used to ensure that the correct imported state is modified
+  def init() {
+    super^init();
+    self.principal := nil;
+  };
+
+	def acceptMessage(msg) {
+		if: !(nil == self.principal) then: {
+			  self.principal <+ msg; // forward message to principal
+		} else: {
+				debug("Uniref: acceptmessage: unbound, storing ",msg.selector);
+				self.inbox.add(msg);
+				nil;
+		};
+	};
+	def isBoundPrincipal(p) { self.principal == p };
+	def foundPrincipal(p) {
+		if: (nil == self.principal) then: {
+			debug("Uniref: foundPrincipal: binding to ", p);
+			self.principal := p;
+			self.notify: self.observerCatalog.reconnection withArgs: [p];
+			// flush stored messages
+			self.flushInbox(p);
+			} else: {
+				debug("Uniref: foundPrincipal: already bound, ignoring ",p);
+			};
+			nil;
+		};
+	def lostPrincipal(p) {
+		debug("Uniref: lostPrincipal: unbound due to loss of ",p);
+		self.principal := nil;
+		self.notify: self.observerCatalog.disconnection withArgs: [p];
+		// retract all unsent messages back to the inbox
+		self.retractOutbox(p);
+	};
+
+};
+
+def TOmniRef := extend: TAbstractCardinality with: {
+  // store a set of currently bound principals
+  // !! always access this variable using 'self' to access
+  // the field that was 'imported' into the actual AR !!
+  def self.principals;
+
+  // initialize this trait's state
+  // note that the 'self' prefix is used to ensure that the correct imported state is modified
+  def init() {
+    super^init();
+    self.principals := Vector.new();
+  };
+	
+  def acceptMessage(msg) {
+    // broadcast the message to all currently connected principals
+    debug("Omniref: acceptMessage: broadcasting " + msg.selector + " to "+self.principals.length()+ " principals.");
+    self.principals.each: { |p| p <+ msg };
+
+    // if the message is sustained, keep it in the inbox for its timeout period
+    (is: msg taggedAs: SustainedMessageType).ifTrue: {
+	    debug("Omniref: acceptMessage: stored sustained message " + msg.selector);
+	    self.inbox.add(msg);
+			def ann := /.at.support.util.getAnnotationOfType(msg, SustainedMessageType);
+			
+	    TimerModule.when: ann.timeout elapsed: {
+		    debug("Omniref: acceptMessage: removing sustained message " + msg.selector);
+		    self.inbox.remove(msg);
+	    };
+    };
+  };
+  def isBoundPrincipal(p) { self.principals.contains(p) };
+  def foundPrincipal(p) {
+    debug("Omniref: foundPrincipal: adding ", p);
+    self.principals.add(p);
+		self.notify: self.observerCatalog.reconnection withArgs: [p];
+    // forward all pending messages to the principal
+    self.forwardInbox(p);
+    // TODO: add support for sustained and enduring messages
+    // forward all messages in inbox to new principal here
+    nil;
+  };
+  def lostPrincipal(p) {
+    debug("Omniref: lostPrincipal: removing ",p);
+    self.principals.remove(p);
+		self.notify: self.observerCatalog.disconnection withArgs: [p];
+    nil;
+  };
+};
+
+def TBreakableRef := extend: TAbstractElasticity with: {
+	def erase(principal) {
+		// dispatch to cardinality trait
+		self.lostPrincipal(principal);
+		// try to rebind to spare candidate principals
+		def idx := self.joinedbox.find: { |potentialP| !(self.isBoundPrincipal(potentialP)) };
+		if: !(nil == idx) then: {
+			// found a spare principal
+			def newPrincipal := self.joinedbox.at(idx);
+			debug("Breakableref: erase: found spare principal: ", newPrincipal);
+			// dispatch to cardinality trait
+			self.foundPrincipal(newPrincipal);
+		};
+	};
+};
+
+def TFragileRef := extend: TBreakableRef with: {
+	def disconnected(principal) {
+		debug("Fragileref: disconnected: signalling loss of ", principal);
+		self.erase(principal);
+	};
+};
+
+def TElasticRef := extend: TBreakableRef with: {
+	def self.timeout;
+	
+	// if no timeout is given, reuse that of the clonee
+	def init(t := self.timeout) {
+		self.timeout := t;
+	};
+	
+	def disconnected(principal) {
+	  debug("ElasticRef: disconnected: starting timeout period for principal: ",principal);
+	  def isDisconnected := true;
+	  def sub := when: principal reconnected: {
+		  isDisconnected := false;
+		  sub.cancel();
+	  };
+	  TimerModule.when: self.timeout elapsed: {
+		  if: isDisconnected then: {
+			  debug("ElasticRef: disconnected: principal lost: ", principal);
+			  self.erase(principal);
+			  sub.cancel();
+		  }; // if principal reconnected in time, ignore this disconnection
+	  };
+  };
+};
+
+def TSturdyRef := extend: TAbstractElasticity with: {
+	def disconnected(principal) {
+		debug("SturdyRef: disconnected: ignoring disconnection of ",principal);
+		nil;
+	};
+};
+*/
