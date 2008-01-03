@@ -392,6 +392,7 @@ def FuturesModule := object: {
   def Due := &Due;
 
   //make visible the exception raised when futures are ruined by timeout.
+  def XTimeoutException := XTimeoutException;
   def TimeoutException := TimeoutException;
 
   // type that identifies this language module
