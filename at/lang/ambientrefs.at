@@ -72,7 +72,7 @@ def debug(@args) {
  */
 def createSturdyUniRef(type, filter := defaultFilter) {
   def [arFuture, arResolver] := FuturesModule.makeFuture();
-  when: type discovered: { |remoteRef|
+  def pub := whenever: type discovered: { |remoteRef|
 	  def props := isolate: { nil };
 	  if: (is: remoteRef taggedAs: /.at.types.Table) then: {
 		  props := remoteRef[1];
@@ -80,6 +80,7 @@ def createSturdyUniRef(type, filter := defaultFilter) {
 	  };
 	
     if: (filter(props)) then: {
+	    pub.cancel();
 	    arResolver.resolve(remoteRef)
     };
   };
