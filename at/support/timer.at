@@ -80,12 +80,25 @@ def TimerModule := object: {
 	// each timeout milliseconds, invoke the given code block
 	// returns a subscription object that can be used to cancel execution of the block
 	def whenever: timeout elapsed: code {
+		// additional boolean flag to check if we can actually execute the code
+		// reason: when canceling a scheduled task, due to timing, the task may
+		// have already been fired (and hence the call to <-run() is already
+		// scheduled in the mailbox of this actor). To prevent the task from running
+		// anyway, we perform an additional check on the boolean. This *guarantees*
+		// that after invoking pub.cancel(), the scheduled code is no longer ran
+		def canceled := false;
 		def ttask := RunnableTimerTask.new(object: {
-			def run() { code() };
+			def run() { canceled.ifFalse: { code() } };
 		});
 		scheduleAtFixedRateMethod(ttask, timeout, timeout);
 		object: {
-			def cancel() { ttask.cancel() }
+			def cancel() {
+				canceled.ifFalse: {
+					canceled := true;
+					ttask.cancel();
+					ttask := nil;
+				}
+			}
 		}
 	};
 	
