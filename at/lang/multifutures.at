@@ -215,7 +215,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		// @param sub a resolution listener
 		def addWhenAllListener(sub) {
 			if: (maxSize == nil) then: {
-				raise: XIllegalOperation("Cannot register a whenAll listener on an unbounded multifuture");
+				raise: XIllegalOperation.new("Cannot register a whenAll listener on an unbounded multifuture");
 			};
 			if: isFullyResolved() then: {
 				sub<-notify(resolvedValues, ruinedValues);
