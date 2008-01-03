@@ -31,6 +31,7 @@
  * Abstractions:
  *  when: type discovered: { |serviceDesc| ... } -> subscription
  *  whenever: type discovered: { |serviceDesc| ... } -> subscription
+ *  whenever: type lost: { |serviceDesc| ... } -> subscription
  *  export: object as: type -> publication
  *
  * It is also possible to define so-called service trackers which

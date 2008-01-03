@@ -188,11 +188,14 @@ def DiscoveryCompositionModule := object: {
 				def makePeer(nam) {
 					actor: { |nam,Bird|
 					  import /.at.ambient.discovery;
-					  export: (isolate: { |nam| def name() { nam } }) as: Bird;
+					  export: (isolate: { |nam|
+						  def name() { nam };
+						  def ==(other) { nam == other.nam };
+						}) as: Bird;
 				  };
 				};
 				
-				def snapshotF := snapshotFor: Bird after: seconds(10);
+				def snapshotF := snapshotFor: Bird after: seconds(5);
 				
 				TimerModule.when: seconds(1) elapsed: { makePeer("tweety") };
 				TimerModule.when: millisec(1500) elapsed: { makePeer("woody") };
