@@ -59,15 +59,23 @@
  *         (what about a ranking policy to determine most suitable service?)
  *  - @All: broadcast msg to all receivers in set, returns multifuture
  * - message lifetime:
- *  - @Transient: potential receivers are the current principals, if no match message is lost
- *  - @Expires(timeout): potential receivers are current principals +
+ *  - @Instant: potential receivers are the current principals, if no match message is lost
+ *  - @Transient(timeout): potential receivers are current principals +
  *     all principals in set between now and timeout period. If no match, buffer until timeout
  *  - @Durable: potential receivers are current principals or any other principal joining
  *     later. Message can be retracted explicitly via its future. [default]
  * - message reply destination:
  *  - @Future: attaches a future to the message to consume result(s) [default]
  *  - @Oneway: no return values are required
- *  - @ReplyTo(future): re-use an existing future (?)
+ *  - @Due(timeout): attaches a future to the message which, after it has been sent
+ *    to one or more receivers, may time out. Note that the timeout period only starts
+ *    when the message has an actual receiver, not when it is sent to the AR itself.
+ *
+ *  - @Expires(timeout): a combination of @Transient(timeout) and @Due(timeout)
+ *    But not the same as just combining those. It sets the timeout period of each outgoing
+ *    message to (timeout - (time_transmitted - time_sent)), meaning that the longer it
+ *    took to discover a receiver, the less time the future gets to wait for the reply.
+ *
  * Defaults can be changed at the reference level.
  *
  * Useful operations:
@@ -102,10 +110,17 @@ deftype One <: MsgArity;
 deftype All <: MsgArity;
 
 deftype MsgLifetime;
-deftype Transient <: MsgLifetime;
-deftype Expirable <: MsgLifetime;
+deftype Instant <: MsgLifetime;
+deftype TransientT <: MsgLifetime;
 deftype Durable <: MsgLifetime;
 
+def Transient(period) {
+	extend: TransientT with: { |period|
+		def ==(other) { super == other };
+	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+};
+
+deftype Expirable <: Transient, FuturesModule.DueType;
 def Expires(timeout) {
 	extend: Expirable with: { |timeout|
 		def ==(other) { super == other };
@@ -119,12 +134,6 @@ deftype Oneway <: FuturesModule.OneWayMessage, MsgReplyAddress;
 def Reply(upperBound := nil, timeout := nil) {
 	extend: ReplyT with: { |upperBound, timeout|
 		nil;
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
-};
-
-def ReplyTo(future) {
-	extend: Reply with: { |future|
-		def ==(other) { super == other };
 	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };
 
@@ -150,7 +159,10 @@ def signalTimeout(msg) {
 	}
 };
 
-deftype MessageDropped <: /.at.types.Exception;
+// a dropped message exception is a special kind of timeout exception
+// that guarantees the caller that no 'orphan computations' can exist
+// because the message was never sent in the first place
+deftype MessageDropped <: FuturesModule.TimeoutException;
 def XMessageDropped := /.at.exceptions.createException(MessageDropped);
 def signalDropped(msg) {
 	if: (does: msg respondTo: `future) then: {
@@ -190,6 +202,7 @@ def makeAmbientReference(extensionalRange,
 	
 	    // TODO: should we perform service discovery when the range
 	    // was given as an extensional set?
+	    // TODO: also take the hidden 'recall period' of a service tracker into account
 	
 	    // when the correct mirror is instantiated, start the service discovery
 			whenever: Type discovered: { |uniref|
@@ -272,8 +285,9 @@ def makeAmbientReference(extensionalRange,
 			// ideally, we just ask the message to process itself given our state
 			// msg already pre-processed case-analysis using partial evaluation
 			// msg.acceptedBy(self)
+			msg.receivedBy(self);
 			
-			def msgArity;			
+			/*def msgArity;			
 			if: (is: msg taggedAs: One) then: {
 				msgArity := One;
 			} else: {
@@ -338,7 +352,7 @@ def makeAmbientReference(extensionalRange,
 						}
 					} // else msgLifeTime == DURABLE
 				};
-			};		
+			};*/	
 		};
 	
 		def toString() {
@@ -355,6 +369,263 @@ def makeAmbientReference(extensionalRange,
 															
 		};
 	})
+};
+
+// Trait hierarchy
+// OR should be implemented using either delegation or composite traits
+// AND should be implemented using double dispatch
+
+/*in intensional ambientref Type: {
+	def range;
+	def when: ar discovered: clo {
+		whenever: Type discovered: clo // + filter, keeping track of lost objs etc.
+	}
+};
+
+in extensional ambientref rng: {
+	def range := rng;
+	def when: ar discovered: clo {
+		object: { def cancel() { true } }
+	}
+};*/
+
+//in message with reply DUE: {
+def makeDueReplyTrait(initDuePeriod) {
+	object: {
+		import makeFutureDueReplyTrait();
+		
+		def duePeriod := initDuePeriod;
+		def sendMessage(rcvr) {
+			// msg contains future, which is either resolved|ruined with reply
+			// or times out if @Due or @Expires was specified
+
+		  // due time should only start when message is sent to an actual receiver
+			// multifutures need to know whose replies to ban! Otherwise, we might report
+			// a timeout AND a value of a receiver in the final multifuture
+	 		// self.future<-startTimeoutFor(duePeriod)@MetaMessage;
+			when: self.duePeriod elapsed: {
+				self.future<-timeout(rcvr, self)@MetaMessage;
+			};
+			rcvr <+ self;
+		};
+		def allMessagesSent() {
+		  // notify unbounded multifutures that they should consider
+		  // themselves totally resolved
+		  when: self.duePeriod elapsed: {
+			  self.future<-becomeResolved()@MetaMessage;		
+		  }
+		};		
+	}
+};
+
+//in message with reply FUTURE | DUE: {
+def makeFutureDueReplyTrait() {
+	object: {
+		def future := self.createFuture();		
+	}
+};
+
+//in message with reply ONEWAY | FUTURE: {
+def makeOnewayFutureReplyTrait() {
+	object: {
+		def sendMessage(rcvr) {
+			rcvr <+ self;
+		};
+		def allMessagesSent() { };		
+	}
+};
+
+//in message with reply FUTURE {
+def makeFutureReplyTrait() {
+	object: {
+		import makeFutureDueReplyTrait();
+		import makeOnewayFutureReplyTrait();
+	}
+};
+
+//in message with reply ONEWAY {
+def makeOnewayReplyTrait() {
+	object: {
+		import makeOnewayFutureReplyTrait();
+	}
+};
+
+//in message with arity ONE: {
+def makeOneArityTrait() {
+	object: {
+		def createFuture() { makeFuture() };
+		def sendTo: ar ifNoneInRange: code {
+			def receiver := ar.range.selectOne;
+			if: (receiver == nil) then: code else: {
+				self.sendMessage(receiver);
+			}
+		};
+		def sendAndDiscover(ar) {
+			self.sendTo: ar ifNoneInRange: {
+				self.search: ar whenFound: { |pub| pub.cancel() };
+			};
+		};
+	}
+};
+
+//in message with arity ALL: {
+def makeAllArityTrait() {
+	object: {
+		def createFuture() { makeMultiFuture() };
+		def sendTo: ar ifNoneInRange: code {
+			if: (ar.range.length == 0) then: code else: {
+				ar.range.each: { |rcvr|
+					self.sendMessage(rcvr);
+				}
+			};
+		};
+		def sendAndDiscover(ar) {
+			self.sendTo: ar ifNoneInRange: { };
+			self.search: ar whenFound: { |pub| };
+		};	
+	}
+};
+
+//in message with lifetime INSTANT: {
+def makeInstantLifetimeTrait() {
+	object: {
+		def receivedBy(ar) {
+			self.sendTo: ar ifNoneInRange: { signalDropped(self) };
+			self.allMessagesSent();
+		}	
+	}
+};
+
+//in message with lifetime (TRANSIENT | DURABLE): {
+def makeTransientDurableLifetimeTrait() {
+	object: {
+		def receivedBy(ar) { self.sendAndDiscover(ar) };
+		def startSearchIn: ar whenFound: clo {
+			def pub := when: ar discovered: { |rcvr|
+				self.sendMessage(rcvr);
+				clo(pub);
+			};
+		};
+		def stopSearch(pub) {
+			pub.cancel();
+			self.allMessagesSent();
+		};	
+	}
+};
+
+//in message with lifetime TRANSIENT: {
+def makeTransientLifetimeTrait(initTransientPeriod) {
+	object: {
+		import makeTransientDurableLifetimeTrait();
+		
+		def transientPeriod := initTransientPeriod;
+		def search: ar whenFound: clo {
+			def pub := self.startSearchIn: ar whenFound: clo;
+			when: self.transientPeriod elapsed: {
+				self.stopSearch(pub);
+			};
+		};	
+	}
+};
+
+//in message with lifetime DURABLE: {
+def makeDurableLifetimeTrait() {
+	object: {
+		import makeTransientDurableLifetimeTrait();
+		
+		def search: ar whenFound: clo {
+			def pub := self.startSearchIn: ar whenFound: clo;
+			// returns publication that can be used to stop msg delivery
+			object: {
+				def cancel() {
+					self.stopSearch(pub);
+				}
+			};
+		};	
+	}
+};
+
+//in message with lifetime EXPIRES: {
+def makeExpiresLifetimeTrait(expPeriod) {
+	object: {
+		import makeTransientLifetimeTrait(expPeriod) alias receivedBy := originalReceivedBy;
+		import makeDueReplyTrait(expPeriod) exclude duePeriod;
+		def timeSent;
+		def receivedBy(ar) {
+			timeSent := now();
+			originalReceivedBy(ar);
+		};
+		def duePeriod() { self.transientPeriod - (now() - self.timeSent) };	
+	}
+};
+
+deftype ARModule;
+
+def enableAmbientRefs() {
+	if: !(is: actor taggedAs: ARModule) then: {
+		FuturesModule.enableFutures(false);
+		actor.install: (extend: actor with: {
+			def createMessage(sel, args, types) {
+				def msg := super^createMessage(sel, args, types);
+				
+				// perform case analysis based on the types
+				def ReplyTrait;
+				if: (is: msg taggedAs: FuturesModule.DueType) then: {
+					ReplyTrait := makeFutureReplyTrait();
+				} else: {
+					if: (is: msg taggedAs: FuturesModule.OneWayMessage) then: {
+						ReplyTrait := makeOnewayReplyTrait();
+					} else: {
+						if: (is: msg taggedAs: FuturesModule.FutureMessage) then: {
+							ReplyTrait := makeFutureReplyTrait();
+						} else: {
+							// DEFAULT SHOULD BE DEPENDENT ON AR RECEIVER
+							ReplyTrait := makeOnewayReplyTrait();
+						}
+					}
+				};
+								
+				def ArityTrait;
+				if: (is: msg taggedAs: One) then: {
+					ArityTrait := makeOneArityTrait();
+				} else: {
+					if: (is: msg taggedAs: All) then: {
+						ArityTrait := makeAllArityTrait();
+					} else: {
+						// DEFAULT SHOULD BE DEPENDENT ON AR RECEIVER
+						ArityTrait := makeOneArityTrait();
+					}
+				};
+
+        def LifetimeTrait;
+				if: (is: msg taggedAs: TransientT) then: {
+					def ann := Util.getAnnotationOfType(msg, TransientT);
+					LifetimeTrait := makeTransientLifetimeTrait(ann.period);
+				} else: {
+					if: (is: msg taggedAs: Expirable) then: {
+						def ann := Util.getAnnotationOfType(msg, Expirable);
+						LifetimeTrait := makeExpiresLifetimeTrait(ann.timeout);
+					} else: {
+						if: (is: msg taggedAs: Durable) then: {
+							LifetimeTrait := makeDurableLifetimeTrait();
+						} else: {
+							// DEFAULT SHOULD BE DEPENDENT ON AR RECEIVER
+							LifetimeTrait := makeDurableLifetimeTrait();
+						}
+					}
+				};
+				
+				def msg.handler := object: {
+					import ArityTrait;
+					import ReplyTrait;
+					import LifetimeTrait;
+				};
+				
+				msg;
+				
+			};
+		} taggedAs: [ ARModule ]);	
+	}
 };
 
 deftype Nothing;
@@ -376,16 +647,18 @@ def nativeExport: obj as: type {
 
 def AmbientRefModule := object: {
 	
+	def enableAmbientRefs := &enableAmbientRefs;
+	
   def One := One;
   def All := All;
 
-	def Transient := Transient;
+  def Instant := Instant;
+	def Transient := &Transient;
 	def Expires := &Expires;
 	def Durable := Durable;
 
 	def Reply := Reply;	
 	def Oneway := Oneway;
-	def ReplyTo := &ReplyTo;
 	
 	def MessageDropped := MessageDropped;
 	
