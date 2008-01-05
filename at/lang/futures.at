@@ -213,10 +213,10 @@ def FutureMirror := mirror: {
 	};
 	
 	// in the case of a multifuture this forces it to become totally
-	// resolved. In the case of a regular future, it does nothing
-	// (semantics as yet unclear)
+	// resolved. In the case of a regular future, it is considered to
+	// timeout the future
 	def becomeResolved() {
-		
+		timeout();
 	};
 
 	// provide the required methods for the TFarRef trait
@@ -285,32 +285,37 @@ def constructLeaseFor(future, timeout) {
 	futureLease
 };
 
-// extend a regular asynchronous message with futures behaviour
-def futurize(msg) {  
-	// attach the resolver for a future to the message
-	def type := FutureMessage;
-	def [future, resolver] := if: (is: msg taggedAs: DueType) then: {
-		// integration of futures with leasing
-		type := DueType;
-		def ann := /.at.support.util.getAnnotationOfType(msg, DueType);
-		makeFuture(ann.timeout);
+// determine what type of future to attach to the message:
+//
+// @FutureMessage -> regular future
+// @Due -> future with timeout
+// @Gather -> multifuture
+//
+// @Due and @Gather are mutually exclusive, if both would be specified, @Due has precedence
+def attachFuture(msg) {  
+	// support for multifutures: messages tagged with the @Gather(n)
+	// type tag receive a multifuture bounded by n
+	def MFModule := /.at.lang.multifutures;
+	if: (is: msg taggedAs: MFModule.GatherType) then: {
+		def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
+		def [fut,res] := MFModule.makeMultiFuture(ann.upperBound, ann.timeout);
+		futurize(msg, fut, MFModule.GatherType);
 	} else: {
-		// @Due and @Gather are mutually exclusive
-	  // if both would be specified, @Due has precedence
-	
-		// support for multifutures: messages tagged with the @Gather(n)
-		// type tag receive a multifuture bounded by n
-		def MFModule := /.at.lang.multifutures;
-		if: (is: msg taggedAs: MFModule.GatherType) then: {
-			type := MFModule.GatherType;
-			def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
-			MFModule.makeMultiFuture(ann.upperBound, ann.timeout);
+		if: (is: msg taggedAs: DueType) then: {
+			// integration of futures with leasing
+			def ann := /.at.support.util.getAnnotationOfType(msg, DueType);
+			def [fut,res] := makeFuture(ann.timeout);
+			futurize(msg, fut, DueType);
 		} else: {
 			// by default, make a future without timeout
-			makeFuture();	
+			def [fut,res] := makeFuture();
+			futurize(msg, fut, FutureMessage);	
 		}
-	};
- 
+	}	
+};
+
+// extend a regular asynchronous message with futures behaviour
+def futurize(msg, future, type) {
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |future|
 
@@ -335,7 +340,7 @@ def futurize(msg) {
 				raise: e;
 			};
 		};
-	} taggedAs: [ type ]; 
+	} taggedAs: [ type ];
 };
 
 // should future-type message sending be supported for default (unannotated) messages?
@@ -368,6 +373,10 @@ def FuturesModule := object: {
 
 	// when-catch support, version with one specific catch block
 	def when: future becomes: resolvedBlock catch: excType using: excBlock {
+		if: (future == nil) then: {
+			raise: /.at.exceptions.XIllegalOperation.new("when:becomes: on nil value. Probably an async message does not return a future.");
+		};
+		
 		def [whenFuture,resolver] := makeFuture();
 		def notify(block, val) {
 			try: {
@@ -454,6 +463,8 @@ def FuturesModule := object: {
   // type that identifies this language module
   deftype FuturesModule;
 
+  def futurize := &futurize;
+
 	// install the futures protocol on the invoking actor,
 	// returns the previously active protocol
 	// the optional argument indicates whether futures should be enabled on unannotated messages
@@ -490,14 +501,14 @@ def FuturesModule := object: {
 							msg;
 						} else: {
 							// default = FutureMessage or overriden by DueType, so attach future behaviour
-							futurize(msg);
+							attachFuture(msg);
 						}
 					} else: {
 						// if the message was explicitly annotated with FutureMessage type, activate
 						// the futures behaviour
 						if: (is: msg taggedAs: FutureMessage) then: {
 							// default = OneWayMessage, overridden by FutureMessage or DueType, so attach future behaviour
-							futurize(msg);
+							attachFuture(msg);
 						} else: {
 							// default = OneWayMessage, so return the normal message
 							msg;
@@ -510,7 +521,7 @@ def FuturesModule := object: {
 				  // for a future message, the return value now becomes the message's future
 				  if: (is: msg taggedAs: FutureMessage) then: {
 					  // if the future is wrapped in a leased reference,
-					  // the future has to be accessed via the leased reference  
+					  // the future has to be accessed via the leased reference
 					  if: (is: msg.future taggedAs: LeasingModule.LeasedRef) then: {
 						  (reflect:  msg.future).getPrincipal();
 					  } else: {

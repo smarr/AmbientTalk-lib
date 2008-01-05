@@ -300,7 +300,6 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		// multifutures are empty objects mirrored by a multifuture mirror
 		def multifut := object: {
 		} taggedAs: [ MultiFuture ] mirroredBy: makeMultiFutureMirror(maxSize, timeout);
-		
 		FuturesModule.constructResolverFor(multifut, timeout);
 	}
 }; // end makeMultiFuture
