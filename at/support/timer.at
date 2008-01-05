@@ -47,6 +47,7 @@ def scheduleAtFixedRateMethod := theTimer.&schedule.cast(TimerTask, long, long);
 def currentTimeMillis := jlobby.java.lang.System.&currentTimeMillis;
 
 def makeLong := /.at.support.symbiosis.&long;
+def ZERO := makeLong(0);
 
 def TimerModule := object: {
 	  
@@ -60,20 +61,37 @@ def TimerModule := object: {
 	// when the timeout has elapsed, invoke the given code block
 	// returns a subscription object that can be used to cancel execution of the block
 	def when: timeout elapsed: code {
-		def ttask := RunnableTimerTask.new(object: {
-			def run() { code() };
-		});
-		scheduleMethod(ttask, timeout);
-		object: {
-			def cancel() { ttask.cancel() };
-			def getTimeRemaining() { 
-			  def time := makeLong(0);
-			  def expiredTime := now() - ttask.scheduledExecutionTime();
-				if: ( expiredTime < timeout) then: {
-					time := timeout - expiredTime;
+		def canceled := false; // see note at whenever:elapsed: below
+		if: (timeout < ZERO) then: {
+			// fire immediately
+			code<-apply([]);
+			object: { def cancel() { false } };
+		} else: {
+			def ttask := RunnableTimerTask.new(object: {
+				def run() { canceled.ifFalse: code };
+			});
+			scheduleMethod(ttask, timeout);
+			object: {
+				def cancel() {
+					canceled.ifFalse: {
+						canceled := true;
+						ttask.cancel();
+						ttask := nil; true;
+					}
 				};
-				time 
-			};
+				def getTimeRemaining() {
+					if: canceled then: {
+						0
+					} else: {
+						def time := ZERO;
+					  def expiredTime := now() - ttask.scheduledExecutionTime();
+						if: ( expiredTime < timeout) then: {
+							time := timeout - expiredTime;
+						};
+						time
+					};
+				};
+			}	
 		}
 	};
 	
@@ -87,18 +105,24 @@ def TimerModule := object: {
 		// anyway, we perform an additional check on the boolean. This *guarantees*
 		// that after invoking pub.cancel(), the scheduled code is no longer ran
 		def canceled := false;
-		def ttask := RunnableTimerTask.new(object: {
-			def run() { canceled.ifFalse: { code() } };
-		});
-		scheduleAtFixedRateMethod(ttask, timeout, timeout);
-		object: {
-			def cancel() {
-				canceled.ifFalse: {
-					canceled := true;
-					ttask.cancel();
-					ttask := nil;
+		if: (timeout < ZERO) then: {
+			// fire immediately
+			code<-apply([]);
+			object: { def cancel() { false } };
+		} else: {
+			def ttask := RunnableTimerTask.new(object: {
+				def run() { canceled.ifFalse: code };
+			});
+			scheduleAtFixedRateMethod(ttask, timeout, timeout);
+			object: {
+				def cancel() {
+					canceled.ifFalse: {
+						canceled := true;
+						ttask.cancel();
+						ttask := nil; true;
+					}
 				}
-			}
+			}	
 		}
 	};
 	
@@ -110,9 +134,7 @@ def TimerModule := object: {
 		def pub := whenever: period elapsed: {
 			if: condClosure() then: {
 				pub.cancel();
-			} else: {
-				body()	
-			};
+			} else: body;
 		};
 	};
 	

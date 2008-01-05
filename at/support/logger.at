@@ -46,6 +46,7 @@ def FATAL   := 6;
 
 // returns a logging function
 def makeLogger(prefix := "", minLevel := DEBUG, output := system) {
+	// made private to this scope in order not to interfere with other names
 	def levelToString := ["NONE","DEBUG","WARNING","INFO","ERROR","FATAL"];
 	if: (minLevel == NONE) then: {
 		// don't log anything at all, just consume the message
