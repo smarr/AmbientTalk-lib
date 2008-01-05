@@ -8,4 +8,5 @@ def AmbientTestSuite := /.at.unit.test.TestSuite.new("ambient package testsuite"
   /.at.ambient.templatediscovery.TemplateDiscoveryModuleTest,
   /.at.ambient.discoverycomposition.DiscoveryCompositionModuleTest,
   /.at.ambient.adaptors.AdaptorModuleTest,
-  /.at.ambient.deapspace.DEAPspaceProtocolTest ]);
+  // /.at.ambient.deapspace.DEAPspaceProtocolTest,
+  /.at.ambient.ambientrefs.AmbientRefsTest ]);
