@@ -173,7 +173,10 @@ def M2MIModule := object: {
 				/*def m2miargs := msg.args.map: { |arg|
 					if: (is: arg taggedAs: Isolate) then: { arg } else: {
 						uniref: arg forType: ?Type // but unirefs also accept omni casts... (ie not private)
+						uniref: arg forType: GenericUnihandle;
 					}
+					// pass a handle unchanged
+					if: (is: arg taggedAs: M2MIHandle) then: { arg }
 				}*/
 				// it is important that the AmbientTalk language value
 				// is first serialized into an opaque Packet object. This
@@ -190,7 +193,7 @@ def M2MIModule := object: {
 			};
 			
 			def toString() {
-				"m2mi ref for interface "+typetag;
+				"m2mi ref for handle "+m2miHandle.toString();
 			};
 			
 			def newInstance(initargs) {
