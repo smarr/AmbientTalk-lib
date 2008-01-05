@@ -36,9 +36,10 @@
  *  => invoked whenever the future is resolved with a new value
  * whenAll: multiFuture resolved: { |values| ... } ruined: { |exceptions| ... }
  *  => invoked if all results have been gathered (only possible
- *     if the maximum number of results is known). If all resolved values
- *     are exceptions, only the second code block is triggered. If there are
- *     no exceptions, only the first code block is triggered.
+ *     if the maximum number of results is known). If there are
+ *     no exceptions, only the first code block is triggered. If there
+ *     are only exceptions, the first block is still invoked with an empty
+ *     value table.
  *
  * Note the following properties of multifutures:
  * - It is allowed to register a whenAll:resolved:ruined: listener on
@@ -370,21 +371,21 @@ def MultiFutureModule := object: {
 		def [futureForResolvedBlock,resolverForResolvedBlock] := FuturesModule.makeFuture();
 		def [futureForExcBlock,resolverForExcBlock] := FuturesModule.makeFuture();
 		def resolveWhenAllFuture(resolver, block, vals) {
-			if: (vals == []) then: {
-				resolver.resolve(nil)
-			} else: {
-				try: {
-					resolver.resolve(block(vals));				
-				} catch: Exception using: {|e|
-					resolver.ruin(e);
-				};	
-			};
+		  try: {
+			  resolver.resolve(block(vals));				
+			} catch: Exception using: {|e|
+				resolver.ruin(e);
+			};	
 			nil;
 		};
 		multiFuture<-addWhenAllListener(object: {
 			def notify(resolved, ruined) {
 				resolveWhenAllFuture(resolverForResolvedBlock,resolvedBlock,resolved);
-				resolveWhenAllFuture(resolverForExcBlock,excBlock,ruined);
+				if: (ruined == []) then: {
+					resolverForExcBlock.resolve(nil)
+				} else: {
+					resolveWhenAllFuture(resolverForExcBlock,excBlock,ruined);					
+				}
 			};
 		// note that <-addWhenAllListener is a message directed to the future's mirror
 		// and that no future return value is required
