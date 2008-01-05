@@ -62,14 +62,14 @@ def Due(timeout) {
 //create TimeoutException used for notifying the ruining of a future when its lease expires. 
 deftype TimeoutException <: Exception;
 def XTimeoutException := extend: /.at.exceptions.createException(TimeoutException) with: {
-	 def future := nil;
-	 def init(fut){ 
-		super^init("Future: " + fut + " timed out");
-		future := fut
+	 def init(future, receiver := nil, message := nil){
+		 if: (receiver == nil) then: {
+			 super^init("Future: " + future + " timed out");			
+		 } else: {
+			 super^init("Future: " + future + " timed out while sending " + message.selector + " to " + receiver);
+		 }
 	 };
-	 def getFuture() { future };
 };
-
 
 // To register a when-observer on a future, a message needs to be sent to its mirror
 // This would only be possible on far references to futures if an explicit additional
@@ -102,7 +102,8 @@ def FutureMirror := mirror: {
 		subscribers := [];
 	};
 
-  // Using resolveWithValue(value) rather than resolve(value) so not to override resolve() in the defaultMirror
+  // Using resolveWithValue(value) rather than resolve(value) as to
+  // not accidentally override the resolve() MOP method of the defaultMirror
 	def resolveWithValue(value) {
 
 		// if value == myself, don't do anything (can happen when forwarding messages)
@@ -176,6 +177,47 @@ def FutureMirror := mirror: {
 		};
 		nil;
 	};
+	
+	// upon timeout, a future ruins itself with a timeout exception
+	def timeout(receiver := nil, message := nil) {
+		ruinWithException(XTimeoutException.new(self.base, receiver, message));
+	};
+	
+	// the following methods make a future behave like a bounded multifuture
+	// with upper bound equal to 1. This enables regular futures to be passed
+	// anywhere a multifuture is expected in the code.
+	
+	def upperBound := 1;
+	
+	// a regular future is fully resolved if it is no longer unresolved
+	def isFullyResolved() { !(state == UNRESOLVED) };
+	
+	// a whenEach:becomes: listener on a regular future behaves exactly the same
+	// as a when:becomes: listener (it triggers at most once)
+	def addWhenEachListener(sub) {
+		addResolutionListener(sub);
+	};
+	
+	// a whenAll:resolved:ruined: listener triggers when the future
+	// either becomes resolved or ruined. Provide an adaptor from
+	// when:becomes: listeners to whenAll:resolved:ruined: listeners
+	def addWhenAllListener(sub) {
+		addResolutionListener(object: {
+			def notifyResolved(val) {
+				sub<-notify([val], [])@OneWayMessage;
+			};
+			def notifyRuined(exc) {
+				sub<-notify([], [exc])@OneWayMessage;
+			};
+		});
+	};
+	
+	// in the case of a multifuture this forces it to become totally
+	// resolved. In the case of a regular future, it does nothing
+	// (semantics as yet unclear)
+	def becomeResolved() {
+		
+	};
 
 	// provide the required methods for the TFarRef trait
 	
@@ -216,41 +258,50 @@ def makeFuture(timeout := nil) {
 	// futures are empty objects mirrored by a future mirror
 	// note that the future mirror is implicitly instantiated for each new future!
 	def future := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
+  constructResolverFor(future, timeout);
+};
 
+def constructResolverFor(future, timeout := nil) {
 	def resolver := isolate: { |future|
 		def resolve(val) { future<-resolveWithValue(val)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
 		def ruin(exc) { future<-ruinWithException(exc)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
 	};
 
-	// has the future been annotated with DueType?
-	if: !(nil == timeout) then: {
+	// has the future been annotated with a timeout?
+	if: (nil != timeout) then: {
 		// if so, wrap the future into a single-call lease
-		def futureLease := LeasingModule.singleCallLease: timeout for: future;
-		LeasingModule.when: futureLease expired: {
-			(reflect: future).ruinWithException(XTimeoutException.new(future));
-		};
-		[ futureLease, resolver ];
+		[ constructLeaseFor(future, timeout), resolver ];
 	} else: {
-		//by default futures are not leased.
+		// by default futures are not leased.
 		[ future, resolver ];
 	};
+};
+
+def constructLeaseFor(future, timeout) {
+	def futureLease := LeasingModule.singleCallLease: timeout for: future;
+	LeasingModule.when: futureLease expired: {
+		(reflect: future).timeout();
+	};
+	futureLease
 };
 
 // extend a regular asynchronous message with futures behaviour
 def futurize(msg) {  
 	// attach the resolver for a future to the message
 	def type := FutureMessage;
-	def [future, resolver] :=	if: (is: msg taggedAs: DueType) then: {
+	def [future, resolver] := if: (is: msg taggedAs: DueType) then: {
 		// integration of futures with leasing
 		type := DueType;
 		def ann := /.at.support.util.getAnnotationOfType(msg, DueType);
 		makeFuture(ann.timeout);
 	} else: {
+		// @Due and @Gather are mutually exclusive
+	  // if both would be specified, @Due has precedence
+	
 		// support for multifutures: messages tagged with the @Gather(n)
 		// type tag receive a multifuture bounded by n
 		def MFModule := /.at.lang.multifutures;
 		if: (is: msg taggedAs: MFModule.GatherType) then: {
-		//TODO: is this necessary??
 			type := MFModule.GatherType;
 			def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
 			MFModule.makeMultiFuture(ann.upperBound, ann.timeout);
@@ -296,7 +347,11 @@ def FuturesModule := object: {
 	// support for first-class futures: returns a pair
 	// [ future, resolver]. The resolver can be used to easily resolve
 	// or ruin the corresponding future
-    def makeFuture := &makeFuture;
+  def makeFuture := &makeFuture;
+
+  // is actually only exported to be used by the MultiFuturesModule!
+  def constructResolverFor := &constructResolverFor;
+  def constructLeaseFor := &constructLeaseFor;
 
 	// when-catch support, version without a catch block
 	def when: future becomes: resolvedBlock {
@@ -390,6 +445,7 @@ def FuturesModule := object: {
 
   //make the Due function publicly visible 
   def Due := &Due;
+  def DueType := DueType;
 
   //make visible the exception raised when futures are ruined by timeout.
   def XTimeoutException := XTimeoutException;
@@ -433,7 +489,7 @@ def FuturesModule := object: {
 							// default = FutureMessage, overridden by OneWayMessage, so return normal message
 							msg;
 						} else: {
-							// default= FutureMessage or overriden by DueType, so attach future behaviour
+							// default = FutureMessage or overriden by DueType, so attach future behaviour
 							futurize(msg);
 						}
 					} else: {
@@ -514,7 +570,7 @@ def FuturesModule := object: {
     };
 		
 		def testAsyncDueResolvingTest(){
-			//TEST 1: Resolving the future within timeout
+			//TEST 1: Resolving the future within the timeout period
 			//This test uses the AR future as return value of the test.
 			def a := actor: {
 				deftype AsyncDueResolvingTestT;
@@ -532,7 +588,7 @@ def FuturesModule := object: {
    	};
 
 		def testAsyncDueRuiningTest(){
-			//TEST 2: Making the future ruin with a TimeoutException
+			//TEST 2: ruining the future with a TimeoutException
 			//This test uses the AR future as return value of the test.
 			def a := actor: {
 				deftype AsyncDueRuiningTestT;
@@ -555,7 +611,7 @@ def FuturesModule := object: {
 			when: future becomes: { |v|
 		  	self.fail("testAsyncDue2: Unexpected resolved future");
 		  } catch: TimeoutException using: { |e|
-				self.assertEquals(e.getFuture(), future);
+				nil
       };
 		};		
     };

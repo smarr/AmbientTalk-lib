@@ -29,7 +29,7 @@
  * A multifuture is a future that can be resolved multiple times.
  * We distinguish between 'bounded multifutures', which can be
  * resolved up to a maximum number and 'unbounded multifutures'
- * which have no upper bound. A bounded multifuture accepts 
+ * which have no upper bound. A multifuture accepts 
  * the following listeners:
  *
  * whenEach: multiFuture becomes: { |val| ... }
@@ -41,9 +41,11 @@
  *     no exceptions, only the first code block is triggered.
  *
  * Note the following properties of multifutures:
- * - It is illegal to register a whenAll:resolved:ruined: listener on
- *   an 'unbounded' multifuture. One may only register whenEach:
- *   listeners with such multifutures.
+ * - It is allowed to register a whenAll:resolved:ruined: listener on
+ *   an 'unbounded' multifuture. However, for such multifutures, this
+ *   listener will only trigger if a timeout was specified during the
+ *   multifuture's creation. The listener is invoked upon timeout, and
+ *   later incoming results are discarded.
  * - As with futures, it is legal to send asynchronous messages to the
  *   multifuture, which are in turn propagated to all resolved values.
  *   If some values are ruined, asynchronous messages containing a
@@ -73,6 +75,7 @@ def log := makeLogger("[multifutures.at]", DEBUG);
 
 def FuturesModule := /.at.lang.futures;
 def LeasingModule := /.at.lang.leasedrefs;
+def TimerModule := /.at.support.timer;
 
 def OneWayMessage := FuturesModule.OneWayMessage;
 
@@ -91,11 +94,9 @@ def Gather(upperBound := nil, timeout := nil) {
 	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };
 
-def makeMultiFuture(maxSize := nil, timeout := nil) {
-	
-	// multifutures are empty objects mirrored by a multifuture mirror
-	def multifut := object: { } taggedAs: [ MultiFuture ] mirroredBy: (mirror: {
-		
+def makeMultiFutureMirror(maxSize, timeoutPeriod) {
+	mirror: {
+
 		def upperBound := maxSize;
 		def resolvedValues := [];
 		def ruinedValues := [];
@@ -104,6 +105,19 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		def whenAllSubscribers := [];
 		def whenBecomesSubscribers := [];
 
+		// constructor: used to initialize the base field of the new future
+		def init(@args) {
+			super^init(@args); // initialize this future's base field
+			
+			// whether bounded or unbounded, a multifuture with a timeout
+			// becomes forcibly resolved when the timeout passes
+			if: (nil != timeoutPeriod) then: {
+				TimerModule.when: timeoutPeriod elapsed: {
+					becomeResolved();
+				};
+			};
+		};
+
 	  // a multifuture is a special kind of far reference
 	  // therefore, this mirror mixes in the 'far reference' behaviour
 	  // Because a future is pass-by-reference, we do not inherit the
@@ -111,9 +125,11 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 	  import TFarRef exclude pass;
 
 		def isFullyResolved() {
-			(nil != maxSize).and: { maxSize == (resolvedValues.length + ruinedValues.length) }
+			upperBound == (resolvedValues.length + ruinedValues.length);
 		};
 
+	  // Using resolveWithValue(value) rather than resolve(value) as to
+	  // not accidentally override the resolve() MOP method of the defaultMirror
 		def resolveWithValue(value) {
 			if: !isFullyResolved() then: {
 				// is the future resolved by another future?
@@ -169,7 +185,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 				};
 		  };
 		};
-		
+
 		// invoked when all results have been gathered on a bounded multifuture
 		def finalize() {
 			whenEachSubscribers := [];
@@ -196,7 +212,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 			};
 			nil;
 		};
-		
+
 		// adds a whenEach listener to the future
 		// @param sub a resolution listener
 		def addWhenEachListener(sub) {
@@ -210,28 +226,32 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 			};
 			nil;
 		};
-		
+
 		// adds a whenAll listener to the future
 		// @param sub a resolution listener
 		def addWhenAllListener(sub) {
-			if: (maxSize == nil) then: {
-				raise: XIllegalOperation.new("Cannot register a whenAll listener on an unbounded multifuture");
-			};
 			if: isFullyResolved() then: {
-				sub<-notify(resolvedValues, ruinedValues);
+				sub<-notify(resolvedValues, ruinedValues)@OneWayMessage;
 			} else: {
 				// only register the listener if there are more results to come in
 				whenAllSubscribers := whenAllSubscribers + [sub];
 			};
 			nil;
 		};
-		
-		// TODO: semantics of a multifuture upon timeout are not yet totally fixed
-		// the current behaviour is still subject to major changes!
-		def timeout() {
-			// set maxSize to current number of registered results such that isFullyResolved
+
+		// upon timeout, a multifuture ruins itself with a timeout exception
+		def timeout(receiver := nil, message := nil) {
+			ruinWithException(FuturesModule.XTimeoutException.new(self.base, receiver, message));
+		};
+
+		// the multifuture becomes totally resolved
+		// and triggers its whenAll subscribers. It is not guaranteed
+		// that these subscribers are notified with n results, where n is
+		// the potential upper bound
+		def becomeResolved() {
+			// set upperBound to current number of registered results such that isFullyResolved
 			// will always return true
-			maxSize := resolvedValues.length + ruinedValues.length;
+			upperBound := resolvedValues.length + ruinedValues.length;
 			// prematurely invoke all whenAll subscribers
 			whenAllSubscribers.each: { |sub| sub<-notify(resolvedValues, ruinedValues)@OneWayMessage };
 			// de-register all listeners
@@ -248,7 +268,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 				ruinedValues.each: { |exception|
 				  msg.future<-ruinWithException(exception)@[MetaMessage,OneWayMessage];
 				};
-      };
+	    };
 			// accumulate message in this future's inbox
 			if: !isFullyResolved() then: {
 				inbox := inbox + [msg];
@@ -257,38 +277,32 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		};
 
 		def toString() {
-			if: (maxSize == nil) then: {
-				"unbound multifuture"
+			if: (upperBound == nil) then: {
+				"multifuture:inf";
 			} else: {
-				"multifuture of " + maxSize
+				"multifuture:" + upperBound;
 			}
 		};
 
 		// to satisfy the required interface of TFarRef, not really required
 		def transportStrategy := { };
-	}); // end MultiFutureMirror
 
-	def resolver := object: {
-		def resolve(val) { (reflect: multifut).resolveWithValue(val) };
-		def ruin(exc) { (reflect: multifut).ruinWithException(exc) };
-		def future := multifut;
-	};
+	}; // end MultiFutureMirror
 
-	// has the multifuture been annotated with a timeout?
-	if: (nil != timeout) then: {
-		// if so, wrap future into a single-call lease
-		def multifutLease := LeasingModule.singleCallLease: timeout for: multifut;
-		LeasingModule.when: multifutLease expired: {
-			// behaviour for multifutures upon timeout:
-			// they notify their whenAll listeners with returned values / exceptions
-			// upon timeout and then de-register all listeners such that the listeners
-			// can no longer be invoked subsequently
-			(reflect: multifut).timeout();			
-		};
-		[ multifutLease, resolver ];
+}; // end makeMultiFutureMirror
+
+def makeMultiFuture(maxSize := nil, timeout := nil) {	
+	if: (maxSize == 1) then: {
+		// return a regular future
+		/.at.lang.futures.makeFuture(timeout);
+		
 	} else: {
-		[ multifut, resolver ];
-	};
+		// multifutures are empty objects mirrored by a multifuture mirror
+		def multifut := object: {
+		} taggedAs: [ MultiFuture ] mirroredBy: makeMultiFutureMirror(maxSize, timeout);
+		
+		FuturesModule.constructResolverFor(multifut, timeout);
+	}
 }; // end makeMultiFuture
 
 def MultiFutureModule := object: {
@@ -352,8 +366,7 @@ def MultiFutureModule := object: {
 	
 	// whenAll: mf resolved: { |tableOfValues| ... } ruined: { |tableOfExceptions| ... }
 	// note that the resolved or ruined closures are not invoked if there are no
-	// resolved values or exceptions. It is illegal to register a whenAll observer
-	// on an unbounded multifuture.
+	// resolved values or exceptions.
 	def whenAll: multiFuture resolved: resolvedBlock ruined: excBlock {
 		def [futureForResolvedBlock,resolverForResolvedBlock] := FuturesModule.makeFuture();
 		def [futureForExcBlock,resolverForExcBlock] := FuturesModule.makeFuture();
@@ -562,6 +575,30 @@ def MultiFutureModule := object: {
 			  resolver.resolve(24);
 			
 			  f;
+      };
+
+      // tests whether we can treat a future of upperbound 1 as a multifuture
+      def testAsyncTreatFutureAsMultifuture() {	
+	      // create a regular future by setting upperbound to 1
+	      def [fut,resolver] := makeMultiFuture(1);
+	      self.assertFalse(is: fut taggedAs: MultiFuture);
+	
+	      // see if the future can deal with whenEach and whenAll observers
+	      def fut1 := whenEach: fut becomes: { |v|
+		      self.assertEquals(42, v);
+		    };
+		
+		    def fut2 := whenAll: fut resolved: { |vals|
+			    self.assertEquals(1, vals.length);
+			    self.assertEquals(42, vals[1]);
+			  } ruined: { |excs|
+			    self.fail("unexpected exceptions: " + excs);
+			  };
+			
+			  resolver.resolve(42);
+			 
+			  FuturesModule.group: [fut1, fut2];
+	
       };
 
 	  };
