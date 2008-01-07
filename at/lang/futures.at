@@ -386,18 +386,22 @@ def FuturesModule := object: {
 			};
 			nil;
 		};
-		future<-addResolutionListener(object: {
-			def notifyResolved(val) { notify(resolvedBlock, val); };
-			def notifyRuined(exc) {
-				if: (is: exc taggedAs: excType) then: {
-					notify(excBlock, exc);
-				} else: {
-					system.println("[futures.at] Warning: uncaught exception: " + exc + ". Can only cath: " + excType);
+		if: !(is: future taggedAs: Future) then: {
+			raise: /.at.exceptions.XIllegalOperation.new("when:becomes: on non-future value: " + future + (reflect: future).listFields);
+		} else: {
+			future<-addResolutionListener(object: {
+				def notifyResolved(val) { notify(resolvedBlock, val); };
+				def notifyRuined(exc) {
+					if: (is: exc taggedAs: excType) then: {
+						notify(excBlock, exc);
+					} else: {
+						system.println("[futures.at] Warning: uncaught exception: " + exc + ". Can only cath: " + excType);
+					};
 				};
-			};
-		// note that <-addResolutionListener is a message directed to the future's mirror
-		// and that no future return value is required
-		})@[MetaMessage, OneWayMessage];
+			// note that <-addResolutionListener is a message directed to the future's mirror
+			// and that no future return value is required
+			})@[MetaMessage, OneWayMessage];	
+		};
 		whenFuture; // when returns a future itself
 	};
 

@@ -821,12 +821,31 @@ def AmbientRefModule := object: {
 		export: serviceObject as: type with: { nil };
 	};
 	
+	// def [tFuture, discoverySubscription] := discover: Type
 	def discover: T {
 		def [fut,res] := FuturesModule.makeFuture();
-		when: T discovered: { |t|
+		def sub := when: T discovered: { |t|
 			res.resolve(t);
 		};
-		fut;
+		[fut,sub];
+	};
+	
+	// def [tFuture, discoverySubscription] := discover: Type where: { |t| filter(t) }
+	def discover: T where: filter {
+	  def [arFuture, arResolver] := FuturesModule.makeFuture();
+	  def sub := whenever: T discovered: { |remoteRef|
+		  def props := isolate: { nil };
+		  if: (is: remoteRef taggedAs: PropertyObject) then: {
+			  remoteRef := remoteRef.service;
+			  props := remoteRef.properties;
+		  };
+
+	    if: (filter(props)) then: {
+		    sub.cancel();
+		    arResolver.resolve(remoteRef)
+	    };
+	  };
+	  [arFuture, sub];
 	};
 	
 	def ambient: T {
@@ -940,9 +959,7 @@ def AmbientRefModule := object: {
 					def serve(request) { request + 2 };
 				}) as: ARManyService;
 			};
-			
-			enableAmbientRefs();
-			
+						
 			def a := ambient: rARFooTest;
 			def asyncReply := ambient: ARAsyncReplyService;
 			def omni := ambient: ARManyService;
@@ -992,7 +1009,7 @@ def AmbientRefModule := object: {
 			};
 			// ALL, TRANSIENT, DUE
 			def testAsyncAllTransientDue() {
-				MFuturesModule.whenAll: omni<-serve(0)@[All,Transient(seconds(3)),Due(seconds(2))] resolved: { |vals|
+				MFuturesModule.whenAll: omni<-serve(0)@[All,Transient(seconds(4)),Due(seconds(3))] resolved: { |vals|
 					self.assertEquals(2, vals.length);
 					self.assertTrue(vals.contains(1));
 					self.assertTrue(vals.contains(2));
@@ -1004,7 +1021,7 @@ def AmbientRefModule := object: {
 			def testAsyncAllTransientFuture() {
 				FuturesModule.future: { |reply|
 					def count := 0;
-					MFuturesModule.whenEach: omni<-serve(0)@[All,Transient(seconds(3)),Future] becomes: { |val|
+					MFuturesModule.whenEach: omni<-serve(0)@[All,Transient(seconds(4)),Future] becomes: { |val|
 					  self.assertTrue((val == 1).or: { val == 2 });
 					  count := count + 1;
 					  if: (count == 2) then: {
@@ -1015,7 +1032,7 @@ def AmbientRefModule := object: {
 			};
 			// ALL, EXPIRES
 			def testAsyncAllExpires() {
-				MFuturesModule.whenAll: omni<-serve(0)@[All,Expires(seconds(3))] resolved: { |vals|
+				MFuturesModule.whenAll: omni<-serve(0)@[All,Expires(seconds(5))] resolved: { |vals|
 					self.assertEquals(2, vals.length);
 					self.assertTrue(vals.contains(1));
 					self.assertTrue(vals.contains(2));
@@ -1118,5 +1135,8 @@ def AmbientRefModule := object: {
 		};
 		
 	}; // end AmbientRefsTest
+	
+	// auto-enable ambient reference behaviour upon loading
+	enableAmbientRefs();
 	
 }; // end AmbientRefModule
