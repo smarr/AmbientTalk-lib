@@ -28,6 +28,8 @@
 /* Miscellaneous functions including:
  *  - random number generation
  *  - macro for executing code upon object arrival
+ *  - annotation retrieval from asynchronous messages
+ *  - creating assignment selectors ending in :=
  * @author tvcutsem
  */
 
@@ -105,6 +107,16 @@ def uniformRandomNumberInRange: range {
 def uniformRandomFractionInRange: range {
 	randomFractionBetween(range[1], range[2]);
 };
+
+def mutatorAllocator := jlobby.edu.vub.at.objects.natives.grammar.AGAssignmentSymbol.&jAlloc;
+
+// given a selector, create selector:=
+def makeMutator(selector) {
+	mutatorAllocator((print: selector) + ":=")
+};
+
+def primitiveSelectors := [`super,`super:=,`new,`init,`==];
+def isPrimitive(selector) { primitiveSelectors.contains(selector) };
 
 def UtilTest() {
   extend: /.at.unit.test.UnitTest.new("UtilTest") with: {

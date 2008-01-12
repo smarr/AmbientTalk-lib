@@ -2,11 +2,12 @@
  * Unit test suite that tests the additions from the 'ambient' package.
  */
 def AmbientTestSuite := /.at.unit.test.TestSuite.new("ambient package testsuite", [
+  /.at.ambient.ambientrefs.AmbientRefsTest,
   /.at.m2mi.api.M2MITest,
   /.at.ambient.discovery.DiscoveryModuleTest,
   /.at.ambient.oomatching.OOMatchModuleTest,
   /.at.ambient.templatediscovery.TemplateDiscoveryModuleTest,
   /.at.ambient.discoverycomposition.DiscoveryCompositionModuleTest,
-  /.at.ambient.adaptors.AdaptorModuleTest,
+  /.at.ambient.adaptors.AdaptorModuleTest
   // /.at.ambient.deapspace.DEAPspaceProtocolTest,
-  /.at.ambient.ambientrefs.AmbientRefsTest ]);
+]);

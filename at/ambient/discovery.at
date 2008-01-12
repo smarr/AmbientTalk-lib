@@ -48,7 +48,7 @@ import /.at.lang.dynvars;
 
 // minimum amount of time in between discovery broadcasts
 def DISCOVER_RATE := seconds(2);
-def RECALL_PERIOD := seconds(5);
+def RECALL_PERIOD := seconds(7);
 
 // service type under which tracker response gatherer objects are published
 deftype Tracker;
@@ -237,6 +237,47 @@ def trackerFor(type) {
 	tracker
 };
 
+// type tag for objects exported using a protocol rather than a type tag
+deftype ProtocolExportedObject;
+def StructuralTypes := /.at.lang.structuraltypes;
+def ServiceProtocolTuple := isolate: {
+	def service;
+	def protocol;
+	def init(s, p) {
+		service := s;
+		protocol := p;
+	};
+	def ==(other) {
+		(service == other.service)
+	};
+};
+
+def discover(type, handler, registerWithTracker) {
+	if: (is: type taggedAs: /.at.types.TypeTag) then: {
+		registerWithTracker(trackerFor(type), handler);
+	} else: {
+		if: (is: type taggedAs: StructuralTypes.Protocol) then: {
+			registerWithTracker(trackerFor(ProtocolExportedObject), { |tuple|
+				if: (StructuralTypes.does: tuple.protocol match: type) then: {
+					handler(tuple.service);
+				}
+			});
+		} else: {
+			raise: /.at.exceptions.XIllegalOperation.new(
+				"discovery needs a type tag or protocol object, given "+type);
+		}
+	}
+};
+
+def export(service, type) {
+	def trackerResponder := object: {
+		def reportTo(serviceTracker) {
+			serviceTracker<-respond(service);
+		}
+	};
+	export: trackerResponder asTypeTag: type;
+};
+
 def DiscoveryModule := object: {
 	
 	/**
@@ -282,7 +323,7 @@ def DiscoveryModule := object: {
 	 *  actor's inbox at the time cancel is invoked)
 	 */
 	def when: type discovered: handler {
-		trackerFor(type).whenDiscovered: handler;
+		discover(type, handler, { |tracker,closure| tracker.whenDiscovered: closure });
 	};
 	
 	/**
@@ -299,7 +340,7 @@ def DiscoveryModule := object: {
 	 *  actor's inbox at the time cancel is invoked)
 	 */
 	def whenever: type discovered: handler {
-		trackerFor(type).wheneverDiscovered: handler;
+		discover(type, handler, { |tracker,closure| tracker.wheneverDiscovered: closure });
 	};
 	
 	/**
@@ -316,7 +357,7 @@ def DiscoveryModule := object: {
 	 *  actor's inbox at the time cancel is invoked)
 	 */
 	def whenever: type lost: handler {
-		trackerFor(type).wheneverLost: handler;
+		discover(type, handler, { |tracker,closure| tracker.wheneverLost: closure });
 	};
 	
 	/**
@@ -328,12 +369,21 @@ def DiscoveryModule := object: {
 	 * does not take the object itself offline.
 	 */
 	def export: obj as: type {
-		def trackerResponder := object: {
-			def reportTo(serviceTracker) {
-				serviceTracker<-respond(obj);
+		if: (is: type taggedAs: /.at.types.TypeTag) then: {
+			export(obj, type);
+		} else: {
+			if: (is: type taggedAs: StructuralTypes.Protocol) then: {
+				StructuralTypes.ensure: obj implements: type;
+				export(ServiceProtocolTuple.new(obj, type), ProtocolExportedObject);
+			} else: {
+				raise: /.at.exceptions.XIllegalOperation.new(
+					"export needs a type tag or protocol object, given "+type);
 			}
-		};
-		export: trackerResponder asTypeTag: type;
+		}
+	};
+	
+	def export: obj {
+		export: obj as: (StructuralTypes.protocolOf: obj);
 	};
 	
 	def DiscoveryModuleTest() {
@@ -408,6 +458,82 @@ def DiscoveryModule := object: {
 				    sub.cancel();
 			    };
 		    };
+		  };
+	
+			def testAsyncMatchingProtocolDiscovery() {
+				import /.at.lang.futures;
+				import /.at.lang.structuraltypes;
+
+				def testProtocol := protocol: {
+					def matchingProtocolDiscoveryTestMethod();
+				};
+
+		    def peer := actor: { |testProtocol|
+			    import /.at.ambient.discovery;
+
+			    def pub := export: (object: {
+				    def matchingProtocolDiscoveryTestMethod() { 42 };
+				    def n() { 24 };
+			    }) as: testProtocol;
+			    import /.at.support.timer;
+			    when: seconds(10) elapsed: {
+				    // stop the discovery
+				    pub.unexport();
+			    };
+		    };
+
+			  future: { |reply|
+			    def sub := whenever: testProtocol discovered: { |ref|
+				    enableFutures(false);
+				    reply(when: ref<-matchingProtocolDiscoveryTestMethod()@FutureMessage becomes: { |val|
+					    self.assertEquals(42, val);
+					  });
+			    };
+
+				  import /.at.support.timer;
+			    when: seconds(10) elapsed: {
+				    // stop the discovery
+				    sub.cancel();
+			    };
+		    };
+		  };
+		
+			def testAsyncNonMatchingProtocolDiscovery() {
+				import /.at.lang.futures;
+				import /.at.lang.structuraltypes;
+
+				def testProtocol := protocol: {
+					def nonmatchingProtocolDiscoveryTestMethod();
+					def m();
+				};
+
+		    def peer := actor: {
+			    import /.at.ambient.discovery;
+
+			    def pub := export: (object: {
+				    def m() { 42 };
+			    });
+			    import /.at.support.timer;
+			    when: seconds(10) elapsed: {
+				    // stop the discovery
+				    pub.unexport();
+			    };
+		    };
+
+        def [fut,res] := makeFuture();
+
+			  def sub := whenever: testProtocol discovered: { |ref|
+				  try: { self.fail("should not discover testProtocol") } catch: /.at.types.Exception using: { |e|
+					  res.ruin(e);
+					}
+			  };
+
+			  /.at.support.timer.when: seconds(6) elapsed: {
+				  // stop the discovery
+				  sub.cancel();
+				  res.resolve(`ok);
+			  };
+			  fut;
 		  };
 	
 	  };

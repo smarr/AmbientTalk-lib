@@ -66,13 +66,6 @@
  */
 import /.at.collections.vector;
 
-def mutatorAllocator := jlobby.edu.vub.at.objects.natives.grammar.AGAssignmentSymbol.&jAlloc;
-
-// given a selector, create selector:=
-def makeMutator(selector) {
-	mutatorAllocator((print: selector) + ":=")
-};
-
 // -- exception declarations --
 
 deftype StructuralTypeMismatch <: /.at.types.Exception;
@@ -82,10 +75,10 @@ def XStructuralTypeMismatch := extend: /.at.exceptions.createException(Structura
 	def init(p, ms, failedObject) {
 		protocol := p;
 		missingSelectors := ms;
-		def msg := "object " + failedObject + " failed to conform to " + p.name + ". Missing selectors:\n";
+		def msg := "object " + failedObject + " failed to conform to " + p.typeName + ". Missing selectors:\n";
 		ms.each: { |sel| msg := msg + sel + "\n" };
 		super^init(msg);
-	}; 
+	};
 } taggedAs: [ StructuralTypeMismatch ];
 
 deftype BrandMismatch <: StructuralTypeMismatch;
@@ -98,9 +91,9 @@ def XBrandMismatch := extend: /.at.exceptions.createException(BrandMismatch) wit
 // -- protocol object implementations --
 
 deftype Protocol;
-def ProtocolPrototype := object: {
+def ProtocolPrototype := object: { |XStructuralTypeMismatch,StructuralTypeMismatch,XBrandMismatch,Vector|
 	def selectors := [];
-	def name := "<<empty protocol>>";
+	def typeName := "<<empty protocol>>";
 	
 	def newFromObject(obj, @args) {
 		def allSelectors := Vector.new();
@@ -109,18 +102,19 @@ def ProtocolPrototype := object: {
 		  objMirror.listMethods().each: { |mth| allSelectors.add(mth.name) };
 			objMirror.listFields().each: { |fld|
 				allSelectors.add(fld.name);
-				allSelectors.add(makeMutator(fld.name));
+				allSelectors.add(/.at.support.util.makeMutator(fld.name));
 			};
 			obj := obj.super;
 		};
 		// remove duplicate selectors (clumsy because selectors have no < operator, so
 		// we have to compare their string representation instead)
-		self.new(allSelectors.uniq({|s1,s2| s1==s2},{|s1,s2| (s1.text <=> s2.text) == -1 }).asTable(), @args);
+		def uniqueSelectors := allSelectors.uniq({|s1,s2| s1==s2},{|s1,s2| (s1.text <=> s2.text) == -1 }).asTable();
+		self.new(uniqueSelectors.filter: { |s| !(/.at.support.util.isPrimitive(s)) }, @args);
 	};
 	
 	def init(sel, nam := nil) {
 		selectors := sel;
-		name := "<<" + (if: nil==nam then: &selectors else: &nam) + ">>";
+		typeName := "<<" + (if: nil==nam then: &selectors else: &nam) + ">>";
 	};
 	
 	// check whether obj conforms to self
@@ -152,7 +146,7 @@ def ProtocolPrototype := object: {
 		self.new(selectors + otherProtocol.selectors);
 	};
 	
-} taggedAs: [Protocol];
+} taggedAs: [Protocol, /.at.types.Isolate];
 
 // a branded protocol is a protocol that also checks type tags
 def BrandedProtocolPrototype := extend: ProtocolPrototype with: {
@@ -222,6 +216,15 @@ def StructuralTypesModule := object: {
 		}
 	};
 	
+	// check for conformance between a protocol and another protocol rather
+	// than conformance between a protocol and an object
+	def does: protocol1 match: protocol2 {
+		def selectors := protocol1.selectors;
+		protocol2 <? (object: { } mirroredBy: (mirror: {
+			def respondsTo(selector) { selectors.contains(selector) }
+		}));
+	};
+	
 	def ensure: obj implements: protocol {
 		protocol.checkConformance(obj);
 	};
@@ -277,6 +280,13 @@ def StructuralTypesModule := object: {
 			  self.assert: StructuralTypeMismatch raisedIn: {
 				  object: { def m(); def n(); } implements: PTestField;
 			  }
+		  };
+		
+		  def testProtocolMatching() {
+			  def PTest1 := protocol: { def m(); };
+			  def PTest2 := protocol: { def m(); def n(); };
+			  self.assertFalse(does: PTest1 match: PTest2);
+			  self.assertTrue(does: PTest2 match: PTest1);
 		  };
 	  };
   };
