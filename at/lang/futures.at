@@ -315,7 +315,7 @@ def attachFuture(msg) {
 };
 
 // extend a regular asynchronous message with futures behaviour
-def futurize(msg, future, type) {
+def futurize(msg, future, type := FutureMessage) {
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |future|
 

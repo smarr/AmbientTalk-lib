@@ -87,9 +87,7 @@
  *
  * To be investigated:
  * - dealing with 'dropped' or 'lost' messages: e.g. @Instant + @Future and no one in range -> ?
- * - allow ARs composed of both an extensional and an intensional set?
- * - for @One messaging, consider a ranking policy to determine the most
- *   'suitable' service in range.
+ * - for @One messaging, consider a ranking policy to determine the most 'suitable' service in range.
  * - a 'metaobject protocol' to enable custom attributes (or just a more open implementation)
  *
  * Implementation-wise:
@@ -300,6 +298,7 @@ def makeAmbientReference(extensionalRange,
 			if: (does: message respondTo: `handler) then: {
 				handler := message.handler;
 			} else: {
+				// TODO: won't this cause the defaults to override the message annotations??
 				handler := attachHandlerToMessage(extend: message with: {} taggedAs:
 					[defaultArity,defaultLifetime,defaultReply]).handler;
 			};
