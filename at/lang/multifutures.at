@@ -191,6 +191,7 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 		def finalize() {
 			whenEachSubscribers := [];
 			whenAllSubscribers := [];
+			whenBecomesSubscribers := [];
 			inbox := [];
 		};
 
@@ -253,6 +254,8 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 			// set upperBound to current number of registered results such that isFullyResolved
 			// will always return true
 			upperBound := resolvedValues.length + ruinedValues.length;
+			// any when:becomes: subscriber still registered is notified with a timeout exception
+			whenBecomesSubscribers.each: { |sub| sub<-notifyRuined(FuturesModule.XTimeoutException.new(self.base)) };
 			// prematurely invoke all whenAll subscribers
 			whenAllSubscribers.each: { |sub| sub<-notify(resolvedValues, ruinedValues)@OneWayMessage };
 			// de-register all listeners
