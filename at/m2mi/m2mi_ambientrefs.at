@@ -81,6 +81,9 @@
  *    took to discover a receiver, the less time the future gets to wait for the reply.
  *
  * Defaults can be changed at the reference level.
+ * Every message send to an ambient reference returns a 'handle' object which
+ * can be used to 'retract' the message send (by invoking its cancel method).
+ * This is useful for explicitly stopping @Sustain message sends.
  *
  * Useful operations:
  * - snapshot: AR -> table of far refs
@@ -101,12 +104,10 @@
  * ('virtual function tables' for AR messages via partial evaluation!)
  * => would also be useful for futures! @Due,@Oneway,@FutureMessage processing
  *
- * - every message send must have an associated 'delivery handle'
- *   => has at least one method: cancel(), to retract the message
- *   In case of @oneway, return val is the handle
- *   In the case of @future, handle is retrieved via the
- *   method handleOf: <future>. Problem: handle only constructed
- *   at message reception time, not creation time => use explicit future to sync?
+ * TODO: factor out all state out of the handlers. This allows the
+ * composition of handlers to occur off-line. At runtime, we only need to select
+ * the appropriate pre-composed handler and compose it with a state object specifying
+ * potential timeouts.
  *
  * @author tvcutsem
  */
@@ -314,7 +315,7 @@ def makeAmbientReference(TypeOrProtocol,
 				import ReplyT();
 			};
 			
-			handler.send(self, message);
+			(message.handle.cancelFuture)<-resolveWithValue(handler.send(self, message))@MetaMessage;
 		};
 
 		def toString() {
@@ -333,14 +334,58 @@ def makeAmbientReference(TypeOrProtocol,
   });
 };
 
-def makeLeasedIdEntry(id,ttl) {
+def min(x,y) { (x < y).ifTrue: { x } ifFalse: { y } };
+
+def makeLeasedIdEntry(id,originalTTL) {
 	object: {
-		def timeToLive := ttl;
+		def timeToLive := originalTTL;
 	  def id := id;
 	  def lapse(duration) { timeToLive := timeToLive - duration };
-	  def renew(duration) { timeToLive := timeToLive + duration };
+	  def renew(duration) { timeToLive := min(originalTTL, timeToLive + duration) };
 	  def expired() { timeToLive < seconds(0) };
-	} 
+	}
+};
+
+// create a table of leased entries
+def makeLeasedEntryTable() {
+	def entries := Vector.new();
+	def leaseRevoker;
+	
+	def activateLeaseRevoker() {
+		leaseRevoker := whenever: RECALL_PERIOD elapsed: {
+		  entries.removeAll: { |entry|
+			  entry.lapse(RECALL_PERIOD);
+			  entry.expired(); // if true, the entry will be removed
+		  };
+		  if: (entries.isEmpty) then: {
+			  // all entries deleted, can stop checking
+			  leaseRevoker.cancel();
+			  leaseRevoker := nil;
+		  };
+	  };
+	};
+	
+	object: {
+		def containsEntry(id) {
+			entries.contains(id, { |elt,entry| elt == entry.id })
+		};
+		def addEntry(id, ttl) {
+			entries.add(makeLeasedIdEntry(id, ttl));
+			if: (leaseRevoker == nil) then: {
+				activateLeaseRevoker();
+			};
+		};
+		def renewEntry(id, ttl) {
+			def idx := (entries.find: { |entry| entry.id == id });
+			entries.at(idx).renew(ttl);
+		};
+		def deactivateLeaseRevoker() {
+			(nil == leaseRevoker).ifFalse: {
+				leaseRevoker.cancel();
+			};
+			entries := nil;
+		};
+	}
 };
 
 deftype AmbientMessageHandler;
@@ -348,14 +393,7 @@ deftype AmbientMessageHandler;
 def exportServiceObject(obj, TypeOrProtocol, attributes) {
 	def attributes.protocol := ProtocolM.protocolOf: obj;
 	
-	def alreadyReceivedMessages := Vector.new();
-	def leaseRevoker := whenever: RECALL_PERIOD elapsed: {
-		alreadyReceivedMessages.removeAll: { |entry|
-			entry.lapse(RECALL_PERIOD);
-			entry.expired(); // if true, the entry will be removed
-			// system.println("SCANNING: ("+obj+"): "+entry.id+" - "+entry.timeToLive+" drop? " + res);
-		};
-	};
+	def alreadyReceivedMessages := makeLeasedEntryTable();
 
 	def unicastMessageHandler := unireference: AmbientMessageHandler for: (object: {
 		def acceptOne(msg) { obj <+ msg };
@@ -369,16 +407,15 @@ def exportServiceObject(obj, TypeOrProtocol, attributes) {
 		};
 		def acceptAll(scope, msg, id, ttl) {
 			if: scope(attributes) then: {
-				if: !alreadyReceivedMessages.contains(id, { |elt,entry| elt == entry.id }) then: {
+				if: !alreadyReceivedMessages.containsEntry(id) then: {
 					if: !(ttl == 0) then: {
-						alreadyReceivedMessages.add(makeLeasedIdEntry(id, ttl));
+						alreadyReceivedMessages.addEntry(id, ttl);
 					};
 					obj <+ msg;
 				} else: {
 					// msg already previously received, update lease time
 					// to make sure we don't hear it twice
-					def idx := (alreadyReceivedMessages.find: { |entry| entry.id == id });
-					alreadyReceivedMessages.at(idx).renew(ttl);
+					alreadyReceivedMessages.renewEntry(id, ttl);
 				}
 			}
 		};
@@ -395,40 +432,25 @@ def exportServiceObject(obj, TypeOrProtocol, attributes) {
 		def unexport() {
 			pub.unexport();
 			detachUniRef: unicastMessageHandler;
-			leaseRevoker.cancel();
+			alreadyReceivedMessages.deactivateLeaseRevoker();
 		}
 	}
 };
 
 // Trait Hierarchy for message handlers
-// 4 dimensions: arity, discovery lifetime, reply destination, comm. lifetime
-// = 4 points on which to dispatch
 
-// 1st dispatch on arity
-// 2nd dispatch on discovery lifetime
-// 3rd dispatch on reply destination
-// 4th dispatch on comm. lifetime
-
-/*def DiscoveryLifetimeTrait() {
-	object: {
-		def sendTime := nil;
-	}
-};*/
 def InstantLifetime := object: {
-	//import DiscoveryLifetimeTrait();
 	def timeLeft(forMsg) { seconds(0) };
 	def stillValid(msg) { false };
 };
 def TransientLifetime(timeout) {
-	//import DiscoveryLifetimeTrait();
 	object: {
 		def transientPeriod := timeout;
-	  def timeLeft(forMsg) { (forMsg.sendTime + timeout) - now() };
+	  def timeLeft(forMsg) { (forMsg.handle.sendTime + timeout) - now() };
 		def stillValid(msg) { self.timeLeft(msg) > seconds(0) };
   }
 };
 def SustainLifetime := object: {
-	//import DiscoveryLifetimeTrait();
 	// RECALL_PERIOD is the maximum amount of time receiver wants to recall the message
 	def timeLeft(forMsg) { RECALL_PERIOD };
 	def stillValid(msg) { true };
@@ -440,20 +462,19 @@ def ExpireLifetime(timeout) {
 		import DueReply(timeout) exclude duePeriod;
 		
 		def duePeriod(forMsg) {
-			self.transientPeriod - (now() - forMsg.sendTime);
+			self.transientPeriod - (now() - forMsg.handle.sendTime);
 		};
 	}
 };
 
 def ArityTrait := object: {
 	def keepSending: msg to: ar while: body {
-		// set the message send time of the discovery lifetime trait
-		//self.sendTime := now();
+		def continuation;
 		
 		def sendOnce() {		
 			FuturesModule.when: body() becomes: { |continue|
 				if: continue then: {
-					when: DISCOVERY_RATE elapsed: {
+					continuation := when: DISCOVERY_RATE elapsed: {
 						if: self.stillValid(msg) then: { // DISPATCH to Discovery Lifetime
 							sendOnce();
 					  } else: {
@@ -471,7 +492,7 @@ def ArityTrait := object: {
 	
 	  object: {
 		  def cancel() {
-			  // TODO: need to stop the above discovery
+			  (nil == continuation).ifFalse: { continuation.cancel() };
 		  }
 	  }
 	};
@@ -481,7 +502,6 @@ deftype ReplyHandlerT;
 
 def OneArity := object: {
 	import ArityTrait;
-	//def makeFuture() { FuturesModule.makeFuture() };
 	def send(ar, msg) {
 		self.keepSending: msg to: ar while: {
 			def replies := [];
@@ -493,7 +513,8 @@ def OneArity := object: {
 			FuturesModule.future: { |signal|
 				when: ANYCAST_TIMEOUT elapsed: {
 					if: (replies.length > 0) then: {
-						self.unicastMessage(replies[1], msg); // DISPATCH to Reply Destination
+						//self.unicastMessage(replies[1], msg); // DISPATCH to Reply Destination
+						replies[1]<-acceptOne(msg);
 						detachUniRef: replyhandler;
 						signal(false); // stop searching
 					} else: {
@@ -502,34 +523,6 @@ def OneArity := object: {
 				}
 			}
 		};
-		
-		// set the message send time of the discovery lifetime trait
-		/*self.sendTime := now();
-		
-		def sendOnce() {			
-			def replies := [];
-			def replyhandler := unihandle: ReplyHandlerT for: (object: {
-				def reply(receiver) { replies := replies + [receiver] };
-			});
-			ar.reach<-anycast(ar.scope, replyhandler);
-			
-			when: ANYCAST_TIMEOUT elapsed: {
-				if: (replies.length > 0) then: {
-					self.replyDestination.unicastMessage(replies[0], msg);
-					replyhandler.detach();
-					self.replyDestination.allMessagesSent();
-				} else: {
-					self.pauseAndIfStillValidDo: sendOnce;
-				}
-			}
-		};
-	  sendOnce();
-	
-	  object: {
-		  def cancel() {
-			  // need to stop the above discovery
-		  }
-	  }*/
 	};
 };
 
@@ -538,30 +531,14 @@ resolver.resolve(true);
 
 def AllArity := object: {
 	import ArityTrait;
-	//def makeFuture() { MFuturesModule.makeMultiFuture() };
 	def send(ar, msg) {
 		def id := (print: msg.selector) + now().intValue;
 		self.keepSending: msg to: ar while: {
 			def ttl := self.timeLeft(msg); // DISPATCH to Discovery Lifetime
-			self.broadcastMessage(ar, msg, id, ttl); // DISPATCH to Reply Destination
+			//self.broadcastMessage(ar, msg, id, ttl); // DISPATCH to Reply Destination
+			ar.reach<-acceptAll(ar.scope, msg, id, ttl);
 			trueFuture; // can always deliver a one-to-many message to more receivers
 		}
-		/*self.sendTime := now();
-		def id := now(); //generateUID;
-		
-		def sendOnce() {		
-			def ttl := self.discoveryLifetime.timeLeft();
-			self.replyDestination.broadcastMessage(ar, msg, id, ttl);
-			self.pauseAndIfStillValidDo: sendOnce;
-		};
-	  sendOnce();
-	
-	  object: {
-		  def cancel() {
-			  // need to stop the above discovery
-		  }
-	  }*/
-	
 	};
 };
 
@@ -571,37 +548,35 @@ def OnewayFutureReplyTrait := object: {
 
 def OnewayReply := object: {
 	import OnewayFutureReplyTrait;
-	//def future := nil;
-	def unicastMessage(unihandle, msg) {
+	/*def unicastMessage(unihandle, msg) {
 		unihandle<-acceptOne(msg);
 	};
 	def broadcastMessage(ar, msg, id, ttl) {
 	  ar.reach<-acceptAll(ar.scope, msg, id, ttl);
-	};
+	};*/
 };
 
-def FutureDueReplyTrait() {
+/*def FutureDueReplyTrait() {
 	object: {
-		//def future := self.makeFuture();
 		def unicastMessage(unihandle, msg) {
-	  	unihandle<-acceptOne(msg); //FuturesModule.futurize(msg, self.future));
-	  };
+			unihandle<-acceptOne(msg);
+		};
 	  def broadcastMessage(ar, msg, id, ttl) {
-	    ar.reach<-acceptAll(ar.scope, msg, id, ttl); //FuturesModule.futurize(msg, self.future), id, ttl);
-	  };	
+	    ar.reach<-acceptAll(ar.scope, msg, id, ttl);
+	  };
 	}
-};
+};*/
 
 def FutureReply() {
 	object: {
 		import OnewayFutureReplyTrait;
-		import FutureDueReplyTrait;
+		//import FutureDueReplyTrait;
   }
 };
 
 def DueReply(timeout) {
 	object: {
-		import FutureDueReplyTrait;		
+		//import FutureDueReplyTrait;		
 		def duePeriod(forMsg) { timeout };
 	  def allMessagesSent(msg) {
 		  when: self.duePeriod(msg) elapsed: {
@@ -622,7 +597,7 @@ deftype ARModule;
 def enableAmbientRefs() {
 	if: !(is: actor taggedAs: ARModule) then: {
 		actor.install: (extend: actor with: {
-			def createMessage(sel, args, types) {
+			/*def createMessage(sel, args, types) {
 				def msg := super^createMessage(sel, args, types);
 				if: (is: msg taggedAs: FutureReturningT) then: {
 					def [fut,res] := Util.getAnnotationOfType(msg, MsgArity).createFuture();
@@ -630,22 +605,31 @@ def enableAmbientRefs() {
 				} else: {
 					msg
 				}
-			}; // end createMessage
+			};*/ // end createMessage
 			
 			def send(receiver, msg) {
-				def result := super^send(receiver,
-					// if sent to an ambient ref, capture the current send time
-					if: (is: receiver taggedAs: AmbientRef) then: {
+				if: (is: receiver taggedAs: AmbientRef) then: {
+				  def [cancelFuture,cancelRes] := FuturesModule.makeFuture();
+				  def handle := object: {
+					  def cancelFuture := cancelFuture;
+					  def future := nil;
 					  def sendTime := now();
-					  extend: msg with: { |sendTime| };
-				  } else: {
-					  msg
-				  });
-				if: (does: msg respondTo: `future) then: {
-					msg.future
-				} else: {
-					result
-				}
+					  def cancel() { cancelFuture<-cancel() };
+				  };
+					if: (is: msg taggedAs: FutureReturningT) then: {
+						def [fut,res] := Util.getAnnotationOfType(msg, MsgArity).createFuture();
+						handle.future := fut;
+						msg := FuturesModule.futurize(msg, fut);
+					} else: {
+						// TODO: actually, we should also add a future to the message
+						// if the receiver AR has a @Future or @Due default AND this
+						// message is not tagged as @Oneway						
+					};
+				  super^send(receiver, extend: msg with: { |handle| });
+				  handle // return value of send to AR is always the handle
+			  } else: {
+				  super^send(receiver, msg);
+			  };
 			};
 		} taggedAs: [ ARModule ]);	
 	}
@@ -821,20 +805,20 @@ def AmbientRefModule := object: {
 			// ONE, INSTANT, ONEWAY
 			def testOneInstantOneway() {
 				when: seconds(3) elapsed: {
-					self.assertEquals(nil, a<-testMethod(5)@[One,Instant,Oneway]);					
+					self.assertEquals(nil, (a<-testMethod(5)@[One,Instant,Oneway]).future);
 				}
 			};
 
       // ONE, SUSTAIN, FUTURE
 			def testAsyncOneSustainFuture() {
-				FuturesModule.when: a<-testMethod(5)@[One,Sustain,Future] becomes: { |v|
+				FuturesModule.when: (a<-testMethod(5)@[One,Sustain,Future]).future becomes: { |v|
 					self.assertEquals(6,v);
 				};
 			};
 
 			// ONE, TRANSIENT, FUTURE
 			def testAsyncOneTransientFuture() {
-				FuturesModule.when: a<-testMethod(5)@[One,Transient(seconds(12)),Future] becomes: { |v|
+				FuturesModule.when: (a<-testMethod(5)@[One,Transient(seconds(20)),Future]).future becomes: { |v|
 					self.assertEquals(6,v);
 				} catch: { |e|
 					self.fail("subject should have been found");
@@ -844,7 +828,7 @@ def AmbientRefModule := object: {
 			// ONE, EXPIRES
 			def testAsyncOneExpirable() {
 				def blackHole := ambient: ARNonExistentTestT;
-				FuturesModule.when: blackHole<-testMethod(5)@[One,Expires(seconds(5))] becomes: { |v|
+				FuturesModule.when: (blackHole<-testMethod(5)@[One,Expires(seconds(10))]).future becomes: { |v|
 					self.fail("method should have never been processed");
 				} catch: { |e|
 					self.assertTrue(is: e taggedAs: FuturesModule.TimeoutException);
@@ -853,7 +837,8 @@ def AmbientRefModule := object: {
 
 			// ONE, SUSTAIN, ONEWAY
 			def testOneSustainOneway() {
-				self.assertEquals(nil, a<-testMethod(5)@[One,Sustain,Oneway]);
+				def handle := a<-testMethod(5)@[One,Sustain,Oneway];
+				self.assertEquals(nil, handle.future);
 			};
 			
 			// ONE, INSTANT, ONEWAY
@@ -862,19 +847,20 @@ def AmbientRefModule := object: {
 					// FIXME: currently, we're just waiting long enough and hoping
 					// that the actor is up in time, but this is otherwise a very
 					// unsafe unit test! (semantically the message may get lost)
-					when: seconds(6) elapsed: {// asyncReply discovered: { |ref|
-						self.assertEquals(nil, asyncReply<-replyTo(object: {
+					when: seconds(10) elapsed: {// asyncReply discovered: { |ref|
+						asyncReply<-replyTo(object: {
 							def reply(x) {
 								return(x);
 							}
-						})@[One,Instant,Oneway]);	
+						})@[One,Instant,Oneway];	
 					}
 				}
 			};
 			
 			// ALL, TRANSIENT, DUE
 			def testAsyncAllTransientDue() {
-				MFuturesModule.whenAll: omni<-serve(0)@[All,Transient(seconds(8)),Due(seconds(5))] resolved: { |vals|
+				def handle := omni<-serve(0)@[All,Transient(seconds(10)),Due(seconds(5))];
+				MFuturesModule.whenAll: handle.future resolved: { |vals|
 					self.assertEquals(2, vals.length);
 					self.assertTrue(vals.contains(1));
 					self.assertTrue(vals.contains(2));
@@ -887,7 +873,8 @@ def AmbientRefModule := object: {
 			def testAsyncAllTransientFuture() {
 				FuturesModule.future: { |reply|
 					def count := 0;
-					MFuturesModule.whenEach: omni<-serve(0)@[All,Transient(seconds(10)),Future] becomes: { |val|
+					def handle := omni<-serve(0)@[All,Transient(seconds(20)),Future];
+					MFuturesModule.whenEach: handle.future becomes: { |val|
 					  self.assertTrue((val == 1).or: { val == 2 });
 					  count := count + 1;
 					  if: (count == 2) then: {
@@ -899,7 +886,7 @@ def AmbientRefModule := object: {
 			
 			// ALL, EXPIRES
 			def testAsyncAllExpires() {
-				MFuturesModule.whenAll: omni<-serve(0)@[All,Expires(seconds(10))] resolved: { |vals|
+				MFuturesModule.whenAll: (omni<-serve(0)@[All,Expires(seconds(15))]).future resolved: { |vals|
 					self.assertEquals(2, vals.length);
 					self.assertTrue(vals.contains(1));
 					self.assertTrue(vals.contains(2));
@@ -911,24 +898,25 @@ def AmbientRefModule := object: {
 			// ALL, SUSTAIN, ONEWAY
 			def testAsyncAllSustainOneway() {
 				FuturesModule.future: { |return|
-					self.assertEquals(nil, asyncReply<-replyTo(object: {
+					def handle := asyncReply<-replyTo(object: {
 						def reply(x) {
 							return(x);
+							handle.cancel(); // stop sending the message
 						}
-					})@[All,Sustain,Oneway]);	
+					})@[All,Sustain,Oneway];	
 				}
 			};
 			
 			def testAsyncMatchingWhere() {
 				def a := ambient: rARBarTest where: (isolatelambda: { |props| props.y > 40 } scoped: {});
-				FuturesModule.when: a<-testContent(5)@[One,Sustain,Future] becomes: { |v|
+				FuturesModule.when: (a<-testContent(5)@[One,Sustain,Future]).future becomes: { |v|
 					self.assertEquals(25,v);
 				} catch: { |e| raise: e };
 			};
 			
 			def testAsyncNonMatchingWhere() {
 				def a := ambient: rARBarTest where: (isolatelambda: { |props| props.z == 6 } scoped: {});
-				FuturesModule.when: a<-testContent(5)@[One,Expires(seconds(10)),Future] becomes: { |v|
+				FuturesModule.when: (a<-testContent(5)@[One,Expires(seconds(10)),Future]).future becomes: { |v|
 					// should not happen!
 					self.fail("discovered a non-matching ambient reference");
 				} catch: { |e|
@@ -965,16 +953,15 @@ def AmbientRefModule := object: {
 				  }	
 				};
 				
-				def MAX := 5;
+				def MAX := 3;
 				spawnPlayers(MAX);
 				
-				def maxVoteTime := seconds(10);
+				def maxVoteTime := seconds(15);
 				def proximateTeamPlayers := ambient: VotePlayerTest
 				                            where: (isolatelambda: { |p| p.team == "blue" } scoped: {});
-				
-				def voteMultiFuture := proximateTeamPlayers<-askToVote("poll")@[All,Expires(maxVoteTime)];
-				
-				MFuturesModule.whenAll: voteMultiFuture resolved: { |votes|
+
+        def handle := proximateTeamPlayers<-askToVote("poll")@[All,Expires(maxVoteTime)];					
+				MFuturesModule.whenAll: handle.future resolved: { |votes|
 					//(voteMultiFuture<-sender())<-voteResult(votes)@Oneway;
 					self.assertEquals(MAX, votes.length);
 					1.to: MAX+1 do: { |i|
@@ -1001,19 +988,19 @@ def AmbientRefModule := object: {
 			}) where: (isolatelambda: { |props| props.x > 10 } scoped: {});
 
 			def testAsyncProtocolAmbientRef() {
-				FuturesModule.when: protocolAmbientRef<-protocolAmbientRefTestMethod()
-				    @[One,Transient(seconds(10)),Future] becomes: { |val|
+				def handle := protocolAmbientRef<-protocolAmbientRefTestMethod()@[One,Sustain,Future];
+				FuturesModule.when: handle.future becomes: { |val|
 					self.assertEquals(`ok, val);
 				}
 			};
 			
 			def testAsyncProtocolsAndWhere() {
-				FuturesModule.when: protocolWhereAmbientRef<-protocolAmbientRefTestMethod()
-				    @[One,Transient(seconds(10)),Future] becomes: { |val|
+				def handle := protocolWhereAmbientRef<-protocolAmbientRefTestMethod()@[One,Sustain,Future];
+				FuturesModule.when: handle.future becomes: { |val|
 					self.assertEquals(`ok, val);
 				}
 			};
-	
+
 			// TODO: deal with dropped messages, currently not explicitly trapped
 			// so, @Instant + @Future is currently a bad combination because the future
 			// never times out, even if no message was ever sent
@@ -1037,8 +1024,5 @@ def AmbientRefModule := object: {
 		};
 		
 	}; // end AmbientRefsTest
-	
-	// auto-enable ambient reference behaviour upon loading
-	// enableAmbientRefs();
 	
 }; // end AmbientRefModule
