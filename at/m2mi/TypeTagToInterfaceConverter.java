@@ -39,11 +39,8 @@ import edu.vub.at.objects.natives.NATTypeTag.OBJRootType;
 import edu.vub.at.objects.symbiosis.XJavaException;
 import edu.vub.at.util.logging.Logging;
 
-import java.io.BufferedInputStream;
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.util.Collections;
 import java.util.EventListener;
 import java.util.HashMap;
@@ -168,6 +165,7 @@ public class TypeTagToInterfaceConverter {
 						if (typetag.base_typeName().equals(OBJRootType._INSTANCE_.base_typeName())) {
 							supertypes[i] = Type.class;
 						} else {
+							register(Reflection.upSelector(typetag.base_typeName()), typetag);
 							supertypes[i] = this.loadClass(Reflection.upSelector(typetag.base_typeName()));
 						}	
 					}
