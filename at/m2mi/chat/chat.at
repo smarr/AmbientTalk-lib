@@ -1,0 +1,112 @@
+import /.at.lang.multifutures;
+import /.at.m2mi.m2mi_ambientrefs;
+import /.at.support.timer;
+
+def JOptionPane := jlobby.javax.swing.JOptionPane;
+
+deftype ChatRef;
+//deftype ChatDiscoveryRef;
+
+def allChatDiscovery := ambient: ChatRef;
+
+def ChatRoom := object: {
+	def name;
+	def chatters;
+	def handle;
+	def init(nam) {
+		name := nam;
+		chatters := ambient: ChatRef where: (isolatelambda: { |c|
+			c.chatRoom == name
+		} scoped: { |name| });
+	};
+	def startAnnouncement() {
+		self.handle := allChatDiscovery<-reportChatroom(name)@[All,Sustain,Oneway];
+	};
+	def stopAnnouncement() {
+		(nil != self.handle).ifTrue: { self.handle.cancel() };
+	};
+	def putMessage(line) {
+		chatters<-putMessage(line)@[All,Instant,Oneway];
+	};
+} mirroredBy: (mirror: {
+	def print() { self.base.name }
+});
+
+object: {
+	def makeChat(username) {
+		def myChatRoom;
+		def myChatFrame := jlobby.at.m2mi.chat.ChatFrame.new("AT/M2MI Chat Demo -- " + username);
+		def myChatLog := myChatFrame.getChatLog();
+		def myChatLogStream := jlobby.java.io.PrintStream.new(myChatLog.getOutputStream());
+		
+		def println := myChatLogStream.&println.cast(jlobby.java.lang.String);
+		
+    def myChatRoomList := /.at.collections.vector.Vector.new();
+
+		def online := false;
+    
+		myChatFrame.setListener(object: {
+			def newChatRoom(name) {
+			  def chatroom := ChatRoom.new(name);
+				// Add chat room to UI list and select it.
+				myChatFrame.addChatRoom(chatroom, true);
+				myChatRoomList.add(name);
+			};
+			def setChatRoom(cr) {
+				if: (nil != myChatRoom) then: {
+					myChatRoom.stopAnnouncement();
+				};
+				myChatRoom := cr;
+				myChatRoom.startAnnouncement();
+			};
+			def sendText(line) {
+				myChatRoom.putMessage(username + "> " + line);
+			};
+			def toggleOnline() {
+				online.ifTrue: { network.offline } ifFalse: { network.online };
+				online := !online;
+			};
+		});
+
+		export: (object: {
+			//def requestChatRooms() { (nil != myChatRoom).ifTrue: { myChatRoom.name } };
+			def reportChatroom(roomname) {
+				if: !myChatRoomList.contains(roomname) then: {
+					myChatRoomList.add(roomname);
+					myChatFrame.addChatRoom(ChatRoom.new(roomname), false);
+				}
+			};
+			def putMessage(line) {
+				println(line);
+			}
+		}) as: ChatRef with: {
+			def chatRoom() { (myChatRoom == nil).ifFalse: { myChatRoom.name } };
+		};
+
+    // Note: cannot use @[All,Sustain,Reply] because this:
+    // A) would only trigger once for each remote peer, while a peer may create
+    // multiple chat rooms over time
+    // B) if a peer does not have a chat room yet when this method is invoked,
+    // it cannot 'refuse to reply', so it replies 'nil' and the sender will never
+    // again invoke the method on the same peer, thus no chat rooms are discovered
+    /*def DISCOVERY_RATE := seconds(2);
+    whenever: DISCOVERY_RATE elapsed: {
+			def handle := allChatDiscovery<-requestChatRooms()@[All,Expires(DISCOVERY_RATE)];
+			// BEWARE: this observer also triggers for my own chatrooms
+			whenEach: handle.future becomes: { |room|
+				//system.println("WHENEACH on " + self + "("+ username + ") discovered " + room);
+				if: ((nil != room).and: { !myChatRoomList.contains(room) }) then: {
+					myChatRoomList.add(room);
+					myChatFrame.addChatRoom(ChatRoom.new(room), false);
+				}
+			};
+    };*/
+	}; // makeChat
+	
+	def ChatTest := extend: /.at.unit.test.UnitTest.new("M2MIChatTest") with: {	
+		def testDemo() {
+			/.at.m2mi.chat.chat.makeChat("Tom");
+			actor: { /.at.m2mi.chat.chat.makeChat("Alice") };
+		}
+	};
+};
