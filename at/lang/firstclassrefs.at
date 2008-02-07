@@ -170,5 +170,18 @@ def FirstClassRefModule := object: {
 
   def reference: closure { reference: closure taggedAs: [] };
 
+  // auxiliary function that can be used to succinctly express interception of
+  // async messages sent to an object. Example: logging:
+  // def r := farreference: { |rcv,msg| log(msg); rcv <+ msg } to: obj
+  //  (here, rcv refers to obj and msg to any message sent to the proxy)
+  def farreference: closure to: object {
+	  object: { } mirroredBy: (mirror: {
+		  import TFarRef exclude pass;
+		  def intercept(msg) { closure(object, msg) };
+	    def toString() { "farref proxy to " + object };
+		  // def transportStrategy; // not needed: proxy is pass-by-far-reference
+	  })
+  };
+
 }; // end FirstClassRefModule
 
