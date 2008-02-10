@@ -1,0 +1,179 @@
+import /.at.lang.multifutures;
+import /.at.m2mi.m2mi_ambientrefs;
+import /.at.support.timer;
+
+def FuturesModule := /.at.lang.futures;
+FuturesModule.enableFutures(false);
+
+deftype Screen;
+deftype ScreenDiscovery;
+deftype Projector;
+
+def allScreenDiscovery := ambient: ScreenDiscovery;
+
+def Theatre := object: {
+	def name;
+	def screens;
+	def handle;
+	def init(nam) {
+		name := nam;
+		screens := ambient: Screen where: (isolatelambda: { |c|
+			c.theatreName == name
+		} scoped: { |name| });
+	};
+	def startAnnouncement() {
+		self.handle := allScreenDiscovery<-report(name)@[All,Sustain,Oneway];
+	};
+	def stopAnnouncement() {
+		(nil != self.handle).ifTrue: { self.handle.cancel() };
+	};
+	def availableSlides(farref, proj, slideIDs) {
+		screens<-availableSlides(farref, proj, slideIDs)@[All,Instant,Oneway];
+	};
+	/*def putSlide(proj, slideID, slide) {
+		screens<-putSlide(proj, slideID, slide)@[All,Instant,Oneway];
+	};*/
+	def displaySlides(proj, slideIDs) {
+		screens<-displaySlides(proj, slideIDs)@[All,Instant,Oneway];
+	};
+} mirroredBy: (mirror: {
+	def print() { self.base.name }
+});
+
+object: {
+
+	def wrapperFactory := object: {
+		def makeDiscovery(listener) {
+			wrapDiscoverableScreenObject(listener);
+		};
+		def makeScreen(discObject, slideSet, listener) {
+			wrapScreen(discObject, slideSet, listener);
+		};
+		def makeProjector() {
+			wrapProjector();
+		};
+	};
+	
+	def makeSlideProjector() {
+		def frame := jlobby.at.m2mi.slides.SlideProjector.new(wrapperFactory);
+		frame.setVisible(true);
+	};
+	
+	def makeSlideScreen() {
+		def frame := jlobby.at.m2mi.slides.SlideScreen.new(wrapperFactory);
+		frame.setVisible(true);
+	};
+	
+	def wrapScreen(discObject, slideSet, listener) {
+		def projToFarRef := jlobby.java.util.HashMap.new();
+    def myRealScreen := jlobby.at.m2mi.slides.ScreenObject.new(
+	    slideSet,
+	    listener,
+	    object: {
+		    def fetch(proj, slideId) {
+			    def farref := projToFarRef.get(proj);
+					system.println("DEBUG: " + self + " screen getting slide " +slideId);
+					FuturesModule.when: farref<-getSlide(slideId)@FuturesModule.FutureMessage becomes: { |slide|
+						system.println("DEBUG: " + self + " screen got slide " +slideId);
+						myRealScreen.putSlide(proj, slideId, slide);
+					}
+		    }	
+      }
+    );
+		
+		export: (object: {
+			def availableSlides(farref, proj, slideIDs) {
+				system.println("DEBUG: on AR-exported Screen " + self + " availableSlides("+farref+","+proj+","+slideIDs+")");
+				projToFarRef.put(proj, farref);
+				myRealScreen<-availableSlides(proj, slideIDs);
+			};
+			def displaySlides(proj, slideIDs) {
+				system.println("DEBUG: on AR-exported Screen " + self + " displaySlides("+proj+","+slideIDs+")");
+				myRealScreen<-displaySlides(proj, slideIDs);
+			};
+		}) as: Screen with: {
+			def theatreName() { discObject.currentTheatreName() };
+		};
+		
+	}; // wrapScreen
+	
+	def wrapProjector() {
+		def myTheatre;
+		def slideReplies := jlobby.java.util.HashMap.new();
+				
+		def multihandleProxy := object: {
+			def availableSlides(proj, slideIDs) {
+				// change proj unihandle into far ref to self
+				(nil != myTheatre).ifTrue: { myTheatre.availableSlides(mySelf, proj, slideIDs) }
+			};
+			def displaySlides(proj, slideIDs) {
+				(nil != myTheatre).ifTrue: { myTheatre.displaySlides(proj, slideIDs) }
+			};
+			def putSlide(proj, slideID, slide) {
+				def reply := slideReplies.get(slideID);
+				reply(slide);
+				slideReplies.remove(slideID);
+			};
+		};
+				
+		def myRealProjector := jlobby.at.m2mi.slides.ProjectorObject.new(multihandleProxy);
+		def mySelf := object: {
+			def setSlideShow(ss) { myRealProjector<-setSlideShow(ss) };
+			def displayFirst() { myRealProjector<-displayFirst() };
+			def displayLast() { myRealProjector<-displayLast() };
+			def displayNext() { myRealProjector<-displayNext() };
+			def displayPrevious() { myRealProjector<-displayPrevious() };
+			def getSlideGroupIndex() { myRealProjector.getSlideGroupIndex() };
+			def setBlanked(bool) { myRealProjector<-setBlanked(bool) };
+			def isBlanked() { myRealProjector.isBlanked() };
+			
+			def setTheatre(theatre) {
+				myTheatre := theatre;
+				myRealProjector<-setTheatre((nil == theatre).ifTrue: { nil } ifFalse: { multihandleProxy });
+			};
+			def getSlide(eoid) {
+				system.println("DEBUG: " + self + " getSlide called on projector with id " +eoid);
+				myRealProjector<-getSlide(eoid);
+				FuturesModule.future: { |reply|
+					slideReplies.put(eoid, reply);
+				};
+			};
+		};	
+	}; // wrapProjector
+	
+	
+	def wrapDiscoverableScreenObject(myListener) {
+		def myTheatre;
+    def myTheatreMap := jlobby.java.util.HashMap.new();
+
+    def public := object: {
+			def report(theatreName) {
+				if: !myTheatreMap.containsKey(theatreName) then: {
+					def theatre := Theatre.new(theatreName);
+					myTheatreMap.put(theatreName, theatre);
+					myListener<-theatreAdded(theatre, theatreName);
+				}
+			};
+		};
+
+		export: public as: ScreenDiscovery;
+		
+		object: {
+			def currentTheatreName() { (nil != myTheatre).ifTrue: { myTheatre.name } };
+			def makeTheatre(name) { public.report(name); myTheatreMap.get(name) };
+			def associate(theatre, theatreName) {
+				(nil != myTheatre).ifTrue: { myTheatre.stopAnnouncement() };
+				myTheatre := theatre;
+				(nil != myTheatre).ifTrue: { myTheatre.startAnnouncement() };
+			};
+		};
+
+	}; // wrapDiscoverableScreenObject
+	
+	def SlidesTest := extend: /.at.unit.test.UnitTest.new("M2MISlidesTest") with: {	
+		def testDemo() {
+			makeSlideScreen();
+			actor: { /.at.m2mi.slides.slides.makeSlideProjector() };
+		}
+	};
+};
