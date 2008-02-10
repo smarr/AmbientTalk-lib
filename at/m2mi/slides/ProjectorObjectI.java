@@ -1,6 +1,9 @@
 package at.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
+import edu.rit.slides.Projector;
+import edu.rit.slides.Screen;
+import edu.rit.slides.SlideShow;
 
 import java.util.EventListener;
 

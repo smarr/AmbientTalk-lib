@@ -30,21 +30,25 @@
 package at.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
-import edu.rit.m2mi.M2MI;
+import edu.rit.slides.Projector;
+import edu.rit.slides.Screen;
+import edu.rit.slides.ScreenChooser;
+import edu.rit.slides.ScreenSelectionListener;
+import edu.rit.slides.SlideDescriptor;
+import edu.rit.slides.SlidePanel;
+import edu.rit.slides.SlideSet;
+import edu.rit.slides.SlideShow;
 
 import java.awt.Color;
 import java.awt.Container;
-
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
-import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-
 import java.io.File;
 
 import javax.swing.AbstractAction;
@@ -59,7 +63,6 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JOptionPane;
-import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
@@ -94,7 +97,7 @@ public class SlideProjector
 	private DiscoverableScreenObjectI myDiscoverableScreenObject;
 	private ScreenChooser myScreenChooser;
 	//private ScreenDiscoveryObject myScreenDiscoveryObject;
-	private DiscoverableScreen allScreens;
+	//private DiscoverableScreen allScreens;
 
 	private JFileChooser myFileChooser;
 	private JList myScreenList;
@@ -106,13 +109,6 @@ public class SlideProjector
 	private JButton myBlankButton;
 	private JButton myUnblankButton;
 	private JButton myOpenButton;
-
-	// callback to AmbientTalk world to create replacement instances of the core classes
-	public interface ATReplacementFactory {
-		public DiscoverableScreenObjectI makeDiscovery(ScreenDiscoveryListener l) throws Exception;
-		public ScreenObjectI makeScreen(DiscoverableScreenObjectI d, SlideSet s, ScreenListener l) throws Exception;
-		public ProjectorObjectI makeProjector() throws Exception;
-	}
 	
 // Hidden constructors.
 
@@ -126,7 +122,7 @@ public class SlideProjector
 
 		// Set up projector objects.
 		mySlideSet = new SlideSet();
-		mySlidePanel = new SlidePanel (mySlideSet);
+		mySlidePanel = new SlidePanel(mySlideSet);
 		myTheatreHandle = null;
 		mySlideShow = null;
 		try {
@@ -174,9 +170,9 @@ public class SlideProjector
 		// myScreenDiscoveryObject = new ScreenDiscoveryObject (myScreenChooser);
 
 		// Initiate the screen discovery process.
-		allScreens = (DiscoverableScreen)
-			M2MI.getOmnihandle (DiscoverableScreen.class);
-		allScreens.request();
+		//allScreens = (DiscoverableScreen)
+		//	M2MI.getOmnihandle (DiscoverableScreen.class);
+		//allScreens.request();
 
 		// Set up file chooser.
 		myFileChooser = new JFileChooser (System.getProperty ("user.dir"));

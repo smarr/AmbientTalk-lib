@@ -31,7 +31,10 @@ package at.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
 import edu.rit.m2mi.M2MI;
-
+import edu.rit.slides.Projector;
+import edu.rit.slides.Screen;
+import edu.rit.slides.Slide;
+import edu.rit.slides.SlideShow;
 import edu.rit.util.Timer;
 import edu.rit.util.TimerTask;
 import edu.rit.util.TimerThread;

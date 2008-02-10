@@ -29,8 +29,13 @@
 
 package at.m2mi.slides;
 
-import edu.rit.m2mi.M2MI;
-import edu.rit.m2mi.Multihandle;
+import edu.rit.slides.FullScreenSlideFrame;
+import edu.rit.slides.Screen;
+import edu.rit.slides.ScreenChooser;
+import edu.rit.slides.ScreenListener;
+import edu.rit.slides.ScreenSelectionListener;
+import edu.rit.slides.SlidePanel;
+import edu.rit.slides.SlideSet;
 
 import java.awt.Color;
 import java.awt.Container;
@@ -50,8 +55,6 @@ import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.Spring;
 import javax.swing.SpringLayout;
-
-import at.m2mi.slides.SlideProjector.ATReplacementFactory;
 
 /**
  * Class SlideScreen is the main program providing a {@link Screen
@@ -81,7 +84,7 @@ public class SlideScreen
 	private DiscoverableScreenObjectI myDiscoverableScreenObject;
 	private ScreenChooser myScreenChooser;
 	//private ScreenDiscoveryObject myScreenDiscoveryObject;
-	private DiscoverableScreen allScreens;
+	//private DiscoverableScreen allScreens;
 
 	private FullScreenSlideFrame myFullScreenSlideFrame;
 
@@ -101,8 +104,8 @@ public class SlideScreen
 
 		// Set up screen objects.
 		mySlideSet = new SlideSet();
-		myFullScreenSlidePanel = new SlidePanel (mySlideSet);
-		mySlidePanel = new SlidePanel (mySlideSet);
+		myFullScreenSlidePanel = new SlidePanel(mySlideSet);
+		mySlidePanel = new SlidePanel(mySlideSet);
 	
 		myTheatreHandle = null;
 		
@@ -164,13 +167,13 @@ public class SlideScreen
 		}
 		
 		// Initiate the screen discovery process.
-		allScreens = (DiscoverableScreen)
-			M2MI.getOmnihandle (DiscoverableScreen.class);
-		allScreens.request();
+		//allScreens = (DiscoverableScreen)
+		//	M2MI.getOmnihandle (DiscoverableScreen.class);
+		//allScreens.request();
 
 		// Set up full screen slide frame.
 		myFullScreenSlideFrame =
-			new FullScreenSlideFrame (myFullScreenSlidePanel);
+			new FullScreenSlideFrame(myFullScreenSlidePanel);
 
 		// Set up GUI widgets.
 		SpringLayout layout = new SpringLayout();

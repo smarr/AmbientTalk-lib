@@ -1,5 +1,7 @@
 package at.m2mi.slides;
 
+import edu.rit.slides.Screen;
+
 import java.util.EventListener;
 
 public interface DiscoverableScreenObjectI extends EventListener {

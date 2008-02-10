@@ -1,6 +1,7 @@
 package at.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
+import edu.rit.slides.Projector;
 
 public interface ScreenObjectI {
 
