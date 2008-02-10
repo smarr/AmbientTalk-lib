@@ -8,6 +8,10 @@
 // reserved. For further information, contact the author, Alan Kaminsky, at
 // ark@cs.rit.edu.
 //
+//
+// File modified by Tom Van Cutsem to make the M2MI example work using
+// ambient references in AmbientTalk.
+//
 // This Java source file is part of the M2MI Library ("The Library"). The
 // Library is free software; you can redistribute it and/or modify it under the
 // terms of the GNU General Public License as published by the Free Software
@@ -45,6 +49,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 
+// note that the listener now extends EventListener such that none of
+// its methods block the Java Swing event loop when invoked.
 interface ChatFrameListener extends java.util.EventListener {
 
 // Exported operations.
@@ -68,7 +74,8 @@ interface ChatFrameListener extends java.util.EventListener {
 	 */
 	public void sendText(String line);
 
-  public void toggleOnline();
+	/** to toggle network.online / .offline in AmbientTalk */
+    public void toggleOnline();
 
 }
 
