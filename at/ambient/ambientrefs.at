@@ -514,7 +514,7 @@ def makeOneArityTrait() {
 			def registration := object: { def cancel() { false } };
 			self.sendTo: ar ifNoneInRange: {
 				debug("[sendAndDiscover (ONE)]: no one in range, starting single search for "+self.message.selector);
-				registration := self.search: ar whenFound: { |pub| pub.cancel() };
+				registration := self.searchAndThenContinue(ar, false);
 			};
 			registration
 		};
@@ -538,7 +538,7 @@ def makeAllArityTrait() {
 			// this method returns a registration object which
 			// is implicitly passed on to sendAndDiscover
 			// (allows early retraction of the message)
-			self.search: ar whenFound: { |pub| };
+			self.searchAndThenContinue(ar, true);
 		};	
 	}
 };
@@ -564,11 +564,13 @@ def makeInstantLifetimeTrait() {
 def makeTransientSustainableLifetimeTrait() {
 	object: {
 		def receivedBy(ar) { self.sendAndDiscover(ar) };
-		def startSearchIn: ar whenFound: clo {
+		def startSearchIn: ar whenFound: bool {
 			debug("[startSearchIn:.. (TRANS|SUSTAINABLE)]: searching for rcvrs for "+self.message.selector);
 			def pub := ar.addDiscoveryObserver({ |rcvr|
 				self.sendMessage(rcvr);
-				clo(pub);
+				if: !bool then: {
+					pub.cancel();
+				}
 			});
 		};
 		def stopSearch(pub) {
@@ -585,8 +587,8 @@ def makeTransientLifetimeTrait(initTransientPeriod) {
 		import makeTransientSustainableLifetimeTrait();
 		
 		def transientPeriod := initTransientPeriod;
-		def search: ar whenFound: clo {
-			def pub := self.startSearchIn: ar whenFound: clo;
+	  def searchAndThenContinue(ar, bool) {
+			def pub := self.startSearchIn: ar whenFound: bool;
 			debug("[search:whenFound: (TRANSIENT)]: will stop search for "+self.message.selector + " in " +self.transientPeriod);
 			def timerPub := when: self.transientPeriod elapsed: {
 				self.stopSearch(pub);
@@ -607,8 +609,8 @@ def makeSustainableLifetimeTrait() {
 	object: {
 		import makeTransientSustainableLifetimeTrait();
 		
-		def search: ar whenFound: clo {
-			def pub := self.startSearchIn: ar whenFound: clo;
+	  def searchAndThenContinue(ar, bool) {
+			def pub := self.startSearchIn: ar whenFound: bool;
 			debug("[search:whenFound: (SUSTAINABLE)]: returning search pub for "+self.message.selector);
 			// returns publication that can be used to stop msg delivery
 			object: {
