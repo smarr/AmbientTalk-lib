@@ -2,7 +2,6 @@ package at.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
 import edu.rit.slides.Projector;
-import edu.rit.slides.Screen;
 import edu.rit.slides.SlideShow;
 
 import java.util.EventListener;
@@ -13,10 +12,10 @@ public interface ProjectorObjectI extends Projector, EventListener {
 	 * Set the theatre in which this projector object will participate.
 	 *
 	 * @param  theTheatre
-	 *     {@link Screen </CODE>Screen<CODE>} multihandle for the theatre, or
+	 *     {@link AsyncScreen </CODE>Screen<CODE>} multihandle for the theatre, or
 	 *     null not to participate in a theatre.
 	 */
-	public void setTheatre(Screen theTheatre);
+	public void setTheatre(AsyncScreen theTheatre);
 
 	/**
 	 * Set the slide show this projector will display. The projector starts by
@@ -24,28 +23,38 @@ public interface ProjectorObjectI extends Projector, EventListener {
 	 *
 	 * @param  theSlideShow
 	 *     Slide show to display, or null not to display a slide show.
+	 * Forced to be synchronous to avoid races between actor and GUI thread.
+	 * (if made async, GUI refreshes too fast, actor won't have updated the slideshow yet)
 	 */
-	public void setSlideShow(SlideShow theSlideShow);
+	public void setSlideShow(SlideShow theSlideShow) throws RuntimeException;
 
 	/**
 	 * Display the first slide group in this projector's slide show.
+	 * Forced to be synchronous to avoid races between actor and GUI thread.
+	 * (if made async, GUI refreshes too fast, actor won't have updated the slideshow yet)
 	 */
-	public void displayFirst();
+	public void displayFirst() throws RuntimeException;
 
 	/**
 	 * Display the last slide group in this projector's slide show.
+	 * Forced to be synchronous to avoid races between actor and GUI thread.
+	 * (if made async, GUI refreshes too fast, actor won't have updated the slideshow yet)
 	 */
-	public void displayLast();
+	public void displayLast() throws RuntimeException;
 
 	/**
 	 * Display the next slide group in this projector's slide show.
+	 * Forced to be synchronous to avoid races between actor and GUI thread.
+	 * (if made async, GUI refreshes too fast, actor won't have updated the slideshow yet)
 	 */
-	public void displayNext();
+	public void displayNext() throws RuntimeException;
 
 	/**
 	 * Display the previous slide group in this projector's slide show.
+	 * Forced to be synchronous to avoid races between actor and GUI thread.
+	 * (if made async, GUI refreshes too fast, actor won't have updated the slideshow yet)
 	 */
-	public void displayPrevious();
+	public void displayPrevious() throws RuntimeException;
 
 	/**
 	 * Returns the index of the slide group this projector is currently
@@ -66,8 +75,10 @@ public interface ProjectorObjectI extends Projector, EventListener {
 	 * Blank or unblank the display.
 	 *
 	 * @param  blanked  True to blank the display, false to unblank the display.
+	 * Forced to be synchronous to avoid races between actor and GUI thread.
+	 * (if made async, GUI refreshes too fast, actor won't have updated the slideshow yet)
 	 */
-	public void setBlanked(boolean blanked);
+	public void setBlanked(boolean blanked) throws RuntimeException;
 
 	/**
 	 * Determine if the display is blanked.

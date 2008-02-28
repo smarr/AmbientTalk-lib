@@ -31,9 +31,7 @@ package at.m2mi.slides;
 
 import edu.rit.slides.FullScreenSlideFrame;
 import edu.rit.slides.Screen;
-import edu.rit.slides.ScreenChooser;
 import edu.rit.slides.ScreenListener;
-import edu.rit.slides.ScreenSelectionListener;
 import edu.rit.slides.SlidePanel;
 import edu.rit.slides.SlideSet;
 
@@ -79,10 +77,10 @@ public class SlideScreen
 	private SlidePanel myFullScreenSlidePanel;
 	private SlidePanel mySlidePanel;
 	private ScreenObjectI myScreenObject;
-	private Screen myTheatreHandle;
+	private AsyncScreen myTheatreHandle;
 
 	private DiscoverableScreenObjectI myDiscoverableScreenObject;
-	private ScreenChooser myScreenChooser;
+	private AsyncScreenChooser myScreenChooser;
 	//private ScreenDiscoveryObject myScreenDiscoveryObject;
 	//private DiscoverableScreen allScreens;
 
@@ -112,11 +110,11 @@ public class SlideScreen
 		// Set up screen discovery objects.
 		//myDiscoverableScreenObject = new DiscoverableScreenObject();
 		myScreenChooser =
-			new ScreenChooser
-				(new ScreenSelectionListener()
+			new AsyncScreenChooser
+				(new AsyncScreenSelectionListener()
 					{
 					public void theatreSelected
-						(Screen theHandle,
+						(AsyncScreen theHandle,
 						 String theName)
 						{
 						if (myTheatreHandle != null)
@@ -275,7 +273,7 @@ public class SlideScreen
 						//Screen handle = (Screen)
 						//	M2MI.getMultihandle (Screen.class);
 						//myScreenDiscoveryObject.report (handle, name);
-						Screen handle = myDiscoverableScreenObject.makeTheatre(name);
+						AsyncScreen handle = myDiscoverableScreenObject.makeTheatre(name);
 						myDiscoverableScreenObject.associate(handle, name);
 						myScreenChooser.selectTheatre(handle);
 						//myDiscoverableScreenObject.request();

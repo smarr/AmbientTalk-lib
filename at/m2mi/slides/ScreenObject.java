@@ -479,7 +479,8 @@ public class ScreenObject
 				if (slide == null)
 					{
 					// We don't have the slide yet. Ask for it right away.
-					theProjector.getSlide (theSlideIDs[i]);
+					myFetcher.fetch(theProjector, theSlideIDs[i]);
+					//theProjector.getSlide (theSlideIDs[i]);
 					}
 				else
 					{

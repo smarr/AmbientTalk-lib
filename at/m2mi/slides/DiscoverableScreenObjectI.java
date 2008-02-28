@@ -24,6 +24,6 @@ public interface DiscoverableScreenObjectI extends EventListener {
 	 *     (unchecked exception) Thrown if <TT>theHandle</TT> is not null and
 	 *     <TT>theName</TT> is null.
 	 */
-	public void associate(Screen theHandle, String theName);
-	public Screen makeTheatre(String name);
+	public void associate(AsyncScreen theHandle, String theName);
+	public AsyncScreen makeTheatre(String name);
 }

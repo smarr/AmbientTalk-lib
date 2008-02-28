@@ -32,7 +32,6 @@ package at.m2mi.slides;
 import edu.rit.m2mi.Eoid;
 import edu.rit.m2mi.M2MI;
 import edu.rit.slides.Projector;
-import edu.rit.slides.Screen;
 import edu.rit.slides.Slide;
 import edu.rit.slides.SlideShow;
 import edu.rit.util.Timer;
@@ -49,7 +48,7 @@ import java.util.Random;
  * A ProjectorObject is responsible for getting the slides in a certain {@link
  * SlideShow </CODE>SlideShow<CODE>} displayed on all the screen objects in a
  * theatre. The projector object does this by calling methods on a multihandle
- * for interface {@link Screen </CODE>Screen<CODE>}; all slide objects attached
+ * for interface {@link AsyncScreen </CODE>Screen<CODE>}; all slide objects attached
  * to this multihandle execute the method calls.
  *
  * @author  Alan Kaminsky
@@ -61,7 +60,7 @@ public class ProjectorObject
 
 // Hidden constants.
 
-	private static final int LEASE_TIME_OVER_5  = Screen.LEASE_TIME / 5;
+	private static final int LEASE_TIME_OVER_5  = AsyncScreen.LEASE_TIME / 5;
 
 	private static final Eoid[] NO_SLIDES = new Eoid [0];
 
@@ -76,7 +75,7 @@ public class ProjectorObject
 	 * Multihandle for all screens in the theatre, or null if not part of a
 	 * theatre.
 	 */
-	private Screen myTheatre;
+	private AsyncScreen myTheatre;
 
 	/**
 	 * Slide show to display, or null if not displaying a slide show.
@@ -159,7 +158,7 @@ public class ProjectorObject
 	 * Construct a new projector object. Initially, the projector object is not
 	 * displaying a slide show and is not part of a theatre.
 	 */
-	public ProjectorObject(Screen myATTheatre)
+	public ProjectorObject(AsyncScreen myATTheatre)
 		{
 		myUnihandle = (Projector) M2MI.getUnihandle (this, Projector.class);
 		//myTheatre = null;
@@ -181,8 +180,7 @@ public class ProjectorObject
 	/* (non-Javadoc)
 	 * @see at.m2mi.slides.ProjectorObjectI#setTheatre(at.m2mi.slides.Screen)
 	 */
-	public synchronized void setTheatre
-		(Screen theTheatre)
+	public synchronized void setTheatre(AsyncScreen theTheatre)
 		{
 		if (myTheatre != null && theTheatre == null)
 			{
@@ -368,6 +366,35 @@ public class ProjectorObject
 			}
 		}
 
+	
+	
+	/*
+	 * CHANGE: Timers no longer hold a lock when invoking a method on the wrapped
+	 * myTheatre variable. This is crucial as it breaks a deadlock in the implementation.
+	 * If these methods are invoked by the Timer thread, we can get the
+	 * following deadlock:
+	 * 
+	 * 1) User presses e.g. 'firstSlide' button: GUI thread invokes redisplay()
+	 *    in SlideProjector, which causes the thread to invoke projector.getSelectedSlideGroupIdx()
+	 *    Since projector is a wrapped AT object, this causes the GUI to wait for the
+	 *    actor to execute that method.
+	 * 2) The timer thread associated with the wrapped ProjectorObject's callDisplaySlides
+	 *    method wakes up and invokes callDisplaySlides, taking a lock on the ProjectorObject
+	 *    because it is a synchronized Java method.
+	 * 3) The actor tries to process the GUI's getSelectedSlideGroupIdx() method. However,
+	 *    in order to invoke this method, it must take a lock on the wrapped ProjectorObject
+	 *    because the method is synchronized in Java. Because the timer thread has the lock,
+	 *    the actor waits for the timer thread to release it.
+	 * 4) The timer thread invokes myTheatre.displaySlides(...) (the method defined below).
+	 *    If this method is not invoked purely asynchronously, the timer thread will wait
+	 *    for the actor to invoke the method, causing a deadlock (actor waits for timer to
+	 *    release lock, timer waits for actor to execute displaySlides).
+	 *    
+	 * We break the deadlock by ensuring that the timer thread gives up the lock on the projector
+	 * object ASAP. It now releases the lock before invoking displaySlides, on which it may
+	 * block (sync symbiotic invocation).
+	 */
+	
 	/**
 	 * Call the <TT>displaySlides()</TT> method on the theatre multihandle.
 	 */

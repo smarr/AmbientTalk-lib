@@ -31,9 +31,6 @@ package at.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
 import edu.rit.slides.Projector;
-import edu.rit.slides.Screen;
-import edu.rit.slides.ScreenChooser;
-import edu.rit.slides.ScreenSelectionListener;
 import edu.rit.slides.SlideDescriptor;
 import edu.rit.slides.SlidePanel;
 import edu.rit.slides.SlideSet;
@@ -90,12 +87,12 @@ public class SlideProjector
 
 	private SlideSet mySlideSet;
 	private SlidePanel mySlidePanel;
-	private Screen myTheatreHandle;
+	private AsyncScreen myTheatreHandle;
 	private SlideShow mySlideShow;
 	private ProjectorObjectI myProjectorObject;
 
 	private DiscoverableScreenObjectI myDiscoverableScreenObject;
-	private ScreenChooser myScreenChooser;
+	private AsyncScreenChooser myScreenChooser;
 	//private ScreenDiscoveryObject myScreenDiscoveryObject;
 	//private DiscoverableScreen allScreens;
 
@@ -136,11 +133,11 @@ public class SlideProjector
 		//myDiscoverableScreenObject = new DiscoverableScreenObject();
 		
 		myScreenChooser =
-			new ScreenChooser
-				(new ScreenSelectionListener()
+			new AsyncScreenChooser
+				(new AsyncScreenSelectionListener()
 					{
 					public void theatreSelected
-						(Screen theHandle,
+						(AsyncScreen theHandle,
 						 String theName)
 						{
 						if (theHandle != null)
@@ -154,7 +151,7 @@ public class SlideProjector
 						myDiscoverableScreenObject.associate
 							(theHandle, theName);
 						myTheatreHandle = theHandle;
-						myProjectorObject.setTheatre (theHandle);
+						myProjectorObject.setTheatre(theHandle);
 						redisplay();
 						}
 					});
@@ -433,7 +430,7 @@ public class SlideProjector
 						//Screen handle = (Screen)
 						//	M2MI.getMultihandle (Screen.class);
 						//myScreenDiscoveryObject.report (handle, name);
-						Screen handle = myDiscoverableScreenObject.makeTheatre(name);
+						AsyncScreen handle = myDiscoverableScreenObject.makeTheatre(name);
 						myDiscoverableScreenObject.associate(handle, name);
 						myScreenChooser.selectTheatre(handle);
 						//myDiscoverableScreenObject.request();
