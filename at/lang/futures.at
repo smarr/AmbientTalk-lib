@@ -291,7 +291,7 @@ def constructLeaseFor(future, timeout) {
 // @Due -> future with timeout
 // @Gather -> multifuture
 //
-// @Due and @Gather are mutually exclusive, if both would be specified, @Due has precedence
+// @Due and @Gather are mutually exclusive, if both would be specified, @Gather has precedence
 def attachFuture(msg) {  
 	// support for multifutures: messages tagged with the @Gather(n)
 	// type tag receive a multifuture bounded by n

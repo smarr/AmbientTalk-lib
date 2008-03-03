@@ -89,6 +89,8 @@ deftype MultiFuture <: FuturesModule.Future;
 // type that signifies that the multifuture expires after the given timeout
 deftype GatherType <: FuturesModule.FutureMessage; 
 
+def DueType := /.at.lang.futures.DueType;
+
 def Gather(upperBound := nil, timeout := nil) {
 	extend: GatherType with: { |upperBound, timeout|
 		nil;
@@ -410,6 +412,48 @@ def MultiFutureModule := object: {
 	  mf
   };
 
+  /* An implementation of Jessie's multireferences in AmbientTalk/2
+   *  group: [ ref1, ref2,... ] returns a multireference.
+   * Any message sent to a multireference is sent to all constituent references, and a multifuture
+   * is returned which can trap the results.
+   *
+   * When the message sent to a multireference is annotated with @Due(t), the timeout
+   * is applied to the implicit multifuture, causing whenAll observers to trigger automatically.
+   * Note that the implicit multifuture of a multireference is bounded, so whenAll observers
+   * trigger automatically when all replies have been received.
+   */
+  deftype MultiReference;
+  def group: farrefs {
+	  object: { } taggedAs: [MultiReference] mirroredBy: (mirror: {
+		  import /.at.lang.firstclassrefs.TFarRef exclude pass;
+		  def arity := farrefs.length;
+		  def intercept(msg) {
+			  farrefs.each: { |farref| farref <+ msg };
+			};
+			def toString() {
+				"group reference: "+farrefs;
+			};
+	  })
+  };
+
+  // necessary actor plug-in to make any message send to a multireference return a multifuture
+  /.at.lang.futures.enableFutures(false);
+  actor.install: (extend: actor with: {
+	  // annotates each message sent to a MultiReference object with @Gather
+	  def send(rcvr, msg) {
+		  if: (is: rcvr taggedAs: MultiReference) then: {
+			  def timeout := nil;
+			  if: (is: msg taggedAs: DueType) then: {
+				  timeout := /.at.support.util.getAnnotationOfType(msg, DueType).timeout;
+			  };
+			  def GatherAnnotation := Gather((reflect: rcvr).arity, timeout);
+			  def annotations := [GatherAnnotation, @(tagsOf: msg)];
+			  msg := actor.createMessage(msg.selector, msg.arguments, annotations);
+		  };
+		  super^send(rcvr, msg);
+	  };
+  });
+
   def MultiFuturesTest() {
 	  extend: /.at.unit.test.UnitTest.new("MultiFuturesTest") with: {
 
@@ -504,6 +548,26 @@ def MultiFutureModule := object: {
 	      receivers.each: { |rcv| rcv <+ msg };
 	
 		    whenAll: msg.future resolved: { |vals|
+			    self.assertEquals(2, vals.length);
+			    self.assertEquals(24, vals[1]);
+			    self.assertEquals(42, vals[2]);
+			  };
+      };
+
+      def testAsyncMultireferences() {
+	      /.at.lang.futures.enableFutures(false);
+	
+	      def receivers := [object: {
+		       def m() { 24 }
+	      }, object: {
+		       def m() { 42 }
+	      } ];
+	
+	      def multiref := group: receivers;
+	      def mf := multiref<-m();
+	
+	      self.assertTrue(is: mf taggedAs: MultiFuture, "multireference does not return a multifuture");
+		    whenAll: mf resolved: { |vals|
 			    self.assertEquals(2, vals.length);
 			    self.assertEquals(24, vals[1]);
 			    self.assertEquals(42, vals[2]);
