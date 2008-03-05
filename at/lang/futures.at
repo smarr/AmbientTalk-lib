@@ -228,7 +228,7 @@ def FutureMirror := mirror: {
 		} else: {
 			if: (state == RUINED) then: {
 				(is: msg taggedAs: FutureMessage).ifTrue: {
-					msg.future<-ruinWithException(exception)@[MetaMessage,OneWayMessage];
+					msg.future<-ruinWithException(resolvedValue)@[MetaMessage,OneWayMessage];
 				};
 			}	else: {
 				// accumulate message in this future's inbox
@@ -447,6 +447,18 @@ def FuturesModule := object: {
 		try: {
 			closure({|val| res.resolve(val)});
 	  } catch: /.at.types.Exception using: { |e| res.ruin(e) };
+		fut;
+	};
+	
+	/**
+	 * asyncfuture: { |return, raise|
+	 *   // some computation
+	 *   return(value) or raise(exception)
+	 * }
+	 */
+	def asyncfuture: closure {
+		def [fut,res] := makeFuture();
+		closure<-apply([{|val| res.resolve(val)}, { |e| res.ruin(e) }]);
 		fut;
 	};
 
