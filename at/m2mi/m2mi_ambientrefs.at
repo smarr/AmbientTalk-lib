@@ -595,7 +595,7 @@ def DueReply(timeout) {
 
 deftype Nothing;
 def dfltType := Nothing;
-def dfltFilter := isolatelambda: { |o| true } scoped: {};
+def dfltFilter := isolatelambda: { |o| true } closeOver: [];
 def dfltArity := OneArity;
 def dfltLifetime := SustainLifetime;
 def dfltReply := OnewayReply;
@@ -916,14 +916,14 @@ def AmbientRefModule := object: {
 			};
 			
 			def testAsyncMatchingWhere() {
-				def a := ambient: rARBarTest where: (isolatelambda: { |props| props.y > 40 } scoped: {});
+				def a := ambient: rARBarTest where: (isolatelambda: { |props| props.y > 40 } closeOver: []);
 				FuturesModule.when: (a<-testContent(5)@[One,Sustain,Reply]).future becomes: { |v|
 					self.assertEquals(25,v);
 				} catch: { |e| raise: e };
 			};
 			
 			def testAsyncNonMatchingWhere() {
-				def a := ambient: rARBarTest where: (isolatelambda: { |props| props.z == 6 } scoped: {});
+				def a := ambient: rARBarTest where: (isolatelambda: { |props| props.z == 6 } closeOver: []);
 				FuturesModule.when: (a<-testContent(5)@[One,Expires(seconds(10)),Reply]).future becomes: { |v|
 					// should not happen!
 					self.fail("discovered a non-matching ambient reference");
@@ -966,7 +966,7 @@ def AmbientRefModule := object: {
 				
 				def maxVoteTime := seconds(15);
 				def proximateTeamPlayers := ambient: VotePlayerTest
-				                            where: (isolatelambda: { |p| p.team == "blue" } scoped: {});
+				                            where: (isolatelambda: { |p| p.team == "blue" } closeOver: []);
 
         def handle := proximateTeamPlayers<-askToVote("poll")@[All,Expires(maxVoteTime)];					
 				MFuturesModule.whenAll: handle.future resolved: { |votes|
@@ -993,7 +993,7 @@ def AmbientRefModule := object: {
 			});
 			def protocolWhereAmbientRef := ambient: (/.at.lang.structuraltypes.protocol: {
 				def protocolAmbientRefTestMethod()
-			}) where: (isolatelambda: { |props| props.x > 10 } scoped: {});
+			}) where: (isolatelambda: { |props| props.x > 10 } closeOver: []);
 
 			def testAsyncProtocolAmbientRef() {
 				def handle := protocolAmbientRef<-protocolAmbientRefTestMethod()@[One,Sustain,Reply];

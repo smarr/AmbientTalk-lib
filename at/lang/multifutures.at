@@ -413,7 +413,7 @@ def MultiFutureModule := object: {
   };
 
   /* An implementation of Jessie's multireferences in AmbientTalk/2
-   *  group: [ ref1, ref2,... ] returns a multireference.
+   *  multiref: [ ref1, ref2,... ] returns a multireference.
    * Any message sent to a multireference is sent to all constituent references, and a multifuture
    * is returned which can trap the results.
    *
@@ -423,7 +423,7 @@ def MultiFutureModule := object: {
    * trigger automatically when all replies have been received.
    */
   deftype MultiReference;
-  def group: farrefs {
+  def multiref: farrefs {
 	  object: { } taggedAs: [MultiReference] mirroredBy: (mirror: {
 		  import /.at.lang.firstclassrefs.TFarRef exclude pass;
 		  def arity := farrefs.length;
@@ -563,7 +563,7 @@ def MultiFutureModule := object: {
 		       def m() { 42 }
 	      } ];
 	
-	      def multiref := group: receivers;
+	      def multiref := multiref: receivers;
 	      def mf := multiref<-m();
 	
 	      self.assertTrue(is: mf taggedAs: MultiFuture, "multireference does not return a multifuture");

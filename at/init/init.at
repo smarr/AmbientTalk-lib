@@ -138,7 +138,8 @@ def isolatelambda: clo {
 };
 
 def isolatelambda: clo scoped: lexclo {
-  deftype Closure;
+	isolatelambda: clo closeOver: (lexclo.method.parameters);
+  /*deftype Closure;
   deftype Isolate;
   def mth := clo.method;
   eval: `(object: { |#@(lexclo.method.parameters)| 
@@ -148,7 +149,21 @@ def isolatelambda: clo scoped: lexclo {
     def run(#@(mth.parameters)){        
       #@(mth.bodyExpression.statements)
     };
-  } taggedAs: [#Closure,#Isolate]) in: lexclo.context.lexicalScope;
+  } taggedAs: [#Closure,#Isolate]) in: lexclo.context.lexicalScope;*/
+};
+
+def isolatelambda: clo closeOver: variableNames {
+  deftype Closure;
+  deftype Isolate;
+  def mth := clo.method;
+  eval: `(object: { |#@(variableNames)| 
+    def apply(args) {
+        self.run(@args);
+    };
+    def run(#@(mth.parameters)){        
+      #@(mth.bodyExpression.statements)
+    };
+  } taggedAs: [#Closure,#Isolate]) in: clo.context.lexicalScope;
 };
 
 /**
