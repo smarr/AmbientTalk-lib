@@ -27,7 +27,7 @@
 
 /* This module implements revised ambient references where message delivery
  * policies are expressed at the messaging level rather than at the
- * reference level.
+ * reference level. This is the implementation with an "extensional" reach.
  *
  * An ambient reference is a time, synchronisation and space-decoupled reference.
  * It extends far references with anonymous and group communication.
@@ -86,7 +86,7 @@
  * - by Type or protocol with properties
  *
  * To be investigated:
- * - dealing with 'dropped' or 'lost' messages: e.g. @Instant + @Future and no one in range -> ?
+ * - dealing with 'dropped' or 'lost' messages: e.g. @Instant + @Future and no one in reach -> ?
  * - for @One messaging, consider a ranking policy to determine the most 'suitable' service in range.
  * - a 'metaobject protocol' to enable custom attributes (or just a more open implementation)
  *
@@ -117,6 +117,7 @@ import /.at.support.timer;
 import /.at.lang.firstclassrefs;
 def DiscoveryModule := /.at.ambient.discovery;
 
+def TEventualRef := TFarRef;
 FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
 
 def log := /.at.support.logger.makeLogger("[ambientrefs.at]", /.at.support.logger.DEBUG);
@@ -161,8 +162,8 @@ def Expires(timeout) {
 
 deftype AmbientRef;
 
-deftype PropertyObjectT;
-def PropertyObject := object: {
+deftype DescriptorT;
+def DescriptorObject := object: {
 	def service;
 	def properties;
 	def init(svcObject, props) {
@@ -172,7 +173,7 @@ def PropertyObject := object: {
 	def ==(other) {
 		(does: other respondTo: `service).and: { service == other.service };
 	};
-} taggedAs: [/.at.types.Isolate, PropertyObjectT];
+} taggedAs: [/.at.types.Isolate, DescriptorT];
 
 /*def signalTimeout(msg) {
 	if: (does: msg respondTo: `future) then: {
@@ -209,7 +210,7 @@ def makeAmbientReference(extensionalReach,
 		
 	} taggedAs: [ AmbientRef ] mirroredBy: (mirror: {
 
-    import TFarRef;
+    import TEventualRef;
     import TObservable;
 
     def reach := Vector.new();
@@ -230,7 +231,7 @@ def makeAmbientReference(extensionalReach,
 				
 				def service := descriptor;
 				def attributes := isolate: { };
-				if: (is: descriptor taggedAs: PropertyObjectT) then: {
+				if: (is: descriptor taggedAs: DescriptorT) then: {
 					service := descriptor.service;
 					attributes := descriptor.properties;
 				};
@@ -249,7 +250,7 @@ def makeAmbientReference(extensionalReach,
 				debug(self.print + " lost uniref " + descriptor);
 				def service := descriptor;
 				def attributes := isolate: { };
-				if: (is: descriptor taggedAs: PropertyObjectT) then: {
+				if: (is: descriptor taggedAs: DescriptorT) then: {
 					service := descriptor.service;
 					attributes := descriptor.properties;
 				};
@@ -284,7 +285,7 @@ def makeAmbientReference(extensionalReach,
 
     def makeSnapshot() { reach.asTable() };
 
-		// == provide required methods for TFarRef trait ==
+		// == provide required methods for TEventualRef trait ==
 		
 		def intercept(message) {
 			// perform case analysis
@@ -331,12 +332,51 @@ def makeAmbientReference(extensionalReach,
 // OR should be implemented using either delegation or composite traits
 // AND should be implemented using double dispatch
 
-//in message with reply DUE:
-def makeDueReplyTrait(initDuePeriod) {
-	object: {
-		import makeFutureDueReplyTrait() alias sendMessage := futureSendMessage;
+//in message with reply ONEWAY:
+def TOneway := object: {
+	def attachFutureToMessage(msg) { msg };
+	def discoveryStopped(msg) { };
+	def sendMessage(rcvr, msg) {
+		debug("[sendMessage (ONEWAY)]: sending "+msg.selector+" to "+rcvr);
+		rcvr <+ msg;
+	};
+};
+
+//in message with reply FUTURE:
+def TReply := object: {
+	def attachFutureToMessage(msg) {
+		def [fut,res] := self.createFuture(); // dispatch TArity
+		debug("[attachFutureToMessage]: creating future for "+msg.selector+": "+fut);
+		FuturesModule.futurize(msg, fut, FuturesModule.FutureMessage);	
+	};
+	def discoveryStopped(msg) { };
+	def sendMessage(rcvr, msg) {
+		debug("[sendMessage (FUTURE|DUE)]: sending "+msg.selector+" to "+rcvr);
+		def [fut, res] := FuturesModule.makeFuture();
 		
-		def duePeriod := initDuePeriod;
+		// send the original msg (= msg without the handler and without the future)
+		def originalMsg := msg.super.super;
+		
+		rcvr <+ FuturesModule.futurize(originalMsg, fut, FuturesModule.FutureMessage);
+		// resolution of copy's future resolves this message's future
+		msg.future<-resolveWithValue(fut)@MetaMessage;
+		fut
+	};
+};
+
+//in message with reply DUE:
+def makeTDue(initDuePeriod) {
+	extend: TReply with: {		
+		def timeLeftForReply(msg) { initDuePeriod };
+		def discoveryStopped(msg) {
+		  // notify unbounded multifutures that they should consider
+		  // themselves totally resolved
+			debug("[discoveryStopped (DUE)]: all "+msg.selector+" msges sent, starting closing timer");
+		  when: self.timeLeftForReply(msg) elapsed: {
+				debug("[discoveryStopped (DUE)]: all "+msg.selector+" sent, closing future");
+			  msg.future<-becomeResolved()@MetaMessage;		
+		  }
+		};
 		def sendMessage(rcvr, msg) {
 			// msg contains future, which is either resolved|ruined with reply
 			// or times out if @Due or @Expires was specified
@@ -345,215 +385,154 @@ def makeDueReplyTrait(initDuePeriod) {
 			// multifutures need to know whose replies to ban! Otherwise, we might report
 			// a timeout AND a value of a receiver in the final multifuture
 			
-			//debug("[sendMessage (DUE)]: sending "+self.message.selector+" to "+rcvr);
-			
-			def fut := self.futureSendMessage(rcvr, msg);
+			debug("[sendMessage (DUE)]: sending "+msg.selector+" to "+rcvr);
 
-			when: self.duePeriod elapsed: {
+			def fut := super^sendMessage(rcvr, msg);
+			when: self.timeLeftForReply(msg) elapsed: {
 				debug("[sendMessage (DUE)]: "+msg.selector+" timed out");
 				// self.message.future<-timeout(rcvr, self.message)@MetaMessage;
 				fut<-timeout(rcvr, msg)@[MetaMessage,OneWayMessage];
 			};
-			
 			fut
-			// rcvr <+ self.message;
-		};
-		def discoveryStopped(msg) {
-		  // notify unbounded multifutures that they should consider
-		  // themselves totally resolved
-			debug("[discoveryStopped (DUE)]: all "+msg.selector+" msges sent, starting closing timer");
-		  when: self.duePeriod elapsed: {
-				debug("[discoveryStopped (DUE)]: all "+msg.selector+" sent, closing future");
-			  msg.future<-becomeResolved()@MetaMessage;		
-		  }
 		};		
 	}
 };
 
-//in message with reply FUTURE | DUE:
-def makeFutureDueReplyTrait() {
-	object: {
-		def attachFutureToMessage(msg) {
-			def [fut,res] := self.createFuture();
-			debug("[attachFutureToMessage]: creating future for "+msg.selector+": "+fut);
-			FuturesModule.futurize(msg, fut, FuturesModule.FutureMessage);	
-		};
-		def sendMessage(rcvr, msg) {
-			debug("[sendMessage (FUTURE|DUE)]: sending "+msg.selector+" to "+rcvr);
-			def [fut, res] := FuturesModule.makeFuture();
-			
-			// send the original msg (= msg without the handler and without the future)
-			def originalMsg := msg.super.super;
-			
-			rcvr <+ FuturesModule.futurize(originalMsg, fut, FuturesModule.FutureMessage);
-			// resolution of copy's future resolves this message's future
-			msg.future<-resolveWithValue(fut)@MetaMessage;
-			fut
-		};
-	}
-};
-
-//in message with reply ONEWAY | FUTURE:
-def makeOnewayFutureReplyTrait() {
-	object: {
-		def discoveryStopped(msg) { };
-	}
-};
-
-//in message with reply FUTURE:
-def makeFutureReplyTrait() {
-	object: {
-		import makeFutureDueReplyTrait();
-		import makeOnewayFutureReplyTrait();
-	}
-};
-
-//in message with reply ONEWAY:
-def makeOnewayReplyTrait() {
-	object: {
-		import makeOnewayFutureReplyTrait();
-		def attachFutureToMessage(msg) { msg };
-		def sendMessage(rcvr, msg) {
-			debug("[sendMessage (ONEWAY)]: sending "+msg.selector+" to "+rcvr);
-			rcvr <+ msg;
-		};
-	}
-};
-
 //in message with arity ONE:
-def makeOneArityTrait() {
-	object: {
-		def createFuture() { FuturesModule.makeFuture() };
-		def send: msg to: ar ifNoneInReach: code {
-			if: (ar.reach.isEmpty) then: code else: {
-				debug("[sendTo:ifNoneInReach: (ONE)]: sending "+msg.selector + " to a rcvr in reach");
-				self.sendMessage(ar.reach.random, msg);
-			};
+def TOne := object: {
+	def createFuture() { FuturesModule.makeFuture() };
+	def send: msg to: ar ifNoneInReach: closure {
+		if: (ar.reach.isEmpty) then: closure else: {
+			def receiver := ar.reach.random;
+			debug("[sendTo:ifNoneInReach: (ONE)]: sending "+msg.selector + " to random receiver: " + receiver);
+			self.sendMessage(receiver, msg);
 		};
-		def sendAndDiscover(ar, msg) {
-			// if the single message could be delivered to an object in range,
-			// no retraction is necessary
-			def registration := object: { def cancel() { false } };
-			self.send: msg to: ar ifNoneInReach: {
-				debug("[sendAndDiscover (ONE)]: no one in range, starting single search for "+msg.selector);
-				registration := self.searchAndThenContinue(ar, msg, false);
-			};
-			registration
+	};
+	def sendAndRegister(ar, msg) {
+		// if the single message could be delivered to an object in range,
+		// no retraction is necessary
+		def registration := object: { def cancel() { false } };
+		self.send: msg to: ar ifNoneInReach: {
+			debug("[sendAndRegister (ONE)]: no one in range, starting single search for "+msg.selector);
+			// dispatch TDiscoveryLT
+			registration := self.registerMessageUntilReceiverFound(ar, msg);
 		};
-	}
+		registration
+	};
 };
 
 //in message with arity ALL:
-def makeAllArityTrait() {
-	object: {
-		def createFuture() { MFuturesModule.makeMultiFuture() };
-		def send: msg to: ar ifNoneInReach: code {
-			if: (ar.reach.isEmpty) then: code else: {
-				debug("[sendTo:ifNoneInReach: (ALL)]: sending "+msg.selector + " to " + ar.reach.length + "receivers");
-				ar.reach.each: { |rcvr|
-					self.sendMessage(rcvr, msg);
-				}
-			};
+def TAll := object: {
+	def createFuture() { MFuturesModule.makeMultiFuture() };
+	def send: msg to: ar ifNoneInReach: closure {
+		if: (ar.reach.isEmpty) then: closure else: {
+			debug("[sendTo:ifNoneInReach: (ALL)]: sending "+msg.selector + " to " + ar.reach.length + "receivers");
+			ar.reach.each: { |receiver|
+				self.sendMessage(receiver, msg);
+			}
 		};
-		def sendAndDiscover(ar, msg) {			
-			self.send: msg to: ar ifNoneInReach: { };
-			// this method returns a registration object which
-			// is implicitly passed on to sendAndDiscover
-			// (allows early retraction of the message)
-			self.searchAndThenContinue(ar, msg, true);
-		};	
-	}
+	};
+	def sendAndRegister(ar, msg) {			
+		self.send: msg to: ar ifNoneInReach: { };
+		// this method returns a registration object which
+		// is implicitly passed on to sendAndRegister
+		// (allows early retraction of the message)
+		self.registerMessage(ar, msg); // dispatch TDiscoveryLT
+	};
 };
 
 //in message with lifetime INSTANT:
 def TInstant := object: {
 	def dispatch(ar, msg) {
 		debug("[dispatch (INSTANT)]: sending "+msg.selector + " to rcvrs in range first");
-		self.send: msg to: ar ifNoneInReach: {
+		self.send: msg to: ar ifNoneInReach: { // dispatch TArity
 			debug("[dispatch (INSTANT)]: "+msg.selector + " dropped!");
 			/*signalDropped(self.message)*/
 		};
-		self.discoveryStopped(msg);
+		self.discoveryStopped(msg); // dispatch TCommLT
 		// return publication object to 'retract' the message
 		// of course, in the case of an instant message no retraction is necessary
 		object: { def cancel() { false } };
 	}
 };
 
-//in message with lifetime (TRANSIENT | SUSTAINABLE):
-def makeTransientSustainableLifetimeTrait() {
-	object: {
-		def dispatch(ar, msg) { self.sendAndDiscover(ar, msg) };
-		def startSearchIn: ar for: msg whenFound: bool {
-			debug("[startSearchIn:.. (TRANS|SUSTAINABLE)]: searching for rcvrs for "+msg.selector);
-			def pub := ar.addDiscoveryObserver: { |rcvr|
-				self.sendMessage(rcvr, msg);
-				if: !bool then: {
-					pub.cancel();
-				}
-			};
-		};
-		def stopSearch(pub, msg) {
-			//debug("[startSearchIn:.. (TRANS|SUSTAINABLE)]: stopping search for rcvrs for "+msg.selector);
-			pub.cancel();
-			self.discoveryStopped(msg);
-		};	
-	}
-};
-
 //in message with lifetime TRANSIENT:
-def makeTransientLifetimeTrait(initTransientPeriod) {
-	object: {
-		import makeTransientSustainableLifetimeTrait();
-		
-		def transientPeriod := initTransientPeriod;
-	  def searchAndThenContinue(ar, msg, bool) {
-			def pub := self.startSearchIn: ar for: msg whenFound: bool;
-			debug("[search:whenFound: (TRANSIENT)]: will stop search for "+msg.selector + " in " +self.transientPeriod);
-			def timerPub := when: self.transientPeriod elapsed: {
-				self.stopSearch(pub, msg);
-			};
-			// invoking cancel causes preliminary retraction of the message
-			object: {
-				def cancel() {
-					timerPub.cancel();
-					self.stopSearch(pub, msg);
-				}
+def makeTTransient(initTransientPeriod) {
+	def makeAutoExpirable(originalRegistration) {
+		def timerRegistration := when: initTransientPeriod elapsed: {
+			originalRegistration.cancel();
+		};
+		object: {
+			def cancel() { // signals a premature cancellation
+				timerRegistration.cancel(); // stop the timer
+				originalRegistration.cancel(); // cancel the registration now
 			}
-		};	
-	}
+		}
+	};
+	extend: TSustain with: {		
+		def transientPeriod(msg) { initTransientPeriod };
+		// override the methods defined by the sustainable lifetime trait
+		def registerMessageUntilReceiverFound(@args) {
+			def reg := super^registerMessageUntilReceiverFound(@args);
+			makeAutoExpirable(reg);
+		};
+		def registerMessage(@args) {
+			def reg := super^registerMessage(@args);
+			makeAutoExpirable(reg);
+		};
+	};
 };
 
 //in message with lifetime SUSTAINABLE: {
-def makeSustainableLifetimeTrait() {
-	object: {
-		import makeTransientSustainableLifetimeTrait();
-		
-	  def searchAndThenContinue(ar, msg, bool) {
-			def pub := self.startSearchIn: ar for: msg whenFound: bool;
-			debug("[search:whenFound: (SUSTAINABLE)]: returning search pub for "+msg.selector);
-			// returns publication that can be used to stop msg delivery
-			object: {
-				def cancel() { self.stopSearch(pub, msg) }
-			};
-		};	
-	}
+def TSustain := object: {
+	def dispatch(ar, msg) { self.sendAndRegister(ar, msg) }; // dispatch TArity
+	
+	def registerMessageUntilReceiverFound(ar, msg) {
+		debug("[registerMessageUntilReceiverFound (SUSTAINABLE)]: searching for rcvrs for "+msg.selector);
+		def registration := ar.addDiscoveryObserver: { |rcvr|
+			self.sendMessage(rcvr, msg);
+			registration.cancel();
+		};
+		// returns publication that can be used to stop msg delivery
+		def stopDiscovery() { self.discoveryStopped(msg) }; // dispatch TCommLT
+		object: {
+			def cancel() {
+				registration.cancel();
+				stopDiscovery();
+			}
+		};
+	};
+	
+	def registerMessage(ar, msg) {
+		debug("[registerMessage (SUSTAINABLE)]: searching for rcvrs for "+msg.selector);
+		def registration := ar.addDiscoveryObserver: { |rcvr|
+			self.sendMessage(rcvr, msg);
+		};
+		// returns publication that can be used to stop msg delivery
+		def stopDiscovery() { self.discoveryStopped(msg) }; // dispatch TCommLT
+		object: {
+			def cancel() {
+				registration.cancel();
+				stopDiscovery();
+			}
+		};
+	};
 };
 
 //in message with lifetime EXPIRES: {
-def makeExpiresLifetimeTrait(expPeriod) {
+def makeTExpires(expPeriod) {
 	object: {
-		import makeTransientLifetimeTrait(expPeriod) alias dispatch := originalDispatch;
-		import makeDueReplyTrait(expPeriod) exclude duePeriod;
+		import makeTTransient(expPeriod) alias dispatch := originalDispatch;
+		import makeTDue(expPeriod) exclude timeLeftForReply;
 		def timeSent;
 		def dispatch(ar, msg) {
 			debug("[dispatch (EXPIRES)]: capturing time sent for "+msg.selector);
 			self.timeSent := now();
 			self.originalDispatch(ar, msg);
 		};
-		def duePeriod() {
-			def to := self.transientPeriod - (now() - self.timeSent);
-			debug("[duePeriod (EXPIRES)]: calculated due time = "+to);
+		def timeLeftForReply(msg) {
+			def to := self.transientPeriod(msg) - (now() - self.timeSent);
+			debug("[timeLeftForReply (EXPIRES)]: calculated due time = "+to);
 			to;
 		};	
 	}
@@ -564,36 +543,34 @@ def attachHandlerToMessage(msg, ArityTrait := nil, ReplyTrait := nil, LifetimeTr
   
   // ARITY = ONE | ALL
 	if: (is: msg taggedAs: One) then: {
-		ArityTrait := &makeOneArityTrait;
+		ArityTrait := { TOne };
 	} else: {
 		if: (is: msg taggedAs: All) then: {
-			ArityTrait := &makeAllArityTrait;
+			ArityTrait :=  { TAll };
 		} else: {
-			// DEFAULT SHOULD BE DEPENDENT ON AR RECEIVER
-			//ArityTrait := makeOneArityTrait();
+			// AR RECEIVER DEFAULT
 		}
 	};
 	
 	// EXPIRABLE => LIFETIME = TRANSIENT AND REPLY = DUE
 	if: (is: msg taggedAs: Expirable) then: {
 		def ann := Util.getAnnotationOfType(msg, Expirable);
-		LifetimeTrait := { makeExpiresLifetimeTrait(ann.timeout) };
+		LifetimeTrait := { makeTExpires(ann.timeout) };
 		ReplyTrait := { object: { } };
 	} else: {
 		
 		// REPLY = DUE | ONEWAY | FUTURE
 		if: (is: msg taggedAs: DueT) then: {
 			def ann := Util.getAnnotationOfType(msg, DueT);
-			ReplyTrait := { makeDueReplyTrait(ann.timeout) };
+			ReplyTrait := { makeTDue(ann.timeout) };
 		} else: {
 			if: (is: msg taggedAs: Oneway) then: {
-				ReplyTrait := &makeOnewayReplyTrait;
+				ReplyTrait := { TOneway };
 			} else: {
 				if: (is: msg taggedAs: Future) then: {
-					ReplyTrait := &makeFutureReplyTrait;
+					ReplyTrait := { TReply };
 				} else: {
-					// DEFAULT SHOULD BE DEPENDENT ON AR RECEIVER
-					//ReplyTrait := makeOnewayReplyTrait();
+					// AR RECEIVER DEFAULT
 				}
 			}
 		};
@@ -604,13 +581,12 @@ def attachHandlerToMessage(msg, ArityTrait := nil, ReplyTrait := nil, LifetimeTr
 	  } else: {
 			if: (is: msg taggedAs: TransientT) then: {
 				def ann := Util.getAnnotationOfType(msg, TransientT);
-				LifetimeTrait := { makeTransientLifetimeTrait(ann.period) };
+				LifetimeTrait := { makeTTransient(ann.period) };
 			} else: {
 				if: (is: msg taggedAs: Sustain) then: {
-					LifetimeTrait := &makeSustainableLifetimeTrait;
+					LifetimeTrait := { TSustain };
 				} else: {
-					// DEFAULT SHOULD BE DEPENDENT ON AR RECEIVER
-					//LifetimeTrait := makeSustainableLifetimeTrait();
+					// AR RECEIVER DEFAULT
 				}
 			};
 	  };
@@ -724,9 +700,9 @@ def AmbientRefModule := object: {
 	};
 	
 	// allow exporting an object together with a set of properties
-	def export: serviceObject as: type with: clo {
-		def props := isolate: clo;
-		DiscoveryModule.export: PropertyObject.new(serviceObject, props) as: type;
+	def export: serviceObject as: typetagOrProtocol with: closure {
+		def attributes := isolate: closure;
+		DiscoveryModule.export: DescriptorObject.new(serviceObject, attributes) as: typetagOrProtocol;
 	};
 
   // override export:as: to include a property object
