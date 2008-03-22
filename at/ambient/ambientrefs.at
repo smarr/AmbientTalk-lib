@@ -160,7 +160,7 @@ def Expires(timeout) {
 	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };
 
-deftype AmbientRef;
+deftype AmbientReference;
 
 deftype DescriptorT;
 def DescriptorObject := object: {
@@ -208,7 +208,7 @@ def makeAmbientReference(extensionalReach,
 			
 		}*/
 		
-	} taggedAs: [ AmbientRef ] mirroredBy: (mirror: {
+	} taggedAs: [ AmbientReference ] mirroredBy: (mirror: {
 
     import TEventualRef;
     import TObservable;
@@ -300,12 +300,8 @@ def makeAmbientReference(extensionalReach,
 				handler := attachHandlerToMessage(message,defaultArity,defaultReply,defaultLifetime).handler;
 			};
 			
-			// TODO: how can we pass this retractionObject to the caller?
-			// via future is not an option, e.g. @One@Sustain@Oneway -> no future attached
-			// to the message
-			// also, def [fut,reg] := o<-m()@[One,Sustain,Oneway] does not work either
-			// because Oneway does not 'return' a future, unless then [nil,reg] is returned?
-			def retractionObject := handler.dispatch(self, message);
+			def registration := handler.dispatch(self, message);
+			message.handle.setRegistration(registration);
 		};
 	
 		def toString() {
@@ -354,8 +350,8 @@ def TReply := object: {
 		debug("[sendMessage (FUTURE|DUE)]: sending "+msg.selector+" to "+rcvr);
 		def [fut, res] := FuturesModule.makeFuture();
 		
-		// send the original msg (= msg without the handler and without the future)
-		def originalMsg := msg.super.super;
+		// send the original msg (= msg without the handle, the handler and the future)
+		def originalMsg := msg.super.super.super;
 		
 		rcvr <+ FuturesModule.futurize(originalMsg, fut, FuturesModule.FutureMessage);
 		// resolution of copy's future resolves this message's future
@@ -617,41 +613,52 @@ deftype ARModule;
 def enableAmbientRefs() {
 	if: !(is: actor taggedAs: ARModule) then: {
 		FuturesModule.enableFutures(false);
+		
+		def extendWithHandle(msg, handle) { extend: msg with: {|handle|} };
+		
 		actor.install: (extend: actor with: {
 			def createMessage(sel, args, types) {
 				def msg := super^createMessage(sel, args, types);
 				if: (is: msg taggedAs: ARAnnotation) then: {
-					attachHandlerToMessage(msg);					
+					attachHandlerToMessage(msg);
 				} else: {
 					msg
 				}
 			}; // end createMessage
 			
-			/*def send(receiver, msg) {
-				def result := super^send(receiver, msg);
-				if: (does: msg respondTo: `future) then: {
-					msg.future
-				} else: {
-					result
-				}
-			};*/
+			def send(receiver, msg) {
+				if: (is: receiver taggedAs: AmbientReference) then: {
+				  def [cancelFuture,cancelResolver] := FuturesModule.makeFuture();
+				  def handle := object: {
+					  // TODO: future can only be assigned here to msges with handlers
+					// TODO: fix error: attachFutureToMessage returns the msg rather than the attached future!
+					  //def future := msg.handler.attachFutureToMessage(msg);
+					  def future := if: (does: msg respondTo: `future) then: { msg.future };
+					  def sendTime := now();
+					  def setRegistration(r) { cancelResolver.resolve(r) };
+					  def cancel() { cancelFuture<-cancel() };
+				  };
+				  super^send(receiver, extendWithHandle(msg, handle));
+				  handle // value of ambient message send is always a handle
+			  } else: {
+				  super^send(receiver, msg);
+			  };
+			}; // end send
 			
-		} taggedAs: [ ARModule ]);	
+		} taggedAs: [ ARModule ]);
 	}
 };
 
 deftype Nothing;
 def dfltRange := [];
 def dfltType := Nothing;
-def dfltFilter := isolatelambda: { |o| true } scoped: {};
+def dfltFilter := script: { |o| true } carrying: [];
 def dfltArity := One;
 def dfltLifetime := Sustain;
 def dfltReply := Oneway;
 
 def AmbientRefModule := object: {
-	
-	def enableAmbientRefs := &enableAmbientRefs;
-	
+		
   def One := One;
   def All := All;
 
@@ -670,7 +677,7 @@ def AmbientRefModule := object: {
 	// language constructs for connection awareness
 	
 	def whenever: ambientRef discovered: code {
-		if: (is: ambientRef taggedAs: AmbientRef) then: {
+		if: (is: ambientRef taggedAs: AmbientReference) then: {
 			(reflect: ambientRef).addDiscoveryObserver: code;
 		} else: {
 			DiscoveryModule.whenever: ambientRef discovered: code;
@@ -859,13 +866,15 @@ def AmbientRefModule := object: {
 
       // ONE, SUSTAIN, FUTURE
 			def testAsyncOneSustainFuture() {
-				FuturesModule.when: a<-testMethod(5)@[One,Sustain,Future] becomes: { |v|
+				def handle := a<-testMethod(5)@[One,Sustain,Future];
+				FuturesModule.when: handle.future becomes: { |v|
 					self.assertEquals(6,v);
 				};
 			};
 			// ONE, TRANSIENT, FUTURE
 			def testAsyncOneTransientFuture() {
-				FuturesModule.when: a<-testMethod(5)@[One,Transient(seconds(12)),Future] becomes: { |v|
+				def handle := a<-testMethod(5)@[One,Transient(seconds(12)),Future];
+				FuturesModule.when: handle.future becomes: { |v|
 					self.assertEquals(6,v);
 				} catch: { |e|
 					self.fail("subject should have been found");
@@ -874,7 +883,8 @@ def AmbientRefModule := object: {
 			// ONE, EXPIRES
 			def testAsyncOneExpirable() {
 				def blackHole := ambient: ARNonExistentTestT;
-				FuturesModule.when: blackHole<-testMethod(5)@[One,Expires(seconds(5))] becomes: { |v|
+				def handle := blackHole<-testMethod(5)@[One,Expires(seconds(5))];
+				FuturesModule.when: handle.future becomes: { |v|
 					self.fail("method should have never been processed");
 				} catch: { |e|
 					self.assertTrue(is: e taggedAs: FuturesModule.TimeoutException);
@@ -882,27 +892,31 @@ def AmbientRefModule := object: {
 			};
 			// ONE, INSTANT, ONEWAY
 			def testOneInstantOneway() {
-				self.assertEquals(nil, a<-testMethod(5)@[One,Instant,Oneway]);
+				def handle := a<-testMethod(5)@[One,Instant,Oneway];
+				self.assertEquals(nil, handle.future);
 			};
 			// ONE, SUSTAIN, ONEWAY
 			def testOneSustainOneway() {
-				self.assertEquals(nil, a<-testMethod(5)@[One,Sustain,Oneway]);
+				def handle := a<-testMethod(5)@[One,Sustain,Oneway];
+				self.assertEquals(nil, handle.future);
 			};
 			// ONE, INSTANT, ONEWAY
 			def testAsyncOneInstantOnewayNotDropped() {
 				FuturesModule.future: { |return|				
 					when: asyncReply discovered: { |ref|
-						self.assertEquals(nil, asyncReply<-replyTo(object: {
+						def handle := asyncReply<-replyTo(object: {
 							def reply(x) {
 								return(x);
 							}
-						})@[One,Instant,Oneway]);	
+						})@[One,Instant,Oneway];
+						self.assertEquals(nil, handle.future);	
 					}
 				}
 			};
 			// ALL, TRANSIENT, DUE
 			def testAsyncAllTransientDue() {
-				MFuturesModule.whenAll: omni<-serve(0)@[All,Transient(seconds(6)),Due(seconds(4))] resolved: { |vals|
+				def handle := omni<-serve(0)@[All,Transient(seconds(6)),Due(seconds(4))];
+				MFuturesModule.whenAll: handle.future resolved: { |vals|
 					self.assertEquals(2, vals.length);
 					self.assertTrue(vals.contains(1));
 					self.assertTrue(vals.contains(2));
@@ -914,7 +928,8 @@ def AmbientRefModule := object: {
 			def testAsyncAllTransientFuture() {
 				FuturesModule.future: { |reply|
 					def count := 0;
-					MFuturesModule.whenEach: omni<-serve(0)@[All,Transient(seconds(6)),Future] becomes: { |val|
+					def handle := omni<-serve(0)@[All,Transient(seconds(6)),Future];
+					MFuturesModule.whenEach: handle.future becomes: { |val|
 					  self.assertTrue((val == 1).or: { val == 2 });
 					  count := count + 1;
 					  if: (count == 2) then: {
@@ -925,7 +940,8 @@ def AmbientRefModule := object: {
 			};
 			// ALL, EXPIRES
 			def testAsyncAllExpires() {
-				MFuturesModule.whenAll: omni<-serve(0)@[All,Expires(seconds(8))] resolved: { |vals|
+				def handle := omni<-serve(0)@[All,Expires(seconds(8))];
+				MFuturesModule.whenAll: handle.future resolved: { |vals|
 					self.assertEquals(2, vals.length);
 					self.assertTrue(vals.contains(1));
 					self.assertTrue(vals.contains(2));
@@ -936,22 +952,25 @@ def AmbientRefModule := object: {
 			// ALL, SUSTAIN, ONEWAY
 			def testAsyncAllSustainOneway() {
 				FuturesModule.future: { |return|
-					self.assertEquals(nil, asyncReply<-replyTo(object: {
+					def handle := asyncReply<-replyTo(object: {
 						def reply(x) {
 							return(x);
 						}
-					})@[All,Sustain,Oneway]);	
+					})@[All,Sustain,Oneway];
+					self.assertEquals(nil, handle.future);	
 				}
 			};
 			def testAsyncMatchingWhere() {
 				def a := ambient: rARBarTest where: { |props| props.y > 40 };
-				FuturesModule.when: a<-testContent(5)@[One,Sustain,Future] becomes: { |v|
+				def handle := a<-testContent(5)@[One,Sustain,Future];
+				FuturesModule.when: handle.future becomes: { |v|
 					self.assertEquals(25,v);
 				} catch: { |e| raise: e };
 			};
 			def testAsyncNonMatchingWhere() {
 				def a := ambient: rARBarTest where: { |props| props.z == 6 };
-				FuturesModule.when: a<-testContent(5)@[One,Expires(seconds(5)),Future] becomes: { |v|
+				def handle := a<-testContent(5)@[One,Expires(seconds(5)),Future];
+				FuturesModule.when: handle.future becomes: { |v|
 					// should not happen!
 					self.fail("discovered a non-matching ambient reference");
 				} catch: { |e|
@@ -963,7 +982,7 @@ def AmbientRefModule := object: {
 				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
 					// after this, there will be 2 copies of a, one created upon parameter passing
 					// and one created upon method return
-					self.assertTrue(is: newAR taggedAs: AmbientRef);
+					self.assertTrue(is: newAR taggedAs: AmbientReference);
 					self.assertFalse(is: newAR taggedAs: /.at.types.FarReference);
 					self.assertFalse(a == newAR);
 				};
@@ -991,11 +1010,11 @@ def AmbientRefModule := object: {
 				
 				def maxVoteTime := seconds(8);
 				def proximateTeamPlayers := ambient: VotePlayerTest where: { |p| p.team == "blue" };
+
+				def handle := proximateTeamPlayers<-askToVote("poll")@[All,Expires(maxVoteTime)];
 				
-				def voteMultiFuture := proximateTeamPlayers<-askToVote("poll")@[All,Expires(maxVoteTime)];
-				
-				MFuturesModule.whenAll: voteMultiFuture resolved: { |votes|
-					//(voteMultiFuture<-sender())<-voteResult(votes)@Oneway;
+				MFuturesModule.whenAll: handle.future resolved: { |votes|
+					//(handle.future<-sender())<-voteResult(votes)@Oneway;
 					self.assertEquals(MAX, votes.length);
 					1.to: MAX+1 do: { |i|
 						self.assertTrue(votes.contains(i));
@@ -1016,8 +1035,8 @@ def AmbientRefModule := object: {
 			});
 
 			def testAsyncProtocolAmbientRef() {
-				FuturesModule.when: protocolAmbientRef<-protocolAmbientRefTestMethod()
-				    @[One,Transient(seconds(10)),Future] becomes: { |val|
+				def handle := protocolAmbientRef<-protocolAmbientRefTestMethod()@[One,Transient(seconds(10)),Future];
+				FuturesModule.when: handle.future becomes: { |val|
 					self.assertEquals(`ok, val);
 				}
 			};
