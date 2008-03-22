@@ -330,7 +330,7 @@ def makeAmbientReference(extensionalReach,
 
 //in message with reply ONEWAY:
 def TOneway := object: {
-	def attachFutureToMessage(msg) { msg };
+	def attachFutureToMessage(msg) { nil };
 	def discoveryStopped(msg) { };
 	def sendMessage(rcvr, msg) {
 		debug("[sendMessage (ONEWAY)]: sending "+msg.selector+" to "+rcvr);
@@ -343,7 +343,8 @@ def TReply := object: {
 	def attachFutureToMessage(msg) {
 		def [fut,res] := self.createFuture(); // dispatch TArity
 		debug("[attachFutureToMessage]: creating future for "+msg.selector+": "+fut);
-		FuturesModule.futurize(msg, fut, FuturesModule.FutureMessage);	
+		fut
+		//FuturesModule.futurize(msg, fut, FuturesModule.FutureMessage);	
 	};
 	def discoveryStopped(msg) { };
 	def sendMessage(rcvr, msg) {
@@ -351,11 +352,11 @@ def TReply := object: {
 		def [fut, res] := FuturesModule.makeFuture();
 		
 		// send the original msg (= msg without the handle, the handler and the future)
-		def originalMsg := msg.super.super.super;
+		def originalMsg := msg.super.super; //handle & handler
 		
 		rcvr <+ FuturesModule.futurize(originalMsg, fut, FuturesModule.FutureMessage);
 		// resolution of copy's future resolves this message's future
-		msg.future<-resolveWithValue(fut)@MetaMessage;
+		msg.handle.future<-resolveWithValue(fut)@MetaMessage;
 		fut
 	};
 };
@@ -370,7 +371,7 @@ def makeTDue(initDuePeriod) {
 			debug("[discoveryStopped (DUE)]: all "+msg.selector+" msges sent, starting closing timer");
 		  when: self.timeLeftForReply(msg) elapsed: {
 				debug("[discoveryStopped (DUE)]: all "+msg.selector+" sent, closing future");
-			  msg.future<-becomeResolved()@MetaMessage;		
+			  msg.handle.future<-becomeResolved()@MetaMessage;		
 		  }
 		};
 		def sendMessage(rcvr, msg) {
@@ -518,16 +519,11 @@ def TSustain := object: {
 //in message with lifetime EXPIRES: {
 def makeTExpires(expPeriod) {
 	object: {
-		import makeTTransient(expPeriod) alias dispatch := originalDispatch;
+		import makeTTransient(expPeriod);
 		import makeTDue(expPeriod) exclude timeLeftForReply;
 		def timeSent;
-		def dispatch(ar, msg) {
-			debug("[dispatch (EXPIRES)]: capturing time sent for "+msg.selector);
-			self.timeSent := now();
-			self.originalDispatch(ar, msg);
-		};
 		def timeLeftForReply(msg) {
-			def to := self.transientPeriod(msg) - (now() - self.timeSent);
+			def to := self.transientPeriod(msg) - (now() - msg.handle.sendTime);
 			debug("[timeLeftForReply (EXPIRES)]: calculated due time = "+to);
 			to;
 		};	
@@ -604,7 +600,7 @@ def attachHandlerToMessage(msg, ArityTrait := nil, ReplyTrait := nil, LifetimeTr
 		  import LifetimeTrait();
 	  };
 		debug("[makeHandler]: handler created for "+msg.selector);
-		extend: handler.attachFutureToMessage(msg) with: { |handler| };
+		extend: msg with: { |handler| };
 	}
 };
 
@@ -631,9 +627,8 @@ def enableAmbientRefs() {
 				  def [cancelFuture,cancelResolver] := FuturesModule.makeFuture();
 				  def handle := object: {
 					  // TODO: future can only be assigned here to msges with handlers
-					// TODO: fix error: attachFutureToMessage returns the msg rather than the attached future!
 					  //def future := msg.handler.attachFutureToMessage(msg);
-					  def future := if: (does: msg respondTo: `future) then: { msg.future };
+					  def future := if: (does: msg respondTo: `handler) then: { msg.handler.attachFutureToMessage(msg) };
 					  def sendTime := now();
 					  def setRegistration(r) { cancelResolver.resolve(r) };
 					  def cancel() { cancelFuture<-cancel() };
@@ -1040,17 +1035,6 @@ def AmbientRefModule := object: {
 					self.assertEquals(`ok, val);
 				}
 			};
-
-			// TODO: deal with dropped messages, currently not explicitly trapped
-			// so, @Instant + @Future is currently a bad combination because the future
-			// never times out, even if no message was ever sent
-			/*def testAsyncOneInstantFuture() {
-				FuturesModule.when: a<-testMethod(5)@[One,Instant,Future] becomes: { |v|
-					self.assertEquals(6,v);
-				} catch: { |e|
-					self.assertTrue(is: e taggedAs: MessageDropped);
-				};
-			};*/
 			
 			// TODO: defaults + futures don't work! Because of the default, the traits are not
 			// applied at message creation time, hence, no future is attached to the message!
