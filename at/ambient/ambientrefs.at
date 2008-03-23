@@ -298,6 +298,8 @@ def makeAmbientReference(extensionalReach,
 				handler := message.handler;
 			} else: {
 				handler := attachHandlerToMessage(message,defaultArity,defaultReply,defaultLifetime).handler;
+				// TODO: problem: future may have been accessed in the mean time
+				message.handle.future := handler.attachFutureToMessage(message);
 			};
 			
 			def registration := handler.dispatch(self, message);

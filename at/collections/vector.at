@@ -36,6 +36,9 @@ def XIndexOutOfBounds := /.at.exceptions.XIndexOutOfBounds;
 deftype StackUnderflow <: /.at.types.Exception;
 def XStackUnderflow := /.at.exceptions.createException(StackUnderflow).new("Cannot pop empty stack");
 
+deftype EmptyVector <: /.at.types.Exception;
+def XEmptyVector := /.at.exceptions.createException(EmptyVector).new("Cannot pick element from empty vector");
+
 def VectorPrototype := object: {
 	
   // the next free position in the vector
@@ -332,6 +335,14 @@ def VectorPrototype := object: {
 		  // this object equals none in the vector
 		  removeDuplicates(2, elements[1]);
 		  self;
+		}
+	};
+	
+	def random() {
+		if: (self.isEmpty) then: {
+			raise: XEmptyVector;
+		} else: {
+			elements[(1??(free-1)).round]
 		}
 	};
 	

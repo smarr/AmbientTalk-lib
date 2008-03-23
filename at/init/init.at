@@ -166,6 +166,9 @@ def isolatelambda: clo closeOver: variableNames {
   } taggedAs: [#Closure,#Isolate]) in: clo.context.lexicalScope;
 };
 
+// an alias for the above method
+def script: clo carrying: variableNames { isolatelambda: clo closeOver: variableNames };
+
 /**
  * Defines an isolate object with a custom serialization strategy.
  * Example:
