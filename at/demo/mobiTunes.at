@@ -42,7 +42,7 @@
 
 import /.at.lang.ambientrefs; // for ambient:
 import /.at.lang.futures; // for when:becomes:
-enableFutures(true); // from now on, using <- returns a future rather than nil
+enableFutures(false);
 
 // the library consists of simple song objects
 def Song := object: {
@@ -145,14 +145,14 @@ def MobiTunesPrototype := object: {
 	     notification("discovered new music player: " + ambientReference);
 	     
 	     // upon discovery, ask for the creation of a new session object
-	     def session := ambientReference<-openSession(userName);
+	     def session := ambientReference<-openSession(userName)@FutureMessage;
 	
 		   // start to exchange libraries by pushing own library to remote peer via the session
 		   def iterator := myLib.iterator(); // to iterate over own music library
 		   def sendSongs() { // auxiliary function to send each song
 		     if: (iterator.hasNext()) then: {
 		       def song := iterator.next();
-		       when: session<-downloadSong(song.artist, song.title) becomes: { |ack|
+		       when: session<-downloadSong(song.artist, song.title)@FutureMessage becomes: { |ack|
 			       notification("sent song " + song.artist + " - " + song.title);
 		         sendSongs(); // recursive call to send the rest of the songs
 		       } catch: { |exception| notification("stopping exchange: " + exception) };

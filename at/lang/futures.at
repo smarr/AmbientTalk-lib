@@ -44,10 +44,10 @@ def RUINED := 2;
 deftype Future;
 
 // all future-carrying messages are marked with this type
-deftype FutureMessage;
+deftype FutureMessage <: /.at.types.AsyncMessage;
 
 // type that signifies that no future should be attached to a message
-deftype OneWayMessage;
+deftype OneWayMessage <: /.at.types.AsyncMessage;
 
 // Addition for the integration of leasing and futures:
 
@@ -76,8 +76,7 @@ def XTimeoutException := extend: /.at.exceptions.createException(TimeoutExceptio
 // far reference to its mirror would be passed. This restriction is avoided through the
 // introduction of a MetaMessage type: messages typed with it will be handled by the
 // future's mirror rather than being forwarded to the actual principal when the future is resolved.
-def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
-def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+import /.at.lang.firstclassrefs;
 
 // the mirror of a Future object
 def FutureMirror := mirror: {
@@ -91,7 +90,7 @@ def FutureMirror := mirror: {
   // therefore, this mirror mixes in the 'far reference' behaviour
   // Because a future is pass-by-reference, we do not inherit the
   // parameter-passing behaviour of the far ref trait
-  import TFarRef exclude pass;
+  import TEventualRef exclude pass;
   
 	// constructor: used to initialize the state of the new future
 	def init(@args) {
@@ -219,7 +218,7 @@ def FutureMirror := mirror: {
 		timeout();
 	};
 
-	// provide the required methods for the TFarRef trait
+	// provide the required methods for the TEventualRef trait
 	
 	def intercept(msg) {
 		// msg received by a resolved future? forward the message
@@ -250,8 +249,12 @@ def FutureMirror := mirror: {
 		};
 	};
 	
-	// to satisfy the required interface of TFarRef, not really required
-	def transportStrategy := { };
+	// to satisfy the required interface of TEventualRef, not really required
+	def transportStrategy := { }
+	/*	def [fut, res]/.at.lang.futures.makeFuture();
+		originalFuture<-resolveWithValue(fut)@[/.at.lang.futures.MetaMessage];
+		fut
+	};*/
 };
 
 def makeFuture(timeout := nil) {
@@ -566,7 +569,7 @@ def FuturesModule := object: {
 
     def foo() { 5 };    
     
-    def testAsyncFutureCreation() {
+   def testAsyncFutureCreation() {
       def [fut,res] := makeFuture();
       self.assertEquals("<unresolved future>", print: fut);
       res.resolve(5);
@@ -574,7 +577,7 @@ def FuturesModule := object: {
 	      self.assertEquals("<resolved future:5>", print: fut);
 	    };
     };
-    
+
     def testFutureSend() {
       def fut := &foo<-apply([])@FutureMessage;
       self.assertNotNil(fut);
@@ -599,7 +602,7 @@ def FuturesModule := object: {
 				self.assertEquals(6, vals[2]);
 			};
     };
-		
+
 		def testAsyncDueResolvingTest(){
 			//TEST 1: Resolving the future within the timeout period
 			//This test uses the AR future as return value of the test.
@@ -617,35 +620,26 @@ def FuturesModule := object: {
 			  self.fail("testAsyncDue1: Unexpected ruined future");
 			};
    	};
-
-		def testAsyncDueRuiningTest(){
+		
+		def testAsyncDueRuiningTest() {
 			//TEST 2: ruining the future with a TimeoutException
-			//This test uses the AR future as return value of the test.
-			def a := actor: {
-				deftype AsyncDueRuiningTestT;
-				def service := object: {
-					def test() { 5 };
-				} mirroredBy: ( mirror:{
-					//intercepting the message so that it's never received and thus, 
-					//the future will be eventually ruined.
-					def receive(msg) {
-					 	if: !(msg.selector	== `(test)) then: {
-						  super^receive(msg);
-					  };
-					};
-				});
-				export: service as: AsyncDueRuiningTestT;
-			};
-			deftype AsyncDueRuiningTestT;
-      def ref := /.at.lang.ambientrefs.ambient: AsyncDueRuiningTestT;
-			def future := ref<-test()@Due(LeasingModule.seconds(5));
+      def ignoreref := eventualref: { |rcv,msg|
+	      if: !(msg.selector	== `(test)) then: {
+				  rcv <+ msg;
+			  };
+	    } to: (actor: {
+				def test() { 42 };
+			});
+	
+			def future := ignoreref<-test()@Due(LeasingModule.seconds(4));
 			when: future becomes: { |v|
-		  	self.fail("testAsyncDue2: Unexpected resolved future");
-		  } catch: TimeoutException using: { |e|
+			 	self.fail("Unexpected resolved future. Value = " + v);
+			} catch: TimeoutException using: { |e|
 				nil
-      };
-		};		
-    };
+	    };
+	  };
+	
+   };
   };
 };
 

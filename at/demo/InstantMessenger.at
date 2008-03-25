@@ -39,7 +39,7 @@
  */
 
 import /.at.lang.futures;
-enableFutures(true);
+enableFutures(false);
 
 //def IMGUI := jlobby.at.demo.IMGUI;
 //def IMGUI := /.at.demo.IMConsole;
@@ -94,7 +94,7 @@ def createIM( IMGUI := /.at.demo.IMConsole) {
 		export: remoteFacade as: InstantMessenger;
   
     whenever: InstantMessenger discovered: { |messenger|
-      when: messenger<-getName() becomes: { |name|
+      when: messenger<-getName()@FutureMessage becomes: { |name|
     		if: (nil == buddyList.get(name)) then: {
 		  		buddyList.put(name, messenger);
 		  		listener.display("Added buddy: " + name);

@@ -274,7 +274,7 @@ def makeAmbientReference(TypeOrProtocol,
 	                       defaultLifetime,
 	                       defaultReply) {
 	object: { } taggedAs: [ AmbientRef ] mirroredBy: (mirror: {
-    import TFarRef;
+    import TEventualRef;
 
     def reach;
     def scope;
@@ -320,7 +320,7 @@ def makeAmbientReference(TypeOrProtocol,
     def addDiscoveryObserver(obs);
     def addLossObserver(obs);
 
-    // == required methods for TFarRef trait ==
+    // == required methods for TEventualRef trait ==
 
     def intercept(message) {			
 			def ArityT := {defaultArity};

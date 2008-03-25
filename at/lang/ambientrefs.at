@@ -114,7 +114,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
   mirror: {
 
 	  // this mirror is a far reference
-	  import TFarRef exclude newInstance;
+	  import TEventualRef exclude newInstance;
 
 	  // import cardinality and elasticity behaviour
 		import TCardinality;
@@ -208,7 +208,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 		  nil;
 		};
 	
-		// == provide required methods for TFarRef trait ==
+		// == provide required methods for TEventualRef trait ==
 		
 		// received base-level messages are delegated to TCardinality
 		def intercept(msg) {
@@ -506,7 +506,8 @@ def AmbientRefModule := object: {
 
 				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
 					self.assertTrue(is: newAR taggedAs: AmbientRef);
-					self.assertFalse(is: newAR taggedAs: /.at.types.FarReference);
+					self.assertFalse(a == newAR);
+					//self.assertTrue(is: newAR taggedAs: /.at.types.FarReference);
 				};
 			};
 			def testAsyncWhereOnSturdyUni() {

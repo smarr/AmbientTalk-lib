@@ -26,7 +26,7 @@
  */
 
 def TimerModule := /.at.support.timer;
-def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+def TEventualRef := /.at.lang.firstclassrefs.TEventualRef;
 def TObservable := /.at.lang.firstclassrefs.TObservable;
 
 import TimerModule;
@@ -55,8 +55,8 @@ def LeasedRefTraitModule := object: {
 
 		// a leased reference is a special kind of far reference, hence
 		// mix in the far reference meta-level behaviour into this mirror
-		import TFarRef;
-		// ATTENTION: the implementation of TFarRef's required interface 
+		import TEventualRef;
+		// ATTENTION: the implementation of TEventualRef's required interface 
 		// is defered to the concrete leased references (except for
 		// transportStrategy which now requires leaseTransportStrategy)
 		
@@ -68,7 +68,7 @@ def LeasedRefTraitModule := object: {
 			// the 'observerCatalog' object with one field storing
 			// the expiration observers
 			TObservable^init(`expiration);
-			// delegate is a field defined in TFarRef which specifies the object to which meta messages 
+			// delegate is a field defined in TEventualRef which specifies the object to which meta messages 
 			// should be forwarded if they are not understood by the far ref itself. 
 			// It is necessary when futures are combined with leased references.
 			// For leases, delegate is also the object to which base messages should be forwarded.

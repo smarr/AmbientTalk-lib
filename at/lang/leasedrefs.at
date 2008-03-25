@@ -45,7 +45,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 		TLeasedRef^init(objPrincipal, timeout);
 	};
 	
-	// implement TFarRef's required interface
+	// implement TEventualRef's required interface
 	
 	def intercept(msg) {
 		//all base messages received are forwarded to principal 
@@ -125,7 +125,7 @@ def createClientLeasingMirror(remoteLease, timeout) {
 			TLeasedRef^init(remoteLease, timeout);
 		};
 
-    // implement TFarRef's required interface
+    // implement TEventualRef's required interface
 		def pass(){
 			//leased object are always passed on a <SL,CL> basis. 
 			//Client leases cannot be passed, they must be adquired at the server side.
@@ -249,7 +249,9 @@ def LeasingModule := object: {
 		//Note that when:expired: on lease references places an observer on the server side while
 		//when:expired: of remote far references on the client side.
 		
-		if: ((is: leasedRef taggedAs: LeasedRef).and: { !(is: leasedRef taggedAs: /.at.types.FarReference) }) then: {
+		// Note: after refactoring the MOP, even leased refs are always regarded as FarReferences, this is why
+		// the check for !FarRef is removed
+		if: (is: leasedRef taggedAs: LeasedRef) /*.and: { !(is: leasedRef taggedAs: /.at.types.FarReference) }*/ then: {
 			(reflect: leasedRef).addExpirationObserver(code) 
 		} else: {
 			if: (is: leasedRef taggedAs: ClientLeasedRef) then: { 

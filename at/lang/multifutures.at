@@ -125,7 +125,7 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 	  // therefore, this mirror mixes in the 'far reference' behaviour
 	  // Because a future is pass-by-reference, we do not inherit the
 	  // parameter-passing behaviour of the far ref trait
-	  import TFarRef exclude pass;
+	  import TEventualRef exclude pass;
 
 		def isFullyResolved() {
 			upperBound == (resolvedValues.length + ruinedValues.length);
@@ -264,7 +264,7 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 			finalize();
 		};
 
-		// provide the required methods for the TFarRef trait
+		// provide the required methods for the TEventualRef trait
 
 		def intercept(msg) {
 			// forward the message to all already resolved values
@@ -290,7 +290,7 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 			}
 		};
 
-		// to satisfy the required interface of TFarRef, not really required
+		// to satisfy the required interface of TEventualRef, not really required
 		def transportStrategy := { };
 
 	}; // end MultiFutureMirror
@@ -425,34 +425,24 @@ def MultiFutureModule := object: {
   deftype MultiReference;
   def multiref: farrefs {
 	  object: { } taggedAs: [MultiReference] mirroredBy: (mirror: {
-		  import /.at.lang.firstclassrefs.TFarRef exclude pass;
-		  def arity := farrefs.length;
+		  import /.at.lang.firstclassrefs.TEventualRef exclude pass;
 		  def intercept(msg) {
-			  farrefs.each: { |farref| farref <+ msg };
+			  def timeout := nil;
+			  if: (is: msg taggedAs: DueType) then: {
+				  timeout := /.at.support.util.getAnnotationOfType(msg, DueType).timeout;
+			  };
+			
+			  def [multifut,mfresolver] := makeMultiFuture(farrefs.length, timeout);
+			  def mfmsg := FuturesModule.futurize(msg, multifut, GatherType);
+			
+			  farrefs.each: { |farref| farref <+ mfmsg };
+			  multifut;
 			};
 			def toString() {
 				"group reference: "+farrefs;
 			};
 	  })
   };
-
-  // necessary actor plug-in to make any message send to a multireference return a multifuture
-  /.at.lang.futures.enableFutures(false);
-  actor.install: (extend: actor with: {
-	  // annotates each message sent to a MultiReference object with @Gather
-	  def send(rcvr, msg) {
-		  if: (is: rcvr taggedAs: MultiReference) then: {
-			  def timeout := nil;
-			  if: (is: msg taggedAs: DueType) then: {
-				  timeout := /.at.support.util.getAnnotationOfType(msg, DueType).timeout;
-			  };
-			  def GatherAnnotation := Gather((reflect: rcvr).arity, timeout);
-			  def annotations := [GatherAnnotation, @(tagsOf: msg)];
-			  msg := actor.createMessage(msg.selector, msg.arguments, annotations);
-		  };
-		  super^send(rcvr, msg);
-	  };
-  });
 
   def MultiFuturesTest() {
 	  extend: /.at.unit.test.UnitTest.new("MultiFuturesTest") with: {

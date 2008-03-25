@@ -133,7 +133,7 @@ def makeExactlyOnceReceptor(forObject) {
 // TODO: check whether mirror-extension works on M2MI-refs
 def makeExactlyOnceAdaptor(receptor) {
 	object: { } mirroredBy: (mirror: {
-	  import TFarRef;
+	  import TEventualRef;
 	  delegate := receptor;
 	
 	  // unique identifier for each outgoing message sent by me
@@ -145,7 +145,7 @@ def makeExactlyOnceAdaptor(receptor) {
 		// if not nil, we're waiting for an acknowledgement
 		def currentMessageId := nil;
 		
-	  // === implement TFarRef's required interface ===
+	  // === implement TEventualRef's required interface ===
 	
 		/**
 		 * This far ref implements exactly-once message delivery,
@@ -230,7 +230,7 @@ def BATCH_INTERVAL := seconds(2);
  */
 def makeBatchAdaptor(batchReceptor, batchInterval := BATCH_INTERVAL) {
 	object: { } mirroredBy: (mirror: {
-	  import TFarRef;
+	  import TEventualRef;
 	  delegate := batchReceptor;
 	
 	  // currently batched outgoing messages
@@ -239,7 +239,7 @@ def makeBatchAdaptor(batchReceptor, batchInterval := BATCH_INTERVAL) {
 		// if not nil, we've scheduled a flush timeout
 		def flushTask := nil;
 		
-	  // === implement TFarRef's required interface ===
+	  // === implement TEventualRef's required interface ===
 	
 	  def intercept(msg) {
 		  // store the message in the outbox
@@ -301,7 +301,7 @@ deftype RebindReceptor <: Receptor;
 def makeRebindableAdaptorFor(Type) {
 	object: { } taggedAs: [ RebindReceptor ] mirroredBy: (mirror: {
 
-    import TFarRef;
+    import TEventualRef;
     import TObservable;
 
     def principal := nil;
@@ -365,7 +365,7 @@ def makeRebindableAdaptorFor(Type) {
 			principal := nil;
     };
 
-		// == provide required methods for TFarRef trait ==
+		// == provide required methods for TEventualRef trait ==
 		
 		// received base-level messages are either forwarded to the
 		// current principal or stored in an outbox while disconnected

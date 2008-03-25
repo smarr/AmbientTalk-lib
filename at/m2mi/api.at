@@ -69,7 +69,7 @@ def cast: obj into: interface {
 def TypeTagToInterfaceConverter := jlobby.at.m2mi.TypeTagToInterfaceConverter;
 def TTTIC_convert := TypeTagToInterfaceConverter.&convert;
 
-def TFarRef := /.at.lang.firstclassrefs.TFarRef;
+def TEventualRef := /.at.lang.firstclassrefs.TEventualRef;
 
 // re-use the native serialization implementation to (de)serialize M2MI payloads
 def Packet := jlobby.edu.vub.at.actors.natives.Packet;
@@ -156,7 +156,7 @@ def M2MIModule := object: {
 			// the reference wrappers around the M2MI handles are
 			// first-class far references, so mix in the far reference
 			// behaviour into this mirror
-			import TFarRef exclude newInstance;
+			import TEventualRef exclude newInstance;
 			
 			// M2MI reference equality is based on their underlying M2MI handles
 			def ==(otherRef) {
@@ -168,7 +168,7 @@ def M2MIModule := object: {
 				m2miHandle.equals(otherM2MIHandle);
 			};
 			
-			// implement the required interface of TFarRef
+			// implement the required interface of TEventualRef
 			
 			def intercept(msg) {
 				// TODO: what about adapting parameter-passing rules? (cannot deal with return val wrapping here)
