@@ -110,11 +110,13 @@
 def FuturesModule := /.at.lang.futures;
 def MFuturesModule := /.at.lang.multifutures;
 def Vector := /.at.collections.vector.Vector;
-def Util := /.at.support.util;
 def OneWayMessage := FuturesModule.OneWayMessage;
 
 import /.at.support.timer;
 import /.at.lang.firstclassrefs;
+// pass this module as argument to the annotations module
+import /.at.ambient.ar_annotations(self);
+
 def DiscoveryModule := /.at.ambient.discovery;
 FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
 
@@ -122,47 +124,6 @@ def log := /.at.support.logger.makeLogger("[ambientrefs.at]", /.at.support.logge
 def debug(text) {
 	log(text, /.at.support.logger.DEBUG)
 };
-
-deftype IllegalAnnotation <: /.at.types.Exception;
-def XIllegalAnnotation := /.at.exceptions.createException(IllegalAnnotation);
-
-deftype ARAnnotation;
-
-deftype MsgArity <: ARAnnotation;
-deftype One <: MsgArity;
-deftype All <: MsgArity;
-
-deftype MsgDiscoveryLifetime <: ARAnnotation;
-deftype Instant <: MsgDiscoveryLifetime;
-deftype TransientT <: MsgDiscoveryLifetime;
-deftype Sustain <: MsgDiscoveryLifetime;
-
-def Transient(period) {
-	extend: TransientT with: { |period|
-		def ==(other) { super == other };
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
-};
-
-deftype MsgCommunicationLifetime <: ARAnnotation;
-deftype Oneway <: MsgCommunicationLifetime;
-deftype Twoway <: MsgCommunicationLifetime;
-deftype Reply <: Twoway;
-deftype DueT <: Twoway;
-
-def Due(timeout) {
-	extend: DueT with: { |timeout|
-		def ==(other) { super == other };
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
-};
-
-deftype Expirable <: TransientT, DueT;
-def Expires(timeout) {
-	extend: Expirable with: { |timeout|
-		def ==(other) { super == other };
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
-};
-
-deftype AmbientReference;
 
 deftype DescriptorT;
 def DescriptorObject := object: {
@@ -195,8 +156,6 @@ def signalDropped(msg) {
 			XMessageDropped.new("message dropped: "+msg.selector))@[OneWayMessage,MetaMessage];
 	}
 };
-
-def extendWithHandle(msg, handle) { extend: msg with: {|handle|} };
 
 def makeAmbientReference(extensionalReach,
 	                       typetagOrProtocol,
@@ -452,33 +411,6 @@ def TInstant := object: {
 	}
 };
 
-//in message with lifetime TRANSIENT:
-def makeTTransient(initTransientPeriod) {
-	def makeAutoExpirable(originalRegistration) {
-		def timerRegistration := when: initTransientPeriod elapsed: {
-			originalRegistration.cancel();
-		};
-		object: {
-			def cancel() { // signals a premature cancellation
-				timerRegistration.cancel(); // stop the timer
-				originalRegistration.cancel(); // cancel the registration now
-			}
-		}
-	};
-	extend: TSustain with: {		
-		def transientPeriod(msg) { initTransientPeriod };
-		// override the methods defined by the sustainable lifetime trait
-		def registerMessageUntilReceiverFound(@args) {
-			def reg := super^registerMessageUntilReceiverFound(@args);
-			makeAutoExpirable(reg);
-		};
-		def registerMessage(@args) {
-			def reg := super^registerMessage(@args);
-			makeAutoExpirable(reg);
-		};
-	};
-};
-
 //in message with lifetime SUSTAINABLE: {
 def TSustain := object: {
 	def dispatch(ar, msg) { self.sendAndRegister(ar, msg) }; // dispatch TArity
@@ -515,6 +447,33 @@ def TSustain := object: {
 	};
 };
 
+//in message with lifetime TRANSIENT:
+def makeTTransient(initTransientPeriod) {
+	def makeAutoExpirable(originalRegistration) {
+		def timerRegistration := when: initTransientPeriod elapsed: {
+			originalRegistration.cancel();
+		};
+		object: {
+			def cancel() { // signals a premature cancellation
+				timerRegistration.cancel(); // stop the timer
+				originalRegistration.cancel(); // cancel the registration now
+			}
+		}
+	};
+	extend: TSustain with: {		
+		def transientPeriod(msg) { initTransientPeriod };
+		// override the methods defined by the sustainable lifetime trait
+		def registerMessageUntilReceiverFound(@args) {
+			def reg := super^registerMessageUntilReceiverFound(@args);
+			makeAutoExpirable(reg);
+		};
+		def registerMessage(@args) {
+			def reg := super^registerMessage(@args);
+			makeAutoExpirable(reg);
+		};
+	};
+};
+
 //in message with lifetime EXPIRES: {
 def makeTExpires(expPeriod) {
 	object: {
@@ -529,85 +488,6 @@ def makeTExpires(expPeriod) {
 	}
 };
 
-def createHandler(msg, dfltArityType, dfltLifetimeType, dfltReplyType) {
-	def ArityTrait := arityTraitFor( (is: msg taggedAs: MsgArity).ifTrue: {
-	  Util.getAnnotationOfType(msg, MsgArity);
-	} ifFalse: { dfltArityType });
-	
-	def CommLTTrait;
-	def DiscLTTrait;
-	
-	// EXPIRABLE => LIFETIME = TRANSIENT AND REPLY = DUE
-	if: (is: msg taggedAs: Expirable) then: {
-		def ann := Util.getAnnotationOfType(msg, Expirable);
-		DiscLTTrait := makeTExpires(ann.timeout);
-		CommLTTrait := nil;
-	} else: {
-		DiscLTTrait := discLTTraitFor((is: msg taggedAs: MsgDiscoveryLifetime).ifTrue: {
-			Util.getAnnotationOfType(msg, MsgDiscoveryLifetime);
-		} ifFalse: { dfltLifetimeType });
-		
-		CommLTTrait := commLTTraitFor((is: msg taggedAs: MsgCommunicationLifetime).ifTrue: {
-			Util.getAnnotationOfType(msg, MsgCommunicationLifetime);
-		} ifFalse: { dfltReplyType });
-	};
-	
-	debug("[makeHandler]: handler created for "+msg.selector);
-	// perform trait composition and fill in the required message slot
-	// to bind the traits to the message
-	object: {
-	  import ArityTrait;
-	  import CommLTTrait;
-	  import DiscLTTrait;
-  };
-};
-
-def arityTraitFor(annotation) {
-  // ARITY = ONE | ALL
-	if: (annotation.isSubtypeOf(One)) then: {
-		TOne;
-	} else: {
-		if: (annotation.isSubtypeOf(All)) then: {
-			TAll;
-		} else: {
-		  raise: XIllegalAnnotation.new("Illegal arity annotation: " + annotation);
-		}
-	};
-};
-
-def commLTTraitFor(annotation) {
-	// REPLY = DUE | ONEWAY | FUTURE
-	if: (annotation.isSubtypeOf(Oneway)) then: {
-		TOneway;
-	} else: {
-		if: (annotation.isSubtypeOf(DueT)) then: {
-			makeTDue(annotation.timeout);
-		} else: {
-			if: (annotation.isSubtypeOf(Reply)) then: {
-				TReply;
-			} else: {
-			  raise: XIllegalAnnotation.new("Illegal commLT annotation: " + annotation);				
-			}
-		}
-	};
-};
-
-def discLTTraitFor(annotation) {
-	// LIFETIME = INSTANT | TRANSIENT | SUSTAINABLE
-	if: (annotation.isSubtypeOf(Instant)) then: {
-		TInstant;
-	} else: {
-		if: (annotation.isSubtypeOf(TransientT)) then: {
-			makeTTransient(annotation.period)
-		} else: {
-			if: (annotation.isSubtypeOf(Sustain)) then: {
-				TSustain;
-			} else: {
-			  raise: XIllegalAnnotation.new("Illegal discLT annotation: " + annotation);				
-			}
-		}
-	};
-};
 /*def enableAmbientRefs() {
 	if: !(is: actor taggedAs: ARModule) then: {
 		FuturesModule.enableFutures(false);
@@ -646,9 +526,7 @@ def discLTTraitFor(annotation) {
 	}
 };*/
 
-deftype Nothing;
 def dfltRange := [];
-def dfltType := Nothing;
 def dfltFilter := script: { |o| true } carrying: [];
 def dfltArity := One;
 def dfltLifetime := Sustain;
@@ -787,17 +665,17 @@ def AmbientRefModule := object: {
 		makeAmbientReference(dfltRange, T, filter, A, L, R);
 	};
 	
-	def ambientalize: range {
-		makeAmbientReference(range, dfltType, dfltFilter, dfltArity, dfltLifetime, dfltReply);
+	def ambientalize: range withType: type {
+		makeAmbientReference(range, type, dfltFilter, dfltArity, dfltLifetime, dfltReply);
 	};
-	def ambientalize: range withArity: A {
-		makeAmbientReference(range, dfltType, dfltFilter, A, dfltLifetime, dfltReply);
+	def ambientalize: range withType: type withArity: A {
+		makeAmbientReference(range, type, dfltFilter, A, dfltLifetime, dfltReply);
 	};
-	def ambientalize: range withLifetime: L {
-		makeAmbientReference(range, dfltType, dfltFilter, dfltArity, L, dfltReply);
+	def ambientalize: range withType: type withLifetime: L {
+		makeAmbientReference(range, type, dfltFilter, dfltArity, L, dfltReply);
 	};
-	def ambientalize: range withArity: A withLifetime: L {
-		makeAmbientReference(range, dfltType, dfltFilter, A, L, dfltReply);
+	def ambientalize: range withType: type withArity: A withLifetime: L {
+		makeAmbientReference(range, type, dfltFilter, A, L, dfltReply);
 	};
 	
 	def ambient: T where: F withArity: A withLifetime: L withReply: R initWith: Range {
