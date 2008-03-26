@@ -133,73 +133,6 @@ def ARExtensionalImpl := object: {
 	// OR should be implemented using either delegation or composite traits
 	// AND should be implemented using double dispatch
 
-	//in message with reply ONEWAY:
-	def TOneway := object: {
-		def attachFuture(message) { [nil, message] };
-		def discoveryStopped(msg) { };
-		def sendMessage(rcvr, msg) {
-			debug("[sendMessage (ONEWAY)]: sending "+msg.selector+" to "+rcvr);
-			rcvr <+ msg;
-		};
-	};
-
-	//in message with reply FUTURE:
-	def TReply := object: {
-		def attachFuture(msg) {
-			def [fut, res] := self.createFuture(); // dispatch TArity
-			[fut, FuturesModule.futurize(msg, fut) ];
-		};
-		def discoveryStopped(msg) { };
-		def sendMessage(rcvr, msg) {
-			debug("[sendMessage (FUTURE|DUE)]: sending "+msg.selector+" to "+rcvr);
-			rcvr <+ msg;
-			/*def [fut, res] := FuturesModule.makeFuture();
-
-			// send the original msg (= msg without the handle)
-			def originalMsg := msg.super;
-
-			rcvr <+ FuturesModule.futurize(originalMsg, fut, FuturesModule.FutureMessage);
-			// resolution of copy's future resolves this message's future
-			msg.handle.future<-resolveWithValue(fut)@MetaMessage;
-			fut*/
-		};
-	};
-
-	//in message with reply DUE:
-	def makeTDue(initDuePeriod) {
-		extend: TReply with: {		
-			def timeLeftForReply(msg) { initDuePeriod };
-			def discoveryStopped(msg) {
-			  // notify unbounded multifutures that they should consider
-			  // themselves totally resolved
-				debug("[discoveryStopped (DUE)]: all "+msg.selector+" msges sent, starting closing timer");
-			  when: self.timeLeftForReply(msg) elapsed: {
-					debug("[discoveryStopped (DUE)]: all "+msg.selector+" sent, closing future");
-				  msg.handle.future<-becomeResolved()@MetaMessage;		
-			  }
-			};
-			def sendMessage(rcvr, msg) {
-				// msg contains future, which is either resolved|ruined with reply
-				// or times out if @Due or @Expires was specified
-
-			  // due time should only start when message is sent to an actual receiver
-				// multifutures need to know whose replies to ban! Otherwise, we might report
-				// a timeout AND a value of a receiver in the final multifuture
-
-				debug("[sendMessage (DUE)]: sending "+msg.selector+" to "+rcvr);
-
-				/*def fut := super^sendMessage(rcvr, msg);
-	      when: self.timeLeftForReply(msg) elapsed: {
-					debug("[sendMessage (DUE)]: "+msg.selector+" timed out");
-					// self.message.future<-timeout(rcvr, self.message)@MetaMessage;
-					fut<-timeout(rcvr, msg)@[MetaMessage,OneWayMessage];
-				};
-				fut*/
-				rcvr <+ msg;
-			};		
-		}
-	};
-
 	//in message with arity ONE:
 	def TOne := object: {
 		def createFuture() { FuturesModule.makeFuture() };
@@ -207,7 +140,7 @@ def ARExtensionalImpl := object: {
 			if: (ar.reach.isEmpty) then: closure else: {
 				def receiver := ar.reach.random;
 				debug("[sendTo:ifNoneInReach: (ONE)]: sending "+msg.selector + " to random receiver: " + receiver);
-				self.sendMessage(receiver, msg);
+				receiver <+ msg;
 			};
 		};
 		def sendAndRegister(ar, msg) {
@@ -229,9 +162,7 @@ def ARExtensionalImpl := object: {
 		def send: msg to: ar ifNoneInReach: closure {
 			if: (ar.reach.isEmpty) then: closure else: {
 				debug("[sendTo:ifNoneInReach: (ALL)]: sending "+msg.selector + " to " + ar.reach.length + "receivers");
-				ar.reach.each: { |receiver|
-					self.sendMessage(receiver, msg);
-				}
+				ar.reach.each: { |receiver| receiver <+ msg };
 			};
 		};
 		def sendAndRegister(ar, msg) {			
@@ -264,7 +195,7 @@ def ARExtensionalImpl := object: {
 		def registerMessageUntilReceiverFound(ar, msg) {
 			debug("[registerMessageUntilReceiverFound (SUSTAINABLE)]: searching for rcvrs for "+msg.selector);
 			def registration := ar.addDiscoveryObserver: { |rcvr|
-				self.sendMessage(rcvr, msg);
+				rcvr <+ msg;
 				registration.cancel();
 			};
 			// returns publication that can be used to stop msg delivery
@@ -279,9 +210,7 @@ def ARExtensionalImpl := object: {
 
 		def registerMessage(ar, msg) {
 			debug("[registerMessage (SUSTAINABLE)]: searching for rcvrs for "+msg.selector);
-			def registration := ar.addDiscoveryObserver: { |rcvr|
-				self.sendMessage(rcvr, msg);
-			};
+			def registration := ar.addDiscoveryObserver: { |rcvr| rcvr <+ msg };
 			// returns publication that can be used to stop msg delivery
 			def stopDiscovery() { self.discoveryStopped(msg) }; // dispatch TCommLT
 			object: {
@@ -307,7 +236,7 @@ def ARExtensionalImpl := object: {
 			}
 		};
 		extend: TSustain with: {		
-			def transientPeriod(msg) { initTransientPeriod };
+			def transientPeriod := initTransientPeriod;
 			// override the methods defined by the sustainable lifetime trait
 			def registerMessageUntilReceiverFound(@args) {
 				def reg := super^registerMessageUntilReceiverFound(@args);
@@ -318,20 +247,6 @@ def ARExtensionalImpl := object: {
 				makeAutoExpirable(reg);
 			};
 		};
-	};
-
-	//in message with lifetime EXPIRES: {
-	def makeTExpires(expPeriod) {
-		object: {
-			import makeTTransient(expPeriod);
-			import makeTDue(expPeriod) exclude timeLeftForReply;
-			def timeSent;
-			def timeLeftForReply(msg) {
-				def to := self.transientPeriod(msg) - (now() - msg.handle.sendTime);
-				debug("[timeLeftForReply (EXPIRES)]: calculated due time = "+to);
-				to;
-			};	
-		}
 	};
 
 	def exportServiceObject(serviceObject, typetagOrProtocol, attributes) {

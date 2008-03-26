@@ -177,13 +177,13 @@ def AmbientRefsModule(ARImplModule := /.at.ambient.ar_extensional_impl) {
 	def commLTTraitFor(annotation) {
 		// REPLY = DUE | ONEWAY | FUTURE
 		if: (annotation.isSubtypeOf(Oneway)) then: {
-			ARImplModule.TOneway;
+			TOneway;
 		} else: {
 			if: (annotation.isSubtypeOf(DueT)) then: {
-				ARImplModule.makeTDue(annotation.timeout);
+				makeTDue(annotation.timeout);
 			} else: {
 				if: (annotation.isSubtypeOf(Reply)) then: {
-					ARImplModule.TReply;
+					TReply;
 				} else: {
 				  raise: XIllegalAnnotation.new("Illegal commLT annotation: " + annotation);				
 				}
@@ -219,7 +219,7 @@ def AmbientRefsModule(ARImplModule := /.at.ambient.ar_extensional_impl) {
 		// EXPIRABLE => LIFETIME = TRANSIENT AND REPLY = DUE
 		if: (is: msg taggedAs: Expirable) then: {
 			def ann := Util.getAnnotationOfType(msg, Expirable);
-			DiscLTTrait := ARImplModule.makeTExpires(ann.timeout);
+			DiscLTTrait := makeTExpires(ann.timeout);
 			CommLTTrait := nil;
 		} else: {
 			DiscLTTrait := discLTTraitFor((is: msg taggedAs: MsgDiscoveryLifetime).ifTrue: {
@@ -237,6 +237,41 @@ def AmbientRefsModule(ARImplModule := /.at.ambient.ar_extensional_impl) {
 		  import CommLTTrait;
 		  import DiscLTTrait;
 	  };
+	};
+
+	def TOneway := object: {
+		def attachFuture(msg) { [nil,msg] };
+	  def discoveryStopped(msg) { /* do nothing */ };
+	};
+
+	def TReply := object: {
+		def attachFuture(msg) {
+			def [fut, res] := self.createFuture(); // dispatch TArity
+			[fut, FuturesModule.futurize(msg, fut) ];
+		};
+	  def discoveryStopped(msg) { /* do nothing */ };
+	};
+
+	def makeTDue(initDuePeriod) {
+		extend: TReply with: {
+			def timeLeftForReply(msg) { initDuePeriod };
+		  def discoveryStopped(msg) {
+			  when: self.timeLeftForReply(msg) elapsed: {
+			    (msg.handle.future)<-becomeResolved()@[OneWayMessage,MetaMessage];
+		    };
+		  };
+	  };
+	};
+
+	def makeTExpires(expPeriod) {
+		object: {
+			import ARImplModule.makeTTransient(expPeriod);
+			import makeTDue(expPeriod) exclude timeLeftForReply;
+
+			def timeLeftForReply(msg) {
+				self.transientPeriod - (now() - msg.handle.sendTime);
+			};
+		}
 	};
 
 	deftype AmbientReference;
