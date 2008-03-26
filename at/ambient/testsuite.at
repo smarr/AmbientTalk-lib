@@ -2,7 +2,9 @@
  * Unit test suite that tests the additions from the 'ambient' package.
  */
 def AmbientTestSuite := /.at.unit.test.TestSuite.new("ambient package testsuite", [
-  /.at.ambient.ambientrefs.AmbientRefsTest,
+  // TODO: integrate BOTH ambient ref unit tests with the test suite
+	// /.at.lang.ambientrefs(/.at.ambient.ar_extensional_impl).AmbientRefsTest,
+	/.at.lang.ambientrefs(/.at.m2mi.ar_intensional_impl).AmbientRefsTest,
   /.at.m2mi.api.M2MITest,
   /.at.ambient.discovery.DiscoveryModuleTest,
   /.at.ambient.oomatching.OOMatchModuleTest,

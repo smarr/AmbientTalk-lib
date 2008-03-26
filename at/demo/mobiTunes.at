@@ -40,7 +40,7 @@
  * @author tvcutsem
  */
 
-import /.at.lang.ambientrefs; // for discover:
+def AmbientRefsM := /.at.lang.ambientrefs_old; // for discover:
 import /.at.lang.futures; // for when:becomes:
 enableFutures(false);
 
@@ -139,7 +139,7 @@ def MobiTunesPrototype := object: {
 	   export: createInterface() as: MusicPlayer;
 	
 	   // uses an ambient reference to discover one other music player
-	   def musicPlayerFuture := discover: MusicPlayer;
+	   def musicPlayerFuture := AmbientRefsM.ambient: MusicPlayer;
      when: musicPlayerFuture becomes: { |ambientReference|
 	
 	     notification("discovered new music player: " + ambientReference);

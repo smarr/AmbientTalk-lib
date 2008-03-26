@@ -223,9 +223,9 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 	  // TODO: support all kinds of ARs!
 		def transportStrategy := { |serviceType|
 			// when arriving at the remote host, create a new local ambient reference
-			/.at.lang.ambientrefs.ambient: serviceType
-			                      withCardinality: /.at.lang.ambientrefs.uni()
-			                      withElasticity: /.at.lang.ambientrefs.fragile();
+			/.at.lang.ambientrefs_old.ambient: serviceType
+			                          withCardinality: /.at.lang.ambientrefs_old.uni()
+			                          withElasticity: /.at.lang.ambientrefs_old.fragile();
 		};
 	
   };
@@ -484,7 +484,7 @@ def AmbientRefModule := object: {
 					def testContent(x) { x*x };
 				};
 				def y := 42;
-				/.at.lang.ambientrefs.export: service2 as: ARBarTest with: { |y| def z := 5 };
+				/.at.lang.ambientrefs_old.export: service2 as: ARBarTest with: { |y| def z := 5 };
 			};
 
 			def testAsyncFragileUni() {

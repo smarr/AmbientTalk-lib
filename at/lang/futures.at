@@ -612,7 +612,7 @@ def FuturesModule := object: {
 				export: service as: AsyncDueResolvingTestT;
 			};
 			deftype AsyncDueResolvingTestT;
-			def ref := /.at.lang.ambientrefs.discover: AsyncDueResolvingTestT;
+			def ref := /.at.lang.ambientrefs_old.ambient: AsyncDueResolvingTestT;
 			def future := ref<-test()@Due(LeasingModule.seconds(10));
 			when: future becomes: { |v|
 			 	self.assertEquals(5,v);

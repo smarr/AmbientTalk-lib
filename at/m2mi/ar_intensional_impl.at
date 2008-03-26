@@ -56,8 +56,10 @@ deftype ReplyHandlerT;
 deftype ProtocolAmbientRefType;
 
 def RECALL_PERIOD := seconds(5);
-def DISCOVERY_RATE := seconds(2);
+def BROADCAST_RATE := seconds(2);
 def ANYCAST_TIMEOUT := millisec(500);
+
+def generateMessageId(msg) { (print: msg.selector) + now().intValue };
 
 def min(x,y) { (x < y).ifTrue: { x } ifFalse: { y } };
 
@@ -233,6 +235,71 @@ def ARIntensionalImpl := object: {
 		def stillValid(msg) { true };
 	};
 
+	def TAll := object: {
+		def createFuture() { MFuturesModule.makeMultiFuture() };
+		def dispatch(ar, msg) {
+			def continuation;
+			def id := generateMessageId(msg);
+			def sendOnce() {
+				def ttl := self.timeLeft(msg); // dispatch to DiscLT
+				
+				ar.performBroadcast(msg, id, ttl);
+				continuation := when: BROADCAST_RATE elapsed: {
+					if: self.stillValid(msg) then: { // dispatch TDiscoveryLT
+						sendOnce(); // recursive call to start new broadcast
+				  } else: { // stop broadcasting
+						self.discoveryStopped(msg); // dispatch TCommLT
+				  }
+				}
+			};
+			sendOnce(); // start broadcasting
+			
+			def stopDiscovery() {
+				continuation.cancel();
+				self.discoveryStopped(msg); // DISPATCH to CommLT
+			};
+			object: { def cancel() {  stopDiscovery() } }
+		};
+	};
+
+	def TOne := object: {
+		def createFuture() { FuturesModule.makeFuture() };
+		def dispatch(ar, msg) {
+			def continuation;
+			def sendOnce() {
+				def receivers := [];
+				def replyHandler := unireference: ReplyHandlerT for: (object: {
+					def reply(rcvr) { receivers := receivers + [rcvr] };
+				});
+				
+				ar.performAnycast(replyHandler);
+				continuation := when: ANYCAST_TIMEOUT elapsed: {
+					if: !receivers.isEmpty then: {
+						receivers[(1 ?? receivers.length).round] <+ msg;
+						detachUniRef: replyHandler;
+						self.discoveryStopped(msg); // dispatch TCommunicationLT
+					} else: {
+						continuation := when: BROADCAST_RATE elapsed: {
+							if: self.stillValid(msg) then: { // dispatch TDiscoveryLT
+								sendOnce(); // recursive call to start new anycast
+						  } else: { // stop the anycast protocol
+								self.discoveryStopped(msg); // dispatch TCommunicationLT
+						  }
+						}
+					}
+				}	
+			};
+			sendOnce();
+			
+			def stopDiscovery() {
+				continuation.cancel();
+				self.discoveryStopped(msg); // DISPATCH to CommLT
+			};
+			object: { def cancel() {  stopDiscovery() } }
+		};
+	};
+
+/*
 	def TArity := object: {
 		def keepSending: msg to: ar while: body {
 			def continuation;
@@ -294,8 +361,6 @@ def ARIntensionalImpl := object: {
 		};
 	};
 
-	def generateMessageId(msg) { (print: msg.selector) + now().intValue };
-
 	def TAll := object: {
 		import TArity;
 		def createFuture() { MFuturesModule.makeMultiFuture() };
@@ -309,5 +374,5 @@ def ARIntensionalImpl := object: {
 			}
 		};
 	};
-	
+	*/
 }; // end ARIntensionalImpl
