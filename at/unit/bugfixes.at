@@ -2,7 +2,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 
   import /.at.lang.futures;
 	enableFutures(false);
-		
+
 	// Tests whether the same async message can be sent multiple times.
 	def testAsyncMultipleAsyncMessages() {
 		def [f1, res1] := makeFuture();
@@ -98,6 +98,27 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assert: /.at.types.DuplicateSlot raisedIn: {
 			object: { def m; def m(); }
 		}
+	};
+
+	def testAsyncSymbioticFutures() {
+		def [testF,testR] := makeFuture();
+		jlobby.at.unit.SymbioticFuturesTest.test(object: {
+			import /.at.support.timer;
+			def access() {
+				def [f,r] := makeFuture();
+				when: seconds(3) elapsed: {
+					r.resolve(1);
+				};
+				f;
+			}
+		}, object: {
+			// this method is invoked when the SymbioticFuturesTest has the resolved
+			// value for the future
+			def run() {
+				testR.resolve(`ok);
+			}
+		});
+		testF;
 	};
 	
 };
