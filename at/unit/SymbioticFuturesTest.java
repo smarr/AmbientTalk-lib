@@ -27,24 +27,41 @@
  */
 package at.unit;
 
+import edu.vub.at.actors.eventloops.BlockingFuture;
 import edu.vub.at.exceptions.InterpreterException;
 
 /**
  * @author tvcutsem
  *
- * TODO document the class SymbioticFuturesTest
+ * An auxiliary class used in the file bugfixes.at to test the AmbientTalk/Java linguistic symbiosis.
  * 
  */
 public class SymbioticFuturesTest {
 
 	private interface Cell {
 		public int access();
+		public BlockingFuture accessFuture(Class type, int bla);
 	}
 	
 	public static void test(final Cell c, final Runnable cont) throws InterpreterException {
 		Thread t = new Thread(new Runnable() {
 			public void run() {
 				int x = c.access(); // access returns an AT future which is resolved later
+				cont.run();
+			}
+		});
+		t.start();
+	}
+	
+	public static void testFuture(final Cell c, final Runnable cont) throws InterpreterException {
+		Thread t = new Thread(new Runnable() {
+			public void run() {
+				BlockingFuture fx = c.accessFuture(Integer.class, 1); // access returns an AT future which is resolved later
+				try {
+					Integer i = (Integer) fx.get();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
 				cont.run();
 			}
 		});

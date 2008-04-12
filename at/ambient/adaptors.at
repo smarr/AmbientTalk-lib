@@ -158,7 +158,8 @@ def makeExactlyOnceAdaptor(receptor) {
 		  // if it's the only message in the outbox, try to send it
 		  if: (outbox.length == 1) then: {
 			  sendNext(msg);
-		  }
+		  };
+		  nil
 	  };
 	
 	  /** sent by receptor upon successful message delivery */
@@ -258,6 +259,7 @@ def makeBatchAdaptor(batchReceptor, batchInterval := BATCH_INTERVAL) {
 				  outbox := [];
 			  };
 		  };
+		  nil
 	  };
 	
 	  def toString() {
@@ -374,6 +376,7 @@ def makeRebindableAdaptorFor(Type) {
 		  if: (alreadyBound) then: {
 			  principal <+ msg;
 		  };
+		  nil
 		};
 	
 		def toString() {

@@ -43,22 +43,6 @@ def RUINED := 2;
 // all future objects are marked with this type
 deftype Future;
 
-// all future-carrying messages are marked with this type
-deftype FutureMessage <: /.at.types.AsyncMessage;
-
-// type that signifies that no future should be attached to a message
-deftype OneWayMessage <: /.at.types.AsyncMessage;
-
-// Addition for the integration of leasing and futures:
-
-// type that signifies that futures objects are leased for a given timeout
-deftype DueType <: FutureMessage; 
-
-def Due(timeout) {
-	extend: DueType with: { |timeout|
-		nil;
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
-};
 //create TimeoutException used for notifying the ruining of a future when its lease expires. 
 deftype TimeoutException <: Exception;
 def XTimeoutException := extend: /.at.exceptions.createException(TimeoutException) with: {
@@ -288,6 +272,8 @@ def constructLeaseFor(future, timeout) {
 	futureLease
 };
 
+// REFACTORED USING msg.annotate
+//
 // determine what type of future to attach to the message:
 //
 // @FutureMessage -> regular future
@@ -295,7 +281,7 @@ def constructLeaseFor(future, timeout) {
 // @Gather -> multifuture
 //
 // @Due and @Gather are mutually exclusive, if both would be specified, @Gather has precedence
-def attachFuture(msg) {  
+/*def attachFuture(msg) {  
 	// support for multifutures: messages tagged with the @Gather(n)
 	// type tag receive a multifuture bounded by n
 	def MFModule := /.at.lang.multifutures;
@@ -315,12 +301,31 @@ def attachFuture(msg) {
 			futurize(msg, fut, FutureMessage);	
 		}
 	}	
-};
+};*/
 
 // extend a regular asynchronous message with futures behaviour
 def futurize(msg, future, type := FutureMessage) {
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |future|
+
+    // return value of the message send is the associated future
+    def sendTo(@args) {
+	    def res := super^sendTo(@args);
+	    // only override return value if it is the default nil value
+	    // this allows other language constructs (e.g. ambient refs) to return
+	    // other values for their asynchronous message sends, even if the message
+	    // is tagged as a future message
+	    if: (res == nil) then: {
+			  if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
+				  // normally OK because executed at sender-side (so future will still be a near ref here)
+				  (reflect: future).getPrincipal();
+			  } else: {
+			    future;
+			  }
+	    } else: {
+		    res
+	    }
+	  };
 
 		// the process method is invoked when an async message arrives
 	  def process(behaviour) {
@@ -346,8 +351,38 @@ def futurize(msg, future, type := FutureMessage) {
 	} taggedAs: [ type ];
 };
 
+def futurizeC := &futurize;
+def makeFutureC := &makeFuture;
+
+// all future-carrying messages are marked with this type
+deftype FutureMessageT <: /.at.types.AsyncMessage;
+def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizeC,FutureMessageT|
+  def annotate(msg) {
+		// by default, make a future without timeout
+		def [fut,res] := makeFutureC();
+		futurizeC(msg, fut, FutureMessageT);
+  };
+};
+
+// type that signifies that no future should be attached to a message
+deftype OneWayMessage <: /.at.types.AsyncMessage;
+
+// Addition for the integration of leasing and futures:
+
+// type that signifies that futures objects are leased for a given timeout
+deftype DueType <: FutureMessage; 
+def Due(timeout) {
+	extend: DueType with: { |timeout,makeFutureC,futurizeC,DueType|
+	  def annotate(msg) {
+			// integration of futures with leasing
+			def [fut,res] := makeFutureC(timeout);
+			futurizeC(msg, fut, DueType);
+	  };
+	}// taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+};
+
 // should future-type message sending be supported for default (unannotated) messages?
-def enableFuturesOnDefaultMessages := false;
+// def enableFuturesOnDefaultMessages := false;
 
 // this object is returned when this file is loaded, hence
 // it is the public interface to code defined in this file
@@ -487,11 +522,54 @@ def FuturesModule := object: {
 
   def futurize := &futurize;
 
-	// install the futures protocol on the invoking actor,
-	// returns the previously active protocol
-	// the optional argument indicates whether futures should be enabled on unannotated messages
-	// by default, futures are not enabled on unannotated messages
-	def enableFutures(enabledByDefault := false) {
+  /* Installs the futures protocol on the current actor.
+   * @param enabledByDefault indicates whether futures should be enabled on unannotated messages
+   *        by default, futures are not enabled on unannotated messages
+   * @return the previously active actor protocol
+   *
+	 * Enabling futures will ensure that <- returns a future instead of the default nil value.
+	 * Note that <- does *not* return a future if the message send evaluates to a value
+	 * other than the default nil value. For example, enabling futures does not cause
+	 * the 'handle' return value of a message send to an ambient reference to be replaced
+	 * by a future.
+	 *
+	 * It is advised to use the feature to activate futures by default on unannotated messages
+	 * with caution. Not only is it expensive, it increases conflicts with other language constructs
+	 * or annotations. Programmers are advised to instead always explicitly annotate their messages
+	 * with @FutureMessage if the message should return a future.
+	 *
+	 * If support for futures on unannotated messages is not required, this method does
+	 * not need to be invoked.
+   */
+  def enableFutures(enabledByDefault := false) {
+	  // if futures should not be enabled by default, do not install a custom
+	  // actor protocol (the annotate method of FutureMessage type tags takes care of
+		// annotating explicitly tagged messages)
+	  if: (enabledByDefault) then: {
+			// do not load the futures module twice!
+			if: !(is: actor taggedAs: FuturesModule) then: {
+				system.println("[futures.at] enabling futures by default on actor " + actor);
+
+				// the futures protocol by default extends the currently active protocol
+				actor.install: (extend: actor with: {
+					def createMessage(sel, args, types) {
+						// if the message was annotated not annotated with OneWayMessage
+						// and not already annotated with FutureMessage, add the FutureMessage
+						// annotation automatically
+						if: ((nil == (types.find: { |type| type.isSubtypeOf(OneWayMessage) })).and:
+							  { nil == (types.find: { |type| type.isSubtypeOf(FutureMessageT) }) }) then: {
+							types := [FutureMessage] + types;
+						};
+						super^createMessage(sel, args, types);
+					}
+				})
+			} else: {
+			  actor; // return the current actor protocol
+			};
+	  }
+  };
+
+	/*def enableFutures(enabledByDefault := false) {
 		
 		// can only change this default from 'false' to 'true'
 		// once set to 'true', the default may no longer change
@@ -557,8 +635,8 @@ def FuturesModule := object: {
 	  } else: {
 		  actor; // return the current actor protocol
 	  };
-  };
-
+  };*/
+	
  	def millisec(ms) { TimerModule^millisec(ms) };
 	def seconds(s) { TimerModule^seconds(s) };
 	def minutes(m) { TimerModule^minutes(m) };

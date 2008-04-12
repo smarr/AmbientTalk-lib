@@ -91,12 +91,6 @@ deftype GatherType <: FuturesModule.FutureMessage;
 
 def DueType := /.at.lang.futures.DueType;
 
-def Gather(upperBound := nil, timeout := nil) {
-	extend: GatherType with: { |upperBound, timeout|
-		nil;
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
-};
-
 def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 	mirror: {
 
@@ -309,6 +303,16 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 		FuturesModule.constructResolverFor(multifut, timeout);
 	}
 }; // end makeMultiFuture
+
+def makeMultiFutureC := &makeMultiFuture;
+def Gather(upperBound := nil, timeout := nil) {
+	extend: GatherType with: { |upperBound,timeout,makeMultiFutureC,FuturesModule,GatherType|
+		def annotate(msg) {
+			def [fut,res] := makeMultiFutureC(upperBound, timeout);
+			FuturesModule.futurize(msg, fut, GatherType);
+		};
+	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+};
 
 def MultiFutureModule := object: {
 	

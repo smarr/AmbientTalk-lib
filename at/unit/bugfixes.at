@@ -121,6 +121,42 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		testF;
 	};
 	
+	def testAsyncFutureTypeSymbioticInvocations() {
+		def [testF,testR] := makeFuture();
+		jlobby.at.unit.SymbioticFuturesTest.testFuture(object: {
+			import /.at.support.timer;
+			def accessFuture(x) {
+				def [f,r] := makeFuture();
+				when: seconds(3) elapsed: {
+					r.resolve(x+1);
+				};
+				f;
+			}
+		}, object: {
+			// this method is invoked when the SymbioticFuturesTest has the resolved
+			// value for the future
+			def run() {
+				testR.resolve(`ok);
+			}
+		});
+		testF;
+	};
+	
+	/* test whether futures work on unannotated messages when enabling them by default */
+	def testAsyncDefaultFutures() {
+		def [f,r] := /.at.lang.futures.makeFuture();
+		def a := actor: { |r|
+			import /.at.lang.futures;
+			enableFutures(true);
+			
+			def obj := object: { def m() { 5 } };
+			when: obj<-m() becomes: { |x|
+			  r<-resolve(x);
+			};
+		};
+		f
+	};
+	
 };
 
 self

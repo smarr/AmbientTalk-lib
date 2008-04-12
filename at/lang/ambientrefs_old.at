@@ -213,6 +213,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 		// received base-level messages are delegated to TCardinality
 		def intercept(msg) {
 		  self.acceptMessage(msg); // provided by cardinality trait
+		  nil
 		};
 	
 		def toString() {
