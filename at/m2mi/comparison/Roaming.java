@@ -31,8 +31,6 @@ import edu.rit.util.Timer;
 import edu.rit.util.TimerTask;
 import edu.rit.util.TimerThread;
 
-import sun.rmi.runtime.GetThreadPoolAction;
-
 class RoamingServiceImpl implements RoamingService {
 	public void anycast(ReplyHandler r) {
 		r.reply((RoamingService) M2MI.getUnihandle(this, RoamingService.class));
