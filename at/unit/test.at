@@ -70,7 +70,7 @@ def assert(bln, reason) {
 def retrieveTestMethodNames(obj) {
 	def methodNames := [];
 	while: { !(nil == obj) } do: {
-		def localTestMethods := ((reflect: obj).listMethods().filter: { |mth| mth.name.text ~= "\\Atest.*" });
+		def localTestMethods := ((reflect: obj).listMethods().filter: { |mth| mth.name.text ~= "^test.*" });
 		methodNames := methodNames + (localTestMethods.map: { |mth| mth.name });
 		obj := obj.super;
 	};
@@ -161,7 +161,7 @@ def UnitTest := object: {
 		reporter.start(self.name, testMethods.length);
 		
 		testMethods.each: { |methName|
-			if: (methName.text ~= "\\AtestAsync.*") then: {
+			if: (methName.text ~= "^testAsync.*") then: {
 				// asynchronous unit test
 				numAsyncTests := numAsyncTests + 1;
 				self.setUp();

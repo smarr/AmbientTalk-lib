@@ -97,7 +97,7 @@ def makeExactlyOnceReceptor(forObject) {
 			// bookkeeping is necessary to prevent duplicates
 			// messages are regarded as 'idempotent' via the naming convention that
 			// their names start with the noun 'idempotent'.
-			if: (message.selector.text ~= "\\Aidempotent.*") then: {
+			if: (message.selector.text ~= "^idempotent.*") then: {
 				// just forward the message
 				forObject <+ message;
 				// and acknowledge receipt (if receipt does not get through, the sender will resend the message)
