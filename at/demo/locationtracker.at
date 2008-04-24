@@ -37,12 +37,12 @@
  */
 
 import /.at.support.timer;
-import /.at.ambient.ambientrefs;
+import /.at.lang.ambientrefs(/.at.m2mi.ar_intensional_impl);
 import /.at.lang.futures exclude seconds, millisec, minutes, Future, Due;
 
 deftype LocationService;
 
-def makeLocationServer() {
+def makeLocationServer(sid) {
 	def locations := jlobby.java.util.HashMap.new();
 	def service := object: {
 		def queryPath(pid) { locations.get(pid) };
@@ -51,6 +51,7 @@ def makeLocationServer() {
 			if: (nil != l) then: { l[l.length] };
 		};
 		def submitLocation(pid, loc) {
+			system.println("client " + pid + " submitted location " + loc + " to server " + sid);
 			def l := locations.get(pid);
 			if: (nil != l) then: {
 				locations.put(pid, l + [loc]);
@@ -67,7 +68,7 @@ def makeClient(pid, updatePeriod) {
 	def conn := ambient: LocationService;
 	whenever: updatePeriod elapsed: {
 		def loc := detectCurrentLocation();
-		conn<-submitLocation(pid, loc)@[One,Durable,Oneway]
+		conn<-submitLocation(pid, loc)@[One,Sustain,Oneway]
 	};
 };
 
@@ -83,9 +84,9 @@ def LocationTrackerTest() {
 
 	  def testAsyncTrack() {
 		  def [fut,res] := makeFuture();
-			def server := makeLocationServer();
+			def server := makeLocationServer("Enigma");
 			def client1 := makeClient("Alan Turing", seconds(2));
-			//def client2 := makeClient("Alonzo Church");
+			// def client2 := makeClient("Alonzo Church", seconds(3));
 			when: seconds(5) elapsed: {
 			  res.resolve(when: server<-queryPath("Alan Turing")@FutureMessage becomes: { |v|
 			    client1.cancel();

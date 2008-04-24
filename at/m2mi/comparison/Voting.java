@@ -162,4 +162,3 @@ public class Voting implements VoteReplyHandler, TimerTask {
 	}
 	
 }
-

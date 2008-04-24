@@ -10,6 +10,7 @@ def AmbientTestSuite := /.at.unit.test.TestSuite.new("ambient package testsuite"
   /.at.ambient.oomatching.OOMatchModuleTest,
   /.at.ambient.templatediscovery.TemplateDiscoveryModuleTest,
   /.at.ambient.discoverycomposition.DiscoveryCompositionModuleTest,
-  /.at.ambient.adaptors.AdaptorModuleTest
+  /.at.ambient.adaptors.AdaptorModuleTest,
+  /.at.demo.locationtracker.LocationTrackerTest
   // /.at.ambient.deapspace.DEAPspaceProtocolTest,
 ]);
