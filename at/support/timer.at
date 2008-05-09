@@ -81,7 +81,7 @@ def TimerModule := object: {
 				};
 				def getTimeRemaining() {
 					if: canceled then: {
-						0
+						ZERO
 					} else: {
 						def time := ZERO;
 					  def expiredTime := now() - ttask.scheduledExecutionTime();
