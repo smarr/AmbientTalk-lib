@@ -307,7 +307,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 def makeMultiFutureC := &makeMultiFuture;
 def Gather(upperBound := nil, timeout := nil) {
 	extend: GatherType with: { |upperBound,timeout,makeMultiFutureC,FuturesModule,GatherType|
-		def annotate(msg) {
+		def annotateMessage(msg) {
 			def [fut,res] := makeMultiFutureC(upperBound, timeout);
 			FuturesModule.futurize(msg, fut, GatherType);
 		};

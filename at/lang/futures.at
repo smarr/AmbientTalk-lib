@@ -272,37 +272,6 @@ def constructLeaseFor(future, timeout) {
 	futureLease
 };
 
-// REFACTORED USING msg.annotate
-//
-// determine what type of future to attach to the message:
-//
-// @FutureMessage -> regular future
-// @Due -> future with timeout
-// @Gather -> multifuture
-//
-// @Due and @Gather are mutually exclusive, if both would be specified, @Gather has precedence
-/*def attachFuture(msg) {  
-	// support for multifutures: messages tagged with the @Gather(n)
-	// type tag receive a multifuture bounded by n
-	def MFModule := /.at.lang.multifutures;
-	if: (is: msg taggedAs: MFModule.GatherType) then: {
-		def ann := /.at.support.util.getAnnotationOfType(msg, MFModule.GatherType);
-		def [fut,res] := MFModule.makeMultiFuture(ann.upperBound, ann.timeout);
-		futurize(msg, fut, MFModule.GatherType);
-	} else: {
-		if: (is: msg taggedAs: DueType) then: {
-			// integration of futures with leasing
-			def ann := /.at.support.util.getAnnotationOfType(msg, DueType);
-			def [fut,res] := makeFuture(ann.timeout);
-			futurize(msg, fut, DueType);
-		} else: {
-			// by default, make a future without timeout
-			def [fut,res] := makeFuture();
-			futurize(msg, fut, FutureMessage);	
-		}
-	}	
-};*/
-
 // extend a regular asynchronous message with futures behaviour
 def futurize(msg, future, type := FutureMessage) {
 	// extend default message with FutureMessage behaviour
@@ -357,7 +326,7 @@ def makeFutureC := &makeFuture;
 // all future-carrying messages are marked with this type
 deftype FutureMessageT <: /.at.types.AsyncMessage;
 def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizeC,FutureMessageT|
-  def annotate(msg) {
+  def annotateMessage(msg) {
 		// by default, make a future without timeout
 		def [fut,res] := makeFutureC();
 		futurizeC(msg, fut, FutureMessageT);
@@ -373,7 +342,7 @@ deftype OneWayMessage <: /.at.types.AsyncMessage;
 deftype DueType <: FutureMessage; 
 def Due(timeout) {
 	extend: DueType with: { |timeout,makeFutureC,futurizeC,DueType|
-	  def annotate(msg) {
+	  def annotateMessage(msg) {
 			// integration of futures with leasing
 			def [fut,res] := makeFutureC(timeout);
 			futurizeC(msg, fut, DueType);
