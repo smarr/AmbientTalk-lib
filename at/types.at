@@ -21,6 +21,7 @@ deftype MethodInvocation <: Message;
 deftype Delegation <: Message;
 deftype AsyncMessage <: Message;
 deftype FieldSelection <: Message;
+deftype Letter;
 deftype Mirror;
 deftype ActorMirror;
 deftype TypeTag;

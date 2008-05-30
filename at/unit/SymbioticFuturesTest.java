@@ -28,7 +28,6 @@
 package at.unit;
 
 import edu.vub.at.actors.eventloops.BlockingFuture;
-import edu.vub.at.exceptions.InterpreterException;
 
 /**
  * @author tvcutsem
@@ -43,7 +42,7 @@ public class SymbioticFuturesTest {
 		public BlockingFuture accessFuture(Class type, int bla);
 	}
 	
-	public static void test(final Cell c, final Runnable cont) throws InterpreterException {
+	public static void test(final Cell c, final Runnable cont) {
 		Thread t = new Thread(new Runnable() {
 			public void run() {
 				int x = c.access(); // access returns an AT future which is resolved later
@@ -53,7 +52,7 @@ public class SymbioticFuturesTest {
 		t.start();
 	}
 	
-	public static void testFuture(final Cell c, final Runnable cont) throws InterpreterException {
+	public static void testFuture(final Cell c, final Runnable cont) {
 		Thread t = new Thread(new Runnable() {
 			public void run() {
 				BlockingFuture fx = c.accessFuture(Integer.class, 1); // access returns an AT future which is resolved later
