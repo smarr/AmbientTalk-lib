@@ -12,8 +12,8 @@ def context( scope, this )
 	{ jlobby.edu.vub.at.objects.natives.NATContext.new( scope, this ) };
 def field( name, scope )
 	{ jlobby.edu.vub.at.objects.natives.NATField.new( name, scope ) };
-def method( name, parameters, body )
-	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body ) };
+def method( name, parameters, body , annotations )
+	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body , annotations ) };
 def namespace( name, path )
 	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
 

@@ -162,7 +162,7 @@ def OOMatchModule := object: {
   // constraint: { ... } => { |_| ... }
   // the closure should be nullary and return a boolean
   def constraint: clo {
-	  closure(method(`constraint, [`_], clo.method.bodyExpression), clo.context);
+	  closure(method(`constraint, [`_], clo.method.bodyExpression,[]), clo.context);
   };
 
 	def OOMatchModuleTest() {
