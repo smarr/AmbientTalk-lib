@@ -58,8 +58,10 @@ def FirstClassRefModule := object: {
    *
    * Optionally, a composite may redefine the 'delegate' field which specifies
    * the object to which metamessages should be forwarded if they are not understood
-   * by the eventual ref itself
-   */
+   * by the eventual ref itself. This is the default behaviour how to intercept meta-level  
+   * messages. Mirrors importing this trait can specify a different behaviour by overriding  
+   * def metaIntercept(msg); 
+	 */
   def TEventualRef := object: {
 		
 	  // disallow synchronous access to the object
@@ -77,16 +79,21 @@ def FirstClassRefModule := object: {
 		
 		def receive(msg) {
 			if: (is: msg taggedAs: MetaMessage) then: {
-				// have to go meta-meta because we need to know whether the
-				// *mirror* itself can respond to the selector
-				if: ((reflect: self).respondsTo(msg.selector)) then: {
-					self <+ msg; // process meta-message myself
-				} else: {
-					self.delegate<-receive(msg)@MetaMessage; // <+ msg;  // forward meta-message if not understood
-				};
+				self.metaIntercept(msg); 
 		  } else: {
 			  self.intercept(msg); // provided by composite
 		  }
+		};
+		
+		//default behaviour to intercept meta-level messages.
+		def metaIntercept(msg) {
+			// have to go meta-meta because we need to know whether the
+			// *mirror* itself can respond to the selector
+			if: ((reflect: self).respondsTo(msg.selector)) then: {
+				self <+ msg; // process meta-message myself
+			} else: {
+				self.delegate<-receive(msg)@MetaMessage; // forward meta-message if not understood
+			}
 		};
 		
 		def delegate := NilEventualRef;

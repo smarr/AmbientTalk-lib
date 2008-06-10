@@ -65,7 +65,11 @@ def TimerModule := object: {
 		if: (timeout < ZERO) then: {
 			// fire immediately
 			code<-apply([]);
-			object: { def cancel() { false } };
+			object: { 
+				def cancel() { false };
+				def getTimeElapsed() {timeout};
+				def getTimeRemaining() {ZERO}; 
+			};
 		} else: {
 			def ttask := RunnableTimerTask.new(object: {
 				def run() { canceled.ifFalse: code };
@@ -79,16 +83,22 @@ def TimerModule := object: {
 						ttask := nil; true;
 					}
 				};
+				def getTimeElapsed(){ 
+					if: canceled then: { timeout } 
+					else: {
+						def timeLeft := ttask.scheduledExecutionTime() - now();
+						// if the task was already runned, timeLeft will be negative
+						if: (timeLeft < ZERO) then: { timeLeft := ZERO};
+						timeout - timeLeft;
+					}
+				};
 				def getTimeRemaining() {
-					if: canceled then: {
-						ZERO
-					} else: {
-						def time := ZERO;
-					  def expiredTime := now() - ttask.scheduledExecutionTime();
-						if: ( expiredTime < timeout) then: {
-							time := timeout - expiredTime;
-						};
-						time
+					if: canceled then: { ZERO } 
+					else: {
+						def timeLeft := ttask.scheduledExecutionTime() - now();
+						// if the task was already runned, timeLeft will be negative
+						if: (timeLeft < ZERO) then: { timeLeft := ZERO};
+						timeLeft;
 					};
 				};
 			}	
@@ -148,9 +158,15 @@ def TimerModule := object: {
 		
 	  def testAsyncWhenElapsed() {
 		def [fut,res] := FuturesModule.makeFuture();
-		when: millisec(200) elapsed: {
+		def subscription := when: millisec(200) elapsed: {
 		  res.resolve(true);
-	    };
+	  };
+		FuturesModule.when: fut becomes: { |val|
+			if: val then:{
+			  self.assertEquals(millisec(200).intValue(), subscription.getTimeElapsed().intValue());
+				self.assertEquals(ZERO, subscription.getTimeRemaining());
+			};
+		};
 		fut;
 	  };
 		def testAsyncWhenEverElapsed() {

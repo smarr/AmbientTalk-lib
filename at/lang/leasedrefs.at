@@ -60,7 +60,7 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 		if: (expired) then: {
 			"expired lease: " + super^print() + " on: " + delegate;
 		} else: {
-			"lease: " + super^print() + " on: " + delegate ;
+			"lease: " + super^print() + " on: " + delegate;
 		};
 	};
 
@@ -91,10 +91,6 @@ def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := t
 
 def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelectors := []) {  extend: createLeasingMirror(principal, timeout) with: {
 
-/*def receive(msg){
-	system.println("SUM receive " + self+ " message " + msg + " will be delegated to " + self.delegate);
-	super^receive(msg);
-}; */
 	def intercept(msg){
 		def res := super^intercept(msg);
 		if: !(self.expired) then: {		
@@ -159,7 +155,7 @@ def createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal) { extend
 			//ATENCIO: this renewal should not be transmitted to the server lease! 
 			//Just renews the client lease to keep it in sync with the server lease.
 			super^renew(renewal);
-			delegate<-intercept(msg);
+			self.delegate<-intercept(msg);
 		};
 	};
 }};
@@ -172,12 +168,12 @@ def createClientLeasingWithSingleUseMirror(remoteLease, timeout, forSelectors) {
 		if: !(self.expired) then: { 
 			if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
 				super^revoke();
-	  		} else: {
+	  	} else: {
 				//ATENCIO: this renewal should not be transmitted to the server lease! 
 				//Just renews the client lease to keep it in sync with the server lease.
 		 		super^renew();
 			};
-		  delegate<-intercept(msg);
+		  self.delegate<-intercept(msg);
 		};
 	};
 }};

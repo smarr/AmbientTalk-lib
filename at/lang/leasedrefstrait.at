@@ -24,7 +24,12 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-
+/*
+ * This trait factors out the common behaviour of different 
+ * lease reference objects in AmbientTalk.
+ *
+ * @author egonzale
+ */
 def TimerModule := /.at.support.timer;
 def TEventualRef := /.at.lang.firstclassrefs.TEventualRef;
 def TObservable := /.at.lang.firstclassrefs.TObservable;
@@ -34,12 +39,6 @@ import TimerModule;
 def long := jlobby.java.lang.Long.TYPE;
 def maxMethod := jlobby.java.lang.Math.&max;
 
-/*
- * This trait factors out the common behaviour of leased
- * reference objects in AmbientTalk.
- *
- * @author egonzale
- */
 def LeasedRefTraitModule := object: {
 
 	def RENEWALONCALL := millisec(10); // default call time renewal 
@@ -55,7 +54,7 @@ def LeasedRefTraitModule := object: {
 
 		// a leased reference is a special kind of far reference, hence
 		// mix in the far reference meta-level behaviour into this mirror
-		import TEventualRef;
+		import TEventualRef exclude metaIntercept;
 		// ATTENTION: the implementation of TEventualRef's required interface 
 		// is defered to the concrete leased references (except for
 		// transportStrategy which now requires leaseTransportStrategy)
@@ -77,19 +76,29 @@ def LeasedRefTraitModule := object: {
 		  self.timerSubscription := when: timeout elapsed: { self.expire };
 	  };
 	  
+	  def metaIntercept(msg) {
+			if: ((reflect: self).respondsTo(msg.selector)) then: {
+				self <+ msg; // process meta-message myself
+			} else: {
+				self.intercept(msg); // apply leasing semantics before forwarding msg to delegate.
+			}
+		};
+		
 		def addExpirationObserver(obs){
 			self.addObserver: obs to: self.observerCatalog.expiration;
 		};
 
 		def takeLeasedObjectOffline() {
-			if: !(expired) then: {
-				//A lease won't be asked more than once to be taken offline.
-			  try: {
+			//A lease won't be asked more than once to be taken offline.
+			//Only take offline the lease object at the server side. 
+			//Note that client leases are never online (currently, they cannot be passed). 
+			if: ( (!self.expired).and: {is: self.base taggedAs: LeasedRef }) then: {
+			  try: { 
 		      takeOffline: self;
 		    } catch: /.at.types.IllegalOperation using: { |e|
 				  // Lease used only locally! Catching this exception means that 
 				  //the lease was never serialized and thus, it was never put online.  
-			    system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);
+			    system.println("[leasedrefs.at] WARNING: lease " +self +" used only locally: "+e.message);
 		  	};
 		  };
 		};
@@ -109,8 +118,8 @@ def LeasedRefTraitModule := object: {
 		};
 
 		def renew(renewalTime := RENEWALONCALL) {
-			if: !(expired) then: {
-				def interval := maxMethod(timerSubscription.getTimeRemaining(), renewalTime);
+			if: !(self.expired) then: {
+				def interval := maxMethod(self.timerSubscription.getTimeRemaining(), renewalTime);
 				self.timerSubscription.cancel();
 				self.timerSubscription := when: interval elapsed: { self.expire };
 			} else: {
