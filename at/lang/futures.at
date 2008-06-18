@@ -520,7 +520,7 @@ def FuturesModule := object: {
 				system.println("[futures.at] enabling futures by default on actor " + actor);
 
 				// the futures protocol by default extends the currently active protocol
-				actor.install: (extend: actor with: {
+				actor.replaceMirror: (extend: actor with: {
 					def createMessage(sel, args, types) {
 						// if the message was annotated not annotated with OneWayMessage
 						// and not already annotated with FutureMessage, add the FutureMessage
@@ -557,7 +557,7 @@ def FuturesModule := object: {
 			system.println("[futures.at] enabling futures on actor " + actor + " (default = " + enabledByDefault + ")");
 
 			// the futures protocol by default extends the currently active protocol
-			actor.install: (extend: actor with: {
+			actor.replaceMirror: (extend: actor with: {
 				def createMessage(sel, args, types) {
 					// first, create a regular message
 					def msg := super^createMessage(sel, args, types);

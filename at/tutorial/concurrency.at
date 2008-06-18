@@ -188,7 +188,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 	};
 	
 	def testActorMirror() {
-		def oldmirror := actor.install: (extend: actor with: {
+		def oldmirror := actor.replaceMirror: (extend: actor with: {
 		  def createMessage(@args) {
 		    def msg := super^createMessage(@args);
 		    def msg.added := 0;
@@ -198,7 +198,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 		def customMsg := <-foo();
 		self.assertTrue((reflect: customMsg).respondsTo(`added));
 		self.assertEquals(0, customMsg.added);
-		actor.install: oldmirror;
+		actor.replaceMirror: oldmirror;
 		customMsg := <-bar();
 		self.assertFalse((reflect: customMsg).respondsTo(`added));
 	};
