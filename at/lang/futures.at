@@ -272,7 +272,66 @@ def constructLeaseFor(future, timeout) {
 	futureLease
 };
 
-// extend a regular asynchronous message with futures behaviour
+/**
+ * extend a regular asynchronous message with a future
+ * every time it is sent.
+ */
+def futurizePerSend(msg, futureMaker, type := FutureMessage) {
+	// extend default message with FutureMessage behaviour
+	extend: msg with: { |type,futureMaker|
+
+    // return value of the message send is the associated future
+    def sendTo(@args) {
+	    def [future, resolver] := futureMaker();
+	    // extend the original message (this object's parent)
+	    def msgWithFuture := extend: super with: { |future|
+		    // the process method is invoked when an async message arrives
+			  def process(behaviour) {
+					try: {
+						// delegate to parent to actually invoke the method
+						def result := super^process(behaviour);
+
+						// if everything goes right, resolve the attached future
+						// replace the placeholder symbol with the actual result
+						future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+
+						result;
+
+				  // note that we need to qualify the full path to the Exception type:
+				  // the Exception variable defined above is out of scope since this message is an isolate!
+				  } catch: /.at.types.Exception using: { |e|
+					  future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+
+					  // re-raise the caught exception
+					  raise: e;
+			    };
+		    }
+	    } taggedAs: [ type ];
+	
+	    def res := msgWithFuture.sendTo(@args);
+	
+	    // def res := super^sendTo(@args);
+	
+	    // only override return value if it is the default nil value
+	    // this allows other language constructs (e.g. ambient refs) to return
+	    // other values for their asynchronous message sends, even if the message
+	    // is tagged as a future message
+	    if: (res == nil) then: {
+			  if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
+				  // normally OK because executed at sender-side (so future will still be a near ref here)
+				  (reflect: future).getPrincipal();
+			  } else: {
+			    future;
+			  }
+	    } else: {
+		    res
+	    }
+	  };
+	};
+};
+
+// extend a regular asynchronous message with a future that will be
+// reused upon each message send
 def futurize(msg, future, type := FutureMessage) {
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |future|
@@ -280,6 +339,7 @@ def futurize(msg, future, type := FutureMessage) {
     // return value of the message send is the associated future
     def sendTo(@args) {
 	    def res := super^sendTo(@args);
+	
 	    // only override return value if it is the default nil value
 	    // this allows other language constructs (e.g. ambient refs) to return
 	    // other values for their asynchronous message sends, even if the message
@@ -296,7 +356,7 @@ def futurize(msg, future, type := FutureMessage) {
 	    }
 	  };
 
-		// the process method is invoked when an async message arrives
+    // the process method is invoked when an async message arrives
 	  def process(behaviour) {
 			try: {
 				// delegate to parent to actually invoke the method
@@ -321,15 +381,16 @@ def futurize(msg, future, type := FutureMessage) {
 };
 
 def futurizeC := &futurize;
+def futurizePerSendC := &futurizePerSend;
 def makeFutureC := &makeFuture;
 
 // all future-carrying messages are marked with this type
 deftype FutureMessageT <: /.at.types.AsyncMessage;
-def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizeC,FutureMessageT|
+def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizePerSendC,FutureMessageT|
   def annotateMessage(msg) {
 		// by default, make a future without timeout
-		def [fut,res] := makeFutureC();
-		futurizeC(msg, fut, FutureMessageT);
+		def futureMaker := script: { makeFutureC() } carrying: [ `makeFutureC ];
+		futurizePerSendC(msg, futureMaker, FutureMessageT);
   };
 };
 
@@ -341,11 +402,11 @@ deftype OneWayMessage <: /.at.types.AsyncMessage;
 // type that signifies that futures objects are leased for a given timeout
 deftype DueType <: FutureMessage; 
 def Due(timeout) {
-	extend: DueType with: { |timeout,makeFutureC,futurizeC,DueType|
+	extend: DueType with: { |timeout,makeFutureC,futurizePerSendC,DueType|
 	  def annotateMessage(msg) {
 			// integration of futures with leasing
-			def [fut,res] := makeFutureC(timeout);
-			futurizeC(msg, fut, DueType);
+			def futureMaker := script: { makeFutureC(timeout) } carrying: `[ makeFutureC, timeout ];
+			futurizePerSendC(msg, futureMaker, DueType);
 	  };
 	}// taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };

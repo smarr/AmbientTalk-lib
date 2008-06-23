@@ -157,6 +157,24 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		f
 	};
 	
+	/* test whether a single message can be sent multiple times and that
+	 * each message send carries its own, independently resolvable future.
+	 */
+	def testAsyncFuturePerSend() {
+		def msg := <-m()@FutureMessage;
+		def rcvr := object: {
+			def count := 0;
+			def m() { count := count + 1 };
+		};
+		def sync1 := when: (rcvr <+ msg) becomes: { |val|
+			self.assertEquals(1, val);
+		};
+		def sync2 := when: (rcvr <+ msg) becomes: { |val|
+			self.assertEquals(2, val);
+		};
+		group: [sync1, sync2]
+	};
+	
 };
 
 self

@@ -308,8 +308,8 @@ def makeMultiFutureC := &makeMultiFuture;
 def Gather(upperBound := nil, timeout := nil) {
 	extend: GatherType with: { |upperBound,timeout,makeMultiFutureC,FuturesModule,GatherType|
 		def annotateMessage(msg) {
-			def [fut,res] := makeMultiFutureC(upperBound, timeout);
-			FuturesModule.futurize(msg, fut, GatherType);
+			def [ multifut, mfresolver] := makeMultiFutureC(upperBound, timeout);
+			FuturesModule.futurize(msg, multifut, GatherType);
 		};
 	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
 };
@@ -436,9 +436,8 @@ def MultiFutureModule := object: {
 				  timeout := /.at.support.util.getAnnotationOfType(msg, DueType).timeout;
 			  };
 			
-			  def [multifut,mfresolver] := makeMultiFuture(farrefs.length, timeout);
+			  def [ multifut, mfresolver ] := makeMultiFuture(farrefs.length, timeout);
 			  def mfmsg := FuturesModule.futurize(msg, multifut, GatherType);
-			
 			  farrefs.each: { |farref| farref <+ mfmsg };
 			  multifut;
 			};
