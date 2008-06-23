@@ -28,8 +28,8 @@ def createCaseObject(name, fields, mirror, context) {
 					// Iterate over all fields of this case object
 					caseFields.each: { | field |
 						try: {
-							def myValueForField  := myMirror.invoke(self, field, []);
-							def itsValueForField := itsMirror.invoke(caseObject, field, []);
+							def myValueForField  := myMirror.invoke(self, `(.#field()));
+							def itsValueForField := itsMirror.invoke(caseObject, `(.#field()));
 
 							// Fields which have their own name as value are ignored when comparing case objects
 							((field == myValueForField).or: 
@@ -57,7 +57,7 @@ def createCaseObject(name, fields, mirror, context) {
 				def myMirror := (reflect: self);
 				def caseFields := myMirror.grabMethod(`init).parameters;
 				
-				caseFields.filter: { | field | field == myMirror.invoke(self, field, []); };
+				caseFields.filter: { | field | field == myMirror.invoke(self, `(.#field())); };
 			};
 						
 			def apply(args) {
@@ -78,7 +78,7 @@ def createCaseMirror(name, fields) {
 			def marker := "(";
 			
 			fields.each: { | fieldName |
-				representation := representation + marker + self.invoke(self.base, fieldName, []);
+				representation := representation + marker + self.invoke(self.base, `(.#fieldName()));
 				marker := ", ";
 			};
 			
@@ -112,7 +112,7 @@ def match: matchedObject with: caseExpression {
 		def bindings: parameterTable {
 			def mirror := reflect: matchedObject;
 			parameterTable.map: { | param |
-				mirror.invoke(matchedObject, param, []);
+				mirror.invoke(matchedObject, `(.#param())));
 			};
 		};
 

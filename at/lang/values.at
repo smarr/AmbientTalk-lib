@@ -7,7 +7,7 @@
 def closure( method, context )
 	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( method, context ) };
 def closureMethod( scope, method )
-	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( scope, method ) };
+	{ jlobby.edu.vub.at.objects.natives.NATClosureMethod.new( scope, method ) };
 def context( scope, this )
 	{ jlobby.edu.vub.at.objects.natives.NATContext.new( scope, this ) };
 def field( name, scope )
@@ -16,5 +16,15 @@ def method( name, parameters, body , annotations )
 	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body , annotations ) };
 def namespace( name, path )
 	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
+def createInvocation(@args)
+	{ jlobby.edu.vub.at.objects.natives.NATMethodInvocation.new(@args) };
+def createFieldSlot(nam, initval) {
+	def nam_ := /.at.support.util.makeMutator(nam);
+	eval: `{
+		def #nam() { val };
+	  def #nam_(v) { val := v };
+	  [ &#nam, &#nam_ ]
+	} in: (object: { def val := initval });
+};
 
 self;

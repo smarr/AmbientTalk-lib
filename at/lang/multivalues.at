@@ -57,12 +57,13 @@ a mirror on the mirror.
 def makeMultiValue: table {
 	object: { } mirroredBy: (extend: defaultMirror with: { } taggedAs: [/.at.types.Mirror] mirroredBy: (mirror: {
 		// a meta-level operation is invoked on the mirror
-		def invoke(mself, msel, margs) {
+		def invoke(mself, minv) {
+			def [msel, margs] := [minv.selector, minv.arguments];
 			system.println("invoked " + msel);
 			if: ((msel == `new).or: { msel == `init }) then: {
 				super^invoke(mself, msel, margs);
 			} else: {
-				makeMultiValue: (table.map: { |elt| (reflect: (reflect: elt)).invoke(mself, msel, margs) })				
+				makeMultiValue: (table.map: { |elt| (reflect: (reflect: elt)).invoke(mself, minv) })				
 			}
 		};
 		def asTable := table;

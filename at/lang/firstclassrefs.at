@@ -65,17 +65,17 @@ def FirstClassRefModule := object: {
   def TEventualRef := object: {
 		
 	  // disallow synchronous access to the object
-	  def invoke(slf, sel, args) {
+	  def invoke(slf, inv) {
 		  // the only legal operation on references is '=='
-		  if: (`(==) == sel) then: {
+		  if: (`(==) == inv.selector) then: {
 				// two eventual refs are equal iff their mirrors are equal
-				self == (reflect: args[1])
+				self == (reflect: (inv.arguments)[1])
 		  } else: {
-				raise: XIllegalOperation.new("Cannot synchronously invoke " + sel + " on " + self.toString());
+				raise: XIllegalOperation.new("Cannot synchronously invoke " + inv.selector + " on " + self.toString());
 		  }
 		};
 		
-		def invokeField(slf, sel) { self.invoke(slf, sel, []) };
+		def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
 		
 		def receive(msg) {
 			if: (is: msg taggedAs: MetaMessage) then: {

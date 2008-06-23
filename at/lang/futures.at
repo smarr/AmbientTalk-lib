@@ -514,13 +514,14 @@ def FuturesModule := object: {
 	  // if futures should not be enabled by default, do not install a custom
 	  // actor protocol (the annotate method of FutureMessage type tags takes care of
 		// annotating explicitly tagged messages)
+		def actor := reflectOnActor();
 	  if: (enabledByDefault) then: {
 			// do not load the futures module twice!
 			if: !(is: actor taggedAs: FuturesModule) then: {
 				system.println("[futures.at] enabling futures by default on actor " + actor);
 
 				// the futures protocol by default extends the currently active protocol
-				actor.replaceMirror: (extend: actor with: {
+				actor.becomeMirroredBy: (extend: actor with: {
 					def createMessage(sel, args, types) {
 						// if the message was annotated not annotated with OneWayMessage
 						// and not already annotated with FutureMessage, add the FutureMessage
@@ -539,7 +540,7 @@ def FuturesModule := object: {
   };
 
 	/*def enableFutures(enabledByDefault := false) {
-		
+		def actor := reflectOnActor();
 		// can only change this default from 'false' to 'true'
 		// once set to 'true', the default may no longer change
 		// (as it may break existing code that relies on implicit futures)
@@ -557,7 +558,7 @@ def FuturesModule := object: {
 			system.println("[futures.at] enabling futures on actor " + actor + " (default = " + enabledByDefault + ")");
 
 			// the futures protocol by default extends the currently active protocol
-			actor.replaceMirror: (extend: actor with: {
+			actor.becomeMirroredBy: (extend: actor with: {
 				def createMessage(sel, args, types) {
 					// first, create a regular message
 					def msg := super^createMessage(sel, args, types);

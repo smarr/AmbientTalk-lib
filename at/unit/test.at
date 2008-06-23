@@ -165,7 +165,7 @@ def UnitTest := object: {
 				// asynchronous unit test
 				numAsyncTests := numAsyncTests + 1;
 				self.setUp();
-				def fut := (reflect: self).invoke(self, methName, []);
+				def fut := (reflect: self).invoke(self, `(.#methName()));
 				FuturesModule.when: fut becomes: { |val|
 					reporter.success(methName);
 					asyncTestFinished();
@@ -182,7 +182,7 @@ def UnitTest := object: {
 				// synchronous unit test
 				try: {
 					self.setUp();
-					(reflect: self).invoke(self, methName, []);
+					(reflect: self).invoke(self, `(.#methName()));
 					self.tearDown();
 					reporter.success(methName);
 				} catch: AssertionFailed using: {|e|

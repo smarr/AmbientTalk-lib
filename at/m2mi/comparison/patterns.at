@@ -38,7 +38,7 @@ object: {
 	
 	def RoamingPattern(Type, message) {
 		def services := ambient: Type;
-		services <+ actor.createMessage(message.selector, message.arguments, (tagsOf: message) + [One,Sustain,Oneway]);
+		services <+ reflectOnActor().createMessage(message.selector, message.arguments, (tagsOf: message) + [One,Sustain,Oneway]);
 	};
 	
 }
