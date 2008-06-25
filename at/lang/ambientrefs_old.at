@@ -163,7 +163,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 			      self.foundPrincipal(potentialPrincipal);
 			    };
 
-			    def sub := when: potentialPrincipal disconnected: {
+			    def sub := whenever: potentialPrincipal disconnected: {
 			      debug("Base: potential principal disconnected: ", potentialPrincipal);
 			      joinedbox.remove(potentialPrincipal);
 			      if: (self.isBoundPrincipal(potentialPrincipal)) then: {
@@ -398,11 +398,11 @@ def TSturdyRef := extend: TAbstractElasticity with: {
 	};
 };
 
-def nativeWhen: farref disconnected: code {
-	when: farref disconnected: code
+def nativeWhenever: farref disconnected: code {
+	whenever: farref disconnected: code
 };
-def nativeWhen: farref reconnected: code {
-	when: farref reconnected: code
+def nativeWhenever: farref reconnected: code {
+	whenever: farref reconnected: code
 };
 
 def nativeExport: obj as: type {
@@ -439,21 +439,21 @@ def AmbientRefModule := object: {
 	
 	// if ambientRef is indeed an ambient reference, add an observer,
 	// otherwise perform the default behaviour
-	def when: ambientRef disconnected: code {
+	def whenever: ambientRef disconnected: code {
 		if: (is: ambientRef taggedAs: AmbientRef) then: {
 			(reflect: ambientRef).addDisconnectionObserver(code);
 		} else: {
-			nativeWhen: ambientRef disconnected: code
+			nativeWhenever: ambientRef disconnected: code
 		};
 	};
 	
 	// if ambientRef is indeed an ambient reference, add an observer,
 	// otherwise perform the default behaviour
-	def when: ambientRef reconnected: code {
+	def whenever: ambientRef reconnected: code {
 		if: (is: ambientRef taggedAs: AmbientRef) then: {
 			(reflect: ambientRef).addConnectionObserver(code);
 		} else: {
-			nativeWhen: ambientRef reconnected: code
+			nativeWhenever: ambientRef reconnected: code
 		};
 	};
 	

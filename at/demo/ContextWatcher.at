@@ -156,10 +156,10 @@ def makeContextWatcher(GUI,nickname) {
 		  if: !buddyList.containsKey(buddyname) then: {
 				buddyList.put(buddyname, client);
 			  gui<-flagDiscovered(buddyname, buddystatus);
-				when: client disconnected: {
+				whenever: client disconnected: {
 				  gui<-flagOffline(buddyname);
 				};
-				when: client reconnected: {
+				whenever: client reconnected: {
 					gui<-flagOnline(buddyname);
 				};
 		  }

@@ -190,10 +190,28 @@ def isolate: closure passAs: transportClosure {
 	})
 };
 
-def whenever: remoteRef disconnected: code {
-	when: remoteRef disconnected: code
+def when: remoteRef disconnected: code {
+	def active := true;
+	def sub := whenever: remoteRef disconnected: {
+		if: active then: code;
+	};
+	object: {
+		def cancel() {
+			active := false;
+			sub.cancel();
+		}
+	}
 };
 
-def whenever: remoteRef reconnected: code {
-	when: remoteRef reconnected: code
+def when: remoteRef reconnected: code {
+	def active := true;
+	def sub := whenever: remoteRef reconnected: {
+		if: active then: code;
+	};
+	object: {
+		def cancel() {
+			active := false;
+			sub.cancel();
+		}
+	}
 };

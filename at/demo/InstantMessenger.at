@@ -98,10 +98,10 @@ def createIM( IMGUI := /.at.demo.IMConsole) {
     		if: (nil == buddyList.get(name)) then: {
 		  		buddyList.put(name, messenger);
 		  		listener.display("Added buddy: " + name);
-		  		when: messenger disconnected: {
+		  		whenever: messenger disconnected: {
 			  		listener.display("Buddy offline:" +name);
 		  		};
-		  		when: messenger reconnected: {
+		  		whenever: messenger reconnected: {
 			  		listener.display("Buddy online:" +name);
 		  		};
 				};

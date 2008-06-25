@@ -169,7 +169,7 @@ def MobiTunesPrototype := object: {
 		   sendSongs();
 		
 		   // failure handling
-	     when: ambientReference disconnected: {
+	     whenever: ambientReference disconnected: {
 		     notification("music player disconnected: ", ambientReference);
 		     // do nothing upon disconnection: keeps the session alive until reconnect
 		     // alternative strategy is to clean up the session:
@@ -185,7 +185,7 @@ def MobiTunesPrototype := object: {
 		     }));*/
 		
 		   };
-		   when: ambientReference reconnected: {
+		   whenever: ambientReference reconnected: {
 			   notification("music player reconnected: ", ambientReference);
 		   };
 		};
