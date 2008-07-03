@@ -224,6 +224,63 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(8, o.foo);
 	};
 	
+	/**
+	 * Tests the new slot-based reflective interface on mirrors of mirages.
+	 */
+	def testSlotbasedReflectionOnMirages() {
+		def o := object: {
+			def x := 5;
+			def y() { 6 };
+			def sum(x,y) { x + y };
+		} mirroredBy: (extend: defaultMirror with: {
+			
+			// automatically removes super/super:= from the list
+			def listSlots() {
+				def slots := super^listSlots();
+				slots.filter: { |slot| !((slot.name == `super).or: { slot.name == `super:= }) };
+			};
+			
+		});
+		
+		def m := (reflect: o);
+		
+		// [x, x:=, y, sum]
+		self.assertEquals(4, m.listSlots.length);
+		
+		def xAccessor := m.grabSlot(`x);
+		def xMutator := m.grabSlot(`x:=);
+		
+		def ctx := /.at.lang.values.createContext(o, o);
+		
+		// o.x == 5
+		self.assertEquals(5, xAccessor.apply([],ctx));
+		// o.x := 1
+		self.assertEquals(1, xMutator.apply([1],ctx));
+		// o.x == 1
+		self.assertEquals(1, xAccessor.apply([],ctx));
+
+		def [acc, mut] := /.at.lang.values.createFieldSlot(`foo, 7);
+		// def o.foo() { 7 }		
+		m.addSlot(acc);
+		// [x, x:=, y, sum, foo]
+		self.assertEquals(5, m.listSlots.length);
+		
+		def fooAccessor := m.grabSlot(`foo);
+		// o.foo == 7
+		self.assertEquals(7, o.foo);
+		
+		// def o.foo:=(v) { foo := v }
+		m.addSlot(mut);
+		o.foo := 10;
+		// o.foo == 10
+		self.assertEquals(10, o.foo);
+		
+		// o.foo := 8
+		m.invoke(o, /.at.lang.values.createInvocation(`foo:=, [8], []));
+		// o.foo == 8
+		self.assertEquals(8, o.foo);
+	};
+	
 };
 
 self
