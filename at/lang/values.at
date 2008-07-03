@@ -4,6 +4,8 @@
  * that some parameters are implicitly filled in. 
  */
 
+
+// DEPRECATED, use the 'create' versions instead
 def closure( method, context )
 	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( method, context ) };
 def closureMethod( scope, method )
@@ -16,8 +18,26 @@ def method( name, parameters, body , annotations )
 	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body , annotations ) };
 def namespace( name, path )
 	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
+	
+def createClosure( method, context )
+	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( method, context ) };
+def createClosureMethod( scope, method )
+	{ jlobby.edu.vub.at.objects.natives.NATClosureMethod.new( scope, method ) };
+def createContext( scope, this )
+	{ jlobby.edu.vub.at.objects.natives.NATContext.new( scope, this ) };
+def createField( name, scope )
+	{ jlobby.edu.vub.at.objects.natives.NATField.new( name, scope ) };
+def createMethod( name, parameters, body , annotations )
+	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body , annotations ) };
+def createNamespace( name, path )
+	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
+	
 def createInvocation(@args)
 	{ jlobby.edu.vub.at.objects.natives.NATMethodInvocation.new(@args) };
+	
+/* while this version of createFieldSlot worked, it returned a pair of
+   closures rather than methods, while the current slot-based reflective API
+   expects slots to be methods.
 def createFieldSlot(nam, initval) {
 	def nam_ := /.at.support.util.makeMutator(nam);
 	eval: `{
@@ -25,6 +45,13 @@ def createFieldSlot(nam, initval) {
 	  def #nam_(v) { val := v };
 	  [ &#nam, &#nam_ ]
 	} in: (object: { def val := initval });
+}; */
+def createFieldSlot(nam, initval) {
+	def nam_ := /.at.support.util.makeMutator(nam);
+	def scope := object: { def val := initval };
+	def accMethod := createMethod(nam, [], `{ val }, []);
+	def mutMethod := createMethod(nam_, [ `v ], `{ val := v }, []);
+	[ createClosureMethod(scope, accMethod), createClosureMethod(scope, mutMethod) ]
 };
 
 self;
