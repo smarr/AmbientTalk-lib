@@ -27,7 +27,7 @@
 //
 //******************************************************************************
 
-package at.m2mi.slides;
+package ext.m2mi.slides;
 
 /**
  * Interface ScreenSelectionListener specifies the interface for a screen

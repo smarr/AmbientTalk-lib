@@ -1,4 +1,4 @@
-package at.m2mi.comparison;
+package ext.m2mi.comparison;
 
 public interface Player {
 

@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.m2mi.comparison;
+package ext.m2mi.comparison;
 
 /**
  * @author tvcutsem

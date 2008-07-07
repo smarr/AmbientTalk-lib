@@ -1,4 +1,4 @@
-package at.m2mi.slides;
+package ext.m2mi.slides;
 //******************************************************************************
 //
 // File:    Screen.java
