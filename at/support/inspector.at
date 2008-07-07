@@ -45,9 +45,9 @@ def InspectorTemplate := object: {
 			exitButton		:= swing.JButton.new();
 		
 			inspectorTabs	:= swing.JTabbedPane.new();
-		def tracePanel		:= swing.JPanel.new();
+		  def tracePanel := swing.JPanel.new();
 		
-		def traceScroll		:= swing.JScrollPane.new();
+		  def traceScroll	:= swing.JScrollPane.new();
 			traceList		:= swing.JList.new();
 			traceObjects	:= currentTrace;
 		
@@ -200,13 +200,13 @@ def ObjectListing := object: {
 	def init() {
 		super^init();
 		
-			currentPanel	:= swing.JPanel.new();
+		currentPanel := swing.JPanel.new();
 		
-		def curLabel		:= swing.JLabel.new();
-			printedForm		:= swing.JTextField.new();
+		def curLabel := swing.JLabel.new();
+		printedForm	:= swing.JTextField.new();
 			
-		def scrollPane		:= swing.JScrollPane.new();
-			listForm 		:= swing.JList.new();
+		def scrollPane := swing.JScrollPane.new();
+		listForm 		:= swing.JList.new();
 		
 		// Current Panel
 		currentPanel.setName("Object Listing");
@@ -299,7 +299,7 @@ def ObjectListing := object: {
 			def fields 			:= valueMirror.listFields();
 
 			def listContents 	:= jlobby.java.util.Vector.new();
-				elements		:= jlobby.java.util.Vector.new();
+			elements		:= jlobby.java.util.Vector.new();
 
 			fields.each: { | field | 
 				// Manually wrap in a Java String to avoid the printing of double quotes
@@ -307,14 +307,20 @@ def ObjectListing := object: {
 				
 				elements.add( field.readField() );
 			};
-			methods.each: { | method | 
+			
+			methods.each: { | method |
 				// Manually wrap in a Java String to avoid the printing of double quotes
-				listContents.add( jlobby.java.lang.String.new("" + method.name + "(" + method.parameters + ")"));
 				
+				def printedForm := method.name.text + "(";
+				method.parameters.each: { |param|
+					printedForm := printedForm + param + ","
+				};
+				printedForm := printedForm + ") { " + method.bodyExpression + " }";
+				listContents.add(printedForm);
 				elements.add( method.bodyExpression );
 			};
 
-			printedForm.setText( jlobby.java.lang.String.new(valueMirror.print()));
+			printedForm.setText(jlobby.java.lang.String.new(valueMirror.print()));
 			listForm.setListData(listContents); 
 
 		} catch: /.at.types.Exception using: { | e |
@@ -331,10 +337,10 @@ def decoratorsFor: value {
 	[ ObjectListing ];
 };
 
-def inspector := object: {
+def Inspector := object: {
 	def root;
 	def installedDecorators;
-	
+	def foobar() { nil };
 	def installDecorators(decorators) {
 		def parent	:= root;
 		decorators.each: { | decorator |
@@ -342,32 +348,29 @@ def inspector := object: {
 			decorator.super := parent;
 			parent			:= decorator;
 		};
-		
+
 		// Set the lowest decorator in the parent chain as my own parent
 		super 		:= parent;
-		
+
 		// Allow all decorators to initialise themselves
 		super^init();
-		
+
 		// keep track of currently active decorators
 		installedDecorators := decorators;		
 	};
 
 	def init(value, @decorators) {
 		// At the root of the inspector hierarchy, we have an InspectorTemplate
-		root 		:= clone: InspectorTemplate;
-		
+		root := clone: InspectorTemplate;
+
 		root^buildGUI();
 		root.handle := self;
-		
-		installDecorators(decorators);
 
-		super^initWithValue(value);
+		installDecorators(decorators);
+		super^initWithValue(value);	
 	};
 	
 	def inspect(value) {
-		system.println("inspect");
-		
 		def valueDecorators := decoratorsFor: value;
 		def newInspector := self.new(value, @valueDecorators);
 		newInspector.show();
@@ -380,16 +383,21 @@ def inspector := object: {
 			super^undecorate();
 			installDecorators(valueDecorators);
 		};
-		
+
 		super^initWithValue(value);
-		
+
 		self
 	};
-	
+
 	def exit() {
 		super^clear();
 		super^undecorate();
 		super := root;
 		super^hide();
 	};
+
+};
+
+def InspectorModule := object: {
+	def inspect(value) { Inspector.inspect(value) };
 };
