@@ -40,25 +40,35 @@ def long := jlobby.java.lang.Long.TYPE;
 def maxMethod := jlobby.java.lang.Math.&max;
 
 def LeasedRefTraitModule := object: {
-
+  
+  // a lease can be in one of these three states
+	def INITIAL := 0; // when its timer has not been activated yet.
+	def ACTIVE := 1; // the timer is ticking.
+	def EXPIRED := 2; // the timer is elapsed.
+	
 	def RENEWALONCALL := millisec(10); // default call time renewal 
 	def LEASETIME := millisec(15); // default lease time
 
 	deftype LeasedRef;
 	deftype ClientLeasedRef;
 	
-	def TLeasedRef := object: {
+  def TLeasedRef := object: {
 		
-		def timerSubscription := nil;
-		def expired := false;
+		def timeInterval;
+		def state := INITIAL;
+		// the timer do not start ticking until the leased reference is created.
+    def timerSubscription;
 
 		// a leased reference is a special kind of far reference, hence
 		// mix in the far reference meta-level behaviour into this mirror
-		import TEventualRef exclude metaIntercept;
-		// ATTENTION: the implementation of TEventualRef's required interface 
-		// is defered to the concrete leased references (except for
-		// transportStrategy which now requires leaseTransportStrategy)
-		
+		import TEventualRef alias pass := originalPass exclude metaIntercept;
+		/* 
+		 * ATTENTION: the implementation of TEventualRef's required interface 
+		 * is defered to the concrete leased references except for:
+		 * 1) transportStrategy which now requires leaseTransportStrategy)
+		 * 2) metaIntercept which is defined here since it is shared amongst the different types of leased references.
+		 */
+	
 		// a leased reference has expiration observers
 		import TObservable;
 
@@ -67,32 +77,28 @@ def LeasedRefTraitModule := object: {
 			// the 'observerCatalog' object with one field storing
 			// the expiration observers
 			TObservable^init(`expiration);
-			// delegate is a field defined in TEventualRef which specifies the object to which meta messages 
-			// should be forwarded if they are not understood by the far ref itself. 
-			// It is necessary when futures are combined with leased references.
-			// For leases, delegate is also the object to which base messages should be forwarded.
+			// For leased references, delegate is the object to which base messages should be forwarded.
 			self.delegate := objPrincipal;
-			self.expired := false;
-		  self.timerSubscription := when: timeout elapsed: { self.expire };
+			self.state := INITIAL;
+			self.timeInterval := timeout;
+			// When a lease reference mirror is created, the timer do not start ticking until 
+		  // the server lease is actually passed to a client.
+			self.timerSubscription :=  nil;
+			//self.timer := when: timeout elapsed: { self.expire };
 	  };
 	  
-	  def metaIntercept(msg) {
-			if: ((reflect: self).respondsTo(msg.selector)) then: {
-				self <+ msg; // process meta-message myself
-			} else: {
-				self.intercept(msg); // apply leasing semantics before forwarding msg to delegate.
-			}
-		};
+	  def activateTimer(){
+			if: ( self.state == INITIAL ) then: {
+		  	self.state := ACTIVE;
+		  	self.timerSubscription := when: self.timeInterval elapsed: { self.expire };
+		  }
+	  };
 		
-		def addExpirationObserver(obs){
-			self.addObserver: obs to: self.observerCatalog.expiration;
-		};
-
 		def takeLeasedObjectOffline() {
 			//A lease won't be asked more than once to be taken offline.
 			//Only take offline the lease object at the server side. 
 			//Note that client leases are never online (currently, they cannot be passed). 
-			if: ( (!self.expired).and: {is: self.base taggedAs: LeasedRef }) then: {
+			if: ( (self.state == ACTIVE).and: {is: self.base taggedAs: LeasedRef }) then: {
 			  try: { 
 		      takeOffline: self;
 		    } catch: /.at.types.IllegalOperation using: { |e|
@@ -105,45 +111,83 @@ def LeasedRefTraitModule := object: {
 
 		def expire(){
 			self.takeLeasedObjectOffline;
-			self.expired := true;
+			self.state := EXPIRED;
 			self.notify: self.observerCatalog.expiration withArgs: [];
 		};
 
 		def revoke() {
 			//Revoking a lease is analogous to a natural expiration of the lease 
 			//except that expiration observers are not triggered.
-			self.takeLeasedObjectOffline;
-			self.expired := true;
-			self.timerSubscription.cancel();
+			if: (self.state == ACTIVE) then: {
+			  self.takeLeasedObjectOffline;
+			  self.state := EXPIRED;
+			  self.timerSubscription.cancel;
+			};
 		};
 
 		def renew(renewalTime := RENEWALONCALL) {
-			if: !(self.expired) then: {
-				def interval := maxMethod(self.timerSubscription.getTimeRemaining(), renewalTime);
-				self.timerSubscription.cancel();
+			if: (self.state == ACTIVE) then: {
+				def interval := maxMethod(self.timerSubscription.getTimeRemaining, renewalTime);
+				self.timerSubscription.cancel;
 				self.timerSubscription := when: interval elapsed: { self.expire };
 			} else: {
-				raise: /.at.exceptions.XIllegalOperation.new("cannot renew an expired leased reference on: " +self.base);
+				if: (self.isExpired) then: {
+				  raise: /.at.exceptions.XIllegalOperation.new("cannot renew an expired leased reference on: " +self.base);
+			  };
 			}
 		};
 
 		def getPrincipal() {
 			self.delegate;	
 		};
-
+		
+		//Returns a Long with the amount of time left before the lease expires.
 		def getTimeLeft() {
-			self.timerSubscription.getTimeRemaining(); 
+			if: (self.state == INITIAL) then: {
+			  self.timeInterval;
+			} else:{
+				self.timerSubscription.getTimeRemaining(); 
+			}
 		};
 		
+		def isExpired() { (self.state == EXPIRED) };
+		
+		//TObservable's required interface.
+		def addExpirationObserver(obs){
+			self.addObserver: obs to: self.observerCatalog.expiration;
+		};
+		
+		// TEventualRef's required interface
 		def transportStrategy() {
 			def remoteLease := self;
-			if: !(self.expired) then: {
-			  self.leaseTransportStrategy(remoteLease, self.getTimeLeft());
+			if: !(self.isExpired) then: {
+			  self.leaseTransportStrategy(remoteLease, self.getTimeLeft);
 			} else: {	
-				// TODO: if I'm passed when expired, what should I be at the receiver side?
-				{ |remoteLease| remoteLease }
+				// If I am here, state == EXPIRED because pass() activates the lease (if it was not active before)
+				// Passing an expired lease, raises an exception. 
+				// TODO: think what the lease should be at the receiver side.
+				raise: /.at.exceptions.XIllegalOperation.new("cannot pass an expired leased reference on: " +self.base); 
 			};
 	  };
-		
+	
+	 /* TEventualRef by default forwards meta messages to its 'delegate' if they are not understood by the far ref itself. 
+	  * Since leased references can be combined with other meta level entities (i.e. futures), we apply the following
+	  * semantics: A meta message not understood by the leased ref itself should be subject to the corresponding 
+	  * leasing mirror before being forwarded to the mirror which understands the meta message.
+	  */
+	 def metaIntercept(msg) {
+		 if: ((reflect: self).respondsTo(msg.selector)) then: {
+			 self <+ msg; // process meta-message myself
+		 } else: {
+		 	 self.intercept(msg); // apply leasing semantics before forwarding msg to delegate.
+		 }
+	 };
+	
+	 //overriding the originalPass of TEventualRef (which calls transportStrategy) 
+	 //to first activate the timer of the leased references.
+	 def pass(){
+			self.activateTimer;
+			self.originalPass;
+	 };
 	};
 }

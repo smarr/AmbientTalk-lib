@@ -265,9 +265,12 @@ def constructResolverFor(future, timeout := nil) {
 };
 
 def constructLeaseFor(future, timeout) {
-	def futureLease := LeasingModule.singleCallLease: timeout for: future;
+  def futureLease := LeasingModule.singleCallLease: timeout for: future;
+  // We force the lease timer to start ticking since by default it  
+  // is activated when the leased object becomes remotely referenced.
+	(reflect: futureLease).activateTimer();
 	LeasingModule.when: futureLease expired: {
-		(reflect: future).timeout();
+	 (reflect: future).becomeResolved();
 	};
 	futureLease
 };
@@ -593,7 +596,7 @@ def FuturesModule := object: {
 						};
 						super^createMessage(sel, args, types);
 					}
-				})
+				} taggedAs: [ FuturesModule ])
 			} else: {
 			  actor; // return the current actor protocol
 			};
@@ -730,20 +733,44 @@ def FuturesModule := object: {
 			};
    	};
 		
-		def testAsyncDueRuiningTest() {
-			//TEST 2: ruining the future with a TimeoutException
-      def ignoreref := eventualref: { |rcv,msg|
+		def testAsyncLocalDueRuiningTest() {
+			//TEST 2.1: ruining a future (for a intra actor asynchrnous message) with a TimeoutException
+      def ref := eventualref: { |rcv,msg|
 	      if: !(msg.selector	== `(test)) then: {
 				  rcv <+ msg;
 			  };
 	    } to: (actor: {
 				def test() { 42 };
 			});
-	
-			def future := ignoreref<-test()@Due(LeasingModule.seconds(4));
+			def future := ref<-test()@Due(LeasingModule.seconds(4));
 			when: future becomes: { |v|
 			 	self.fail("Unexpected resolved future. Value = " + v);
-			} catch: TimeoutException using: { |e|
+			} catch: TimeoutException using:  { |e|
+				nil
+	    };
+	  };
+	
+	  def testAsyncRemoteDueRuiningTest() {
+			//TEST 2.2: ruining a future (for a inter actor asynchrnous message) with a TimeoutException
+			def a := actor: {
+				deftype AsyncDueRuiningTestT;
+				def service := object: {
+					def test() { 5 };
+				} mirroredBy: ( mirror:{
+					def receive(msg) {
+					 	if: !(msg.selector	== `(test)) then: {
+							super^receive(msg);
+					  };
+					};
+				});
+				export: service as: AsyncDueRuiningTestT;
+			};
+	    deftype AsyncDueRuiningTestT;
+      def ref := /.at.lang.ambientrefs_old.ambient: AsyncDueRuiningTestT; 
+			def future := ref<-test()@Due(LeasingModule.seconds(4));
+			when: future becomes: { |v|
+			 	self.fail("Unexpected resolved future. Value = " + v);
+			} catch: TimeoutException using:  { |e|
 				nil
 	    };
 	  };

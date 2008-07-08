@@ -51,13 +51,16 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 		//all base messages received are forwarded to principal 
 		//the base object of a leased ref is an empty object =>
 		//it does not understand any async msg.
-		if: !(expired) then: {
+		if: !(isExpired) then: {
 			delegate <+ msg
-		}
+		} else: {
+			raise: /.at.exceptions.XIllegalOperation.new("Sending a message to an expired lease " + self.toString);
+		};
 	};
 	
 	def toString() {
-		if: (expired) then: {
+		def tags := tagsOf: delegate;
+		if: (isExpired) then: {
 			"expired lease: " + super^print() + " on: " + delegate;
 		} else: {
 			"lease: " + super^print() + " on: " + delegate;
@@ -75,10 +78,13 @@ def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 def createLeasingWithRenewalMirror(principal, timeout := LEASETIME, renewal := timeout) {  extend: createLeasingMirror( principal, timeout) with: {
 
 	def intercept(msg) {
+		def res := super^intercept(msg);
 		//automatically renew the lease upon mesage reception. 
 		//By default, renewal time = leasetime. 
-		super^renew(renewal);
-		super^intercept(msg);
+		if: !(self.isExpired) then: {		
+			 super^renew(renewal);
+		};
+		res;
 	};
 
   def leaseTransportStrategy(remoteLease, timeout) {
@@ -93,7 +99,7 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 
 	def intercept(msg){
 		def res := super^intercept(msg);
-		if: !(self.expired) then: {		
+		if: !(self.isExpired) then: {		
 		  	if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
 				  super^revoke();
 		  	}
@@ -112,32 +118,51 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 //CLIENT LEASES MIRRORS
 
 def createClientLeasingMirror(remoteLease, timeout) {
-	mirror: {	
-
-		import TLeasedRef exclude pass;
+	mirror: {	 
+					
+		import TLeasedRef exclude pass; //transportStrategy;
 
 		def init(base) {
 			super^init(base);
 			TLeasedRef^init(remoteLease, timeout);
+			self.activateTimer();
 		};
 
     // implement TEventualRef's required interface
 		def pass(){
 			//leased object are always passed on a <SL,CL> basis. 
 			//Client leases cannot be passed, they must be adquired at the server side.
-			 raise: XIllegalOperation.new("Cannot pass client lease " + self.toString);
+			 raise: /.at.exceptions.XIllegalOperation.new("Cannot pass client lease " + self.toString);
 		};
 		
+	/*	def transportStrategy() {
+			def remoteLease := self.delegate;
+			if: !(self.expired) then: {
+			  self.leaseTransportStrategy(remoteLease, self.timeInterval);
+			} else: {	
+				// TODO: if I'm passed when expired, what should I be at the receiver side?
+				{ |remoteLease| remoteLease }
+			};
+	  };*/
+	
+	/*	def leaseTransportStrategy(remoteLease, timeout) {
+		  { |remoteLease, timeout|
+			  /.at.lang.leasedrefs.makeClientLease(remoteLease, timeout);
+		  }
+	  };*/
+	
+		//all mesages received are forwarded to server lease. 
+		//the base object of a leased ref is an empty object => it does not understand any async msg.
 		def intercept(msg) {
-			//all mesages received are forwarded to server lease. 
-			//the base object of a leased ref is an empty object => it does not understand any async msg.
-			if: !(expired) then: { 
+			if: !(isExpired) then: { 
 				delegate<-intercept(msg);
+			} else: {
+				raise: /.at.exceptions.XIllegalOperation.new("Sending a message to an expired lease " + self.toString);
 			};
 		};
 		
 		def toString() {
-			if: (expired) then: {
+			if: (isExpired) then: {
 				"expired client lease " + super^print()  + " on:" + delegate;
 			} else: {
 				"client lease " + super^print() + " on: " + delegate;
@@ -149,23 +174,28 @@ def createClientLeasingMirror(remoteLease, timeout) {
 def createClientLeasingWithRenewalMirror(remoteLease, timeout, renewal) { extend: createClientLeasingMirror( remoteLease, timeout) with: {
 
 	def intercept(msg) {
-		//all mesages received are forwarded to server lease. 
-		//the base object of a leased ref is an empty object => it does not understand any async msg.
-		if: !(self.expired) then: { 
+		def res := super^intercept(msg);
+		if: !(self.isExpired) then: { 
 			//ATENCIO: this renewal should not be transmitted to the server lease! 
 			//Just renews the client lease to keep it in sync with the server lease.
 			super^renew(renewal);
-			self.delegate<-intercept(msg);
 		};
+		res;
 	};
+	
+/*	def leaseTransportStrategy(remoteLease, timeout) {
+	  { |remoteLease, timeout, renewal|
+	    /.at.lang.leasedrefs.makeClientLeaseWithRenewal(remoteLease, timeout, renewal);
+	  }
+  };*/
+
 }};
 
 def createClientLeasingWithSingleUseMirror(remoteLease, timeout, forSelectors) { extend: createClientLeasingMirror( remoteLease, timeout) with: {
 
 	def intercept(msg) {
-		//all mesages received are forwarded to server lease. 
-		//the base object of a leased ref is an empty object => it does not understand any async msg.
-		if: !(self.expired) then: { 
+		def res := super^intercept(msg);
+		if: !(self.isExpired) then: { 
 			if: ( forSelectors.isEmpty().or: {forSelectors.contains(msg.selector)}) then: {
 				super^revoke();
 	  	} else: {
@@ -173,9 +203,14 @@ def createClientLeasingWithSingleUseMirror(remoteLease, timeout, forSelectors) {
 				//Just renews the client lease to keep it in sync with the server lease.
 		 		super^renew();
 			};
-		  self.delegate<-intercept(msg);
 		};
+		res;
 	};
+/*	def leaseTransportStrategy(remoteLease, timeout) {
+	  { |remoteLease, timeout, forSelectors|
+		  /.at.lang.leasedrefs.makeClientLeaseWithSingleUse(remoteLease,timeout, forSelectors);
+	  }
+	};*/
 }};
 
 //Public interface of leased object references
@@ -204,7 +239,7 @@ def LeasingModule := object: {
 	it has processed a single message. This is a useful lease for callback objects, such as futures.
 	*/
 	def singleCallLease: timeout for: obj {
-		object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout)
+		singleCallLease: timeout revokedOn: [] for: obj
 	};
 		 
 	// selectors is expected to be an array of message names (which upon reception expire the lease). 
@@ -218,7 +253,7 @@ def LeasingModule := object: {
 	  The lease can always be explicitely revoked earlier.
     */
 	def renewOnCallLease: timeout for: obj {
-	    object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout)
+	    renewOnCallLease: timeout renewedWith: timeout for: obj
 	};
 	
 	// Customizable version of renewedOnCallLease where one can determine the renewal time instead of using timeout. 
@@ -242,30 +277,50 @@ def LeasingModule := object: {
 	// Places an observer with the given code to a leased reference. 
 	// The block of code is executed upon the expiration of the lease. 	
 	def when: leasedRef expired: code {
-		//Note that when:expired: on lease references places an observer on the server side while
-		//when:expired: of remote far references on the client side.
-		
-		// Note: after refactoring the MOP, even leased refs are always regarded as FarReferences, this is why
-		// the check for !FarRef is removed
-		if: (is: leasedRef taggedAs: LeasedRef) /*.and: { !(is: leasedRef taggedAs: /.at.types.FarReference) }*/ then: {
+		//Note that when:expired: can be placed either at the server side or at the client side.
+		if: ((is: leasedRef taggedAs: LeasedRef).or: { (is: leasedRef taggedAs: ClientLeasedRef)}) then: {
 			(reflect: leasedRef).addExpirationObserver(code) 
 		} else: {
-			if: (is: leasedRef taggedAs: ClientLeasedRef) then: { 
-				(reflect: leasedRef).addExpirationObserver(code) 
-			} else: {
 			//call the native when:takenOffline: of remote far references. 
 			//leased references are subject to leasing as well when passed to client objects.
 			//Thus, it should never enter here when working with leased references.
 			when: leasedRef takenOffline: code
-			}
 		}
 	};
 	
 	// Returns a Long with the amount of time left before the lease expires
 	def leaseTimeLeft: leasedRef {
-		(reflect: leasedRef).getTimeLeft();
+		(reflect: leasedRef).getTimeLeft;
 	};
+		
+	// type that identifies this language module
+	deftype LeasingModule;
 	
+	/* Installs leased far references on the current actor.
+   *
+	 * Enabling leasing will ensure that every pass-by-reference object will be passed by
+	 * leased reference instead of the default far reference. 
+	 *
+	 * Note that this feature will be also activated on object explicitely exported 
+	 * by means of the export:as language construct. 
+	 */
+	// TODO include pass-by-copy semantics to client leases so that enabling works with exported objects.
+	def enableLeasing(){
+		def actor := reflectOnActor();
+		if: !(is: actor taggedAs: LeasingModule) then: {
+			system.println("[leasedrefs.at] enabling leases by default on actor " + actor);
+			actor.becomeMirroredBy: (extend: actor with: {
+				def createReference(object) {							
+						system.println("createReference:default policy for: " + object );
+						def serverLease := renewOnCallLease: LEASETIME for: object;
+				}
+			} taggedAs: [LeasingModule]);
+		} else: {
+		  actor; // return the current actor protocol
+		};
+	};
+
+
 	// Suport primitives to manipulate time intervals. 
 	// Export here also so that people using leasing abstractions
 	// do not need to explicitly import timer module.
@@ -282,27 +337,55 @@ def LeasingModule := object: {
       def obj := object: {
 			  def foo() { 5 }; 
       };
-
+     
       def testLocalLeaseCreation() {
 				//Creation of a lease
 	    	def lease := lease: seconds(5) for: obj;
   			def table := (print: lease).split(":");
       	self.assertEquals("<lease", table[1]);
+				// lease not active so leaseTimeLeft == initialTimeInterval
+				self.assertEquals((leaseTimeLeft: lease).intValue, seconds(5).intValue);
 	    	//Creation of a renewOnCallLease
-				lease := renewOnCallLease: seconds(5) for: obj;
-				when: lease expired: { 
-	      	table := (print: lease).split(":");
-	        self.assertEquals("<expired lease", table[1])
+				def rlease := renewOnCallLease: seconds(5) for: obj;
+				when: rlease expired: { 
+	        self.assertTrue((reflect: rlease).isExpired)
 	    	};
     	};
 
       def testAsynLocalMessageSend(){
+	      def [fut, res] := makeFuture();
 				//Creation of a singleCallLease
 	    	def lease := singleCallLease: seconds(5) for: obj;
-				def fut := when: lease<-foo()@FutureMessage becomes: { |v|
+				// Forcing the lease timer to start ticking 
+				(reflect: lease).activateTimer;
+				when: lease<-foo()@FutureMessage becomes: { |v|
 					self.assertEquals(5,v);
 				};
+				try: { 
+		      lease<-foo();
+					//next line should never be executed because lease is a single call lease
+					self.fail("Unexpected not expired lease " + lease);
+		    } catch: /.at.types.IllegalOperation using: { |e|
+					res.resolve(5);
+				};
 				fut;
+			};
+			
+			//TODO: Add the new remote lease creation test after changing pass semantics of client leases.
+			def testRemoteLeaseCreation(){
+			  deftype testRemoteLeaseCreation;
+				def pepeObj := object: { def pepe(){system.println("Ik ben pepe")}};
+				def lease := /.at.lang.leasedrefs.lease: /.at.support.timer.seconds(60) for: pepeObj;
+				def pepaObj := object: { def pepa(){system.println("ik ben pepa"); pepeObj; }};
+				export: pepaObj as: testRemoteLeaseCreation;
+
+			   def otherRemoteHost := actor: {
+			     deftype testRemoteLeaseCreation;
+			     when: testRemoteLeaseCreation discovered:{ | pepaRef |
+				   def leaseRef := pepaRef<-pepa();
+				   system.println("got a lease reference " + leaseRef);
+			     };
+			   };
 			};
   	};
 	};

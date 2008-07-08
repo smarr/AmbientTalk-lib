@@ -76,7 +76,6 @@ def log := makeLogger("[multifutures.at]", DEBUG);
 
 def FuturesModule := /.at.lang.futures;
 def LeasingModule := /.at.lang.leasedrefs;
-def TimerModule := /.at.support.timer;
 
 def OneWayMessage := FuturesModule.OneWayMessage;
 
@@ -91,7 +90,7 @@ deftype GatherType <: FuturesModule.FutureMessage;
 
 def DueType := /.at.lang.futures.DueType;
 
-def makeMultiFutureMirror(maxSize, timeoutPeriod) {
+def makeMultiFutureMirror(maxSize) {
 	mirror: {
 
 		def upperBound := maxSize;
@@ -105,14 +104,13 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 		// constructor: used to initialize the base field of the new future
 		def init(@args) {
 			super^init(@args); // initialize this future's base field
-			
-			// whether bounded or unbounded, a multifuture with a timeout
-			// becomes forcibly resolved when the timeout passes
-			if: (nil != timeoutPeriod) then: {
-				TimerModule.when: timeoutPeriod elapsed: {
-					becomeResolved();
-				};
-			};
+  		upperBound := maxSize;
+			resolvedValues := []; 
+			ruinedValues := [];
+			inbox := [];
+			whenEachSubscribers := [];
+			whenAllSubscribers := [];
+			whenBecomesSubscribers := [];
 		};
 
 	  // a multifuture is a special kind of far reference
@@ -241,7 +239,11 @@ def makeMultiFutureMirror(maxSize, timeoutPeriod) {
 		def timeout(receiver := nil, message := nil) {
 			ruinWithException(FuturesModule.XTimeoutException.new(self.base, receiver, message));
 		};
-
+		
+		// When the timeout specified in a multifuture is elapsed, 
+		// becomeResolved is called forcing the multifuture to be resolved 
+		// regardless of whether the multifuture is bounded or unbounded.
+		
 		// the multifuture becomes totally resolved
 		// and triggers its whenAll subscribers. It is not guaranteed
 		// that these subscribers are notified with n results, where n is
@@ -299,7 +301,7 @@ def makeMultiFuture(maxSize := nil, timeout := nil) {
 	} else: {
 		// multifutures are empty objects mirrored by a multifuture mirror
 		def multifut := object: {
-		} taggedAs: [ MultiFuture ] mirroredBy: makeMultiFutureMirror(maxSize, timeout);
+		} taggedAs: [ MultiFuture ] mirroredBy: makeMultiFutureMirror(maxSize);
 		FuturesModule.constructResolverFor(multifut, timeout);
 	}
 }; // end makeMultiFuture

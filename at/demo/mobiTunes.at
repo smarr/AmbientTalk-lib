@@ -37,12 +37,14 @@
  * in Mobile Ad Hoc Networks', in Proceedings of the 9th internation conference
  * on coordination models and languages (COORDINATION '07), 2007.
  *
+ * Added changes for leasing DSAL paper - egonzale
  * @author tvcutsem
  */
 
 def AmbientRefsM := /.at.lang.ambientrefs_old; // for discover:
 import /.at.lang.futures; // for when:becomes:
 enableFutures(false);
+import /.at.lang.leasedrefs exclude minutes, seconds, millisec; // for leasing primitives
 
 // the library consists of simple song objects
 def Song := object: {
@@ -95,6 +97,7 @@ def MobiTunesPrototype := object: {
 
   // create an the interface object that will be exported
   def createInterface() {
+	// this object remains exported forever
 		object: {
 			// returns a session object encapsulating the state of the music library exchange process
 			def openSession(remoteUser) {
@@ -106,7 +109,12 @@ def MobiTunesPrototype := object: {
 					senderLib := nil;
 				};*/
 
-				object: {
+				 /* 
+	         * The session is exported using a lease for 10 minutes that is renewed
+	         * each time it receives a message. The lease is explicitly
+	         * revoked when a client terminates the exchange by calling the endExchange.
+	         */
+				def session := renewOnCallLease: minutes(1) for: ( object: {
 					// invoked by remote peer to transmit one single song
 		      def downloadSong(artist, title) {
 			      notification("downloaded song: " + artist + " - " + title + " from " + remoteUser);
@@ -115,7 +123,9 @@ def MobiTunesPrototype := object: {
 		      };
 		      
 		      // invoked by remote peer to signal that all songs have been sent
+					// (after having invoked this method, the session object expires)
 		      def endExchange() {
+			      revoke: session; // takes the session offline
 			      notification("finished exchanging library with " + remoteUser + " sharing " + senderLib.size() + " songs");
 			      senderLib.retainAll(myLib); // senderLib := intersection(senderLib, myLib)
 					  def matchRatio := (senderLib.size() * 100 / (myLib.size()+0.01)).round();
@@ -127,7 +137,14 @@ def MobiTunesPrototype := object: {
 						};
 						"done";
 				  };
-			  };
+			  });
+				// Notifies when a session with another remote music player expires.
+				// Note this is a when:expired: listener registered on a server lease.
+				when: session expired: {
+				  notification("session with " + remoteUser + " timed out.");
+				};
+				// return session object (which will be leased referenced) to client
+			  session;
 		  };
 
 		  def getSizeOfLibrary() { myLib.size() };
@@ -145,29 +162,29 @@ def MobiTunesPrototype := object: {
 	     notification("discovered new music player: " + ambientReference);
 	     
 	     // upon discovery, ask for the creation of a new session object
-	     def session := ambientReference<-openSession(userName)@FutureMessage;
-	
-		   // start to exchange libraries by pushing own library to remote peer via the session
-		   def iterator := myLib.iterator(); // to iterate over own music library
-		   def sendSongs() { // auxiliary function to send each song
-		     if: (iterator.hasNext()) then: {
-		       def song := iterator.next();
-		       when: session<-downloadSong(song.artist, song.title)@FutureMessage becomes: { |ack|
-			       notification("sent song " + song.artist + " - " + song.title);
-		         sendSongs(); // recursive call to send the rest of the songs
-		       } catch: { |exception| notification("stopping exchange: " + exception) };
-		     } else: {
-			     // all songs sent, signal the end of the exchange
-		       session<-endExchange()@OneWayMessage;
+	     when: ambientReference<-openSession(userName)@Due(minutes(1)) becomes: {  |session|
+		     // start to exchange libraries by pushing own library to remote peer via the session
+		     def iterator := myLib.iterator(); // to iterate over own music library
+		     def sendSongs() { // auxiliary function to send each song
+		       if: (iterator.hasNext()) then: {
+		         def song := iterator.next();
+		         when: session<-downloadSong(song.artist, song.title)@Due(leaseTimeLeft: session) becomes: { |ack|
+			         notification("sent song " + song.artist + " - " + song.title);
+		           sendSongs(); // recursive call to send the rest of the songs
+		         } catch: { |exception| notification("stopping exchange: " + exception) };
+		       } else: {
+			       // all songs sent, signal the end of the exchange
+		         session<-endExchange()@OneWayMessage;
+		       };
+		       // it is better to return nil than to return a future that will resolve the future
+		       // of the previous recursive call to sendSongs()
+		       nil;
 		     };
-		     // it is better to return nil than to return a future that will resolve the future
-		     // of the previous recursive call to sendSongs()
-		     nil;
-		   };
-		
-		   notification("starting to send songs");
-		   sendSongs();
-		
+		     notification("starting to send songs");
+		     sendSongs();
+			 } catch: TimeoutException using: { |e| 
+					notification("unable to open a session"); 
+			 };
 		   // failure handling
 	     whenever: ambientReference disconnected: {
 		     notification("music player disconnected: ", ambientReference);
