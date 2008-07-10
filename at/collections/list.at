@@ -53,13 +53,7 @@ def NIL := object: {
 	def contains(elt, cmp := DEFAULTCOMPARATOR) { false };
 	def implode() { "" };
 	def join(txt) { txt };
-	def select(start, stop) {
-		if: (start == stop) then: { 
-			self
-		} else: {
-			raise: XEmptyList.new("Cannot select empty list from "+start+" to "+stop);
-		}
-	};
+	def tail(n) { self };
 	def add(elt) { Cons.new(elt, self) };
   def insert(atPos, element) {
 	  if: (atPos == 1) then: { Cons.new(elt,self) } else: {
@@ -115,12 +109,12 @@ def Cons := object: {
 		}
 	};
 	def implode() { car + cdr.implode };
-	def select(start, stop) {
-		if: (start == stop) then: { 
+	def tail(n) {
+		if: (n == 0) then: { 
 			self
 		} else: {
-			raise: XEmptyList.new("Cannot select empty list from "+start+" to "+stop);
-		}
+			cdr.tail(n-1);
+		};
 	};
 	def add(elt) { Cons.new(elt, self) };
 	def append(aList) { Cons.new(car, cdr.append(aList)) };
@@ -235,6 +229,9 @@ def ListModule := object: {
 			};
 			def testFind() {
 				self.assertEquals(2, list("a","bb","ccc").find: { |e| e.explode().length == 2 });
+			};
+			def testTail() {
+				self.assertEquals("cd", list("a","b","c","d").tail(2).implode());
 			};
 			def testIndexOf() {
 				self.assertEquals(2, list("a","bb","ccc").indexOf("bb"));
