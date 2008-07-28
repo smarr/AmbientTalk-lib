@@ -58,6 +58,14 @@ def TimerModule := object: {
 	
 	def now() { currentTimeMillis() };
 	
+	// time: { code } => return number of milliseconds
+	// it took to execute the given code
+	def time: code {
+		def start := now();
+		code();
+		now() - start
+	};
+	
 	// when the timeout has elapsed, invoke the given code block
 	// returns a subscription object that can be used to cancel execution of the block
 	def when: timeout elapsed: code {
