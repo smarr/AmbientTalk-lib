@@ -116,12 +116,23 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 
   def testIsolateHasNoLexScope() {
     def x := 1;
-    def adder := isolate: {
+    def y := 2;
+    // we only include y, not x, so an error results
+    def adder := isolate: { |y|
       def add(n) { x + n };
     };
     self.assert: /.at.types.UndefinedSlot raisedIn: {
       adder.add(3)
     };
+  };
+
+  def testIsolateAutoLexScope() {
+    def x := 1;
+    // we do not specify lexical vars, so they are calculated automatically
+    def adder := isolate: {
+      def add(n) { x + n };
+    };
+    self.assertEquals(4, adder.add(3));
   };
   
   def testIsolateScopeInheritance() {
