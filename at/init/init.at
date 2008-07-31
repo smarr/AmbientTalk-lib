@@ -190,6 +190,17 @@ def isolate: closure passAs: transportClosure {
 	})
 };
 
+/**
+ * alias for extend:with: as a mental note for the programmer he's extending isolates
+ */
+def extendIsolate: obj with: clo {
+	extend: obj with: clo taggedAs: [/.at.types.Isolate];
+};
+
+def extendIsolate: obj with: clo taggedAs: tags {
+	extend: obj with: clo taggedAs: tags + [/.at.types.Isolate]
+};
+
 def when: remoteRef disconnected: code {
 	def active := true;
 	def sub := whenever: remoteRef disconnected: {
