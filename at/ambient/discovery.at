@@ -437,8 +437,8 @@ def DiscoveryModule := object: {
 				    def answer := 42;
 				    def m() { def prevAnswer := answer; answer := 24; prevAnswer }
 			    }) as: SimpleDiscoveryTestT;
-			    def TimerM := /.at.support.timer;
-			    TimerM.when: TimerM.seconds(10) elapsed: {
+			    import /.at.support.timer;
+			    when: seconds(10) elapsed: {
 				    // stop the discovery
 				    pub.unexport();
 			    };
@@ -513,8 +513,8 @@ def DiscoveryModule := object: {
 			    def pub := export: (object: {
 				    def m() { 42 };
 			    });
-			    def TimerM := /.at.support.timer;
-			    TimerM.when: TimerM.seconds(10) elapsed: {
+			    import /.at.support.timer;
+			    when: seconds(10) elapsed: {
 				    // stop the discovery
 				    pub.unexport();
 			    };
