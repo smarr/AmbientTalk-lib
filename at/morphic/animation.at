@@ -1,0 +1,153 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/**
+ * A set of useful traits and support abstractions for
+ * doing animations in Ambient Morphic.
+ *
+ * @author tvcutsem
+ */
+
+import /.at.support.timer;
+import /.at.lang.traits;
+
+def Color := ~.drawmorph.Color;
+
+def AnimationModule := object: {
+	
+	def Vector2D := isolate: {
+		def x := 0;
+		def y := 0;
+		def init(xx, yy) {
+			x := xx; y := yy;
+		};
+		def destructiveAdd(otherV) {
+			x := x + otherV.x;
+			y := y + otherV.y;
+		};
+		def destructiveAverage(otherV) {
+			x := ((x + otherV.x) / 2).round();
+			y := ((y + otherV.y) / 2).round();
+		};
+		def flipX() {
+			x := -x;
+		};
+		def flipY() {
+			y := -y;
+		};
+	};
+
+	// allows a colored morph to fade away
+	def FadeTrait := trait: {
+		def fade(maxtime, whenTotallyFaded := { }) {
+			import /.at.support.timer;
+
+			// morph will be entirely transparent after maxtime
+			def morphColor := clone: self.getColor;
+			def alpha := 255;
+			// decrease alpha in steps of 5
+			def fadeTimer := whenever: (maxtime / lobby.at.support.symbiosis.long((255 / 5).round)) elapsed: {
+				alpha := alpha - 5;
+				morphColor[4] := alpha.round;
+				self.setColor(morphColor);
+				self.getTopParent.repaint();
+			};
+			def totalTimer := when: maxtime elapsed: {
+				fadeTimer.cancel();
+				whenTotallyFaded();
+			};
+			def morph := self; // lexical alias for self
+			object: {
+				// cancelling restores the morph's original color
+				def cancel() {
+					totalTimer.cancel();
+					fadeTimer.cancel();
+					morphColor[4] := 255;
+					morph.setColor(morphColor);
+				}
+			};
+		};
+	};
+
+	// requires animate() method
+	def AnimationTrait := trait: {
+
+		def timer;
+		def start() {
+			import /.at.support.timer;
+			def REFRESH_RATE := millisec(100);
+
+	    self.timer := whenever: REFRESH_RATE elapsed: {
+			  self.animate();
+			  self.getTopParent.repaint();
+		  };
+		};
+		def stop() {
+			if: (nil != self.timer) then: {
+				self.timer.cancel();
+				self.timer := nil;	
+			}
+		};
+	} requiring: (/.at.lang.structuraltypes.protocol: {
+		def animate();
+	});
+
+	def BounceTrait := trait: { |AnimationTrait,Vector2D|
+		def directionV; // a 2D vector
+
+		def init(dx, dy) {
+			self.directionV := Vector2D.new(dx,dy);
+		};
+
+		def animate() {
+			// update morph position
+			self.move(self.directionV.x, self.directionV.y);
+			// bounds checks
+			if: (self.relativeX + self.width > self.owner.bounds.width) then: {
+				self.touchedRight();
+			};
+			if: (self.relativeX < 0) then: {
+				self.touchedLeft();
+			};
+			if: (self.relativeY + self.height > self.owner.bounds.height) then: {
+				self.touchedBottom();
+			};
+			if: (self.relativeY < 0) then: {
+				self.touchedTop();
+			};
+		};
+
+		def touchedLeft()   { self.directionV.flipX() };
+		def touchedRight()  { self.directionV.flipX() };
+		def touchedTop()    { self.directionV.flipY() };
+		def touchedBottom() { self.directionV.flipY() };
+
+		/.at.lang.traits.use: {
+			import AnimationTrait;
+		};
+	};
+};

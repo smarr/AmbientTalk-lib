@@ -1,0 +1,423 @@
+import /.at.lang.traits;
+
+//import lobby.lib.morph;
+//import lobby.lib.drawmorph;
+//import lobby.lib.eventmorph;
+
+def Morphs := ~.morphstructure;
+def CompositeTrait := Morphs.CompositeTrait;
+def PositionTrait := Morphs.PositionTrait;
+def SizeTrait := Morphs.SizeTrait;
+def PickingTrait := Morphs.PickingTrait;
+def Color := ~.drawmorph.Color;
+def Shapes := ~.drawmorph.Shapes;
+def ColoredMorphTrait := ~.drawmorph.ColoredMorphTrait;
+def DrawableMorphTrait := ~.drawmorph.DrawableMorphTrait;
+def DefaultInputEventHandlerTrait := ~.eventmorph.DefaultInputEventHandlerTrait;
+
+// Combines position and composite traits
+def BasicMorph := object: {
+	// modified PositionTrait setPosition method to move the children along
+	def setPosition(newX, newY) {
+		def [dx,dy] := self.oldSetPosition(newX, newY);
+		self.onSubmorphsDo: { |submorph| submorph.move(dx, dy) };
+		[dx,dy]
+	};
+	
+	use: {
+		import CompositeTrait;
+		import PositionTrait alias setPosition := oldSetPosition;
+		import DefaultInputEventHandlerTrait;
+	}
+};
+// distributable version of BasicMorph: 
+def BasicIsolateMorph := isolate: { |CompositeTrait, PositionTrait, DefaultInputEventHandlerTrait|
+	// modified PositionTrait setPosition method to move the children along
+	def setPosition(newX, newY) {
+		def [dx,dy] := self.oldSetPosition(newX, newY);
+		self.onSubmorphsDo: { |submorph| submorph.move(dx, dy) };
+		[dx,dy]
+	};
+	
+	/.at.lang.traits.use: {
+		import CompositeTrait;
+		import PositionTrait alias setPosition := oldSetPosition;
+		import DefaultInputEventHandlerTrait;
+	}
+};
+
+def RectangleMorph := extendIsolate: BasicIsolateMorph with: { |SizeTrait, PickingTrait, ColoredMorphTrait, DrawableMorphTrait|
+	def init(x, y, width, height) {
+		self.setPosition(x, y);
+		self.setSize(width, height);
+	};
+	def drawOn: canvas {
+		canvas.drawRoundRectangle(self, self.getColor(), 8);
+	};
+
+	/.at.lang.traits.use: {
+		import SizeTrait;
+		import PickingTrait;
+		import ColoredMorphTrait;
+		import DrawableMorphTrait;
+	};
+};
+
+def LabelMorph := extendIsolate: RectangleMorph with: { |Color|
+	def label := "";
+	def hInset :=  5; 
+	def textColor := Color.black;
+	def init(x, y, width, height, labelText := "") {
+		self.setSize(width, height);
+		self.setPosition(x, y);
+		self.label := labelText;
+		self.setColor(Color.white);
+	};
+	
+	def drawOn: canvas {
+		super^drawOn: canvas;
+		//hardcoded insets for now...
+		canvas.drawText(label, self.x + self.hInset, self.y + (self.height/2).floor() + 5, self.textColor);
+	}
+};
+
+def BoundingBox := Morphs.BoundingBox;
+
+def CircleMorph := extendIsolate: RectangleMorph with: { |BoundingBox, Color|
+	def init(x, y, radius) {
+		super^init(x,y,radius,radius);
+		super^setColor(Color.red);
+	};
+	def drawOn: canvas {
+		canvas.drawOval(self, self.getColor());
+	};
+	// override the bounding checks (works for oval too)
+	def bounds() {
+		BoundingBox.new(self.x - self.width, self.y - self.height, self.width*2, self.height*2)
+	};
+	/** override inside test for picking a circle instead the of the rectangular bounds*/
+	def inside(x,y) {
+		def dx := x - self.x;
+		def dy := y - self.y;
+		def distance2 := dx*dx + dy*dy;
+		distance2 < (self.width * self.width);
+	};
+};
+
+def FocusTrait := trait: {
+	def focussed := false;
+	def handleMouseClicked(event) {
+		// assumes source is a HandMorph with the var 'focus'
+		def hand := event.source;
+		def currentFocused := hand.focus;
+		if: ((nil != currentFocused).and: { currentFocused != self })
+			then: { currentFocused.focussed := false };
+		if: self.focussed
+			then: { self.focussed := false; hand.focus := nil; }
+			else: { self.focussed := true; hand.focus := self; };
+	};
+};
+
+def Rectangle := Shapes.Rectangle;
+def TextInputMorph := extendIsolate: LabelMorph with: { |FocusTrait, Rectangle, Color|
+	def fullString := "";
+	def drawOn: canvas {
+		drawAura(canvas);	
+		if: (fullString.length > 15)
+		then:
+			 { self.label := ((self.fullString.explode()).select(self.fullString.length -14, self.fullString.length+1)).implode;}
+		else:
+			 {self.label := fullString};
+		super^drawOn: canvas;
+		
+	};
+	
+	def drawAura(canvas) {
+		if: self.focussed
+		then: {
+				def aura1 := Rectangle.new(self.x-8, self.y-8, self.width+16, self.height+16);
+				canvas.drawRectangle(aura1, [228, 233, 237]);
+				
+				aura1 := Rectangle.new(self.x-4, self.y-4, self.width+8, self.height+8);
+				canvas.drawRectangle(aura1, [202, 210, 220]);
+					
+				aura1 := Rectangle.new(self.x-3, self.y-3, self.width+6, self.height+6);
+				canvas.drawRectangle(aura1, [175, 188, 202]);
+							
+				aura1 := Rectangle.new(self.x-2, self.y-2, self.width+4, self.height+4);
+				canvas.drawRectangle(aura1, [174, 182, 192]);
+			
+				aura1 := Rectangle.new(self.x-1, self.y-1, self.width+2, self.height+2);
+				canvas.drawRectangle(aura1, [217, 222, 226]);
+			
+		}
+		else:
+		{
+				def aura1 := Rectangle.new(self.x-2, self.y-2, self.width+4, 1);
+				canvas.drawRectangle(aura1, [124, 124, 124]);
+								
+				def aura2 := Rectangle.new(self.x-2, self.y-1, self.width+4, self.height+2);
+				canvas.drawRectangle(aura2, [195, 195, 195]);
+				
+				def aura3 := Rectangle.new(self.x-1, self.y, 1, self.height);
+				canvas.drawRectangle(aura3, [240, 240, 240]);
+				
+				def aura4 := Rectangle.new(self.x+self.width, self.y, 1, self.height);
+				canvas.drawRectangle(aura4, [240, 240, 240]);
+		};
+	};
+	def handleKeyPressed(event) {
+			//typingString := typingString + event.keyChar();
+			if: self.focussed 
+			then: {
+				system.println(event.keyCode);
+				if: (event.keyCode() = 8 )
+					then: {self.fullString := ((self.fullString.explode()).select(1, self.fullString.length)).implode;}
+					else: {self.fullString := self.fullString + event.keyChar();};
+				self.owner.repaint();
+			}
+	};
+	
+	/.at.lang.traits.use: {
+		import FocusTrait;
+	}
+};
+
+def TrashMorph := extendIsolate: RectangleMorph with: { |Color|
+	def addMorph(morph) {
+		super^addMorph(morph);
+		self.removeMorph(morph);
+	};
+	def dropTest(droppedMorph) {
+		(self.bounds.collides(droppedMorph.bounds)).and:
+		{ !(droppedMorph == self) }
+	};
+	def drawOn: canvas {
+		super^drawOn: canvas;
+		canvas.drawText("Trash", self.x + 5, self.y + 12, Color.white);
+	};
+};
+
+def HandMorph := extend: BasicMorph with: {
+	def focus;
+	def focusedColor := Color.blue;
+	def unfocusedColor := Color.red;
+	
+	def init() {
+		self.setColor( unfocusedColor );
+		self.focus := nil;
+	};
+
+	def drawOn: canvas {
+		//draw children
+		self.allSubmorphsDo: {|m| m.drawOn: canvas};
+		//draw myself
+		def crossTop := Shapes.Rectangle.new(self.x, self.y - 4, 1, 4);
+		def crossBottom := Shapes.Rectangle.new(self.x, self.y + 1, 1, 4);
+		def crossLeft := Shapes.Rectangle.new(self.x - 4, self.y, 4, 1);
+		def crossRight := Shapes.Rectangle.new(self.x + 1, self.y, 4, 1);
+		canvas.drawRectangle(crossTop, self.getColor());
+		canvas.drawRectangle(crossBottom, self.getColor());
+		canvas.drawRectangle(crossLeft, self.getColor());
+		canvas.drawRectangle(crossRight, self.getColor());
+	};
+	
+	/** event handling functions (see DefaultInputEventHandlerTrait */
+	def dispatch(event) {
+		// dispatch the event to the most specific morph under the cursor
+		self.dropDo: { |morph| morph.dispatch(event) } at: event.position;
+		// handle the event myself
+		event.handleWith: self;
+		// ask world to repaint everything
+		self.owner.repaint();
+	};
+	
+	/** picks the 'most specific' morph under the handmorph */ 
+	def pickMostSpecific(x,y) {
+		def world := self.owner;
+		def picked := world.pick(x, y);
+		if: picked.length > 0
+		then: { picked[1] }
+		else: { world } // failsafe for when the cursor goes 'out' of the world, 
+		                //  can pose a problem when multiple worlds share a handmorph cursor
+	};
+	
+	/** runs the given closure on the most specific morph under the hand */
+	def dropDo: closure at: position {
+		def world := self.owner;
+		def picked := pickMostSpecific(position.x, position.y);
+//system.println("**DEBUG** Picked: "+picked+" at: "+position.x+", "+position.y);
+		if: !((nil == picked).or: { world == picked })
+		then: {
+			closure(picked);
+		};
+	};
+	
+	/** on mouse press, try grabbing a morph */
+	def handleMousePressed(event) {
+		self.setColor(Color.blue);
+		dropDo: { |morph| 
+			def grabbed := morph.grab();
+			if: !(nil == grabbed)
+			then: { self.addMorph(grabbed) }
+		} at: event.position;
+	};
+
+	def handleMouseClicked(event);
+	
+	def handleMouseMetaClicked(event) {
+		dropDo: { |morph|
+			makeMeta(morph);
+		} at: event.position;
+	};
+	
+	def handleMouseMoved(event) {
+		self.setPosition(event.position.x, event.position.y)
+	};
+	
+	def handleMouseDragged(event) {
+		self.setPosition(event.position.x, event.position.y)
+	};
+	
+	def handleMouseReleased(event) {
+		/**
+		 * check if the morph fits inside, if it does then check the children.
+		 * if none of the children can fit it inside, add the morph as a child here.
+		 * Assumes all morphs in the hierarchy have the morphCollectionTrait.
+		 */
+		def dropMorph(targetMorph, droppedMorph) {
+			if: targetMorph.dropTest(droppedMorph)
+			then: {
+				if: (nil == targetMorph.subMorphs.find: { |subMorph| dropMorph(subMorph, droppedMorph) })
+				then: {	targetMorph.addMorph(droppedMorph) };
+				true
+			} 
+			else: {
+				false
+			}
+		};
+		self.setColor(Color.red);
+		def world := self.owner;
+		self.onSubmorphsDo: {
+			|droppedMorph| 
+			dropMorph(world,droppedMorph)
+		}
+	};
+	
+	def handleKeyPressed(event);
+	
+	
+	/** help functions */
+	deftype Proxy;
+	def makeProxy(morph) {
+		def mirror := mirror: {
+			def receive(msg) {
+				morph <+ msg;
+			}
+		};
+		object: { nil } taggedAs: [Proxy] mirroredBy: mirror;
+	};
+	def makeMetaQuit(morph, metaManager) {
+		def bounds := morph.bounds();
+		def quitMorph := extendIsolate: CircleMorph.new(bounds.x + bounds.width + 10, bounds.y - 5, 5)
+		with: { |metaManager|
+			def handleMouseClicked(event) {
+				if: nil != metaManager
+				then: {
+					metaManager.destroy();
+				}
+			} 
+		};
+		quitMorph.setColor(Color.red);
+		quitMorph
+	};
+	// maintains a list of meta-morphs about one specific morph
+	def makeMetaManager(morph) {
+		def metaManager := extend: BasicMorph with: {
+			def morph := makeProxy(morph); //shadow morph to be a proxy, won't be copied along this way
+			def metaMorphs := []; //we keep this list so we can manipulate metaMorphs that moved to another parent
+			def addMorph(metaMorph) {
+				def proxy := makeProxy(morph); //lets stay in touch
+				super^addMorph(proxy);
+				metaMorphs := metaMorphs + [proxy];
+			};
+			def destroy() {
+				self.onSubMorphsDo: { |m| m<-removeFromOwner() };
+				self.removeFromOwner();
+				metaMorphs := [];
+				morph := nil;
+			};
+			
+			/** overridden trait behavior */
+			def drawOn: canvas { nil };
+			/** ensure picking by forcing badBounds on the original morph and itself*/
+			
+			use: {
+				import SizeTrait; // required by picking, we don't use it though
+				import PickingTrait;
+			}
+		};
+		morph.addMorph(metaManager);
+		metaManager.setBadBounds(true);
+	};
+	def makeMeta(morph) {
+		def metaMorphManager := makeMetaManager(morph);
+		/** movemorph, doesn't do anything atm */
+		def bounds := morph.bounds();
+		def moveMorph := CircleMorph.new(bounds.x - 10, bounds.y - 5, 5);
+		moveMorph.setColor(Color.blue);
+		metaMorphManager.addMorph(moveMorph);
+		/** quitmorph */
+		def quitMorph := makeMetaQuit(morph, metaMorphManager);
+		metaMorphManager.addMorph(quitMorph);
+	};
+	
+	use: {
+		import Morphs.SizeTrait;
+		import Morphs.PickingTrait;
+		import ~.drawmorph.ColoredMorphTrait;
+		import ~.drawmorph.DrawableMorphTrait;
+	}
+};
+
+def WorldMorph := object: {
+	def handMorph;
+	def addMorph(morph) {
+		self.oldAddMorph(morph);
+		self.repaint();
+	}; 
+	def drawOn: canvas {
+		canvas.clear(self,self.getColor());
+		canvas.drawRectangle(self, self.getColor());
+		self.allSubmorphsDo: { //draw from back to front
+			|submorph|
+			submorph.drawOn: canvas
+		};
+		handMorph.drawOn: canvas; //draw handmorph over everything else
+	};
+	def init(w := 800, h := 600) {
+		/* hardcoded suff :P */
+		self.setPosition(0,0); 
+		self.setSize(w,h); 
+		self.sync(); /* creates the awt instances in the AwtWorldMorphTrait */
+		self.setColor(Color.makeColor(0,0,0,0)); //transparent by default
+		
+		//handmorph is treat as 'special', outside the normal child hierarchy (drawing order reasons etc)
+		handMorph := HandMorph.new();
+		handMorph.owner := self; //handmorph still has me as parent, but it's not a child of mine
+		/** subscribe the handmorph to the mouse input events */
+		self.subscribe(handMorph);
+	};
+	use: {
+		import Morphs.CompositeTrait alias addMorph := oldAddMorph;
+		import Morphs.SizeTrait;
+		import Morphs.PositionTrait;
+		import Morphs.PickingTrait;
+		import FocusTrait;
+		import ~.drawmorph.ColoredMorphTrait;
+		import ~.drawmorph.DrawableMorphTrait;
+		import ~.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt frame, canvas and handles awt painting requests */
+		import ~.eventmorph.AwtInputEventDispatcherTrait;
+	}
+};
+self

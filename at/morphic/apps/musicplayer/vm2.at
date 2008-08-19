@@ -1,0 +1,28 @@
+/**
+ * GUEST AND ROOM MATE DEVICE CODE
+ */
+
+import /.at.lang.futures;
+enableFutures(true);
+
+def Color := /.at.morphic.drawmorph.Color;
+def RectangleMorph := /.at.morphic.morphic.RectangleMorph;
+def WorldMorph := /.at.morphic.morphic.WorldMorph;
+def TrashMorph := /.at.morphic.morphic.TrashMorph;
+def LabelMorph := /.at.morphic.morphic.LabelMorph;
+def NimbusMorph := /.at.morphic.distributed.NimbusMorph;
+//def ButtonMorph := lobby.lib.distributed.ButtonMorph;
+
+def world := WorldMorph.new();
+world.setColor(Color.makeColor(240, 235, 103));
+
+def trash := TrashMorph.new(600, 300, 100, 100);
+trash.setColor(Color.black);
+//world.addMorph(trash);
+
+network.online;
+
+def nimbus := NimbusMorph.new(0,world.height-100,world.width,100);
+nimbus.setColor(Color.makeColor(120, 113, 51));
+world.addMorph(nimbus);
+

@@ -1,0 +1,206 @@
+import /.at.lang.traits;
+deftype Isolate;
+
+/**
+ * Basic Morph traits
+ */
+def ProtoMorphTrait := trait: {
+	def owner := nil;
+	def onAdd(parent) {
+		self.owner := parent;
+	};
+	def grab() { self }
+};
+
+def MorphCollectionTrait := trait: {
+	def subMorphs := [];
+	
+	def addSubMorph(morph) {
+		def index := self.subMorphs.find: {|el| el == morph};
+		if: (nil == index)
+		  then: { self.subMorphs := self.subMorphs + [morph] }
+		  else: { self.subMorphs }
+	};
+	def removeSubMorph(morph) {
+		self.subMorphs := self.subMorphs.filter: {|el| !(el == morph)}
+	};
+	def each: closure {
+		self.subMorphs.each: closure
+  	};
+	def onSubmorphsDo: closure {
+		self.subMorphs.each: closure
+	};
+	def mapSubmorphsOn: closure {
+		self.subMorphs.map: closure
+	};
+  	def numSubmorphs() {
+  		self.subMorphs.length
+    };
+	/** expects all submorphs to have MorphCollectionTrait too */
+	def allSubmorphsDo: closure {
+		self.onSubmorphsDo: { |submorph| closure(submorph); submorph.allSubmorphsDo: closure }
+	};
+	def reverseAllSubmorphsDo: closure {
+		self.onSubmorphsDo: { |submorph| submorph.allSubmorphsDo: closure; closure(submorph);  }
+	}
+};
+
+
+def CompositeTrait := trait: { |ProtoMorphTrait, MorphCollectionTrait|
+	def addMorph(morph) {
+		def oldOwner := morph.owner;
+		if: !(nil == oldOwner)
+		  then: { oldOwner.removeMorph(morph) };
+		self.addSubMorph(morph);
+		morph.onAdd(self);
+	};
+	def removeMorph(morph) { 
+		self.removeSubMorph(morph);
+	};
+	def getTopParent() { //assumes parent is compositeMorph too, usually that's a given
+		if: (nil == self.owner)
+		then: { self }
+		else: { self.owner.getTopParent() } 
+	};
+	// removes self from owner
+	def removeFromOwner() {
+		def owner := self.owner;
+		if: owner != nil
+		then: { 
+			owner <- removeMorph(self);
+			self.onAdd(nil);
+		}
+	};
+	// deep clone will clone all subchildren recursively
+	// assumes all submorphs are composite morphs themselves
+	def deepClone() {
+		def clone := (clone: self);
+		clone.subMorphs := self.subMorphs.map: {
+			|subMorph|
+			def subMorphClone := subMorph.deepClone();
+			subMorphClone.owner := clone; //owner of the clone still points to the old parent
+			subMorphClone
+		};
+		clone
+	};
+	
+	/.at.lang.traits.use: {
+		import ProtoMorphTrait;
+		import MorphCollectionTrait;
+	}
+};
+
+def PositionTrait := trait: {
+	def x := 0;
+	def y := 0;
+	
+	def relativeX() { self.x - self.owner.x };
+	def relativeY() { self.y - self.owner.y };
+	
+	def setPosition(newX, newY) {
+		def deltas := [newX - self.x, newY - self.y];
+		self.x := newX; self.y := newY;
+		deltas
+	};
+	def move(dx, dy) {
+		self.setPosition(self.x + dx, self.y + dy)
+	};
+} requiring: ProtoMorphTrait;
+
+def SizeTrait := trait: {
+	def width := 0;
+	def height := 0;
+	def setSize(newWidth, newHeight) { self.width := newWidth; self.height := newHeight };
+	//def resize(dWidth, dHeight) { self.width := self.width + dWidth; self.height := self.height + dHeight };
+	//def scale(factor) { self.width := self.width * factor; self.height := self.height * factor };
+};
+
+def BoundingBox := isolate: {
+	def x := 0;
+	def y := 0;
+	def width := 0;
+	def height := 0;
+	def init(x, y, width, height) {
+		self.x := x;
+		self.y := y;
+		self.width := width;
+		self.height := height;
+	};
+	
+	def collides(bbox) {
+		(((bbox.x > self.x - bbox.width).and: 
+		{ bbox.y > self.y - bbox.height }).and: 
+		{ bbox.x < self.x + self.width }).and:
+		{ bbox.y < self.y + self.height }
+	};
+	
+	def inside(x, y) {
+		(((x > self.x).and:
+		{ y > self.y }).and:
+		{ x < self.x + self.width}). and:
+		{ y < self.y + self.height}
+	};
+};
+
+def PickingTrait := trait: { |BoundingBox|
+	def pickMe := true;
+	def pickChildren := true;
+	def boundingBox := nil;
+	def badBounds := false; //set this when a child needs to be picked even if it's outside current bounds
+	
+	/** test for submorphs that fall outside this morph's bounds */
+	def testBadBounds() {
+		badBounds := 
+			if: (self.subMorphs.find: { |submorph| submorph.badBounds })
+				then: { self.setBadBounds(true) }
+				else: { self.setBadBounds(false) };
+	};
+	/** set bad bounds flag, propagate to parent when a flip occured */
+	def setBadBounds(bool) {
+		def flip := bool != self.badBounds;
+		self.badBounds := bool;
+		if: (flip.and: { nil != self.owner })
+		then: { self.owner.testBadBounds() }
+	};
+	
+	/** Returns a list of all morphs in the hierarchy that contain the given coordinate.
+	  * The deepest (sub)morph will appear first in the list, its parent second and so on to the world.
+	  * A picked list containing only the world morph means no morph was picked.
+	  */
+	def pick(x, y) {
+		def morph := self;
+		def inside := morph.inside(x, y);
+		if: !(morph.pickMe.and: { inside.or: { morph.badBounds } }) 
+		 	then: { [] }
+			else: {
+				def selfPicked := if: inside then: { [morph] } else: { [] };
+				if: morph.pickChildren
+					then: {
+						/** This should handle overlap too , even though it's not adviced */ 
+						def pickedList := morph.subMorphs.inject: [] into: { |collect, submorph| submorph.pick(x, y) + collect };
+						pickedList + selfPicked;
+					}
+					else: { selfPicked };
+			};	
+	};
+	/**
+	 * default inside calculation for rectangle, overload when needed
+	 */
+	def inside(x, y) {
+		self.bounds.inside(x,y);
+	};
+	
+	// returns a bounding box rectangle for this object
+	def bounds() {
+		BoundingBox.new(self.x, self.y, self.width, self.height)
+	};
+	
+	// check if the morph's bbox fits inside ours
+	def dropTest(morph) {
+		def containerBounds := self.bounds;
+		def droppedBounds := morph.bounds;
+		containerBounds.inside(droppedBounds.x, droppedBounds.y).and:
+		{ containerBounds.inside(droppedBounds.x + droppedBounds.width, droppedBounds.y + droppedBounds.height) }
+	};
+} requiring: [PositionTrait, SizeTrait, CompositeTrait];
+self

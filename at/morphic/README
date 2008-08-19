@@ -1,0 +1,33 @@
+AmbientMorphic
+==============
+
+The famous GUI framework of Self and Squeak, ported to AmbientTalk/2.
+AmbientTalk/2 augments morphic with morphs that can freely migrate between distributed worlds.
+
+Authors:
+Yves Vandriessche
+Tom Van Cutsem
+Christophe Scholliers
+
+How to run the applications:
+============================
+
+The apps/ subdirectory lists some demo applications written in AmbientMorphic. Make sure all *.java files are compiled into *.class files before proceeding.
+
+Distributed Music Player:
+-------------------------
+To run, execute in a first console:
+
+iat apps/musicplayer/vm1.at
+
+Then, execute in a second console:
+
+iat apps/musicplayer/vm2.at
+
+Note: the applescript bindings for iTunes will only work on Mac OS X.
+
+PortalPong:
+-----------
+To run, execute in a console:
+
+iat apps/portalpong/portalpong.at

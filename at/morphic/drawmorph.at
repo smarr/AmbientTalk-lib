@@ -1,0 +1,141 @@
+import /.at.lang.structuraltypes;
+import /.at.lang.traits;
+
+deftype Isolate;
+def Morphs := ~.morphstructure;
+def WorldCanvas := jlobby.at.morphic.platform.WorldCanvas;
+def AwtColor := jlobby.java.awt.Color;
+
+def Color := isolate: {
+	def red := [255,0,0,255];
+	def green := [0,255,0,255];
+	def blue := [0,0,255,255];
+	def black := [0,0,0,255];
+	def white := [255,255,255,255];
+	def makeTransparent(color, rate := 3) { 
+		def newColor := clone: color; 
+		newColor[4] := (newColor[4]/rate).round(); 
+		newColor
+	};
+	def makeOpaque(color) { 
+		def newColor := clone: color; 
+		newColor[4] := 255; 
+		newColor
+	};
+	def makeColor(r, g, b, a := 255) {
+		[r, g, b, a]
+	};
+	def makeInverse(color) {
+		def newColor := color.map: {|channel| 255 - channel};
+		//don't inverse the alpha
+		newColor[4] := color[4];
+		newColor
+	};
+	def randomColor() {
+		def rand() { /.at.support.util.randomNumberBetween(0, 256) };
+		[rand(), rand(), rand(), 255];
+	};
+};
+
+def ColoredMorphTrait := trait: { |Color|
+	def color := Color.black;
+	def getColor() { self.color };
+	def setColor(newColor) { self.color := newColor };
+};
+
+def Shapes := object: {
+	def Rectangle := isolate: {
+		def x := 0;
+		def y := 0;
+		def width := 0;
+		def height := 0;
+		def init(x, y, width, height) {
+			self.x := x;
+			self.y := y;
+			self.width := width;
+			self.height := height;
+		};
+	}
+};
+
+/** TODO
+ *  Try to do away with the methods' first 2 lines copy/paste.
+ */
+def AwtDrawCanvas := object: {
+	def defaultColor := Color.black;
+	def gfx := nil;
+	
+	def init(awtGraphics) {
+		gfx := awtGraphics;
+	};
+
+	/** assumes 'self' has PositionTrait and SizeTrait */
+	def drawRectangle(rectangle, color) {
+		gfx.setColor(AwtColor.new(@color));
+		gfx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+	};
+	/** draws an oval with x,y as center */
+	def drawOval(oval, color) {
+		gfx.setColor(AwtColor.new(@color));
+		/** awt takes x,y as top left point, not center */
+		def x := oval.x - oval.width;
+		def y := oval.y - oval.height;
+		gfx.fillOval(x, y, oval.width*2, oval.height*2);
+	};
+	def draw3DRectangle(rectangle, color) {
+		gfx.setColor(AwtColor.new(@color));
+		gfx.fill3DRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, true);
+	};
+	def drawText(string, x, y, color) {
+		gfx.setColor(AwtColor.new(@color));
+		gfx.drawString(string, x, y);
+	};
+	def drawRoundRectangle(rectangle, color, arcDiameter) {
+		gfx.setColor(AwtColor.new(@color));
+		gfx.fillRoundRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, arcDiameter, arcDiameter);
+	};
+	def drawRoundRectangleOutline(rectangle, color, arcDiameter) {
+		gfx.setColor(AwtColor.new(@color));
+		gfx.drawRoundRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, arcDiameter, arcDiameter);
+	};
+	def clear(dimensions, clearColor) {
+		//gfx.setBackground(AwtColor.new(@clearColor));
+		gfx.clearRect(0, 0, dimensions.width, dimensions.height);
+	};
+};
+
+def DrawProtocol := protocol: { def drawOn: canvas; };
+
+def DrawableMorphTrait := trait: { 	nil
+} requiring: DrawProtocol; // require drawOn:
+
+/**
+ * Assumes that self is part of a morph hierarchy and thus implements the message each:
+ * This object implements the paint() method for the awt canvas.
+ * This object implements the mouse event handling methods for the awt canvas
+ * Requires all submorphs to implement the recursiveDrawOn: method
+ */
+def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
+	def awtCanvas := nil;
+
+	def sync() {
+		if: (nil == self.awtCanvas)
+			then: { self.awtCanvas := WorldCanvas.new(self, self.width, self.height) };
+	};
+
+	def paint(gfx) {  /** remember that gfx is an awt.Graphics2D object */
+		try: {
+			def canvas := AwtDrawCanvas.new(gfx); 	
+		  /** drawOn should implement the recursive drawing */
+		  self.drawOn: canvas;
+		} catch: /.at.types.Exception using: { |e|
+			system.println("Error while painting: " + e.message);
+			system.println(e.stackTrace);
+		};
+	};
+
+	def repaint() {
+		self.awtCanvas.repaint();
+	};
+} requiring: [DrawableMorphTrait, ~.morphstructure.SizeTrait];
+self

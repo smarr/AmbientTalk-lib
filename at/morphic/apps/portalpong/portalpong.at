@@ -1,0 +1,367 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * Portal Pong.
+ *
+ * Players may discover one another in the ad hoc network and
+ * play a game of portal pong. Players can aim their ball
+ * through a portal which makes the ball travel to another
+ * player's screen.
+ *
+ * @author tvcutsem
+ */
+import /.at.support.timer;
+import /.at.lang.traits;
+
+def Color := /.at.morphic.drawmorph.Color;
+def RectangleMorph := /.at.morphic.morphic.RectangleMorph;
+def CircleMorph := /.at.morphic.morphic.CircleMorph;
+def WorldMorph := /.at.morphic.morphic.WorldMorph;
+def LabelMorph := /.at.morphic.morphic.LabelMorph;
+def DefaultInputEventHandlerTrait := lobby.at.morphic.eventmorph.DefaultInputEventHandlerTrait;
+
+import /.at.morphic.animation;
+
+def world := WorldMorph.new(340,340);
+def world.bat := nil;
+def world.player;
+def world.portals := [];
+
+def BatMorph := extend: RectangleMorph with: {
+	def onLeftKeypress() {
+		if: (self.relativeX > 4) then: {
+			self.move(-4, 0)
+		}
+	};
+	def onRightKeypress() {
+		if: (self.relativeX + self.width < self.owner.width - 4) then: {
+			self.move(+4, 0)
+		}
+	};	
+};
+
+def PortalTrait := trait: { |Color, FadeTrait|
+
+	def PLAYER_TIMEOUT := /.at.support.timer.seconds(30);
+	
+	// local end of the portal
+	def localPortalEndPoint;	
+	// (future for) remote end of the portal
+	def remotePortalEndPoint;
+	
+	// resolver for the above future
+	def remotePortalEndPointResolver;
+	
+	def isOpen;
+	
+	def init() {
+		def myMorph := self; // lexical alias for self
+		self.isOpen := false;
+		self.localPortalEndPoint := object: {
+			def teleport(morph) {
+				// reposition morph using its old relative X,Y coords
+				morph.setPosition(myMorph.x + morph.relativeX, myMorph.y + morph.relativeY);
+				myMorph.originalAddMorph(morph);
+				morph.start(); // start animation morphs
+				`ok // reply with acknowledgement
+			}
+		};
+		def [fut,res] := /.at.lang.futures.makeFuture();
+		self.remotePortalEndPointResolver := res;
+		// assign the remote portal endpoint to a future instead of nil
+		// reason: a morph could already be dropped on the portal before
+		// the portal is linked up to the remote endpoint. In that case,
+		// any <-teleport messages sent to this remotePortalEndPoint will
+		// be buffered by a future
+		self.remotePortalEndPoint := fut;
+	};
+	
+	def link(remotePortal) {
+		self.remotePortalEndPointResolver.resolve(remotePortal);
+		self.remotePortalEndPoint := remotePortal;
+		self.isOpen := true;
+		if: (is: self.remotePortalEndPoint taggedAs: /.at.types.FarReference) then: {
+			def fader;
+			// make portal fade away gradually while there is a disconnection
+			when: self.remotePortalEndPoint disconnected: {
+				fader := self.fade(PLAYER_TIMEOUT, {
+					// portal timed out, remove it
+					self.owner.removeMorph(self);
+					// delete it from the list of portals
+					def world := self.getTopParent;
+					world.portals := world.portals.filter: { |p| !(p==self) };
+				});
+				self.isOpen := false;
+			};
+			when: self.remotePortalEndPoint reconnected: {
+				fader.cancel();
+				self.isOpen := true;
+			};
+		};
+	};
+	
+	def originalAddMorph(morph) {
+		// skip my own definition for addMorph
+		(self.super)^addMorph(morph);
+	};
+	
+	def addMorph(morph) {
+		import /.at.lang.futures; enableFutures(false);
+		self.originalAddMorph(morph);
+		morph.stop(); // stop animation morphs
+		when: self.remotePortalEndPoint<-teleport(morph)@FutureMessage becomes: { |ack|
+			self.removeMorph(morph);
+			self.getTopParent.repaint();
+		}
+	};
+	
+	/.at.lang.traits.use: {
+		import FadeTrait;
+	}
+};
+
+deftype PortalMorphT;
+def PortalMorph := extend: RectangleMorph with: { |PortalTrait|
+	def init() {
+		super^init(0,0,40,40);
+		PortalTrait^init();
+	};
+	/.at.lang.traits.use: {
+		import PortalTrait;
+	};
+} taggedAs: [ PortalMorphT, /.at.types.Isolate ];
+
+def PLAYER_COLOR := if: (system.getArgv.length > 0) then: { Color.makeColor(@(system.getArgv.map: { |str| str.parseNumeric })) } else: { Color.randomColor() };
+def START_X := 180;
+def START_Y := 150;
+
+deftype FieldMorphT;
+def field := extend: RectangleMorph.new(5, 5, 300, 300) with: { } taggedAs: [FieldMorphT];
+field.setColor(Color.black);
+world.addMorph(field);
+
+def water := RectangleMorph.new(field.x, field.y + field.height, field.width, 5);
+water.setColor(Color.blue);
+field.addMorph(water);
+
+def bat := BatMorph.new((field.width / 2).round, field.height - 10 , 50, 5);
+world.bat := bat;
+bat.setColor(Color.white);
+field.addMorph(bat);
+
+def portalsForPlayers := jlobby.java.util.HashMap.new();
+def prevPortalX := 0;
+def portalForPlayer(pid) {
+	def portal := portalsForPlayers.get(pid);
+	if: (portal == nil) then: {
+		portal := PortalMorph.new();
+		portalsForPlayers.put(pid, portal);
+		world.portals := world.portals + [portal];
+		
+		prevPortalX := prevPortalX + portal.width + 30;
+		portal.setPosition(field.x + prevPortalX, field.y + 20);
+		field.addMorph(portal);
+	};
+	portal
+};
+
+world.player := object: {
+	
+	def connect(pid, remotePortalEndPoint, remotePlayerColor) {
+		def localPortal := portalForPlayer(pid);
+		localPortal.link(remotePortalEndPoint);
+		localPortal.setColor(remotePlayerColor);
+	};
+	
+	def score := 0;
+	def scoreLabel := LabelMorph.new(100,320,80,14,"Score: 0");
+	scoreLabel.setColor(PLAYER_COLOR);
+	world.addMorph(scoreLabel);
+	
+	def incrementScore() {
+		score := score + 1;
+		scoreLabel.label := "Score: "+score;
+		// my ball disappears on opponent's field so regenerate
+		// one on my own field
+		spawnNewBall();
+		world.repaint();
+	};
+	
+	def decrementScore(ballMorph) {
+		ballMorph.setPosition(field.x + (field.width / 2).round,
+		                      field.y + (field.height/2).round);
+		score := score - 1;
+		scoreLabel.label := "Score: "+score;
+		world.repaint();
+	};
+};
+
+network.online;
+
+deftype PortalPongPlayer;	
+export: world.player as: PortalPongPlayer;
+
+whenever: PortalPongPlayer discovered: { |ppp|
+	// create a portal to connect to this player
+	ppp<-connect(world.player, portalForPlayer(ppp).localPortalEndPoint, PLAYER_COLOR);
+};
+
+/*
+deftype MorphicPortalEndPoint;
+def makeDistributedPortal: whenConnected {
+	network.online;
+	def localPortal := PortalMorph.new();
+	// publish my own endpoint
+	export: [PLAYER_COLOR, localPortal.localPortalEndPoint] as: MorphicPortalEndPoint;
+	// discover a remote endpoint
+	when: MorphicPortalEndPoint discovered: { |info|
+		def [color, discoveredPortalEndpoint] := info;
+		localPortal.link(discoveredPortalEndpoint);
+		localPortal.setColor(color);
+		whenConnected();
+	};
+	localPortal
+};
+
+def makeLinkedPortals(color) {
+	def p1 := PortalMorph.new();
+	def p2 := PortalMorph.new();
+	p1.link(p2.localPortalEndPoint);
+	p2.link(p1.localPortalEndPoint);
+	p1.setColor(color);
+	p2.setColor(color);
+	[p1,p2]
+};
+
+def [p1,p2] := makeLinkedPortals(Color.blue);
+p1.setPosition(100, 110);
+p2.setPosition(180, 240);
+field.addMorph(p1);
+field.addMorph(p2);
+world.portals := [p1,p2];*/
+
+def BallMorph := extend: CircleMorph with: { |BounceTrait,PortalMorphT,FieldMorphT|
+	
+	def ballController;
+	
+	def init(controller,x,y,radius,dx,dy) {
+		super^init(x,y,radius);
+		ballController := controller;
+		BounceTrait^init(dx,dy);
+	};
+	
+	def animate() {
+		if: self.bounds().collides(self.getTopParent.bat.bounds()) then: {
+			self.directionV.flipY() // bounce
+		};
+		if: !(is: self.owner taggedAs: PortalMorphT) then: {
+			self.getTopParent.portals.each: { |p|
+				if: p.dropTest(self) then: {
+					p.addMorph(self);
+				}
+			};
+		};
+		self.bounceAnimate();
+	};
+	
+	def unlessBouncedAgainstOpenPortalDo: code {
+		if: ((!(is: self.owner taggedAs: PortalMorphT)).or: { ! self.owner.isOpen }) then: {
+			code();
+		} else: {
+			// the ball is leaving a portal
+			self.owner.owner.addMorph(self);
+		};
+	};
+	
+	def touchedLeft() {
+		unlessBouncedAgainstOpenPortalDo: { self.bounceLeft()	};
+	};
+	def touchedRight() {
+		unlessBouncedAgainstOpenPortalDo: { self.bounceRight() };
+	};
+	def touchedTop() {
+		unlessBouncedAgainstOpenPortalDo: { self.bounceTop() };
+	};
+	
+	def touchedBottom() {
+		unlessBouncedAgainstOpenPortalDo: {
+			if: (is: self.owner taggedAs: FieldMorphT) then: {
+			  // increase score of my original owner
+		    if: !(self.getTopParent.player == ballController) then: {
+			    // only increment if scored on other player's field
+					ballController<-incrementScore();
+					// remove myself from the world
+					self.owner.removeMorph(self);
+					self.stop();
+		    } else: {
+			    ballController.decrementScore(self);
+		    };
+			} else: {
+				self.bounceBottom();
+			}
+		};			
+	};
+	
+	/.at.lang.traits.use: {
+		import BounceTrait alias animate := bounceAnimate,
+		                         touchedLeft   := bounceLeft,
+		                         touchedRight  := bounceRight,
+		                         touchedTop    := bounceTop,
+		                         touchedBottom := bounceBottom;
+	};
+};
+
+def spawnNewBall() {
+	def dx := 3; //(3??6).round; // (dx == 0).ifTrue: { dx := 1 };
+	def dy := 4; //(-6 ?? (-3)).round; // (dy == 0).ifTrue: { dy := 2 };
+	def ball := BallMorph.new(world.player,START_X,START_Y,5,dx,dy);
+	ball.setColor(PLAYER_COLOR);
+	field.addMorph(ball);
+	ball.start();
+};
+
+spawnNewBall();
+
+// trap left key and right key presses
+world.subscribeKeyEvents(object: {
+	def LEFT_KEY_CODE := 37;
+	def RIGHT_KEY_CODE := 39;
+	def handleKeyPressed(keyEvent) {
+		def c := keyEvent.keyCode;
+		if: (c == LEFT_KEY_CODE) then: {
+			bat.onLeftKeypress();
+		};
+		if: (c == RIGHT_KEY_CODE) then: {
+			bat.onRightKeypress();
+		};
+		world.repaint();
+	};
+	use: {
+		import DefaultInputEventHandlerTrait exclude handleKeyPressed;
+	};
+});

@@ -1,0 +1,189 @@
+import /.at.lang.traits;
+//import /.at.support.inspector;
+def bitwiseOr := jlobby.at.morphic.platform.Utility.&bitwiseOr;
+deftype Isolate;
+
+def Point := isolate: {
+	def x := 0;
+	def y := 0;
+	def init(x,y) { 
+		self.x := x;
+		self.y := y;
+	};
+};
+
+def AwtKeyModifiers := isolate: {
+	def modifiers := 0;
+	def event := nil;
+	def init(awtEvent) {
+		self.event := awtEvent;
+		self.modifiers := awtEvent.getModifiersEx();
+	};
+	def isAltPressed() {
+		0 != modifiers.bitwiseOr(modifiers, event.ALT_DOWN_MASK)
+	}
+};
+
+def Event := isolate: {
+	def source := nil;
+	def handleCallback := {|handler| nil}; //default handler
+	def init(closure) {
+		handleCallback := closure;
+	};
+	def handleWith: handler {
+		handleCallback(handler);
+	};
+};
+
+def MouseEvent := extendIsolate: Event with: {
+	def position := nil;
+	def init(position, keyModifiers, handleCallback) {
+		super^init(handleCallback);
+		self.position := position;
+		//import keyModifiers; // I can now understand isAltPressed etc.
+	};
+};
+
+def KeyCodes := isolate: {
+	def enter := jlobby.java.awt.event.KeyEvent.VK_ENTER;
+};
+
+def KeyEvent := extendIsolate: Event with: { |KeyCodes|
+	def keyCode := nil;
+	def keyChar := nil;
+	def isEnterPressed() {
+		keyCode == KeyCodes.enter;
+	};
+	def init(keyCode, keyChar, handleCallback) {
+		super^init(handleCallback);
+		self.keyCode := keyCode;
+		self.keyChar := keyChar;
+	};
+};
+
+def Subscription := isolate: {
+	def subscribers := [];
+	def clearSubscribers() { subscribers := [] };
+	def subscribe(obj) {
+		def index := self.subscribers.find: {|el| el == obj};
+		if: (nil == index)
+		  then: { self.subscribers := self.subscribers + [obj] }
+		  else: { self.subscribers }
+	};
+	def unsubscribe(obj) {
+		self.subscribers := self.subscribers.filter: {|el| !(el == subscribers) }
+	};
+	def onSubscribersDo: closure {
+		self.subscribers.each: closure
+	};
+};
+
+def KeyInputHandlerTrait := trait: {
+	def keyPressed(evt);
+};
+
+def MouseInputHandlerTrait := trait: {
+	def handleMouseClicked(awtMouseEvent);
+	def handleMouseMetaClicked(awtMouseEvent);
+	def handleMousePressed(awtMouseEvent);
+	def handleMouseReleased(awtMouseEvent);
+	def handleMouseDragged(awtMouseEvent);
+	def handleMouseMoved(awtMouseEvent);	
+};
+
+/** default event handler trait, dispatch does not dispatch to its childen. */
+def DefaultInputEventHandlerTrait := trait: { //| inspector |
+	def dispatch(event) {
+		//def i := inspector.inspect(self);
+		event.handleWith: self;
+	};
+	def handleMouseClicked(awtMouseEvent);
+	def handleMouseMetaClicked(awtMouseEvent);
+	def handleMousePressed(awtMouseEvent);
+	def handleMouseReleased(awtMouseEvent);
+	def handleMouseDragged(awtMouseEvent);
+	def handleMouseMoved(awtMouseEvent);
+	def handleKeyPressed(awtKeyEvent);
+};
+
+def AwtInputEventDispatcherTrait := trait: { |Point, MouseEvent, KeyEvent, AwtKeyModifiers, Subscription|
+	
+	def mouseSubscription := Subscription.new();
+	def keyboardSubscription := Subscription.new();
+	
+	def subscribe(obj) {
+		mouseSubscription.subscribe(obj);
+	};
+	
+	def subscribeKeyEvents(obj) {
+		keyboardSubscription.subscribe(obj);
+	};
+
+	//todo ( with tool support this would read auto generated method stub :d )
+	def clearSubscribers();
+	def unsubscribe(obj);
+	def onSubscribersDo: closure ; 
+	
+	def dispatch(event) {
+		mouseSubscription.onSubscribersDo: 
+		{ 
+			|subscriber|
+			event.source := subscriber;  /** make the event think the subscriber was the source */
+			subscriber.dispatch(event);
+		};
+	};
+	
+	def keyDispatch(event) {
+		keyboardSubscription.onSubscribersDo: 
+		{ 
+			|subscriber|
+			event.source := subscriber;  /** make the event think the subscriber was the source */
+			subscriber.dispatch(event);
+		};
+	};
+	
+	def mouseClicked(awtMouseEvent) {
+		def position := Point.new(awtMouseEvent.getX(), awtMouseEvent.getY());
+		def modifiers := AwtKeyModifiers.new(awtMouseEvent);
+		def button := awtMouseEvent.getButton();
+		def event := if: button = awtMouseEvent.BUTTON2
+		then: {
+				MouseEvent.new(position, modifiers, { |handler| handler.handleMouseMetaClicked(event)});
+		}
+		else: {
+			MouseEvent.new(position, modifiers, { |handler| handler.handleMouseClicked(event)});
+		};
+		self.dispatch(event);	
+	};
+	def mousePressed(awtMouseEvent) {
+		def position := Point.new(awtMouseEvent.getX(), awtMouseEvent.getY());
+		def modifiers := AwtKeyModifiers.new(awtMouseEvent);
+		def event := MouseEvent.new(position, modifiers, { |handler| handler.handleMousePressed(event)});
+		self.dispatch(event);
+	};
+	def mouseReleased(awtMouseEvent) {
+		def position := Point.new(awtMouseEvent.getX(), awtMouseEvent.getY());
+		def modifiers := AwtKeyModifiers.new(awtMouseEvent);
+		def event := MouseEvent.new(position, modifiers, { |handler| handler.handleMouseReleased(event)});
+		self.dispatch(event);
+	};
+	def mouseDragged(awtMouseEvent) {
+		def position := Point.new(awtMouseEvent.getX(), awtMouseEvent.getY());
+		def modifiers := AwtKeyModifiers.new(awtMouseEvent);
+		def event := MouseEvent.new(position, modifiers, { |handler| handler.handleMouseDragged(event)});
+		self.dispatch(event);
+	};
+	def mouseMoved(awtMouseEvent) {
+		def position := Point.new(awtMouseEvent.getX(), awtMouseEvent.getY());
+		def modifiers := AwtKeyModifiers.new(awtMouseEvent);
+		def event := MouseEvent.new(position, modifiers, { |handler| handler.handleMouseMoved(event)});
+		self.dispatch(event);
+	};
+	def keyPressed(awtKeyEvent) {
+		def event := KeyEvent.new(awtKeyEvent.getKeyCode(), awtKeyEvent.getKeyChar(), {|handler| handler.handleKeyPressed(event)});
+	    self.keyDispatch(event);
+	};
+	def keyReleased(awtKeyEvent);
+	def keyTyped(awtKeyEvent);
+};
+self

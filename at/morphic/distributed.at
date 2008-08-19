@@ -1,0 +1,82 @@
+import /.at.lang.traits;
+import /.at.lang.futures;
+enableFutures(true);
+
+deftype Isolate;
+
+def Color := ~.drawmorph.Color;
+def Shapes := ~.drawMorph.Shapes;
+def BoundingBox := ~.morphstructure.BoundingBox;
+def RectangleMorph := ~.morphic.RectangleMorph;
+
+/***
+  ** Nimbus Morph
+  **/
+def MovingMorph;
+def TransportData := isolate: {
+	def dx := 0;
+	def dy := 0;
+	def proxy := nil;
+	def init(x, y, p) {
+		self.dx := x;
+		self.dy := y;
+		self.proxy := p;
+	}
+};
+def MorphProxy := object: {
+	def nimbus := nil;
+	def morph := nil;
+	def init(n, m) { nimbus := n; morph := m };
+	def perform(lambda) {
+		lambda.apply(nimbus, morph);
+	};
+};
+def NimbusMorph := extend: RectangleMorph with: { |Color, MorphProxy, TransportData|
+	deftype MovingMorph;
+	deftype StayHere;
+	def publications;
+	
+	def init(x, y, width, height) {
+		super^setPosition(x, y);
+		super^setSize(width, height);
+		super^setColor(Color.makeColor(80,255,255));
+		self.run();
+		self.publications := jlobby.java.util.HashMap.new();
+	};
+	
+	def grab() { nil };
+	def addMorph(morph) {
+		super^addMorph(morph);
+		def data := TransportData.new(morph.x - self.x, morph.y - self.y, MorphProxy.new(self, morph));
+		def subscription :=
+			export: [data, morph] as: MovingMorph;
+		publications.put(morph, subscription);
+	};
+	def removeMorph(morph) {
+		super^removeMorph(morph);
+		def pub := publications.get(morph);
+		if: nil != pub
+		then: { pub<-cancel() }
+	};
+	def discovered := nil;
+	def run() {
+		whenever: MovingMorph discovered: { |transportVector|
+			def [data, morph] := transportVector;
+			discovered := morph;
+			morph.setPosition(self.x + data.dx, self.y + data.dy);
+			super^addMorph(morph);
+			if: nil != self.owner
+			then: { self.owner.repaint(); };
+			if: !(is: morph taggedAs: StayHere)
+			then: {
+				data.proxy<-perform( isolate: {
+					def apply(nimbus, childMorph) {
+						nimbus.removeMorph(childMorph);
+					}
+				})	
+			}
+		}
+	}
+};
+
+self

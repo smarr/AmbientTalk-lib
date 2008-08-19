@@ -1,0 +1,287 @@
+/** 
+ *  HIFI SYSTEM DEMO CODE
+ */
+
+import /.at.lang.futures;
+enableFutures(true);
+
+def MorphicModule := /.at.morphic.morphic;
+def Color := /.at.morphic.drawmorph.Color;
+def RectangleMorph := MorphicModule.RectangleMorph;
+def WorldMorph := MorphicModule.WorldMorph;
+def LabelMorph := MorphicModule.LabelMorph;
+def NimbusMorph := /.at.morphic.distributed.NimbusMorph;
+def TrashMorph := MorphicModule.TrashMorph;
+def Rectangle := /.at.morphic.drawmorph.Shapes.Rectangle;
+
+def AppleScript := jlobby.at.morphic.apps.musicplayer.AppleScript;
+
+def PlayerProxy := object: {
+	def player := nil;
+	def init(obj) { self.player := obj };
+} mirroredBy: (extend: defaultMirror with: {
+	def receive(msg) { (reflect: player).receive(msg) }
+});
+
+
+def world := WorldMorph.new();
+world.setColor(Color.makeColor(240, 235, 103));
+
+network.online;
+
+def nimbus := NimbusMorph.new(0,world.height-100,world.width,100);
+nimbus.setColor(Color.makeColor(120, 113, 51));
+world.addMorph(nimbus);
+
+def trash := TrashMorph.new(600, 300, 100, 100);
+trash.setColor(Color.black);
+//world.addMorph(trash);
+
+def Voting := object: {
+	def voteOptions := [];
+	def ballotBox := nil;
+	def init(voteOptions) {
+		self.voteOptions := voteOptions;
+		self.ballotBox := jlobby.java.util.HashMap.new();
+	};
+	// object 'votingObj' votes for 'option'
+	def vote(option, votingObj) {
+		ballotBox.put(votingObj, option)
+	};
+	def tallyAllVotes() {
+		def getEntry(vote, list) {
+			def idx := list.find: { |entry|
+				if: vote == entry[1]
+				then: { true }
+				else: { false }
+			};
+			if: nil != idx
+			then: { list[idx] }
+			else: { nil }
+		};
+		def entries := [];
+		// populate entries
+		def i := ballotBox.values.iterator;
+		while: { i.hasNext() }
+		do: {
+			def vote := i.next();
+			def entry := getEntry(vote, entries);
+			if: nil != entry
+			then: { entry[2] := entry[2] + 1 }
+			else: { entries := entries + [[vote, 1]] }
+		};
+		entries
+	};
+	def winner() {
+		def entries := tallyAllVotes();
+		def winner := nil;
+		def max := 0;
+		entries.each: { |entry|
+			def [vote, count] := entry;
+			if: max < count
+			then: { winner := vote; max := count }
+		};
+		winner;
+	};
+};
+
+def MusicPlayer := object: {
+	def playlists := [];
+	def currentPlaylist := nil;
+	def voting := nil;
+	def skin := nil;
+	def init(x, y, playlists) {
+		self.playlists := playlists;
+		self.voting := Voting.new(playlists);
+		self.currentPlaylist := playlists[1];
+		self.skin := makePlayerMorph(x, y, self);
+	};
+
+	def stopScript := AppleScript.new("tell application \"iTunes\" to stop \n");
+	def pauseScript := AppleScript.new("tell application \"iTunes\" to pause \n");
+	
+	def play() {
+		def playScript := AppleScript.new("tell application \"iTunes\" \n"+
+			"play playlist \""+ currentPlaylist + "\"\n" +
+		 	"end tell");
+		playScript.execute();
+		skin<-setLabel("Playing "+ currentPlaylist); 
+		self 
+	};
+	def stop() {
+		stopScript.execute();
+		skin<-setLabel("Stopped!"); 
+		self 
+	};
+	def pause() {
+		pauseScript.execute();
+		skin<-setLabel("Paused!"); 
+		self
+	};
+	def changePlaylist(playlist) {
+		currentPlaylist := playlist;
+		self.play();
+	};
+	def voteForPlaylist: playlist from: obj {
+		voting.vote(playlist, obj);
+		def winner := voting.winner(); //this can be slow when a lot different objects vote
+		if: currentPlaylist != winner
+		then: { changePlaylist(winner) }
+	};
+};
+
+def makePlayerMorph(x, y, player) {
+	def playerMorph := extend: RectangleMorph.new(x, y, 200, 150) with: { |Color, LabelMorph, Rectangle|
+		def drawOn: canvas {
+			//super^drawOn: canvas;
+			//draw a border
+			canvas.drawRoundRectangle(self, self.getColor(), 12);
+			canvas.drawRoundRectangleOutline(self, Color.black, 12);
+			def inner := Rectangle.new(self.x+2, self.y+2, self.width-4, self.height-4);
+			canvas.drawRoundRectangleOutline(inner, Color.black, 12);
+		};
+		def label := extend: LabelMorph.new(self.x+20, self.y+5, self.width-40, 20, "Player Ready") with: {
+			def grab() { nil };  //can't move the label
+		};
+		self.addMorph(label);
+		self.setColor(Color.white);
+		//label.setColor(Color.white);
+		def setLabel(newLabel) {
+			label.label := newLabel
+		};
+	};
+
+	def playlistMorph := makePlaylistMorph(x+10, y+35, player.playlists, player);
+	def controlBarMorph := makeControlBarMorph(player, x+10, y+playerMorph.height-38, 180, 30);
+	playerMorph.addMorph(controlBarMorph);
+	playerMorph.addMorph(playlistMorph);
+	playerMorph
+};
+
+def makeControlBarMorph(controlingPlayer, x, y, width, height) {
+	def player := controlingPlayer;
+	def Button := extend: LabelMorph with: { |Color| 
+		def drawOn: canvas { 
+			//draw a border
+			super^drawOn: canvas;
+			canvas.drawRoundRectangleOutline(self, Color.black, 8);
+		};
+	};
+	def controlBar := extend: RectangleMorph.new(x, y, width, height) with: { |Color|
+		def drawOn: canvas {
+			//draw a border
+			super^drawOn: canvas;
+			canvas.drawRoundRectangleOutline(self, Color.black, 8);
+		}
+	};
+	controlBar.setColor(Color.makeColor(60,60,255));
+	
+	def numButtons := 3;
+	def getLayoutAnchor(min, max, numTotal, i) {
+		def width := max - min;
+		def anchor := min + (width / (numTotal + 1))*i;
+		anchor.round();
+	};
+	// populate the control bar with buttons
+	def playX := getLayoutAnchor(x, x+width, numButtons, 1);
+	def pauseX := getLayoutAnchor(x, x+width, numButtons, 2);
+	def stopX := getLayoutAnchor(x, x+width, numButtons, 3);
+	def layoutHorizontally(parentMorph) {
+		def i := 1;
+		def spacing := (parentMorph.width / (parentMorph.numSubmorphs + 1)).round();
+		parentMorph.subMorphs.each: { |morph|
+			def pos := parentMorph.x + spacing * i;
+			morph.setPosition(pos - (morph.width/2).round(), morph.y);
+			i := i + 1;
+		};
+	};
+	def playButton := extend: Button.new(x, y+5, 40, 20, "Play") with: { |player|
+		def handleMouseClicked(event) {
+			player<-play();
+		};
+	};
+	def pauseButton := extend: Button.new(x, y+5, 40, 20, "Pause") with: { |player|
+		def handleMouseClicked(event) {
+			player<-pause();
+		};
+	};
+	def stopButton := extend: Button.new(x, y+5, 40, 20, "Stop") with: { |player|
+		def handleMouseClicked(event) {
+			player<-stop();
+		};
+	};
+	playButton.setColor(Color.makeColor(2,2,180));
+	pauseButton.setColor(Color.makeColor(2,2,180));
+	stopButton.setColor(Color.makeColor(2,2,180));
+	playButton.textColor := Color.white;
+	pauseButton.textColor := Color.white;
+	stopButton.textColor := Color.white;
+	playButton.hInset := 8;
+	pauseButton.hInset := 2;
+	stopButton.hInset := 7;
+	controlBar.addMorph(playButton);
+	controlBar.addMorph(pauseButton);
+	controlBar.addMorph(stopButton);
+	layoutHorizontally(controlBar);
+	controlBar
+};
+
+
+//Playlist buttons
+def PlaylistSelectionButton := extend: LabelMorph with: { |Rectangle, Color|
+	def voteHandler := nil;
+	def playlistLabel := nil;
+	def init(x, y, width, height, label, voteHandler) {
+		super^init(x, y, width, height, label);
+		playlistLabel := label;
+		self.voteHandler := voteHandler;
+		self.setColor(Color.makeColor(2,180,2));
+		self.textColor := Color.white;
+	};
+	def drawOn: canvas {
+		//draw a border
+	//	def border := Rectangle.new(self.x - 1, self.y -1, self.width+2, self.height+2);
+		super^drawOn: canvas;
+		canvas.drawRoundRectangleOutline(self, Color.black, 8);
+	};
+	def handleMouseClicked(event) {
+		if: nil != voteHandler
+		then: {
+			voteHandler<-voteForPlaylist: self.playlistLabel from: actor
+		}
+	};
+};
+
+deftype StayHere;
+
+def makePlaylistMorph(x, y, playlists, voteHandler) {
+	def xInset := 4;
+	def yInset := 5;
+	def buttonWidth := 150;
+	def buttonHeight := 17;
+	def yOffset := yInset;
+	def buttons := [];
+	playlists.each: { |playlistLabel|
+		def button := PlaylistSelectionButton.new(x+xInset, y+yOffset, buttonWidth, buttonHeight, playlistLabel, voteHandler);
+		buttons := buttons + [button];
+		yOffset := yOffset + buttonHeight + yInset;
+	};
+	def playlistMorph := extend: RectangleMorph.new(x, y, buttonWidth+xInset*2+20, (buttonHeight+yInset)*buttons.length+yInset)
+		with: { |Color, Rectangle|
+			// return a clone when grabbed, but the clone reverts to the default behavior
+			//def grab() { extend: self.deepClone() with: { def grab() { self } } };
+			def drawOn: canvas {
+				//draw a border
+				super^drawOn: canvas;
+				canvas.drawRoundRectangleOutline(self, Color.black, 8);
+			};
+	} taggedAs: [StayHere];
+	buttons.each: { |button|
+		playlistMorph.addMorph(button)
+	};
+	playlistMorph.setColor(Color.makeColor(50,255,40));
+	playlistMorph
+};
+
+def player := MusicPlayer.new(20,20, ["Pop", "Classical", "Jazz"]);
+world.addMorph(player.skin);
