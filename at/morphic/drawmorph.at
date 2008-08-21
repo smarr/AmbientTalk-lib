@@ -119,8 +119,10 @@ def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
 	def awtCanvas := nil;
 
 	def sync() {
-		if: (nil == self.awtCanvas)
-			then: { self.awtCanvas := WorldCanvas.new(self, self.width, self.height) };
+		if: (nil == self.awtCanvas) then: {
+			self.awtCanvas := WorldCanvas.new(self, self.width, self.height);
+			self.awtCanvas.openInFrame();
+		};
 	};
 
 	def paint(gfx) {  /** remember that gfx is an awt.Graphics2D object */

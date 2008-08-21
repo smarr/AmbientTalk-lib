@@ -183,6 +183,8 @@ def AwtInputEventDispatcherTrait := trait: { |Point, MouseEvent, KeyEvent, AwtKe
 		def event := KeyEvent.new(awtKeyEvent.getKeyCode(), awtKeyEvent.getKeyChar(), {|handler| handler.handleKeyPressed(event)});
 	    self.keyDispatch(event);
 	};
+	def mouseEntered(awtMouseEvent);
+	def mouseExited(awtMouseEvent);
 	def keyReleased(awtKeyEvent);
 	def keyTyped(awtKeyEvent);
 };
