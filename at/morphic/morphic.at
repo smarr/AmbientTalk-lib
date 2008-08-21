@@ -400,7 +400,6 @@ def WorldMorph := object: {
 		/* hardcoded suff :P */
 		self.setPosition(0,0); 
 		self.setSize(w,h); 
-		self.sync(); /* creates the awt instances in the AwtWorldMorphTrait */
 		self.setColor(Color.makeColor(0,0,0,0)); //transparent by default
 		
 		//handmorph is treat as 'special', outside the normal child hierarchy (drawing order reasons etc)
@@ -409,14 +408,15 @@ def WorldMorph := object: {
 		/** subscribe the handmorph to the mouse input events */
 		self.subscribe(handMorph);
 		
-		self.UILoop();
+		self.initGraphics(); /* creates the awt instances in the AwtWorldMorphTrait */
+		self.startUILoop();
 	};
 	
-	def UILoop() {
+	def startUILoop() {
 		whenever: millisec(33) elapsed: {
 			self.processInputs();
 			self.processDraw();
-			}
+		}
 	};
 	
 	use: {
@@ -427,7 +427,7 @@ def WorldMorph := object: {
 		import FocusTrait;
 		import ~.drawmorph.ColoredMorphTrait;
 		import ~.drawmorph.DrawableMorphTrait;
-		import ~.drawmorph.AwtCanvasWorldMorphTrait.new(); /* creates an awt canvas which handles awt painting requests */
+		import ~.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt canvas which handles awt painting requests */
 		import ~.eventmorph.AwtInputEventDispatcherTrait;
 	}
 };

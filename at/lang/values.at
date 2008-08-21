@@ -17,7 +17,7 @@ def field( name, scope )
 def method( name, parameters, body , annotations )
 	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body , annotations ) };
 def namespace( name, path )
-	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
+	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };	
 	
 def createClosure( method, context )
 	{ jlobby.edu.vub.at.objects.natives.NATClosure.new( method, context ) };
@@ -31,6 +31,8 @@ def createMethod( name, parameters, body , annotations )
 	{ jlobby.edu.vub.at.objects.natives.NATMethod.new( name, parameters, body , annotations ) };
 def createNamespace( name, path )
 	{ jlobby.edu.vub.at.objects.natives.NATNamespace.new( name, path ) };
+def createSymbol(name)
+  { jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(name) };
 	
 def createInvocation(@args)
 	{ jlobby.edu.vub.at.objects.natives.NATMethodInvocation.new(@args) };

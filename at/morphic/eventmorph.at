@@ -1,5 +1,6 @@
 import /.at.lang.traits;
-//import /.at.support.inspector;
+import /.at.lang.structuraltypes;
+
 def bitwiseOr := jlobby.at.morphic.platform.Utility.&bitwiseOr;
 deftype Isolate;
 
@@ -142,6 +143,13 @@ def AwtInputEventDispatcherTrait := trait: { |Point, MouseEvent, KeyEvent, AwtKe
 		};
 	};
 	
+	def processInputs() {
+		self.awtWorldCanvas.capture().each: { |eventTuple|
+			def [eventName, event] := eventTuple;
+			(reflect: self).invoke(self, /.at.lang.values.createInvocation(eventName, [event], []));
+		}
+	};
+	
 	def mouseClicked(awtMouseEvent) {
 		def position := Point.new(awtMouseEvent.getX(), awtMouseEvent.getY());
 		def modifiers := AwtKeyModifiers.new(awtMouseEvent);
@@ -187,5 +195,5 @@ def AwtInputEventDispatcherTrait := trait: { |Point, MouseEvent, KeyEvent, AwtKe
 	def mouseExited(awtMouseEvent);
 	def keyReleased(awtKeyEvent);
 	def keyTyped(awtKeyEvent);
-};
+} requiring: [ protocol: { def awtWorldCanvas(); } ];
 self

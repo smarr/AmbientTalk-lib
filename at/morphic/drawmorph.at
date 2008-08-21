@@ -120,9 +120,9 @@ def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
 	def canvas := nil;
 	def awtWorldCanvas := nil;
 	
-	def init() {
-		self.imageBuffer := jlobby.awt.image.BufferedImage.new(self.width, self.height, jlobby.awt.image.BufferedImage.TYPE_INT_ARGB_PRE); 
-		self.canvas := AwtDrawCanvas.new(imageBuffer.getGraphics());
+	def initGraphics() {
+		self.imageBuffer := jlobby.java.awt.image.BufferedImage.new(self.width, self.height, jlobby.java.awt.image.BufferedImage.TYPE_INT_ARGB); 
+		self.canvas := AwtDrawCanvas.new(self.imageBuffer.getGraphics());
 		self.awtWorldCanvas := WorldCanvas.new(self.width, self.height);
 		self.awtWorldCanvas.openInFrame();
 	};
@@ -130,7 +130,9 @@ def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
 	def processDraw() {
 		/** drawOn should implement the recursive drawing */
 		self.drawOn: self.canvas;
-		self.awtWorldCanvas.setBuffer(imageBuffer);
+		self.awtWorldCanvas.setBuffer(self.imageBuffer);
 	};
+	
+	def repaint();
 } requiring: [DrawableMorphTrait, ~.morphstructure.SizeTrait];
 self
