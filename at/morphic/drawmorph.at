@@ -116,28 +116,21 @@ def DrawableMorphTrait := trait: { 	nil
  * Requires all submorphs to implement the recursiveDrawOn: method
  */
 def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
-	def awtCanvas := nil;
-
-	def sync() {
-		if: (nil == self.awtCanvas) then: {
-			self.awtCanvas := WorldCanvas.new(self, self.width, self.height);
-			self.awtCanvas.openInFrame();
-		};
+	def imageBuffer := nil;
+	def canvas := nil;
+	def awtWorldCanvas := nil;
+	
+	def init() {
+		self.imageBuffer := jlobby.awt.image.BufferedImage.new(self.width, self.height, jlobby.awt.image.BufferedImage.TYPE_INT_ARGB_PRE); 
+		self.canvas := AwtDrawCanvas.new(imageBuffer.getGraphics());
+		self.awtWorldCanvas := WorldCanvas.new(self.width, self.height);
+		self.awtWorldCanvas.openInFrame();
 	};
 
-	def paint(gfx) {  /** remember that gfx is an awt.Graphics2D object */
-		try: {
-			def canvas := AwtDrawCanvas.new(gfx); 	
-		  /** drawOn should implement the recursive drawing */
-		  self.drawOn: canvas;
-		} catch: /.at.types.Exception using: { |e|
-			system.println("Error while painting: " + e.message);
-			system.println(e.stackTrace);
-		};
-	};
-
-	def repaint() {
-		self.awtCanvas.repaint();
+	def processDraw() {
+		/** drawOn should implement the recursive drawing */
+		self.drawOn: self.canvas;
+		self.awtWorldCanvas.setBuffer(imageBuffer);
 	};
 } requiring: [DrawableMorphTrait, ~.morphstructure.SizeTrait];
 self

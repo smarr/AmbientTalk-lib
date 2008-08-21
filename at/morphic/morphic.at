@@ -1,4 +1,5 @@
 import /.at.lang.traits;
+import /.at.support.timer;
 
 //import lobby.lib.morph;
 //import lobby.lib.drawmorph;
@@ -407,7 +408,17 @@ def WorldMorph := object: {
 		handMorph.owner := self; //handmorph still has me as parent, but it's not a child of mine
 		/** subscribe the handmorph to the mouse input events */
 		self.subscribe(handMorph);
+		
+		self.UILoop();
 	};
+	
+	def UILoop() {
+		whenever: millisec(33) elapsed: {
+			self.processInputs();
+			self.processDraw();
+			}
+	};
+	
 	use: {
 		import Morphs.CompositeTrait alias addMorph := oldAddMorph;
 		import Morphs.SizeTrait;
@@ -416,7 +427,7 @@ def WorldMorph := object: {
 		import FocusTrait;
 		import ~.drawmorph.ColoredMorphTrait;
 		import ~.drawmorph.DrawableMorphTrait;
-		import ~.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt frame, canvas and handles awt painting requests */
+		import ~.drawmorph.AwtCanvasWorldMorphTrait.new(); /* creates an awt canvas which handles awt painting requests */
 		import ~.eventmorph.AwtInputEventDispatcherTrait;
 	}
 };
