@@ -52,10 +52,12 @@ def CompositeTrait := trait: { |ProtoMorphTrait, MorphCollectionTrait|
 		if: !(nil == oldOwner)
 		  then: { oldOwner.removeMorph(morph) };
 		self.addSubMorph(morph);
+		self.getTopParent().damaged(self.bounds);
 		morph.onAdd(self);
 	};
 	def removeMorph(morph) { 
 		self.removeSubMorph(morph);
+		self.getTopParent().damaged(self.bounds);
 	};
 	def getTopParent() { //assumes parent is compositeMorph too, usually that's a given
 		if: (nil == self.owner)
@@ -90,31 +92,6 @@ def CompositeTrait := trait: { |ProtoMorphTrait, MorphCollectionTrait|
 	}
 };
 
-def PositionTrait := trait: {
-	def x := 0;
-	def y := 0;
-	
-	def relativeX() { self.x - self.owner.x };
-	def relativeY() { self.y - self.owner.y };
-	
-	def setPosition(newX, newY) {
-		def deltas := [newX - self.x, newY - self.y];
-		self.x := newX; self.y := newY;
-		deltas
-	};
-	def move(dx, dy) {
-		self.setPosition(self.x + dx, self.y + dy)
-	};
-} requiring: ProtoMorphTrait;
-
-def SizeTrait := trait: {
-	def width := 0;
-	def height := 0;
-	def setSize(newWidth, newHeight) { self.width := newWidth; self.height := newHeight };
-	//def resize(dWidth, dHeight) { self.width := self.width + dWidth; self.height := self.height + dHeight };
-	//def scale(factor) { self.width := self.width * factor; self.height := self.height * factor };
-};
-
 def BoundingBox := isolate: {
 	def x := 0;
 	def y := 0;
@@ -140,6 +117,43 @@ def BoundingBox := isolate: {
 		{ x < self.x + self.width}). and:
 		{ y < self.y + self.height}
 	};
+	
+	// does this bbox fully contain the other bbox?
+	def contains(bbox) {
+		(((bbox.x >= self.x).and:
+		{ bbox.y >= self.y }).and:
+		{ (bbox.x + bbox.width) <= (self.x + self.width) }).and:
+		{ (bbox.y + bbox.height) <= (self.y + self.height) }
+	};
+};
+
+def PositionTrait := trait: {
+	def x := 0;
+	def y := 0;
+	
+	def relativeX() { self.x - self.owner.x };
+	def relativeY() { self.y - self.owner.y };
+	
+	def setPosition(newX, newY) {
+		def [dx,dy] := [newX - self.x, newY - self.y];
+		self.x := newX; self.y := newY;
+		self.getTopParent().damaged(BoundingBox.new(self.x, self.y, self.width + dx, self.height + dy));
+		[dx,dy]
+	};
+	def move(dx, dy) {
+		self.setPosition(self.x + dx, self.y + dy);
+	};
+} requiring: ProtoMorphTrait;
+
+def SizeTrait := trait: {
+	def width := 0;
+	def height := 0;
+	def setSize(newWidth, newHeight) {
+		self.width := newWidth; self.height := newHeight;
+		self.getTopParent().damaged(self.bounds());
+	};
+	//def resize(dWidth, dHeight) { self.width := self.width + dWidth; self.height := self.height + dHeight };
+	//def scale(factor) { self.width := self.width * factor; self.height := self.height * factor };
 };
 
 def PickingTrait := trait: { |BoundingBox|

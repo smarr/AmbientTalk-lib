@@ -71,36 +71,26 @@ def AwtDrawCanvas := object: {
 
 	/** assumes 'self' has PositionTrait and SizeTrait */
 	def drawRectangle(rectangle, color) {
-		gfx.setColor(AwtColor.new(@color));
-		gfx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height);
+		gfx.fillRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, AwtColor.new(@color));
 	};
 	/** draws an oval with x,y as center */
 	def drawOval(oval, color) {
-		gfx.setColor(AwtColor.new(@color));
 		/** awt takes x,y as top left point, not center */
 		def x := oval.x - oval.width;
 		def y := oval.y - oval.height;
-		gfx.fillOval(x, y, oval.width*2, oval.height*2);
-	};
-	def draw3DRectangle(rectangle, color) {
-		gfx.setColor(AwtColor.new(@color));
-		gfx.fill3DRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, true);
+		gfx.fillOval(x, y, oval.width*2, oval.height*2, AwtColor.new(@color));
 	};
 	def drawText(string, x, y, color) {
-		gfx.setColor(AwtColor.new(@color));
-		gfx.drawString(string, x, y);
+		gfx.drawString(string, x, y, AwtColor.new(@color));
 	};
 	def drawRoundRectangle(rectangle, color, arcDiameter) {
-		gfx.setColor(AwtColor.new(@color));
-		gfx.fillRoundRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, arcDiameter, arcDiameter);
+		gfx.fillRoundRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, arcDiameter, arcDiameter, AwtColor.new(@color));
 	};
 	def drawRoundRectangleOutline(rectangle, color, arcDiameter) {
-		gfx.setColor(AwtColor.new(@color));
-		gfx.drawRoundRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, arcDiameter, arcDiameter);
+		gfx.drawRoundRect(rectangle.x, rectangle.y, rectangle.width, rectangle.height, arcDiameter, arcDiameter, AwtColor.new(@color));
 	};
 	def clear(dimensions, clearColor) {
-		//gfx.setBackground(AwtColor.new(@clearColor));
-		gfx.clearRect(0, 0, dimensions.width, dimensions.height);
+		gfx.clearRect(0, 0, dimensions.width, dimensions.height, AwtColor.new(@clearColor));
 	};
 };
 
@@ -122,15 +112,33 @@ def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
 	
 	def initGraphics() {
 		self.imageBuffer := jlobby.java.awt.image.BufferedImage.new(self.width, self.height, jlobby.java.awt.image.BufferedImage.TYPE_INT_ARGB); 
-		self.canvas := AwtDrawCanvas.new(self.imageBuffer.getGraphics());
+		self.canvas := AwtDrawCanvas.new(jlobby.at.morphic.platform.NATAWTCanvas.new(self.imageBuffer.getGraphics()));
 		self.awtWorldCanvas := WorldCanvas.new(self.width, self.height);
 		self.awtWorldCanvas.openInFrame();
+	};
+
+  def damageList := [];
+  def damaged(bounds) {
+	  { |return|
+		  damageList.each: { |existingBounds|
+		    if: (existingBounds.contains(bounds)) then: {
+			    return(false); // return immediately from this function
+		    };
+		  };
+		  // bound does not collide, add to damage list
+			damageList := damageList + [bounds];
+		}.escape();
 	};
 
 	def processDraw() {
 		/** drawOn should implement the recursive drawing */
 		self.drawOn: self.canvas;
-		self.awtWorldCanvas.setBuffer(self.imageBuffer);
+		self.awtWorldCanvas.setBuffer(self.imageBuffer, 0, 0, self.width, self.height);
+		// selective update does not work yet...
+		/*damageList.each: { |bounds|
+			self.awtWorldCanvas.setBuffer(self.imageBuffer, bounds.x, bounds.y, bounds.width, bounds.height);			
+		};*/
+		damageList := []; // reset for next round
 	};
 	
 	def repaint();

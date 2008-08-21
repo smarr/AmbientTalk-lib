@@ -24,7 +24,8 @@ def BasicMorph := object: {
 		self.onSubmorphsDo: { |submorph| submorph.move(dx, dy) };
 		[dx,dy]
 	};
-	
+	// ignore requests to redraw portions of the screen, only the world reacts upon this
+	def damaged(bounds);
 	use: {
 		import CompositeTrait;
 		import PositionTrait alias setPosition := oldSetPosition;
@@ -33,6 +34,9 @@ def BasicMorph := object: {
 };
 // distributable version of BasicMorph: 
 def BasicIsolateMorph := isolate: { |CompositeTrait, PositionTrait, DefaultInputEventHandlerTrait|
+	// ignore requests to redraw portions of the screen, only the world reacts upon this
+	def damaged(bounds);
+	
 	// modified PositionTrait setPosition method to move the children along
 	def setPosition(newX, newY) {
 		def [dx,dy] := self.oldSetPosition(newX, newY);
@@ -397,7 +401,6 @@ def WorldMorph := object: {
 		handMorph.drawOn: canvas; //draw handmorph over everything else
 	};
 	def init(w := 800, h := 600) {
-		/* hardcoded suff :P */
 		self.setPosition(0,0); 
 		self.setSize(w,h); 
 		self.setColor(Color.makeColor(0,0,0,0)); //transparent by default
@@ -409,11 +412,12 @@ def WorldMorph := object: {
 		self.subscribe(handMorph);
 		
 		self.initGraphics(); /* creates the awt instances in the AwtWorldMorphTrait */
+		self.damaged(self.bounds);
 		self.startUILoop();
 	};
 	
 	def startUILoop() {
-		whenever: millisec(33) elapsed: {
+		whenever: millisec(100) elapsed: {
 			self.processInputs();
 			self.processDraw();
 		}
