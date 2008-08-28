@@ -17,7 +17,7 @@ def DrawableMorphTrait := ~.drawmorph.DrawableMorphTrait;
 def DefaultInputEventHandlerTrait := ~.eventmorph.DefaultInputEventHandlerTrait;
 
 
-// distributable version of BasicMorph: 
+// distributable version of Morph: 
 def Morph := isolate: { |CompositeTrait, PositionTrait, DefaultInputEventHandlerTrait, SizeTrait, PickingTrait, ColoredMorphTrait, DrawableMorphTrait|
 	
 	def defaultWidth := 10;
@@ -373,10 +373,10 @@ def HandMorph := extend: Morph with: {
 	};
 };
 
-def WorldMorph := extendIsolate: Morph with: {
+def WorldMorph := object: {
 	def handMorph;
 	def addMorph(morph) {
-		super^addMorph(morph);
+		self.oldaddMorph(morph);
 		self.repaint();
 	}; 
 	def drawOn: canvas {
@@ -413,7 +413,14 @@ def WorldMorph := extendIsolate: Morph with: {
 	};
 	
 	/.at.lang.traits.use: {
-		import FocusTrait;
+		import CompositeTrait alias addMorph := oldaddMorph;
+		import PositionTrait;
+		import /.at.morphic.eventmorph.MouseInputHandlerTrait;
+		import /.at.morphic.eventmorph.KeyInputHandlerTrait;
+		import SizeTrait;
+		import PickingTrait;
+		import ColoredMorphTrait;
+		import DrawableMorphTrait;
 		import /.at.morphic.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt canvas which handles awt painting requests */
 		import /.at.morphic.eventmorph.AwtInputEventDispatcherTrait;
 	}

@@ -80,7 +80,7 @@ def Subscription := isolate: {
 };
 
 def KeyInputHandlerTrait := trait: {
-	def keyPressed(evt);
+	def handleKeyPressed(evt);
 };
 
 def MouseInputHandlerTrait := trait: {
