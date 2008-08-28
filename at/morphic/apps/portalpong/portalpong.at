@@ -84,9 +84,9 @@ def PortalTrait := trait: { |Color, FadeTrait|
 		self.isOpen := false;
 		self.localPortalEndPoint := object: {
 			def teleport(morph) {
+				myMorph.originalAddMorph(morph);
 				// reposition morph using its old relative X,Y coords
 				morph.setPosition(myMorph.x + morph.relativeX, myMorph.y + morph.relativeY);
-				myMorph.originalAddMorph(morph);
 				morph.start(); // start animation morphs
 				`ok // reply with acknowledgement
 			}
