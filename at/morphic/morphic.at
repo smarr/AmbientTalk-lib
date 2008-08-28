@@ -16,59 +16,53 @@ def ColoredMorphTrait := ~.drawmorph.ColoredMorphTrait;
 def DrawableMorphTrait := ~.drawmorph.DrawableMorphTrait;
 def DefaultInputEventHandlerTrait := ~.eventmorph.DefaultInputEventHandlerTrait;
 
-// Combines position and composite traits
-def BasicMorph := object: {
-	// modified PositionTrait setPosition method to move the children along
-	def setPosition(newX, newY) {
-		def [dx,dy] := self.oldSetPosition(newX, newY);
-		self.onSubmorphsDo: { |submorph| submorph.move(dx, dy) };
-		[dx,dy]
-	};
-	// ignore requests to redraw portions of the screen, only the world reacts upon this
-	def damaged(bounds);
-	use: {
-		import CompositeTrait;
-		import PositionTrait alias setPosition := oldSetPosition;
-		import DefaultInputEventHandlerTrait;
-	}
-};
-// distributable version of BasicMorph: 
-def BasicIsolateMorph := isolate: { |CompositeTrait, PositionTrait, DefaultInputEventHandlerTrait|
-	// ignore requests to redraw portions of the screen, only the world reacts upon this
-	def damaged(bounds);
-	
-	// modified PositionTrait setPosition method to move the children along
-	def setPosition(newX, newY) {
-		def [dx,dy] := self.oldSetPosition(newX, newY);
-		self.onSubmorphsDo: { |submorph| submorph.move(dx, dy) };
-		[dx,dy]
-	};
-	
-	/.at.lang.traits.use: {
-		import CompositeTrait;
-		import PositionTrait alias setPosition := oldSetPosition;
-		import DefaultInputEventHandlerTrait;
-	}
-};
 
-def RectangleMorph := extendIsolate: BasicIsolateMorph with: { |SizeTrait, PickingTrait, ColoredMorphTrait, DrawableMorphTrait|
-	def init(x, y, width, height) {
+// distributable version of BasicMorph: 
+def Morph := isolate: { |CompositeTrait, PositionTrait, DefaultInputEventHandlerTrait, SizeTrait, PickingTrait, ColoredMorphTrait, DrawableMorphTrait|
+	
+	def defaultWidth := 10;
+	def defaultHeight := 10;
+	
+	def init(x, y) {
 		self.setPosition(x, y);
-		self.setSize(width, height);
+		self.setSize(defaultWidth, defaultHeight);
 	};
+	// ignore requests to redraw portions of the screen, only the world reacts upon this
+	def damaged(bounds);
+	
+	// modified PositionTrait setPosition method to move the children along
+	def setPosition(newX, newY) {
+		def [dx,dy] := self.oldSetPosition(newX, newY);
+		self.onSubmorphsDo: { |submorph| submorph.move(dx, dy) };
+		[dx,dy]
+	};
+	
 	def drawOn: canvas {
+		// default 'abstract' drawing of the basic morph
 		canvas.drawRoundRectangle(self, self.getColor(), 8);
 	};
-
+	
 	/.at.lang.traits.use: {
+		import CompositeTrait;
+		import PositionTrait alias setPosition := oldSetPosition;
+		import DefaultInputEventHandlerTrait;
 		import SizeTrait;
 		import PickingTrait;
 		import ColoredMorphTrait;
 		import DrawableMorphTrait;
-	};
+	}
 };
 
-def LabelMorph := extendIsolate: RectangleMorph with: { |Color|
+def RectangleMorph := extendIsolate: Morph with: {
+	
+	def init(x, y, width, height) {
+		self.setPosition(x, y);
+		self.setSize(width, height);
+	};
+
+};
+
+def LabelMorph := extendIsolate: Morph with: { |Color|
 	def label := "";
 	def hInset :=  5; 
 	def textColor := Color.black;
@@ -88,10 +82,11 @@ def LabelMorph := extendIsolate: RectangleMorph with: { |Color|
 
 def BoundingBox := Morphs.BoundingBox;
 
-def CircleMorph := extendIsolate: RectangleMorph with: { |BoundingBox, Color|
+def CircleMorph := extendIsolate: Morph with: { |BoundingBox, Color|
 	def init(x, y, radius) {
-		super^init(x,y,radius,radius);
-		super^setColor(Color.red);
+		self.setPosition(x,y);
+		self.setSize(radius,radius);
+		self.setColor(Color.red);
 	};
 	def drawOn: canvas {
 		canvas.drawOval(self, self.getColor());
@@ -203,7 +198,7 @@ def TrashMorph := extendIsolate: RectangleMorph with: { |Color|
 	};
 };
 
-def HandMorph := extend: BasicMorph with: {
+def HandMorph := extend: Morph with: {
 	def focus;
 	def focusedColor := Color.blue;
 	def unfocusedColor := Color.red;
@@ -338,7 +333,7 @@ def HandMorph := extend: BasicMorph with: {
 	};
 	// maintains a list of meta-morphs about one specific morph
 	def makeMetaManager(morph) {
-		def metaManager := extend: BasicMorph with: {
+		def metaManager := extendIsolate: Morph with: {
 			def morph := makeProxy(morph); //shadow morph to be a proxy, won't be copied along this way
 			def metaMorphs := []; //we keep this list so we can manipulate metaMorphs that moved to another parent
 			def addMorph(metaMorph) {
@@ -357,7 +352,7 @@ def HandMorph := extend: BasicMorph with: {
 			def drawOn: canvas { nil };
 			/** ensure picking by forcing badBounds on the original morph and itself*/
 			
-			use: {
+			/.at.lang.traits.use: {
 				import SizeTrait; // required by picking, we don't use it though
 				import PickingTrait;
 			}
@@ -376,19 +371,12 @@ def HandMorph := extend: BasicMorph with: {
 		def quitMorph := makeMetaQuit(morph, metaMorphManager);
 		metaMorphManager.addMorph(quitMorph);
 	};
-	
-	use: {
-		import Morphs.SizeTrait;
-		import Morphs.PickingTrait;
-		import ~.drawmorph.ColoredMorphTrait;
-		import ~.drawmorph.DrawableMorphTrait;
-	}
 };
 
-def WorldMorph := object: {
+def WorldMorph := extendIsolate: Morph with: {
 	def handMorph;
 	def addMorph(morph) {
-		self.oldAddMorph(morph);
+		super^addMorph(morph);
 		self.repaint();
 	}; 
 	def drawOn: canvas {
@@ -417,22 +405,17 @@ def WorldMorph := object: {
 	};
 	
 	def startUILoop() {
+		import /.at.support.timer;
 		whenever: millisec(100) elapsed: {
 			self.processInputs();
 			self.processDraw();
 		}
 	};
 	
-	use: {
-		import Morphs.CompositeTrait alias addMorph := oldAddMorph;
-		import Morphs.SizeTrait;
-		import Morphs.PositionTrait;
-		import Morphs.PickingTrait;
+	/.at.lang.traits.use: {
 		import FocusTrait;
-		import ~.drawmorph.ColoredMorphTrait;
-		import ~.drawmorph.DrawableMorphTrait;
-		import ~.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt canvas which handles awt painting requests */
-		import ~.eventmorph.AwtInputEventDispatcherTrait;
+		import /.at.morphic.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt canvas which handles awt painting requests */
+		import /.at.morphic.eventmorph.AwtInputEventDispatcherTrait;
 	}
 };
 self
