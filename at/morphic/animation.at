@@ -103,7 +103,8 @@ def AnimationModule := object: {
 
 	    self.timer := whenever: REFRESH_RATE elapsed: {
 			  self.animate();
-			  self.getTopParent.repaint();
+			  // request for repaint no longer necessary with new UI loop
+			  // self.getTopParent.repaint();
 		  };
 		};
 		def stop() {
@@ -123,21 +124,24 @@ def AnimationModule := object: {
 			self.directionV := Vector2D.new(dx,dy);
 		};
 
-		def animate() {
+		def animate() {			
 			// update morph position
 			self.move(self.directionV.x, self.directionV.y);
-			// bounds checks
-			if: (self.relativeX + self.width > self.owner.bounds.width) then: {
-				self.touchedRight();
-			};
-			if: (self.relativeX < 0) then: {
-				self.touchedLeft();
-			};
-			if: (self.relativeY + self.height > self.owner.bounds.height) then: {
-				self.touchedBottom();
-			};
-			if: (self.relativeY < 0) then: {
-				self.touchedTop();
+			
+			if: (self.owner != nil) then: {
+				// bounds checks
+				if: (self.relativeX + self.width > self.owner.bounds.width) then: {
+					self.touchedRight();
+				};
+				if: (self.relativeX < 0) then: {
+					self.touchedLeft();
+				};
+				if: (self.relativeY + self.height > self.owner.bounds.height) then: {
+					self.touchedBottom();
+				};
+				if: (self.relativeY < 0) then: {
+					self.touchedTop();
+				};
 			};
 		};
 

@@ -83,10 +83,10 @@ def PortalTrait := trait: { |Color, FadeTrait|
 		def myMorph := self; // lexical alias for self
 		self.isOpen := false;
 		self.localPortalEndPoint := object: {
-			def teleport(morph) {
+			def teleport(morph, relativeX, relativeY) {
 				myMorph.originalAddMorph(morph);
 				// reposition morph using its old relative X,Y coords
-				morph.setPosition(myMorph.x + morph.relativeX, myMorph.y + morph.relativeY);
+				morph.setPosition(myMorph.x + relativeX, myMorph.y + relativeY);
 				morph.start(); // start animation morphs
 				`ok // reply with acknowledgement
 			}
@@ -133,8 +133,11 @@ def PortalTrait := trait: { |Color, FadeTrait|
 	def addMorph(morph) {
 		import /.at.lang.futures; enableFutures(false);
 		self.originalAddMorph(morph);
+		def relativeX := morph.relativeX;
+		def relativeY := morph.relativeY;
 		morph.stop(); // stop animation morphs
-		when: self.remotePortalEndPoint<-teleport(morph)@FutureMessage becomes: { |ack|
+		morph.owner := nil;
+		when: self.remotePortalEndPoint<-teleport(morph, relativeX, relativeY)@FutureMessage becomes: { |ack|
 			self.removeMorph(morph);
 			self.getTopParent.repaint();
 		}
