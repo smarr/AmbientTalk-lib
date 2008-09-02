@@ -281,6 +281,36 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(8, o.foo);
 	};
 	
+	/**
+	 * Tests whether one can add and remove slots to an object dynamically.
+	 */
+	def testSlotRemoval() {
+		def o := object: { def x := 1; def m() { x } };
+
+		self.assertEquals(1, o.x);
+		self.assertEquals(1, o.m);
+		self.assertEquals(1, (reflect: o).removeSlot(`x));
+		
+		// test that x is no longer present
+		self.assert: /.at.types.SelectorNotFound raisedIn: { o.x };
+		// even when accessed from within a method
+		self.assert: /.at.types.UndefinedSlot raisedIn: { o.m };
+
+		def [acc,mut] := /.at.lang.values.createFieldSlot(`x, 5);
+		(reflect: o).addSlot(acc);
+
+		self.assertEquals(5, o.m);
+
+		(reflect: o).addSlot(mut);
+		o.x := 6;
+		self.assertEquals(6, o.m);
+		(reflect: o).removeSlot(`x);
+
+		(reflect: o).addSlot(acc);
+		(reflect: o).removeSlot(`x:=);
+		self.assertEquals(6, o.m);
+	};
+	
 };
 
 self

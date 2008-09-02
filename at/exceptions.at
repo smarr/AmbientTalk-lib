@@ -66,6 +66,8 @@ def ExceptionModule := object: {
 		jlobby.edu.vub.at.exceptions.XParseError.new("uninitialized parse error", nil);
 	def XSelectorNotFound := 
 		jlobby.edu.vub.at.exceptions.XSelectorNotFound.new(`uninitialized, root);
+	def XUndefinedSlot := 
+		jlobby.edu.vub.at.exceptions.XUndefinedSlot.new("uninitialized undefined slot", "undefined");
 
 	def XIndexOutOfBounds := IndexOutOfBoundsPrototype;
 };
