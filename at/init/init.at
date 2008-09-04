@@ -72,12 +72,19 @@ def table: size fill: closure {
   }) in: obj;
   obj;
 };*/
-
+/*
+TODO: currently a slight hack is applied in functor:, namely to return 'self'
+from the default run method. This is necessary because apparently, when a functor
+is bound to a 'super' field, the interpreter will dereference super as 'super()'
+(i.e. it will think super is bound to a nullary closure and thus invoke it)
+Therefore, the functor's run() method will be applied! The default run() method
+returns self such that super() really returns the value of super (the functor itself)
+*/
 def functor: closure {
   deftype Closure;
   def functorPrototype := object: {
     // to be overridden by children
-    def run(@args) { nil };
+    def run(@args) { self };
     // base-level interface for closures
     def apply(args) { self.run(@args) };
     def whileTrue: body { self.run.whileTrue: body };

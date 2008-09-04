@@ -311,6 +311,12 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(6, o.m);
 	};
 	
+	// tests whether the functor: construct defined in init.at works
+	def testFunctor() {
+		def f := functor: { def x := 1; def run(y) { x + y } };
+		self.assertEquals(6, f(5));
+	};
+	
 };
 
 self
