@@ -25,36 +25,44 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// the profile is a property list, but it's implemented as an isolate object
-def makeProfile() {
-	isolate: {
-		// a unique username for a Flockr (type: string, mandatory)
-		def username;
-		// the Flockr's first name (type: string, mandatory)
-		def firstname;
-		// the Flockr's last name (type: string, mandatory)
-		def lastname;
-		// the Flockr's birthdate (type: java.util.Date, optional)
-		def birthdate;
-		// the Flockr's sex (type: `male | `female, optional)
-		def sex;
+// stores the user's buddies, together with a cached profile of those buddies
+
+def HashMap := jlobby.java.util.HashMap;
+
+// the buddy list is a HashMap username:string -> profile:Profile
+
+def makeBuddyList() {
+	def map := HashMap.new();
+	
+	object: {
+		def addProfile(profile) { map.put(profile.username, profile) };
+		def removeProfile(uid) { map.remove(uid) };
+		def getProfile(uid) { map.get(uid) };
+		def setProfile(profile) { addProfile(profile) };
+		def listUsernames() {
+			def keyIt := map.keySet.iterator;
+			def theList := [];
+			while: { keyIt.hasNext } do: {
+				theList := theList + [keyIt.next]
+			};
+			theList;
+		};
+		def listProfiles() {
+			def valIt := map.values.iterator;
+			def theList := [];
+			while: { valIt.hasNext } do: {
+				theList := theList + [valIt.next]
+			};
+			theList;
+		};
 	}
-};
-
-def addProperty(profile, propName, propVal) {
-	(reflect: profile).addField(propname, propVal);
-};
-
-def removeProperty(profile, propName) {
-	// TODO: if the slot is mandatory, this method should not allow the removal of the slot!
-	(reflect: profile).removeSlot(propname);
 };
 
 // the module object of this file
 object: {
-	def makeProfile := &makeProfile;
+	// public stuff goes here
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("ProfileTest") with: {
+	def Test := extend: /.at.unit.test.UnitTest.new("BuddylistTest") with: {
 		
 		// unit tests go here
 		

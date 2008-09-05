@@ -50,8 +50,8 @@ def makeFlockr(profile) {
 		def getProfile() { profile };
 		def profileChanged(flockr, newProfile) {
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
-		} taggedAs: [ extend: FlockrT with: { |username| }];
-	};
+		};
+	} taggedAs: [ extend: FlockrT with: { |username| }];
 	
 	export: remoteInterface as: FlockrT;
 	
@@ -95,6 +95,31 @@ object: {
 	def Test := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
 		
 		// unit tests go here
+		
+		def testAsyncProfileExchange() {
+			def [fut,res] := makeFuture(seconds(10));
+			
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockr1";
+		  def flockr1 := makeFlockr(profile1);
+			flockr1.registerProfileChangedListener(object: {
+				def notifyProfileChanged(flockr, newProfile) {
+					res.resolve(newProfile.username);
+				};
+			});
+			
+			actor: {
+				import /.at.urbiflock.flockr;
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr2";
+			  def flockr2 := makeFlockr(profile2);
+			};
+			
+			when: fut becomes: { |uname|
+				self.assertEquals("flockr2", uname);
+			};
+			
+		};
 		
 	};
 	
