@@ -26,15 +26,318 @@
  */
 
 // private stuff goes here
+//import /.at.urbiflock.flockr;
+def HashMap := jlobby.java.util.HashMap;
+
+def uidOf(RI) {
+	RI.id;
+};
+
+def POSITIVE := true;
+def NEGATIVE := false; 
+
+def makeToken(sign, flockr) { 
+	object: {	
+		def getSign() {
+			sign;
+		};
+		def getFlockr() {
+			flockr;
+		};	
+	};
+};
+
+def makeFilter(predicate) {
+	object: {
+		def pass(RemoteInterface) {
+			predicate(RemoteInterface);
+		};
+	};
+};
+
+def makeMemory(keyFunction) {
+	object: {
+	  def tokens := HashMap.new();
+	
+	  def insert(Object) {
+		   tokens.put(keyFunction(Object),Object);
+	  };
+	
+	  def contains(Object) {
+		  tokens.containsKey(keyFunction(Object));
+	  };
+	
+	  def remove(Object) {
+		  tokens.remove(keyFunction(Object));
+	  };
+  };
+};
+
+def makeFilterNode(filter) {
+	object: {
+		def pass := {|Token| nil};
+		
+		def passAsToken(sign,RemoteInterface) {
+			pass(makeToken(sign,RemoteInterface));
+		};
+		
+		def insert(RemoteInterface) {
+			if: filter.pass(RemoteInterface) then: {
+				passAsToken(POSITIVE,RemoteInterface);
+			};
+		};
+		
+		def remove(RemoteInterface) {
+			if: filter.pass(RemoteInterface) then: {
+				passAsToken(NEGATIVE,RemoteInterface);
+			};
+		};
+
+	};
+};
+
+def makeChangeNode(filter) {
+	extend: makeFilterNode(filter) with: {
+		def memory := makeMemory({|RemoteInterface| uidOf(RemoteInterface)});
+		
+		def changeEvent(RemoteInterface) {
+			if: filter.pass(RemoteInterface) then: {
+				if: !memory.contains(RemoteInterface) then: {
+					memory.insert(RemoteInterface);
+					super^passAsToken(POSITIVE,RemoteInterface);
+				};
+			} else: {
+				if: memory.contains(RemoteInterface) then: {
+					memory.remove(RemoteInterface);
+					super^passAsToken(NEGATIVE,RemoteInterface);
+				};
+			};
+		};		
+	};
+};
+
+def makeAndJoinNode(fleft, fright){
+  extend: makeFilterNode(makeFilter({|v| true})) with: {
+	  def mleft := makeMemory({|Token| uidOf(Token.getFlockr)});
+		def mright := makeMemory({|Token| uidOf(Token.getFlockr)});
+	  
+	  def rightPass(token){
+		  if: (token.getSign) then:{
+			  mright.insert(token);
+			  if: mleft.contains(token) then: {
+				  super^pass(token);
+			  };
+		  } else:{
+			 if: mright.contains(token) then:{
+				  mright.remove(token);
+				  if: mleft.contains(token) then:{
+					  super^pass(token);
+				  };
+			  };
+		  };
+	  };
+	
+	  def leftPass(token){
+		  if: (token.getSign) then:{
+			  mleft.insert(token);
+			  if: mright.contains(token) then: {
+				  super^pass(token);
+			  };
+		  } else:{
+			 if: mleft.contains(token) then:{
+				  mleft.remove(token);
+				  if: mright.contains(token) then:{
+					  super^pass(token);
+				  };
+			  };
+		  };
+	  };
+	
+		fleft.pass := {|Token| self.leftPass(Token)};
+		fright.pass := {|Token| self.rightPass(Token)};	
+	
+  };
+};
 
 // the module object of this file
 object: {
 	// public stuff goes here
+  def makeFilter := &makeFilter;
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("ProximityTest") with: {
+	def ProximityTest := extend: /.at.unit.test.UnitTest.new("ProximityTest") with: {
 		
 		// unit tests go here
 		
-	};
+		def testChangedFired() {
+			def testChangeRemoteInterface := object: {
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			testChangeNode.pass := {|Token| fired := Token.getSign};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertTrue(fired);
+			self.assertTrue(testChangeNode.memory.contains(testChangeRemoteInterface));
+		};
+		
+		def testChangedNotFired() {
+			def testChangeRemoteInterface := object: {
+				def age := 23;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			testChangeNode.pass := {|Token| fired := Token.getSign};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertFalse(testChangeNode.memory.contains(testChangeRemoteInterface));
+		};
+		
+		def testChangedNotFiredAndFired() {
+			def testChangeRemoteInterface := object: {
+				def age := 25;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			testChangeNode.pass := {|Token| fired := Token.getSign};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertFalse(testChangeNode.memory.contains(testChangeRemoteInterface));
+			testChangeRemoteInterface.age := 27;
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertTrue(fired);
+			self.assertTrue(testChangeNode.memory.contains(testChangeRemoteInterface));
+		};
+		
+		def testChangedFiredAndNotFired() {
+			def testChangeRemoteInterface := object: {
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			testChangeNode.pass := {|Token| fired := Token.getSign};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertTrue(fired);
+			self.assertTrue(testChangeNode.memory.contains(testChangeRemoteInterface));
+			testChangeRemoteInterface.age := 23;
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertFalse(testChangeNode.memory.contains(testChangeRemoteInterface));
+		};
+		
+		def testChangedFiredAndShouldNotFired() {
+			def testChangeRemoteInterface := object: {
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			testChangeNode.pass := {|Token| fired := Token.getSign};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertTrue(fired);
+			self.assertTrue(testChangeNode.memory.contains(testChangeRemoteInterface));
+			testChangeRemoteInterface.age := 28;
+			testChangeNode.pass := {|Token| fired := false};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertTrue(fired);
+			self.assertTrue(testChangeNode.memory.contains(testChangeRemoteInterface));
+		};
+		
+		def testChangedNOtFiredAndShouldNotFired() {
+			def testChangeRemoteInterface := object: {
+				def age := 23;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			testChangeNode.pass := {|Token| fired := Token.getSign};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertFalse(testChangeNode.memory.contains(testChangeRemoteInterface));
+			testChangeRemoteInterface.age := 24;
+			testChangeNode.pass := {|Token| fired := true};
+			testChangeNode.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertFalse(testChangeNode.memory.contains(testChangeRemoteInterface));
+		};
+		
+		def FEMALE := 1;
+		def MALE := 0;
+		
+		def testAndFired(){
+			def testChangeRemoteInterface := object: {
+	      def sex := MALE;
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| fired := Token.getSign};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertTrue(fired);
+      self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+		};
+		
+		def testAndNotFiredL(){
+			def testChangeRemoteInterface := object: {
+	      def sex := MALE;
+				def age := 25;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| fired := Token.getSign};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertFalse(fired);
+      self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+ 		};
+
+  	def testAndNotFiredR(){
+			def testChangeRemoteInterface := object: {
+	      def sex := FEMALE;
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| fired := Token.getSign};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertFalse(fired);
+      self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+ 		}; 
+ 
+    def testAndNotFiredLNotFiredR(){
+				def testChangeRemoteInterface := object: {
+		      def sex := FEMALE;
+					def age := 25;
+					def id := 5;
+				};
+				def fired := false;
+				def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+				def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+				def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+				testAndNode.pass := {|Token| fired := Token.getSign};
+				testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+				testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+				self.assertFalse(fired);
+	      self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+				self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+	 		};
+	  };
 	
 };
