@@ -49,7 +49,7 @@ def makeFlock(proximity) {
 object: {
 	def makeFlock := &makeFlock;
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("FlockTest") with: {
+	def FlockTest := extend: /.at.unit.test.UnitTest.new("FlockTest") with: {
 		
 		// unit tests go here
 		

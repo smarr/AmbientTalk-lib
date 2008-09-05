@@ -39,6 +39,7 @@ def makeBuddyList() {
 		def removeProfile(uid) { map.remove(uid) };
 		def getProfile(uid) { map.get(uid) };
 		def setProfile(profile) { addProfile(profile) };
+		def contains(uid) { map.contains(uid) };
 		def listUsernames() {
 			def keyIt := map.keySet.iterator;
 			def theList := [];
@@ -60,11 +61,32 @@ def makeBuddyList() {
 
 // the module object of this file
 object: {
-	// public stuff goes here
+	def makeBuddyList := &makeBuddyList;
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("BuddylistTest") with: {
+	def BuddylistTest := extend: /.at.unit.test.UnitTest.new("BuddylistTest") with: {
 		
-		// unit tests go here
+		def testBuddyList() {
+			import /.at.urbiflock.profile;
+			
+			def bl := makeBuddyList();
+			
+			def p1 := makeProfile(); p1.username := "p1"; p1.firstname := "X";
+			def p2 := makeProfile(); p2.username := "p2";
+			def p3 := makeProfile(); p3.username := "p1"; p3.firstname := "Y";
+			
+			bl.addProfile(p1);
+			bl.addProfile(p2);
+			
+			self.assertEquals(p1, bl.getProfile("p1"));
+			self.assertEquals(p2, bl.getProfile("p2"));
+			self.assertEquals(2, bl.listUsernames.length);
+			bl.removeProfile("p2");
+			self.assertEquals(nil, bl.getProfile("p2"));
+			
+			self.assertEquals("X",bl.getProfile("p1").firstname);
+			bl.setProfile(p3);
+			self.assertEquals("Y",bl.getProfile("p1").firstname);
+		};
 		
 	};
 	
