@@ -25,7 +25,30 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// private stuff goes here
+// the profile is a property list, but it's implemented as an isolate object
+def makeProfile() {
+	isolate: {
+		// a unique username for a Flockr (type: string, mandatory)
+		def username;
+		// the Flockr's first name (type: string, mandatory)
+		def firstname;
+		// the Flockr's last name (type: string, mandatory)
+		def lastname;
+		// the Flockr's birthdate (type: java.util.Date, optional)
+		def birthdate;
+		// the Flockr's sex (type: `male | `female, optional)
+		def sex;
+	}
+};
+
+def addProperty(profile, propName, propVal) {
+	(reflect: profile).addField(propname, propVal);
+};
+
+def removeProperty(profile, propName) {
+	// TODO: if the slot is mandatory, this method should not allow the removal of the slot!
+	(reflect: profile).removeSlot(propname);
+};
 
 // the module object of this file
 object: {

@@ -24,12 +24,30 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
+def Vector := /.at.collections.vector.Vector;
+def FlockrModule := /.at.urbiflock.flockr;
 
-// private stuff goes here
+def makeFlock(proximity) {
+	def flockrList := Vector.new(10, { |flockr1, flockr2| FlockrModule.uidOf(flockr1) == FlockrModule.uidOf(flockr2) });
+	
+
+	def theFlock := object: {
+		def addFlockr(flockr) {
+			if: !(flockrList.contains(flockr)) then: {
+				flockrList.add(flockr);
+			};
+		};
+		def removeFlockr(flockr) { flockrList.remove(flockr) };
+	};
+	
+	proximity.registerFlock(theFlock);
+	
+	theFlock;
+};
 
 // the module object of this file
 object: {
-	// public stuff goes here
+	def makeFlock := &makeFlock;
 	
 	def Test := extend: /.at.unit.test.UnitTest.new("FlockTest") with: {
 		

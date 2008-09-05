@@ -25,11 +25,72 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// private stuff goes here
+def Vector := /.at.collections.vector.Vector;
+import /.at.lang.futures;
+
+// type identifying remote Flockr Users
+deftype FlockrT;
+
+def makeFlockr(profile) {
+	def username := profile.username;
+	
+	def profileChangedListeners := Vector.new();
+	def discoveryListeners := Vector.new();
+	
+	def notifyListeners: listeners with: message {
+		listeners.each: { |l| l <+ message };
+	};
+	
+	def localInterface := object: {
+		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
+    def registerDiscoveryListener(l) { discoveryListeners.add(l) };
+	};
+		
+	def remoteInterface := object: {
+		def getProfile() { profile };
+		def profileChanged(flockr, newProfile) {
+			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
+		} taggedAs: [ extend: FlockrT with: { |username| }];
+	};
+	
+	export: remoteInterface as: FlockrT;
+	
+	// whenever a new Flockr is discovered:
+	// 1) all discovery listeners get a notifyJoined event
+	// 2) all profile changed listeners get a notifyProfileChanged event
+	whenever: FlockrT discovered: { |flockr|		
+		notifyListeners: discoveryListeners with: <-notifyJoined(flockr);
+		
+		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
+			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
+		} catch: TimeoutException using: { |e|
+		};
+		
+		/*
+		Problem? What if a flockr disconnects, then reconnects and the addFlockr event
+		is signalled before the removeFlockr event
+		*/
+		
+		when: flockr disconnected: {
+			notifyListeners: discoveryListeners with: <-notifyLeft(flockr);
+		};
+				
+	};
+	
+	localInterface;
+	
+};
+
 
 // the module object of this file
 object: {
-	// public stuff goes here
+	
+	// makeFlockr(profile) -> returns a Flockr object
+	def makeFlockr := &makeFlockr;
+	
+	def uidOf(flockr) {
+		(/.at.support.util.getAnnotationOfType(flockr, FlockrT)).username;
+	};
 	
 	def Test := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
 		
