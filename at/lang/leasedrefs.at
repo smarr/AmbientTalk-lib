@@ -232,7 +232,7 @@ def LeasingModule := object: {
 	
 	//Construct a lease that lasts for a given period of time.
 	def lease: timeout for: obj  {
-		object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingMirror(obj, timeout)
+		object: { nil } taggedAs: [LeasedRef]+(tagsOf: obj) mirroredBy: createLeasingMirror(obj, timeout)
 	};
 	
 	/* Construct a lease for only a single call: a lease that is alive for the given period unless
@@ -245,7 +245,7 @@ def LeasingModule := object: {
 	// selectors is expected to be an array of message names (which upon reception expire the lease). 
 	// An empty array has the same effect than singleCallLease construct.
 	def singleCallLease: timeout revokedOn: selectors for: obj {
-		object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithSingleUseMirror(obj, timeout, selectors)
+		object: { nil } taggedAs: [LeasedRef]+(tagsOf: obj) mirroredBy: createLeasingWithSingleUseMirror(obj, timeout, selectors)
 	};
 	
 	/* Lease that is prolonged with a given initial period of time each time a message is sent to the object. 
@@ -258,7 +258,7 @@ def LeasingModule := object: {
 	
 	// Customizable version of renewedOnCallLease where one can determine the renewal time instead of using timeout. 
 	def renewOnCallLease: timeout renewedWith: renewalTime for: obj {
-	    object: { nil } taggedAs: [LeasedRef] mirroredBy: createLeasingWithRenewalMirror(obj, timeout, renewalTime)
+	    object: { nil } taggedAs: [LeasedRef]+(tagsOf: obj) mirroredBy: createLeasingWithRenewalMirror(obj, timeout, renewalTime)
 	};
 			 
 	// Tries to renew explicitly the lease.		
