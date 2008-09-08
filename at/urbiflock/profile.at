@@ -49,7 +49,15 @@ def makeProfile() {
 	extend: ProfileMandatoryFields with: {
 		def isMandatoryField(propName) {
 			(reflect: super).respondsTo(propName);
-		}
+		};
+		
+		def propertyHashMap() {
+			def theMap := jlobby.java.util.HashMap.new();
+			((reflect: self).listFields()).each: { |field|
+				theMap.put(field.name(), field.readField());
+			};
+			theMap;
+		};
 	}
 };
 

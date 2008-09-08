@@ -35,6 +35,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 
 /**
  * A viewer for flocks of flockrs. Clicking on a flockr opens a profile viewer on the flockr.
@@ -66,14 +67,14 @@ public class FlockViewer extends Frame {
 	}
 	
 	public static void main(String[] args) {
+		final HashMap propertyMap = new HashMap();
+		propertyMap.put("username", "foobar");
+		propertyMap.put("firstname", "foo");
+		propertyMap.put("lastname", "bar");
 		FlockViewer f = new FlockViewer(new Flock() {
 			public Profile getProfile(String username) {
 				return new Profile() {
-					  public String username() { return "foo"; }
-					  public String firstname() { return "Mr."; }
-					  public String lastname() { return "Foo"; }
-					  public Date birthdate() { return Calendar.getInstance().getTime(); }
-					  public AGSymbol sex() { return AGSymbol.jAlloc("male"); }
+					public HashMap propertyHashMap() { return propertyMap; }; 
 				};
 			}
 			public Profile[] listProfiles() {

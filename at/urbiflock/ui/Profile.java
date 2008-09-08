@@ -27,14 +27,10 @@
  */
 package at.urbiflock.ui;
 
-import edu.vub.at.objects.natives.grammar.AGSymbol;
-
-import java.util.Date;
+import java.util.HashMap;
 
 interface Profile {
-  public String username();
-  public String firstname();
-  public String lastname();
-  public Date birthdate();
-  public AGSymbol sex(); // returns male or female
+	
+  public HashMap propertyHashMap();
+  
 }
