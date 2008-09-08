@@ -25,29 +25,48 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+deftype MandatoryFieldRemoval <: lobby.at.types.Exception;
+def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryFieldRemoval);
+
+deftype DuplicateField <: lobby.at.types.Exception;
+def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
+
+def ProfileMandatoryFields := isolate: {
+	// a unique username for a Flockr (type: string, mandatory)
+	def username;
+	// the Flockr's first name (type: string, mandatory)
+	def firstname;
+	// the Flockr's last name (type: string, mandatory)
+	def lastname;
+	// the Flockr's birthdate (type: java.util.Date, optional)
+	def birthdate;
+	// the Flockr's sex (type: `male | `female, optional)
+	def sex;
+};
+
 // the profile is a property list, but it's implemented as an isolate object
 def makeProfile() {
-	isolate: {
-		// a unique username for a Flockr (type: string, mandatory)
-		def username;
-		// the Flockr's first name (type: string, mandatory)
-		def firstname;
-		// the Flockr's last name (type: string, mandatory)
-		def lastname;
-		// the Flockr's birthdate (type: java.util.Date, optional)
-		def birthdate;
-		// the Flockr's sex (type: `male | `female, optional)
-		def sex;
+	extend: ProfileMandatoryFields with: {
+		def isMandatoryField(propName) {
+			(reflect: super).respondsTo(propName);
+		}
 	}
 };
 
 def addProperty(profile, propName, propVal) {
-	(reflect: profile).addField(propname, propVal);
+	if: (reflect: profile).respondsTo(propName) then: {
+		raise: XDuplicateField.new("Profile already has property: " + propName);
+	} else: {
+		(reflect: profile).defineField(propName, propVal);
+	}
 };
 
 def removeProperty(profile, propName) {
-	// TODO: if the slot is mandatory, this method should not allow the removal of the slot!
-	(reflect: profile).removeSlot(propname);
+	if: profile.isMandatoryField(propName) then: {
+		raise: XMandatoryFieldRemoval.new("Cannot remove mandatory property from profile: " + propName);
+	} else: {
+		(reflect: profile).removeSlot(propName);
+	}
 };
 
 // the module object of this file
@@ -57,6 +76,30 @@ object: {
 	def Test := extend: /.at.unit.test.UnitTest.new("ProfileTest") with: {
 		
 		// unit tests go here
+		
+		def testAddAndRemoveProperty() {
+			def profile := makeProfile();
+			self.assertFalse((reflect: profile).respondsTo(`testProperty));
+			addProperty(profile, `testProperty, "testProperty");
+			self.assertTrue((reflect: profile).respondsTo(`testProperty));
+			self.assertEquals(profile.testProperty, "testProperty");
+			removeProperty(profile, `testProperty);
+			self.assertFalse((reflect: profile).respondsTo(`testProperty));
+		};
+		
+		def testRemoveMandatoryProperty() {
+			def profile := makeProfile();
+			self.assert: MandatoryFieldRemoval raisedIn: { 
+				removeProperty(profile, `username);
+			};
+		};
+		
+		def testDuplicateProperty() {
+			def profile := makeProfile();
+			self.assert: DuplicateField raisedIn: { 
+				addProperty(profile, `username, "Zazawie");
+			};
+		};
 		
 	};
 	
