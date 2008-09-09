@@ -27,27 +27,41 @@
  */
 package at.urbiflock.ui;
 
+import java.awt.Button;
+import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Frame;
 import java.awt.Label;
 import java.awt.Panel;
 import java.awt.TextField;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Iterator;
 
 import javax.swing.BoxLayout;
 
+import edu.vub.at.objects.natives.NATBoolean;
+import edu.vub.at.objects.natives.NATText;
+import edu.vub.at.objects.natives.grammar.AGSymbol;
+
 /**
  * The UI of a Urbiflock Profile (by default viewer, editor for own profile)
  */
-public class ProfileViewer extends Frame {
+public class ProfileViewer extends Frame implements ActionListener {
 
 	private boolean editable_ = false;
+	private Profile profile_;
+	private Panel fieldsPanel_ = new Panel();
 	
 	public ProfileViewer(Profile p, boolean editable) {
+		fieldsPanel_.setLayout(new BoxLayout(fieldsPanel_, BoxLayout.Y_AXIS));
 		editable_ = editable;
+		profile_ = p;
 		
-		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));	
+		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+		
+		add(fieldsPanel_);
 		
 		Iterator keysIterator = p.propertyHashMap().keySet().iterator();
 		while (keysIterator.hasNext()) {
@@ -56,17 +70,121 @@ public class ProfileViewer extends Frame {
 			addFieldPanel(key, value);
 		}
 		
+		Button addFieldButton = new Button("Add Field");
+		addFieldButton.setActionCommand("addField");
+		addFieldButton.addActionListener(this);
+		add(addFieldButton);
+		
 		pack();
 		setVisible(true);
 	}
 	
-	public void addFieldPanel(String fieldName, String fieldValue) {
+	private void addFieldPanel(String fieldName, String fieldValue) {
 		Panel thePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
-		thePanel.add(new Label(fieldName));
+		Label label = new Label(fieldName);
+		thePanel.add(label);
 		TextField textField = new TextField(fieldValue);
 		textField.setEditable(editable_);
 		thePanel.add(textField);
-		add(thePanel);
+		Button removeFieldButton = new Button("remove");
+		removeFieldButton.setActionCommand("removeField_" + fieldName);
+		removeFieldButton.addActionListener(this);
+		thePanel.add(removeFieldButton);
+		thePanel.setName(fieldName);
+		fieldsPanel_.add(thePanel);
+		this.pack();
+	}
+	
+	public void actionPerformed(ActionEvent ae) {
+		String command = ae.getActionCommand();
+		if (command == "addField") {
+			new AddFieldDialog(this, profile_);
+			return;
+		}
+		if ((command.substring(0, 12)).equals("removeField_")) {
+			String fieldNameString = command.substring(12);
+			AGSymbol fieldName = AGSymbol.jAlloc(fieldNameString);
+			if (profile_.isMandatoryField(fieldName).javaValue) {
+				new MandatoryFieldRemovalDialog();
+			} else {
+				Component[] components = fieldsPanel_.getComponents();
+				for (int i = 0; i < components.length; i++) {
+					if (components[i].getName().equals(fieldNameString)) {
+						fieldsPanel_.remove(components[i]);
+						this.pack();
+					}
+				}
+			}
+			return;
+		}
+	}
+	
+	private class MandatoryFieldRemovalDialog extends Frame implements ActionListener {
+		public MandatoryFieldRemovalDialog() {
+			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			add(new Label("Cannot remove mandatory field!"));
+			Button okButton = new Button("Ok");
+			okButton.addActionListener(this);
+			add(okButton);
+			pack();
+			setVisible(true);
+		}
+		
+		public void actionPerformed(ActionEvent ae) {
+			this.dispose();
+		}
+	}
+	
+	private class AddFieldDialog extends Frame implements ActionListener {
+		
+		TextField fieldNameTextField_ = new TextField();
+		TextField fieldValueTextField_ = new TextField();
+		Profile profile_;
+		ProfileViewer profileViewer_;
+		
+		public AddFieldDialog(ProfileViewer pv, Profile p) {
+			profileViewer_ = pv;
+			profile_ = p;
+			
+			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			Panel fieldNamePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+			fieldNamePanel.add(new Label("Name"));
+			fieldNamePanel.add(fieldNameTextField_);
+			add(fieldNamePanel);
+			Panel fieldValuePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+			fieldNamePanel.add(new Label("Value"));
+			fieldNamePanel.add(fieldValueTextField_);
+			fieldNamePanel.add(fieldValuePanel);
+			add(fieldValuePanel);
+			Button okButton = new Button("Ok");
+			Button cancelButton = new Button("Cancel");
+			okButton.addActionListener(this);
+			cancelButton.addActionListener(this);
+			okButton.setActionCommand("ok");
+			cancelButton.setActionCommand("cancel");
+			add(okButton);
+			add(cancelButton);
+			
+			pack();
+			setVisible(true);
+		}
+		
+		public void actionPerformed(ActionEvent ae) {
+			String command = ae.getActionCommand();
+			if (command == "ok") {
+				if (fieldNameTextField_.getText().length() == 0) {
+					return;
+				}
+				profile_.addField(AGSymbol.jAlloc(fieldNameTextField_.getText()), NATText.atValue(fieldValueTextField_.getText()));
+				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), fieldValueTextField_.getText());
+				this.dispose();
+				return;
+			}
+			if (command == "cancel") {
+				this.dispose();
+				return;
+			}
+		}
 	}
 	
 	public static void main(String[] args) {
@@ -75,7 +193,10 @@ public class ProfileViewer extends Frame {
 		propertyMap.put("firstname", "foo");
 		propertyMap.put("lastname", "bar");
 		ProfileViewer v = new ProfileViewer(new Profile() {
-			 public HashMap propertyHashMap() { return propertyMap; }; 
+			 public HashMap propertyHashMap() { return propertyMap; };
+			 public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
+			 public void addField(AGSymbol name, NATText value) {  };
+			 public void removeField(AGSymbol fieldName) {  };
 		}, true);
 	}
 	

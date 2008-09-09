@@ -27,6 +27,8 @@
  */
 package at.urbiflock.ui;
 
+import edu.vub.at.objects.natives.NATBoolean;
+import edu.vub.at.objects.natives.NATText;
 import edu.vub.at.objects.natives.grammar.AGSymbol;
 
 import java.awt.Frame;
@@ -74,7 +76,10 @@ public class FlockViewer extends Frame {
 		FlockViewer f = new FlockViewer(new Flock() {
 			public Profile getProfile(String username) {
 				return new Profile() {
-					public HashMap propertyHashMap() { return propertyMap; }; 
+					public HashMap propertyHashMap() { return propertyMap; };
+					public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
+					public void addField(AGSymbol name, NATText value) {  };
+					public void removeField(AGSymbol fieldName) {  };
 				};
 			}
 			public Profile[] listProfiles() {

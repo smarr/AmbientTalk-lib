@@ -29,8 +29,14 @@ package at.urbiflock.ui;
 
 import java.util.HashMap;
 
+import edu.vub.at.objects.natives.NATBoolean;
+import edu.vub.at.objects.natives.NATText;
+import edu.vub.at.objects.natives.grammar.AGSymbol;
+
 interface Profile {
 	
   public HashMap propertyHashMap();
-  
+  public NATBoolean isMandatoryField(AGSymbol symbol);
+  public void addField(AGSymbol fieldName, NATText value);
+  public void removeField(AGSymbol fieldName);
 }

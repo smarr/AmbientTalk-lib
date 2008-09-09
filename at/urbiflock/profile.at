@@ -58,6 +58,14 @@ def makeProfile() {
 			};
 			theMap;
 		};
+		
+		def addField(propName, propVal) {
+			addProperty(self, propName, propVal);
+		};
+		
+		def removeField(propName) {
+			removeProperty(self, propName);
+		};
 	}
 };
 
