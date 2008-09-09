@@ -71,6 +71,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 		}
 		
 		Button addFieldButton = new Button("Add Field");
+		addFieldButton.setEnabled(editable_);
 		addFieldButton.setActionCommand("addField");
 		addFieldButton.addActionListener(this);
 		add(addFieldButton);
@@ -87,6 +88,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 		textField.setEditable(editable_);
 		thePanel.add(textField);
 		Button removeFieldButton = new Button("remove");
+		removeFieldButton.setEnabled(editable_);
 		removeFieldButton.setActionCommand("removeField_" + fieldName);
 		removeFieldButton.addActionListener(this);
 		thePanel.add(removeFieldButton);
