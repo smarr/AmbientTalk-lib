@@ -37,13 +37,16 @@ def makeFlockr(profile) {
 	def profileChangedListeners := Vector.new();
 	def discoveryListeners := Vector.new();
 	
+	def buddyList := /.at.urbiflock.buddylist.makeBuddyList();
+	
 	def notifyListeners: listeners with: message {
 		listeners.each: { |l| l <+ message };
 	};
 	
 	def localInterface := object: {
 		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
-    def registerDiscoveryListener(l) { discoveryListeners.add(l) };
+    	def registerDiscoveryListener(l) { discoveryListeners.add(l) };
+		def getBuddyList() { buddyList };
 	};
 		
 	def remoteInterface := object: {
@@ -52,6 +55,8 @@ def makeFlockr(profile) {
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
 		};
 	} taggedAs: [ extend: FlockrT with: { |username| }];
+	
+	localInterface.registerProfileChangedListener(buddyList);
 	
 	export: remoteInterface as: FlockrT;
 	
@@ -119,6 +124,37 @@ object: {
 				self.assertEquals("flockr2", uname);
 			};
 			
+		};
+		
+		def testAsyncUpdateProfileInBuddyList() {
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockr1";
+			def flockr1 := makeFlockr(profile1);
+			def bl := flockr1.getBuddyList();
+			def profile2 := /.at.urbiflock.profile.makeProfile();
+			profile2.username := "flockr2";
+			profile2.firstname := "Jef";
+			bl.addProfile(profile2);
+			self.assertEquals((bl.getProfile("flockr2")).firstname, "Jef");
+			
+			// We wait 10 seconds for the event to be delivered and the profile to be updated.
+			// If this test fails, maybe the update did not happen within 10 seconds.
+			def [fut, res] := makeFuture(seconds(11));
+			/.at.support.timer.when: seconds(10) elapsed: {
+				res.resolve(`ok);
+			};
+	
+			actor: {
+				import /.at.urbiflock.flockr;
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr2";
+				profile2.firstname := "Marcel";
+			  	makeFlockr(profile2);
+			};
+						
+			when: fut becomes: { |signal|
+				self.assertEquals((bl.getProfile("flockr2")).firstname, "Marcel");	
+			};
 		};
 		
 	};

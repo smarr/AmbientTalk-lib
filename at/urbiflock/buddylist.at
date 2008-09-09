@@ -39,7 +39,7 @@ def makeBuddyList() {
 		def removeProfile(uid) { map.remove(uid) };
 		def getProfile(uid) { map.get(uid) };
 		def setProfile(profile) { addProfile(profile) };
-		def contains(uid) { map.contains(uid) };
+		def contains(uid) { map.containsKey(uid) };
 		def listUsernames() {
 			def keyIt := map.keySet.iterator;
 			def theList := [];
@@ -55,6 +55,11 @@ def makeBuddyList() {
 				theList := theList + [valIt.next]
 			};
 			theList;
+		};
+		def notifyProfileChanged(flockr, newProfile) {
+			if: contains(newProfile.username) then: {
+				setProfile(newProfile);
+			};
 		};
 	}
 };
