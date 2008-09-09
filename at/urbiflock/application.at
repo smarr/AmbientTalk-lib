@@ -27,6 +27,17 @@
 
 // private stuff goes here
 
+def makeApplication(theName, theCode) {
+	isolate: {
+		def name := theName;
+		def code := theCode;
+		
+		def start() {
+			code();
+		};
+	}
+}
+
 // the module object of this file
 object: {
 	// public stuff goes here
