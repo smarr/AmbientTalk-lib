@@ -33,15 +33,15 @@ def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 
 def ProfileMandatoryFields := isolate: {
 	// a unique username for a Flockr (type: string, mandatory)
-	def username;
+	def username := "";
 	// the Flockr's first name (type: string, mandatory)
-	def firstname;
+	def firstname := "";
 	// the Flockr's last name (type: string, mandatory)
-	def lastname;
+	def lastname := "";
 	// the Flockr's birthdate (type: java.util.Date, optional)
-	def birthdate;
+	def birthdate := "";
 	// the Flockr's sex (type: `male | `female, optional)
-	def sex;
+	def sex := "";
 };
 
 // the profile is a property list, but it's implemented as an isolate object
@@ -53,9 +53,13 @@ def makeProfile() {
 		
 		def propertyHashMap() {
 			def theMap := jlobby.java.util.HashMap.new();
+			((reflect: super).listFields()).each: { |field|
+				theMap.put(field.name(), field.readField());
+			};
 			((reflect: self).listFields()).each: { |field|
 				theMap.put(field.name(), field.readField());
 			};
+			theMap.remove(`super);
 			theMap;
 		};
 		

@@ -32,15 +32,19 @@ def makeApplication(theName, theCode) {
 		def name := theName;
 		def code := theCode;
 		
+		def getName() { name };
+		
 		def start() {
 			code();
 		};
 	}
-}
+};
 
 // the module object of this file
 object: {
 	// public stuff goes here
+	
+	def makeApplication := &makeApplication;
 	
 	def Test := extend: /.at.unit.test.UnitTest.new("ApplicationTest") with: {
 		

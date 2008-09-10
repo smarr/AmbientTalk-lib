@@ -32,10 +32,14 @@ import /.at.lang.futures;
 deftype FlockrT;
 
 def makeFlockr(profile) {
+	def myProfile := profile;
 	def username := profile.username;
 	
 	def profileChangedListeners := Vector.new();
 	def discoveryListeners := Vector.new();
+	
+	def applications := (jlobby.java.util.Vector).new();
+	def flocks := Vector.new();
 	
 	def buddyList := /.at.urbiflock.buddylist.makeBuddyList();
 	
@@ -47,6 +51,7 @@ def makeFlockr(profile) {
 		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
     	def registerDiscoveryListener(l) { discoveryListeners.add(l) };
 		def getBuddyList() { buddyList };
+		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
 	};
 		
 	def remoteInterface := object: {
@@ -57,6 +62,12 @@ def makeFlockr(profile) {
 	} taggedAs: [ extend: FlockrT with: { |username| }];
 	
 	localInterface.registerProfileChangedListener(buddyList);
+	applications.add(
+		/.at.support.symbiosis.cast: 
+			(/.at.urbiflock.application.makeApplication(
+				"My Profile", 
+				{ jlobby.at.urbiflock.ui.ProfileViewer.new(myProfile, true) })) 
+		into: (jlobby.at.urbiflock.ui.Application));
 	
 	export: remoteInterface as: FlockrT;
 	

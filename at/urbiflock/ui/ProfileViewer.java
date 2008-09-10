@@ -54,9 +54,9 @@ public class ProfileViewer extends Frame implements ActionListener {
 	private Profile profile_;
 	private Panel fieldsPanel_ = new Panel();
 	
-	public ProfileViewer(Profile p, boolean editable) {
+	public ProfileViewer(Profile p, NATBoolean editable) {
 		fieldsPanel_.setLayout(new BoxLayout(fieldsPanel_, BoxLayout.Y_AXIS));
-		editable_ = editable;
+		editable_ = editable.javaValue;
 		profile_ = p;
 		
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -65,9 +65,9 @@ public class ProfileViewer extends Frame implements ActionListener {
 		
 		Iterator keysIterator = p.propertyHashMap().keySet().iterator();
 		while (keysIterator.hasNext()) {
-			String key = (String)keysIterator.next();
-			String value = (String)(p.propertyHashMap().get(key));
-			addFieldPanel(key, value);
+			AGSymbol key = (AGSymbol)keysIterator.next();
+			String value = ((NATText)(p.propertyHashMap().get(key))).javaValue;
+			addFieldPanel(key.toString(), value);
 		}
 		
 		Button addFieldButton = new Button("Add Field");
@@ -177,6 +177,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 				if (fieldNameTextField_.getText().length() == 0) {
 					return;
 				}
+				System.out.println(profile_);
 				profile_.addField(AGSymbol.jAlloc(fieldNameTextField_.getText()), NATText.atValue(fieldValueTextField_.getText()));
 				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), fieldValueTextField_.getText());
 				this.dispose();
@@ -199,7 +200,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 			 public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
 			 public void addField(AGSymbol name, NATText value) {  };
 			 public void removeField(AGSymbol fieldName) {  };
-		}, true);
+		}, NATBoolean._TRUE_);
 	}
 	
 }

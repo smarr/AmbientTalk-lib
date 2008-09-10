@@ -57,7 +57,7 @@ public class FlockViewer extends Frame {
 			public void actionPerformed(ActionEvent ae) {
 				int selected = unameList.getSelectedIndex();
 				if (selected != -1) {
-					new ProfileViewer(f.getProfile(usernames[selected]), false);
+					new ProfileViewer(f.getProfile(usernames[selected]), NATBoolean._FALSE_);
 				}
 			}
 		});
