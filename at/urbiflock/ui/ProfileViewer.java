@@ -76,6 +76,11 @@ public class ProfileViewer extends Frame implements ActionListener {
 		addFieldButton.addActionListener(this);
 		add(addFieldButton);
 		
+		Button okButton = new Button("Ok");
+		okButton.setActionCommand("ok");
+		okButton.addActionListener(this);
+		add(okButton);
+		
 		pack();
 		setVisible(true);
 	}
@@ -99,6 +104,10 @@ public class ProfileViewer extends Frame implements ActionListener {
 	
 	public void actionPerformed(ActionEvent ae) {
 		String command = ae.getActionCommand();
+		if (command == "ok") {
+			this.dispose();
+			return;
+		}
 		if (command == "addField") {
 			new AddFieldDialog(this, profile_);
 			return;
@@ -177,7 +186,6 @@ public class ProfileViewer extends Frame implements ActionListener {
 				if (fieldNameTextField_.getText().length() == 0) {
 					return;
 				}
-				System.out.println(profile_);
 				profile_.addField(AGSymbol.jAlloc(fieldNameTextField_.getText()), NATText.atValue(fieldValueTextField_.getText()));
 				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), fieldValueTextField_.getText());
 				this.dispose();
@@ -192,9 +200,9 @@ public class ProfileViewer extends Frame implements ActionListener {
 	
 	public static void main(String[] args) {
 		final HashMap propertyMap = new HashMap();
-		propertyMap.put("username", "foobar");
-		propertyMap.put("firstname", "foo");
-		propertyMap.put("lastname", "bar");
+		propertyMap.put(AGSymbol.jAlloc("username"), NATText.atValue("foobar"));
+		propertyMap.put(AGSymbol.jAlloc("firstname"), NATText.atValue("foo"));
+		propertyMap.put(AGSymbol.jAlloc("lastname"), NATText.atValue("bar"));
 		ProfileViewer v = new ProfileViewer(new Profile() {
 			 public HashMap propertyHashMap() { return propertyMap; };
 			 public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };

@@ -64,11 +64,19 @@ def makeProfile() {
 		};
 		
 		def addField(propName, propVal) {
-			addProperty(self, propName, propVal);
+			if: (reflect: self).respondsTo(propName) then: {
+				raise: XDuplicateField.new("Profile already has property: " + propName);
+			} else: {
+				(reflect: self).defineField(propName, propVal);
+			}
 		};
 		
 		def removeField(propName) {
-			removeProperty(self, propName);
+			if: isMandatoryField(propName) then: {
+				raise: XMandatoryFieldRemoval.new("Cannot remove mandatory property from profile: " + propName);
+			} else: {
+				(reflect: self).removeSlot(propName);
+			}
 		};
 	}
 };
@@ -100,24 +108,24 @@ object: {
 		def testAddAndRemoveProperty() {
 			def profile := makeProfile();
 			self.assertFalse((reflect: profile).respondsTo(`testProperty));
-			addProperty(profile, `testProperty, "testProperty");
+			profile.addField(`testProperty, "testProperty");
 			self.assertTrue((reflect: profile).respondsTo(`testProperty));
 			self.assertEquals(profile.testProperty, "testProperty");
-			removeProperty(profile, `testProperty);
+			profile.removeField(`testProperty);
 			self.assertFalse((reflect: profile).respondsTo(`testProperty));
 		};
 		
 		def testRemoveMandatoryProperty() {
 			def profile := makeProfile();
 			self.assert: MandatoryFieldRemoval raisedIn: { 
-				removeProperty(profile, `username);
+				profile.removeField(`username);
 			};
 		};
 		
 		def testDuplicateProperty() {
 			def profile := makeProfile();
 			self.assert: DuplicateField raisedIn: { 
-				addProperty(profile, `username, "Zazawie");
+				profile.addField(`username, "Zazawie");
 			};
 		};
 		
