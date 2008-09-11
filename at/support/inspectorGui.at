@@ -185,29 +185,35 @@ def inspect(value) {
 	//Register an after advice on the inspectedObject to update the inspector
 	on: value after: (matchMethod: ".*") do: {|invocation, value| updateInspector(); value; };
 };
+def InspectorGUIModule := object: {
+	
+  def InspectorGUITest() { 
+    extend: /.at.unit.test.UnitTest.new("InspectorGUITest") with: {
 
+    def testView(){
+      def testMirror() {
+      	mirror: {
+		      def invoke(delegate, invocation) {
+			      super^invoke(delegate,invocation);
+		      };
+	      };
+      };
 
-def testMirror() {
-	mirror: {
-		def invoke(delegate, invocation) {
-			super^invoke(delegate,invocation);
-		};
-	};
+     def testObjectB := object: {
+	     def foo := "bar";
+     } taggedAs: [Object] mirroredBy: testMirror();
+
+    def testObjectA := object: {
+	    def id := "testObjectA";
+	    def objectTest := testObjectB;
+	    def setId(new) {
+		    id := new;
+	   };	
+    };
+    //inspect(testObjectA);
+    testObjectB.foo := 3;
+    testObjectA.id := 129;
+    };
+  }};
+	def inspect := &inspect;
 };
-
-def testObjectB := object: {
-	def foo := "bar";
-} taggedAs: [Object] mirroredBy: testMirror();
-
-
-def testObjectA := object: {
-	def id := "testObjectA";
-	def objectTest := testObjectB;
-	def setId(new) {
-		id := new;
-	};	
-};
-
-inspect(testObjectA);
-testObjectB.foo := 3;
-testObjectA.id := 129;
