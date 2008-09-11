@@ -39,4 +39,5 @@ interface Profile {
   public NATBoolean isMandatoryField(AGSymbol symbol);
   public void addField(AGSymbol fieldName, NATText value);
   public void removeField(AGSymbol fieldName);
+  public void setField(AGSymbol fieldName, NATText value);
 }

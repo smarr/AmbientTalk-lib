@@ -78,6 +78,14 @@ def makeProfile() {
 				(reflect: self).removeSlot(propName);
 			}
 		};
+		
+		def setField(propName, propVal) {
+			if: (nil != ((reflect: self).listFields().find: { |f| f.name() == propName })) then: {
+				((reflect: self).grabField(propName)).writeField(propVal);
+			} else: {
+				((reflect: super).grabField(propName)).writeField(propVal);
+			}
+		};
 	}
 };
 

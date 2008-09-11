@@ -38,6 +38,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Vector;
 
 import javax.swing.BoxLayout;
 
@@ -53,6 +54,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 	private boolean editable_ = false;
 	private Profile profile_;
 	private Panel fieldsPanel_ = new Panel();
+	private Vector textFields_ = new Vector();
 	
 	public ProfileViewer(Profile p, NATBoolean editable) {
 		fieldsPanel_.setLayout(new BoxLayout(fieldsPanel_, BoxLayout.Y_AXIS));
@@ -90,6 +92,8 @@ public class ProfileViewer extends Frame implements ActionListener {
 		Label label = new Label(fieldName);
 		thePanel.add(label);
 		TextField textField = new TextField(fieldValue);
+		textField.setName(fieldName);
+		textFields_.add(textField);
 		textField.setEditable(editable_);
 		thePanel.add(textField);
 		Button removeFieldButton = new Button("remove");
@@ -105,6 +109,13 @@ public class ProfileViewer extends Frame implements ActionListener {
 	public void actionPerformed(ActionEvent ae) {
 		String command = ae.getActionCommand();
 		if (command == "ok") {
+			Iterator it = textFields_.iterator();
+			while (it.hasNext()) {
+				TextField textField = (TextField)it.next();
+				AGSymbol key = AGSymbol.jAlloc(textField.getName());
+				NATText value = NATText.atValue(textField.getText());
+				profile_.setField(key, value);
+			}
 			this.dispose();
 			return;
 		}
@@ -209,6 +220,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 			 public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
 			 public void addField(AGSymbol name, NATText value) {  };
 			 public void removeField(AGSymbol fieldName) {  };
+			 public void setField(AGSymbol fieldName, NATText value) {  };
 		}, NATBoolean._TRUE_);
 	}
 	

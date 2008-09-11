@@ -80,6 +80,7 @@ public class FlockViewer extends Frame {
 					public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
 					public void addField(AGSymbol name, NATText value) {  };
 					public void removeField(AGSymbol fieldName) {  };
+					public void setField(AGSymbol fieldName, NATText value) {  };
 				};
 			}
 			public Profile[] listProfiles() {
