@@ -137,6 +137,13 @@ public class ProfileViewer extends Frame implements ActionListener {
 						this.pack();
 					}
 				}
+				Iterator it = textFields_.iterator();
+				while (it.hasNext()) {
+					TextField textField = (TextField)it.next();
+					if (textField.getName().equals(fieldNameString)) {
+						textFields_.remove(textField);
+					}
+				}
 			}
 			return;
 		}
