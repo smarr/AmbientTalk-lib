@@ -122,6 +122,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 				for (int i = 0; i < components.length; i++) {
 					if (components[i].getName().equals(fieldNameString)) {
 						fieldsPanel_.remove(components[i]);
+						profile_.removeField(fieldName);
 						this.pack();
 					}
 				}
