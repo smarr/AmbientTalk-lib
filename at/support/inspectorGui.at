@@ -129,7 +129,7 @@ def inspect(value) {
 		def keyReleased(e) {};
 		def keyPressed(e) {
 			 	ambientTalkSyntaxColor(textArea);
-	     	if: (e.getKeyCode() == awt.event.KeyEvent.VK_F9) then: {
+	     	if: (e.getKeyCode() == awt.event.KeyEvent.VK_F5) then: {
 						try: {
 							textOutput.setText(""+(eval: (read: textArea.getText) in: value));
 							textOutput.getStyledDocument().setCharacterAttributes(0, textOutput.getStyledDocument().getLength() + 1, asetb, true);							
@@ -210,7 +210,7 @@ def InspectorGUIModule := object: {
 		    id := new;
 	   };	
     };
-    //inspect(testObjectA);
+    inspect(testObjectA);
     testObjectB.foo := 3;
     testObjectA.id := 129;
     };
