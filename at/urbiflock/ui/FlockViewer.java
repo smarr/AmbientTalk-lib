@@ -27,57 +27,97 @@
  */
 package at.urbiflock.ui;
 
-import edu.vub.at.objects.natives.NATBoolean;
-import edu.vub.at.objects.natives.NATText;
-import edu.vub.at.objects.natives.grammar.AGSymbol;
-
 import java.awt.Frame;
 import java.awt.List;
+import java.awt.MenuItem;
+import java.awt.PopupMenu;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.util.Calendar;
-import java.util.Date;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.HashMap;
+
+import edu.vub.at.objects.natives.NATText;
+import edu.vub.at.objects.natives.grammar.AGSymbol;
 
 /**
  * A viewer for flocks of flockrs. Clicking on a flockr opens a profile viewer on the flockr.
  */
 public class FlockViewer extends Frame {
-
-	public FlockViewer(final Flock f) {
+	
+	List unameList_ = new List();
+	final Flockr owner_;
+	final String[] usernames_;
+	
+	public FlockViewer(final Flock f, Flockr owner) {
+		owner_ = owner;
+		usernames_ = f.listUsernames();
 		
-		final String[] usernames = f.listUsernames();
-		
-		final List unameList = new List();
-		unameList.setMultipleMode(false);
-		for (int i = 0; i < usernames.length; i++) {
-			unameList.add(usernames[i]);
+		unameList_ = new List();
+		unameList_.setMultipleMode(false);
+		for (int i = 0; i < usernames_.length; i++) {
+			unameList_.add(usernames_[i]);
 		}
-		unameList.addActionListener(new ActionListener() {
+		unameList_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
-				int selected = unameList.getSelectedIndex();
+				int selected = unameList_.getSelectedIndex();
 				if (selected != -1) {
-					new ProfileViewer(f.getProfile(usernames[selected]), NATBoolean._FALSE_);
+					new ProfileViewer(f.getProfile(usernames_[selected]), false);
 				}
 			}
 		});
 		
-		add(unameList);
+		unameList_.addMouseListener(new PopupListener());
+		
+		add(unameList_);
 		
 		pack();
 		setVisible(true);
 	}
 	
+	class PopupListener extends MouseAdapter {
+		MenuItem addBuddyItem = new MenuItem("Add to buddylist");
+		MenuItem removeBuddyItem = new MenuItem("Remove from buddylist");
+		PopupMenu buddyMenu = new PopupMenu();
+
+		public PopupListener() {
+			unameList_.add(buddyMenu);
+			buddyMenu.add(addBuddyItem);
+			buddyMenu.add(removeBuddyItem);
+		}
+		
+	    public void mousePressed(MouseEvent e) {
+	        maybeShowPopup(e);
+	    }
+
+	    public void mouseReleased(MouseEvent e) {
+	        maybeShowPopup(e);
+	    }
+
+	    private void maybeShowPopup(MouseEvent e) {
+	        if (e.isPopupTrigger()) {
+				int selected = unameList_.getSelectedIndex();
+				if (selected != -1) {
+					boolean isFriend = owner_.isBuddy(usernames_[selected]);
+					addBuddyItem.setEnabled(!isFriend);
+					removeBuddyItem.setEnabled(isFriend);
+		            buddyMenu.show(e.getComponent(),
+		                       e.getX(), e.getY());	
+				}
+	        }
+	    }
+	}
+	
 	public static void main(String[] args) {
 		final HashMap propertyMap = new HashMap();
-		propertyMap.put("username", "foobar");
-		propertyMap.put("firstname", "foo");
-		propertyMap.put("lastname", "bar");
+		propertyMap.put(AGSymbol.jAlloc("username"), NATText.atValue("foobar"));
+		propertyMap.put(AGSymbol.jAlloc("firstname"), NATText.atValue("foo"));
+		propertyMap.put(AGSymbol.jAlloc("lastname"), NATText.atValue("bar"));
 		FlockViewer f = new FlockViewer(new Flock() {
 			public Profile getProfile(String username) {
 				return new Profile() {
 					public HashMap propertyHashMap() { return propertyMap; };
-					public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
+					public boolean isMandatoryField(AGSymbol symbol) { return false; };
 					public void addField(AGSymbol name, NATText value) {  };
 					public void removeField(AGSymbol fieldName) {  };
 					public void setField(AGSymbol fieldName, NATText value) {  };
@@ -89,6 +129,22 @@ public class FlockViewer extends Frame {
 			public String[] listUsernames() {
 				return new String[] { "foo" };
 			}
+		}, new Flockr() {
+
+			public void addBuddy(Profile profile) {
+			}
+
+			public Profile getBuddy(String uid) {
+				return null;
+			}
+
+			public boolean isBuddy(String uid) {
+				return false;
+			}
+
+			public void removeBuddy(Profile profile) {				
+			}
+			
 		});
 	}
 	

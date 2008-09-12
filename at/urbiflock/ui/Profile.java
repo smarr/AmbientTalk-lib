@@ -36,7 +36,7 @@ import edu.vub.at.objects.natives.grammar.AGSymbol;
 interface Profile {
 	
   public HashMap propertyHashMap();
-  public NATBoolean isMandatoryField(AGSymbol symbol);
+  public boolean isMandatoryField(AGSymbol symbol);
   public void addField(AGSymbol fieldName, NATText value);
   public void removeField(AGSymbol fieldName);
   public void setField(AGSymbol fieldName, NATText value);

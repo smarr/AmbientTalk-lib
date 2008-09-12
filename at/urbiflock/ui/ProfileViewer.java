@@ -56,9 +56,9 @@ public class ProfileViewer extends Frame implements ActionListener {
 	private Panel fieldsPanel_ = new Panel();
 	private Vector textFields_ = new Vector();
 	
-	public ProfileViewer(Profile p, NATBoolean editable) {
+	public ProfileViewer(Profile p, boolean editable) {
 		fieldsPanel_.setLayout(new BoxLayout(fieldsPanel_, BoxLayout.Y_AXIS));
-		editable_ = editable.javaValue;
+		editable_ = editable;
 		profile_ = p;
 		
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -126,7 +126,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 		if ((command.substring(0, 12)).equals("removeField_")) {
 			String fieldNameString = command.substring(12);
 			AGSymbol fieldName = AGSymbol.jAlloc(fieldNameString);
-			if (profile_.isMandatoryField(fieldName).javaValue) {
+			if (profile_.isMandatoryField(fieldName)) {
 				new MandatoryFieldRemovalDialog();
 			} else {
 				Component[] components = fieldsPanel_.getComponents();
@@ -224,11 +224,11 @@ public class ProfileViewer extends Frame implements ActionListener {
 		propertyMap.put(AGSymbol.jAlloc("lastname"), NATText.atValue("bar"));
 		ProfileViewer v = new ProfileViewer(new Profile() {
 			 public HashMap propertyHashMap() { return propertyMap; };
-			 public NATBoolean isMandatoryField(AGSymbol symbol) { return NATBoolean._FALSE_; };
+			 public boolean isMandatoryField(AGSymbol symbol) { return false; };
 			 public void addField(AGSymbol name, NATText value) {  };
 			 public void removeField(AGSymbol fieldName) {  };
 			 public void setField(AGSymbol fieldName, NATText value) {  };
-		}, NATBoolean._TRUE_);
+		}, true);
 	}
 	
 }

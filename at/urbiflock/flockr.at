@@ -34,9 +34,11 @@ deftype FlockrT;
 def makeFlockr(profile) {
 	def myProfile := profile;
 	def username := profile.username;
+	def publication; // the pub object by which I am exported
 	
 	def profileChangedListeners := Vector.new();
 	def discoveryListeners := Vector.new();
+	def buddyListListeners := Vector.new();
 	
 	def applications := (jlobby.java.util.Vector).new();
 	def flocks := Vector.new();
@@ -50,7 +52,22 @@ def makeFlockr(profile) {
 	def localInterface := object: {
 		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
     	def registerDiscoveryListener(l) { discoveryListeners.add(l) };
-		def getBuddyList() { buddyList };
+		def registerBuddyListListener(l) { buddyListListeners.add(l) };
+		def addBuddy(profile) { 
+			buddyList.addProfile(profile);
+			notifyListeners: buddyListListeners with: <-buddyAdded(profile);
+		};
+		def removeBuddy(profile) { 
+			buddyList.removeProfile(profile.username);
+			notifyListeners: buddyListListeners with: <-buddyRemoved(profile); 
+		};
+		def isBuddy(uid) {
+			buddyList.contains(uid);
+		};
+		def getBuddy(uid) {
+			buddyList.getProfile(uid);
+		};
+		def stop() { (publication != nil).ifTrue: { publication.cancel() } };
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
 	};
 		
@@ -69,7 +86,7 @@ def makeFlockr(profile) {
 				{ jlobby.at.urbiflock.ui.ProfileViewer.new(myProfile, true) })) 
 		into: (jlobby.at.urbiflock.ui.Application));
 	
-	export: remoteInterface as: FlockrT;
+	publication := export: remoteInterface as: FlockrT;
 	
 	// whenever a new Flockr is discovered:
 	// 1) all discovery listeners get a notifyJoined event
@@ -110,8 +127,6 @@ object: {
 	
 	def Test := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
 		
-		// unit tests go here
-		
 		def testAsyncProfileExchange() {
 			def [fut,res] := makeFuture(seconds(10));
 			
@@ -124,47 +139,45 @@ object: {
 				};
 			});
 			
-			actor: {
+			def a := actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2";
-			  def flockr2 := makeFlockr(profile2);
+			    def flockr2 := makeFlockr(profile2);
 			};
 			
 			when: fut becomes: { |uname|
 				self.assertEquals("flockr2", uname);
 			};
-			
 		};
 		
 		def testAsyncUpdateProfileInBuddyList() {
 			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockr1";
+			profile1.username := "flockr2.1";
 			def flockr1 := makeFlockr(profile1);
-			def bl := flockr1.getBuddyList();
 			def profile2 := /.at.urbiflock.profile.makeProfile();
-			profile2.username := "flockr2";
+			profile2.username := "flockr2.2";
 			profile2.firstname := "Jef";
-			bl.addProfile(profile2);
-			self.assertEquals((bl.getProfile("flockr2")).firstname, "Jef");
+			flockr1.addBuddy(profile2);
+			self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Jef");
 			
 			// We wait 10 seconds for the event to be delivered and the profile to be updated.
 			// If this test fails, maybe the update did not happen within 10 seconds.
 			def [fut, res] := makeFuture(seconds(11));
-			/.at.support.timer.when: seconds(10) elapsed: {
+			/.at.support.timer.when: seconds(8) elapsed: {
 				res.resolve(`ok);
 			};
 	
 			actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr2";
+				profile2.username := "flockr2.2";
 				profile2.firstname := "Marcel";
 			  	makeFlockr(profile2);
 			};
 						
 			when: fut becomes: { |signal|
-				self.assertEquals((bl.getProfile("flockr2")).firstname, "Marcel");	
+				self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Marcel");	
 			};
 		};
 		
