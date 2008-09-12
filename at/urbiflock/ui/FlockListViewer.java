@@ -44,22 +44,22 @@ public class FlockListViewer extends Frame {
 	
 	final List listOfFlocks_;
 	final Flockr owner_;
-	final Flock[] flocks_;
+	Flock[] flocks_;
 	
 	public FlockListViewer(final Flockr owner) {
 		super("Flock List Viewer");
 		owner_ = owner;
-		
+
 		listOfFlocks_ = new List();
 		listOfFlocks_.setMultipleMode(false);
 		
 		flocks_ = owner.getFlocks();
-		
+
 		for (int i = 0; i < flocks_.length; i++) {
 			int flockIdx = i;
 			listOfFlocks_.add(flocks_[i].getName());
 		}
-		
+
 		listOfFlocks_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 				int selected = listOfFlocks_.getSelectedIndex();
@@ -68,7 +68,7 @@ public class FlockListViewer extends Frame {
 				}
 			}
 		});
-		
+
 		listOfFlocks_.addMouseListener(new PopupListener());
 		
 		add(listOfFlocks_);
