@@ -33,7 +33,7 @@ import edu.vub.at.objects.natives.NATBoolean;
 import edu.vub.at.objects.natives.NATText;
 import edu.vub.at.objects.natives.grammar.AGSymbol;
 
-interface Profile {
+public interface Profile {
 	
   public HashMap propertyHashMap();
   public boolean isMandatoryField(AGSymbol symbol);
