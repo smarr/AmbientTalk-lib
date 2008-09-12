@@ -28,6 +28,8 @@
 // private stuff goes here
 //import /.at.urbiflock.flockr;
 def HashMap := jlobby.java.util.HashMap;
+def Vector := /.at.collections.vector.Vector;
+
 
 //helper function to test locally the engine.
 def uidOf(RI) {
@@ -37,13 +39,13 @@ def uidOf(RI) {
 def POSITIVE := true;
 def NEGATIVE := false; 
 
-def makeToken(sign, flockr) { 
+def makeToken(sign, profile) { 
 	object: {	
 		def getSign() {
 			sign;
 		};
 		def getFlockr() {
-			flockr;
+			profile;
 		};	
 	};
 };
@@ -203,6 +205,63 @@ def makeAndJoinNode(fleft, fright){
 		fright.pass := {|Token| self.rightPass(Token)};	
 	
   };
+};
+
+
+def makeProximity(reteNode) {
+	object: {
+		def listeners := Vector.new();
+	
+		def register(listener) {
+			listeners.add(listener);
+		};
+	
+		def getReteNode(){ reteNode };
+		
+		def notifyFromNode(Token) {
+				if: Token.getSign then: {
+						listeners.each: {|listener| listener.addFlockr(Token.getFlockr); };				
+					} else: {
+						listeners.each: {|listener| listener.removeFlockr(Token.getFlockr); };					 
+				};
+		};
+		
+		def connect () {
+			reteNode.pass  := {|Token| self.notifyFromNode(Token) };
+		};
+		
+		connect();
+	};
+};
+
+def makeIsFriendProximity(flockr, listener) {
+	def myFriend := makeIsFriendProximity(flockr);
+	myFriend.register(listener); 
+};
+
+def makeIsFriendProximity(flockr) {
+	def isFriendProximity := extend: makeProximity(makeFilter({|RI| true})) with: {
+		//  invoked whenever a buddy was manually added to this flockr's buddy list
+		def notifyBuddyAdded(profile) {
+			super^getReteNode().insert(makeToken(POSITIVE,profile));
+		};
+
+    //invoked whenever a buddy was manually removed from this flockr's buddy list
+    def notifyBuddyRemoved(profile) {
+			super^getReteNode().remove(makeToken(NEGATIVE,profile));
+		};
+		
+		super^connect();	
+	};
+	flockr.registerBuddyListListener(isFriendProximity);
+};
+
+def makeAndProximity(leftP, rightP) {
+	makeProximity( makeAndJoinNode(leftP.getReteNode , rightP.getReteNode ) );
+};
+
+def makeOrProximity(leftP, rightP) {
+	makeProximity( makeOrJoinNode(leftP.getReteNode , rightP.getReteNode ) );
 };
 
 // the module object of this file
