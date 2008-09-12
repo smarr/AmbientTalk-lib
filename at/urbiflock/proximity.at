@@ -32,8 +32,8 @@ def Vector := /.at.collections.vector.Vector;
 
 
 //helper function to test locally the engine.
-def uidOf(RI) {
-	RI.id;
+def getId(profile) {
+	profile.username;
 };
 
 def POSITIVE := true;
@@ -101,7 +101,7 @@ def makeFilterNode(filter) {
 
 def makeChangeNode(filter) {
 	extend: makeFilterNode(filter) with: {
-		def memory := makeMemory({|RemoteInterface| uidOf(RemoteInterface)});
+		def memory := makeMemory({|RemoteInterface| getId(RemoteInterface)});
 		
 		def changeEvent(RemoteInterface) {
 			if: filter.pass(RemoteInterface) then: {
@@ -121,8 +121,8 @@ def makeChangeNode(filter) {
 
 def makeOrJoinNode(fleft, fright){
   extend: makeFilterNode(makeFilter({|v| true})) with: {
-	  def mleft := makeMemory({|Token| uidOf(Token.getFlockr)});
-		def mright := makeMemory({|Token| uidOf(Token.getFlockr)});
+	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
+		def mright := makeMemory({|Token| getId(Token.getFlockr)});
 	  
 	  def rightPass(token){
 		  if: (token.getSign) then:{
@@ -166,8 +166,8 @@ def makeOrJoinNode(fleft, fright){
 
 def makeAndJoinNode(fleft, fright){
   extend: makeFilterNode(makeFilter({|v| true})) with: {
-	  def mleft := makeMemory({|Token| uidOf(Token.getFlockr)});
-		def mright := makeMemory({|Token| uidOf(Token.getFlockr)});
+	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
+		def mright := makeMemory({|Token| getId(Token.getFlockr)});
 	  
 	  def rightPass(token){
 		  if: (token.getSign) then:{
@@ -234,11 +234,6 @@ def makeProximity(reteNode) {
 	};
 };
 
-def makeIsFriendProximity(flockr, listener) {
-	def myFriend := makeIsFriendProximity(flockr);
-	myFriend.register(listener); 
-};
-
 def makeIsFriendProximity(flockr) {
 	def isFriendProximity := extend: makeProximity(makeFilter({|RI| true})) with: {
 		//  invoked whenever a buddy was manually added to this flockr's buddy list
@@ -268,18 +263,24 @@ def makeOrProximity(leftP, rightP) {
 object: {
 	// public stuff goes here
   def makeFilter := &makeFilter;
+	def makeIsFriendProximity := &makeIsFriendProximity;
 	
 	def ProximityTest := extend: /.at.unit.test.UnitTest.new("ProximityTest") with: {
 		
 		def FEMALE := 1;
 		def MALE := 0;
 				
-		// unit tests go here
+		def testFriendsFlock(){
+		/*	def profile := /.at.urbiflock.profile.makeProfile();
+			def localFlockr := /.at.urbiflock.flockr.makeFlockr(profile);
+			localFlockr.openApplicationLauncher();*/
+		};		
+		// unit tests for RETE network go here
 		
 		def testChangedFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -292,7 +293,7 @@ object: {
 		def testChangedNotFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 23;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -305,7 +306,7 @@ object: {
 		def testChangedNotFiredAndFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 25;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -322,7 +323,7 @@ object: {
 		def testChangedFiredAndNotFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -339,7 +340,7 @@ object: {
 		def testChangedFiredAndShouldNotFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -357,7 +358,7 @@ object: {
 		def testChangedNotFiredAndShouldNotFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 23;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNode :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -376,7 +377,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -395,7 +396,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 25;
-				def id := 5;
+				def username := 5;
 			};
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
@@ -412,7 +413,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := FEMALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
@@ -429,7 +430,7 @@ object: {
 				def testChangeRemoteInterface := object: {
 		      def sex := FEMALE;
 					def age := 25;
-					def id := 5;
+					def username := 5;
 				};
 				def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 				def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
@@ -446,7 +447,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := FEMALE;
 				def age := 27;
-				def id := 5;
+				def username := 5;
 			};
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
@@ -468,7 +469,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 24;
-				def id := 5;
+				def username := 5;
 			};
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
@@ -491,7 +492,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -516,7 +517,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -541,7 +542,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -560,7 +561,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := FEMALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -579,7 +580,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 25;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -598,7 +599,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := FEMALE;
 				def age := 25;
-				def id := 5;
+				def username := 5;
 			};
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
@@ -615,7 +616,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := FEMALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -640,7 +641,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 25;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
@@ -665,7 +666,7 @@ object: {
 			def testChangeRemoteInterface := object: {
 	      def sex := MALE;
 				def age := 26;
-				def id := 5;
+				def username := 5;
 			};
 			def fired := 0;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));

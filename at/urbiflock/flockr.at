@@ -28,6 +28,9 @@
 def Vector := /.at.collections.vector.Vector;
 import /.at.lang.futures;
 
+def ProximityModule := /.at.urbiflock.proximity;
+def FlockModule := /.at.urbiflock.flock;
+
 // type identifying remote Flockr Users
 deftype FlockrT;
 
@@ -110,6 +113,11 @@ def makeFlockr(profile) {
 	
 	// BuddyList is interested in Profile changes (update cached profiles)
 	localInterface.registerProfileChangedListener(buddyList);
+	
+	// Adding predifined flocks
+	//def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
+	//flocks.add(FriendFlock);
+
 	
 	// "My Profile" editor application
 	applications.add(
