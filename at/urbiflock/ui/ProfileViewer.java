@@ -57,6 +57,8 @@ public class ProfileViewer extends Frame implements ActionListener {
 	private Vector textFields_ = new Vector();
 	
 	public ProfileViewer(Profile p, boolean editable) {
+		super("Profile Viewer");
+
 		fieldsPanel_.setLayout(new BoxLayout(fieldsPanel_, BoxLayout.Y_AXIS));
 		editable_ = editable;
 		profile_ = p;

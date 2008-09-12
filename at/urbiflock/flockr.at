@@ -95,6 +95,8 @@ def makeFlockr(profile) {
 		def getBuddy(uid) {
 			buddyList.getProfile(uid);
 		};
+		def getFlocks() { flocks.toTable };
+		def removeFlock(flock) { flocks.remove(flock) };
 		def stop() { (publication != nil).ifTrue: { publication.cancel() } };
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
 	};

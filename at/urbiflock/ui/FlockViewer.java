@@ -51,6 +51,8 @@ public class FlockViewer extends Frame {
 	final Flock flock_;
 	
 	public FlockViewer(final Flock f, Flockr owner) {
+		super("Flock Viewer");
+
 		flock_ = f;
 		owner_ = owner;
 		usernames_ = f.listUsernames();
@@ -147,6 +149,7 @@ public class FlockViewer extends Frame {
 			public String[] listUsernames() {
 				return new String[] { "foo" };
 			}
+			public String getName() { return "testflock"; }
 		}, new Flockr() {
 
 			public void addBuddy(Profile profile) {
@@ -163,6 +166,12 @@ public class FlockViewer extends Frame {
 
 			public void removeBuddy(Profile profile) {				
 			}
+
+			public Flock[] getFlocks() {
+				return null;
+			}
+
+			public void removeFlock(Flock f) {}
 			
 		});
 	}

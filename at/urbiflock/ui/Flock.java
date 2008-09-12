@@ -31,4 +31,5 @@ interface Flock {
 	public String[] listUsernames();
 	public Profile getProfile(String username);
 	public Profile[] listProfiles();
+	public String getName();
 }
