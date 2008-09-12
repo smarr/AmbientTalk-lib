@@ -27,20 +27,21 @@
 def Vector := /.at.collections.vector.Vector;
 def FlockrModule := /.at.urbiflock.flockr;
 
-def makeFlock(proximity) {
-	def flockrList := Vector.new(10, { |flockr1, flockr2| FlockrModule.uidOf(flockr1) == FlockrModule.uidOf(flockr2) });
-	
+def makeFlock(theName, proximity) {
+	def profileList := Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
+	def name := theName;
 
 	def theFlock := object: {
-		def addFlockr(flockr) {
-			if: !(flockrList.contains(flockr)) then: {
-				flockrList.add(flockr);
+		def addFlockr(profile) {
+			if: !(flockrList.contains(profile)) then: {
+				flockrList.add(profile);
 			};
 		};
-		def removeFlockr(flockr) { flockrList.remove(flockr) };
+		def removeFlockr(profile) { flockrList.remove(profile) };
+		def getName() { name };
 	};
 	
-	proximity.registerFlock(theFlock);
+	proximity.register(theFlock);
 	
 	theFlock;
 };

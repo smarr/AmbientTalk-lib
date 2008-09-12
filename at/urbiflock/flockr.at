@@ -31,10 +31,16 @@ import /.at.lang.futures;
 // type identifying remote Flockr Users
 deftype FlockrT;
 
+def uidOf(flockr) {
+	(/.at.support.util.getAnnotationOfType(flockr, FlockrT)).username;
+};
+
 def makeFlockr(profile) {
 	def myProfile := profile;
 	def username := profile.username;
 	def publication; // the pub object by which I am exported
+	
+	def uidFlockrMap := jlobby.java.util.HashMap.new();
 	
 	def profileChangedListeners := Vector.new();
 	def discoveryListeners := Vector.new();
@@ -63,12 +69,18 @@ def makeFlockr(profile) {
 		*/
     def registerDiscoveryListener(l) { discoveryListeners.add(l) };
 		/* l should understand:
-		     notifyBuddyAdded(buddyProfile : profile)
+		     notifyBuddyAdded(flockr : flockr, buddyProfile : profile)
 		       invoked whenever a buddy was manually added to this flockr's buddy list
-		     notifyBuddyRemoved(buddyProfile: profile)
+		     notifyBuddyRemoved(flockr : flockr, buddyProfile: profile)
 		       invoked whenever a buddy was manually removed from this flockr's buddy list
 		*/
 		def registerBuddyListListener(l) { buddyListListeners.add(l) };
+		def getFlockrWithUid(uid) {
+			uidFlockrMap.get(uid);
+		};
+		def updateFlockrWithUid(flockr, uid) {
+			uidFlockrMap.put(uid, flockr);
+		};
 		def addBuddy(profile) { 
 			buddyList.addProfile(profile);
 			notifyListeners: buddyListListeners with: <-notifyBuddyAdded(profile);
@@ -94,12 +106,23 @@ def makeFlockr(profile) {
 		};
 	} taggedAs: [ extend: FlockrT with: { |username| }];
 	
+	// BuddyList is interested in Profile changes (update cached profiles)
 	localInterface.registerProfileChangedListener(buddyList);
+	
+	// "My Profile" editor application
 	applications.add(
 		/.at.support.symbiosis.cast: 
 			(/.at.urbiflock.application.makeApplication(
 				"My Profile", 
 				{ jlobby.at.urbiflock.ui.ProfileViewer.new(myProfile, true) })) 
+		into: (jlobby.at.urbiflock.ui.Application));
+		
+	// "Flocks" flock list viewer application
+	applications.add(
+		/.at.support.symbiosis.cast: 
+			(/.at.urbiflock.application.makeApplication(
+				"Flocks", 
+				{ jlobby.at.urbiflock.ui.FlockListViewer.new(localInterface) })) 
 		into: (jlobby.at.urbiflock.ui.Application));
 	
 	publication := export: remoteInterface as: FlockrT;
@@ -107,7 +130,8 @@ def makeFlockr(profile) {
 	// whenever a new Flockr is discovered:
 	// 1) all discovery listeners get a notifyJoined event
 	// 2) all profile changed listeners get a notifyProfileChanged event
-	whenever: FlockrT discovered: { |flockr|		
+	whenever: FlockrT discovered: { |flockr|
+		uidFlockrMap.put(uidOf(flockr), flockr);		
 		notifyListeners: discoveryListeners with: <-notifyJoined(flockr);
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
@@ -121,6 +145,9 @@ def makeFlockr(profile) {
 		*/
 		
 		when: flockr disconnected: {
+			if: !(buddyList.contains(uidOf(flockr))) then: {
+				uidFlockrMap.remove(uidOf(flockr));
+			}; 
 			notifyListeners: discoveryListeners with: <-notifyLeft(flockr);
 		};
 				
@@ -136,10 +163,7 @@ object: {
 	
 	// makeFlockr(profile) -> returns a Flockr object
 	def makeFlockr := &makeFlockr;
-	
-	def uidOf(flockr) {
-		(/.at.support.util.getAnnotationOfType(flockr, FlockrT)).username;
-	};
+	def uidOf := &uidOf;
 	
 	def Test := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
 		
