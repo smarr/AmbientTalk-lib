@@ -50,16 +50,32 @@ def makeFlockr(profile) {
 	};
 	
 	def localInterface := object: {
+		/* l should understand:
+		     notifyProfileChanged(flockr : farref, newProfile : profile)
+		       invoked whenever a nearby flockr's profile has changed
+		*/
 		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
-    	def registerDiscoveryListener(l) { discoveryListeners.add(l) };
+		/* l should understand:
+		     notifyJoined(flockr : farref)
+		       invoked whenever a new flockr has joined the ad hoc network
+		     notifyLeft(flockr: farref)
+		       invoked whenever an existing flockr has left the ad hoc network
+		*/
+    def registerDiscoveryListener(l) { discoveryListeners.add(l) };
+		/* l should understand:
+		     notifyBuddyAdded(buddyProfile : profile)
+		       invoked whenever a buddy was manually added to this flockr's buddy list
+		     notifyBuddyRemoved(buddyProfile: profile)
+		       invoked whenever a buddy was manually removed from this flockr's buddy list
+		*/
 		def registerBuddyListListener(l) { buddyListListeners.add(l) };
 		def addBuddy(profile) { 
 			buddyList.addProfile(profile);
-			notifyListeners: buddyListListeners with: <-buddyAdded(profile);
+			notifyListeners: buddyListListeners with: <-notifyBuddyAdded(profile);
 		};
 		def removeBuddy(profile) { 
 			buddyList.removeProfile(profile.username);
-			notifyListeners: buddyListListeners with: <-buddyRemoved(profile); 
+			notifyListeners: buddyListListeners with: <-notifyBuddyRemoved(profile); 
 		};
 		def isBuddy(uid) {
 			buddyList.contains(uid);
