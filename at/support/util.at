@@ -47,12 +47,12 @@ def getAnnotationOfType(obj, type) {
   def anns;
   def idx;
   { |return|
-	  while: { !(obj == nil) } do: {
+	  while: { !(nil == obj) } do: {
 	    anns := tagsOf: obj;
 	    idx := anns.find: { |tag|
 	      tag.isSubtypeOf(type)
 	    };
-	    if: (idx != nil) then: {
+	    if: (nil != idx) then: {
 		    return(anns[idx]);
 	    };
 	    obj := obj.super;
