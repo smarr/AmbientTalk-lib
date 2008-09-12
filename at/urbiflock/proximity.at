@@ -291,7 +291,7 @@ object: {
 			self.assertTrue(testChangeNode.memory.contains(testChangeRemoteInterface));
 		};
 		
-		def testChangedNOtFiredAndShouldNotFired() {
+		def testChangedNotFiredAndShouldNotFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 23;
 				def id := 5;
@@ -336,14 +336,12 @@ object: {
 				def age := 25;
 				def id := 5;
 			};
-			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
 			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
-			testAndNode.pass := {|Token| fired := Token.getSign};
+			testAndNode.pass := {|Token| self.assertTrue(false)};
 			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
 			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
-			self.assertFalse(fired);
       self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
  		};
@@ -354,14 +352,12 @@ object: {
 				def age := 26;
 				def id := 5;
 			};
-			def fired := false;
 			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
 			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
-			testAndNode.pass := {|Token| fired := Token.getSign};
+			testAndNode.pass := {|Token| self.assertTrue(false)};
 			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
 			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
-			self.assertFalse(fired);
       self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 			self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
  		}; 
@@ -372,17 +368,106 @@ object: {
 					def age := 25;
 					def id := 5;
 				};
-				def fired := false;
 				def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
 				def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
 				def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
-				testAndNode.pass := {|Token| fired := Token.getSign};
+				testAndNode.pass := {|Token| self.assertTrue(false)};
 				testChangeNodeL.changeEvent(testChangeRemoteInterface);			
 				testChangeNodeR.changeEvent(testChangeRemoteInterface);			
-				self.assertFalse(fired);
 	      self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 				self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
-	 		};
 	  };
+	  
+		def testAndNotFiredAndShoudNotFireL(){
+			def testChangeRemoteInterface := object: {
+	      def sex := FEMALE;
+				def age := 27;
+				def id := 5;
+			};
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| self.assertTrue(false)};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			// change on node left -> not fire
+			testChangeRemoteInterface.age := 24;
+		  testChangeNodeL.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+		};
+	  
+	  def testAndNotFiredAndShoudNotFireR(){
+			def testChangeRemoteInterface := object: {
+	      def sex := MALE;
+				def age := 24;
+				def id := 5;
+			};
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| self.assertTrue(false)};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			// change on node right -> not fire
+			testChangeRemoteInterface.sex := FEMALE;
+		  testChangeNodeR.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+		};
+		
+		
+		def testFiredAndShoudFireNegTokenR(){
+			def testChangeRemoteInterface := object: {
+	      def sex := MALE;
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| fired := Token.getSign};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertTrue(fired);
+			self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			// change on node right -> not fire
+			testChangeRemoteInterface.sex := FEMALE;
+		  testChangeNodeR.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertFalse(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+		};
+		
+		def testFiredAndShoudFireNegTokenL(){
+			def testChangeRemoteInterface := object: {
+	      def sex := MALE;
+				def age := 26;
+				def id := 5;
+			};
+			def fired := false;
+			def testChangeNodeL :=  makeChangeNode(makeFilter({|RI| RI.age > 25}));
+			def testChangeNodeR :=  makeChangeNode(makeFilter({|RI| RI.sex == MALE}));			
+			def testAndNode := makeAndJoinNode(testChangeNodeL, testChangeNodeR);
+			testAndNode.pass := {|Token| fired := Token.getSign};
+			testChangeNodeL.changeEvent(testChangeRemoteInterface);			
+			testChangeNodeR.changeEvent(testChangeRemoteInterface);			
+			self.assertTrue(fired);
+			self.assertTrue(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			// change on node left -> not fire
+			testChangeRemoteInterface.age := 24;
+		  testChangeNodeL.changeEvent(testChangeRemoteInterface);
+			self.assertFalse(fired);
+			self.assertFalse(testAndNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+			self.assertTrue(testAndNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
+		};
+	};
 	
 };
