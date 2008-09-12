@@ -48,8 +48,10 @@ public class FlockViewer extends Frame {
 	List unameList_ = new List();
 	final Flockr owner_;
 	final String[] usernames_;
+	final Flock flock_;
 	
 	public FlockViewer(final Flock f, Flockr owner) {
+		flock_ = f;
 		owner_ = owner;
 		usernames_ = f.listUsernames();
 		
@@ -84,6 +86,22 @@ public class FlockViewer extends Frame {
 			unameList_.add(buddyMenu);
 			buddyMenu.add(addBuddyItem);
 			buddyMenu.add(removeBuddyItem);
+			addBuddyItem.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent ae) {
+					int selected = unameList_.getSelectedIndex();
+					if (selected != -1) {
+						owner_.addBuddy(flock_.getProfile(usernames_[selected]));
+					}
+				}
+			});
+			removeBuddyItem.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent ae) {
+					int selected = unameList_.getSelectedIndex();
+					if (selected != -1) {
+						owner_.removeBuddy(flock_.getProfile(usernames_[selected]));
+					}
+				}
+			});
 		}
 		
 	    public void mousePressed(MouseEvent e) {
@@ -132,6 +150,7 @@ public class FlockViewer extends Frame {
 		}, new Flockr() {
 
 			public void addBuddy(Profile profile) {
+				System.out.println("Buddy added: " + profile);
 			}
 
 			public Profile getBuddy(String uid) {

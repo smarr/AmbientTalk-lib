@@ -35,8 +35,8 @@ def makeBuddyList() {
 	def map := HashMap.new();
 	
 	object: {
-		def addProfile(profile) { map.put(profile.username, profile) };
-		def removeProfile(uid) { map.remove(uid) };
+		def addProfile(profile) { map.put(profile.username, profile); };
+		def removeProfile(uid) { map.remove(uid); };
 		def getProfile(uid) { map.get(uid) };
 		def setProfile(profile) { addProfile(profile) };
 		def contains(uid) { map.containsKey(uid) };
