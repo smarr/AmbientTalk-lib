@@ -31,22 +31,25 @@ def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryField
 deftype DuplicateField <: lobby.at.types.Exception;
 def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 
-def ProfileMandatoryFields := isolate: {
-	// a unique username for a Flockr (type: string, mandatory)
-	def username := "";
-	// the Flockr's first name (type: string, mandatory)
-	def firstname := "";
-	// the Flockr's last name (type: string, mandatory)
-	def lastname := "";
-	// the Flockr's birthdate (type: java.util.Date, optional)
-	def birthdate := "";
-	// the Flockr's sex (type: `male | `female, optional)
-	def sex := "";
+
+def makeProfileMandatoryFields() { 
+	isolate: {
+		// a unique username for a Flockr (type: string, mandatory)
+		def username := "";
+		// the Flockr's first name (type: string, mandatory)
+		def firstname := "";
+		// the Flockr's last name (type: string, mandatory)
+		def lastname := "";
+		// the Flockr's birthdate (type: java.util.Date, optional)
+		def birthdate := "";
+		// the Flockr's sex (type: `male | `female, optional)
+		def sex := "";
+	};
 };
 
 // the profile is a property list, but it's implemented as an isolate object
 def makeProfile() {
-	extend: ProfileMandatoryFields with: {
+	extend: makeProfileMandatoryFields() with: {
 		def isMandatoryField(propName) {
 			(reflect: super).respondsTo(propName);
 		};
