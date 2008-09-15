@@ -99,6 +99,14 @@ def makeFlockr(profile) {
 			buddyList.getProfile(uid);
 		};
 		def getFlocks() { flocks.asTable };
+		def getFlock(name) { 
+			def flockIndex := flocks.find: { |flock| name == flock.getName};
+			if: !(flockIndex == nil ) then: {
+				flocks.at(flockIndex);
+			} else: {
+				nil;
+			};
+		};
 		def removeFlock(flock) { flocks.remove(flock) };
 		def stop() { (publication != nil).ifTrue: { publication.cancel() } };
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
@@ -117,7 +125,6 @@ def makeFlockr(profile) {
 	// Adding predifined flocks
 	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
 	flocks.add(FriendsFlock);
-
 	
 	// "My Profile" editor application
 	applications.add(

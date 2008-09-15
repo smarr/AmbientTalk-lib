@@ -55,7 +55,7 @@ public class FlockViewer extends Frame {
 
 		flock_ = f;
 		owner_ = owner;
-		usernames_ = f.listUsernames();
+		usernames_ = f.getFlockrList();
 		
 		unameList_ = new List();
 		unameList_.setMultipleMode(false);
@@ -146,7 +146,7 @@ public class FlockViewer extends Frame {
 			public Profile[] listProfiles() {
 				return null;
 			}
-			public String[] listUsernames() {
+			public String[] getFlockrList() {
 				return new String[] { "foo" };
 			}
 			public String getName() { return "testflock"; }

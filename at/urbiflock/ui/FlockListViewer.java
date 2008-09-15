@@ -133,7 +133,7 @@ public class FlockListViewer extends Frame {
 							return null;
 						}
 
-						public String[] listUsernames() {
+						public String[] getFlockrList() {
 							return null;
 						}
 					}

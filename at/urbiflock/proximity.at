@@ -120,7 +120,7 @@ def makeChangeNode(filter) {
 };
 
 def makeOrJoinNode(fleft, fright){
-  extend: makeFilterNode(makeFilter({|v| true})) with: {
+  extend: makeFilterNode(makeFilter(makeFilter({|v| true}))) with: {
 	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
 		def mright := makeMemory({|Token| getId(Token.getFlockr)});
 	  
@@ -219,8 +219,12 @@ def makeProximity(reteNode) {
 		def getReteNode(){ reteNode };
 		
 		def notifyFromNode(Token) {
+	system.println("P:notifyFromNode " +Token.getSign);
 				if: Token.getSign then: {
-						listeners.each: {|listener| listener.addFlockr(Token.getFlockr); };				
+					system.println("P:listeners " + listeners);
+						listeners.each: {|listener| 
+							system.println("P: listener " + listener);
+							listener.addFlockr(Token.getFlockr); };				
 					} else: {
 						listeners.each: {|listener| listener.removeFlockr(Token.getFlockr); };					 
 				};
@@ -228,16 +232,16 @@ def makeProximity(reteNode) {
 		
 		def connect () {
 			reteNode.pass := {|Token| self.notifyFromNode(Token) };
-		};
-system.println("P:retenode " + reteNode);		
+		};	
 		connect();
 	};
 };
 
 def makeIsFriendProximity(flockr) {
-	def isFriendProximity := extend: makeProximity(makeFilterNode({|RI| true})) with: {
+	def isFriendProximity := extend: makeProximity(makeFilterNode(makeFilter({|RI| true}))) with: {
 		//  invoked whenever a buddy was manually added to this flockr's buddy list
 		def notifyBuddyAdded(profile) {
+	system.println("P:notifyBuddyAdded " +profile);
 			super^getReteNode().insert(makeToken(POSITIVE,profile));
 		};
 
@@ -245,7 +249,6 @@ def makeIsFriendProximity(flockr) {
     def notifyBuddyRemoved(profile) {
 			super^getReteNode().remove(makeToken(NEGATIVE,profile));
 		};
-system.println("P:retenodeSuper " + super.getReteNode);
 		super^connect();	
 	};
 	flockr.registerBuddyListListener(isFriendProximity);
@@ -272,12 +275,46 @@ object: {
 		def MALE := 0;
 				
 		def testFriendsFlock(){
-		/*	def profile := /.at.urbiflock.profile.makeProfile();
-			def localFlockr := /.at.urbiflock.flockr.makeFlockr(profile);
-			localFlockr.openApplicationLauncher();*/
-		};		
-		// unit tests for RETE network go here
+			import /.at.support.timer;
+			
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockr1";
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+			def profile2 := /.at.urbiflock.profile.makeProfile();
+			profile2.username := "flockr2";
+			flockr1.addBuddy(profile2);
+			def friendFlock := flockr1.getFlock("FriendsFlock");
+			
+			when: seconds(5) elapsed: {
+			  self.assertEquals(1, friendFlock.getFlockrList.length);	
+			};			
+		};
 		
+		def testFilterFriendFlock(){
+			import /.at.support.timer;
+			
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockr1";
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+			def profile2 := /.at.urbiflock.profile.makeProfile();
+			profile2.username := "flockr2";
+			
+			// Adding predifined flocks
+			def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
+			flocks.add(FriendsFlock);
+			
+			flockr1.addBuddy(profile2);
+			
+			
+			def friendFlock := flockr1.getFlock("FriendsFlock");
+			
+			when: seconds(5) elapsed: {
+			  self.assertEquals(1, friendFlock.getFlockrList.length);	
+			};			
+		};
+				
+		// unit tests for RETE network go here
+/*		
 		def testChangedFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 26;
@@ -698,5 +735,8 @@ object: {
       self.assertFalse(testOrNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 			self.assertFalse(testOrNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 		};
+		
+		*/
+		
 	};
 };
