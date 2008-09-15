@@ -40,4 +40,5 @@ public interface Profile {
   public void addField(AGSymbol fieldName, NATText value);
   public void removeField(AGSymbol fieldName);
   public void setField(AGSymbol fieldName, NATText value);
+  public String username();
 }

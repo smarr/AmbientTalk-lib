@@ -158,6 +158,8 @@ public class FlockListViewer extends Frame {
 			
 			public void registerProfileChangedListener(Object l) {}
 			public void removeProfileChangedListener(Object l) {}
+			public void registerBuddyListListener(Object l) {}
+			public void removeBuddyListListener(Object l) {}
 		});
 	}
 	

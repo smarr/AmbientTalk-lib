@@ -79,6 +79,7 @@ def makeFlockr(profile) {
 		       invoked whenever a buddy was manually removed from this flockr's buddy list
 		*/
 		def registerBuddyListListener(l) { buddyListListeners.add(l) };
+		def removeBuddyListListener(l) { buddyListListeners.remove(l) };
 		def getFlockrWithUid(uid) {
 			uidFlockrMap.get(uid);
 		};

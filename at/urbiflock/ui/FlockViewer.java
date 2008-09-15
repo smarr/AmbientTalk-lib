@@ -85,6 +85,13 @@ public class FlockViewer extends Frame {
 		        dispose();
 		    }
 		});
+		
+		owner_.registerBuddyListListener(this);
+	}
+	
+	public void dispose() {
+		owner_.removeBuddyListListener(this);
+		super.dispose();
 	}
 	
 	class PopupListener extends MouseAdapter {
@@ -136,6 +143,15 @@ public class FlockViewer extends Frame {
 	    }
 	}
 	
+	public void notifyBuddyAdded(Profile buddyProfile) {
+		unameList_.add(buddyProfile.username());
+	}
+	
+	public void notifyBuddyRemoved(Profile buddyProfile) {
+		unameList_.remove(buddyProfile.username());
+	}
+	
+	
 	public static void main(String[] args) {
 		final HashMap propertyMap = new HashMap();
 		propertyMap.put(AGSymbol.jAlloc("username"), NATText.atValue("foobar"));
@@ -149,6 +165,7 @@ public class FlockViewer extends Frame {
 					public void addField(AGSymbol name, NATText value) {  };
 					public void removeField(AGSymbol fieldName) {  };
 					public void setField(AGSymbol fieldName, NATText value) {  };
+					public String username() { return "foobar"; };
 				};
 			}
 			public Profile[] listProfiles() {
@@ -182,8 +199,9 @@ public class FlockViewer extends Frame {
 			public void removeFlock(Flock f) {}
 			
 			public void registerProfileChangedListener(Object l) {}
-			
 			public void removeProfileChangedListener(Object l) {}
+			public void registerBuddyListListener(Object l) {}
+			public void removeBuddyListListener(Object l) {}
 			
 		});
 	}
