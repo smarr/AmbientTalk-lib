@@ -200,6 +200,11 @@ object: {
 			};
 			flockr1.registerProfileChangedListener(listener);
 			
+			def [testFut, testRes] := makeFuture(seconds(11));
+			/.at.support.timer.when: seconds(8) elapsed: {
+				testRes.resolve(`ok);
+			};
+			
 			def a := actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
@@ -210,6 +215,8 @@ object: {
 			when: fut becomes: { |uname|
 				self.assertEquals("flockr2", uname);
 			};
+			
+			testFut;
 			
 		};
 		
