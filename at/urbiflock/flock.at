@@ -43,7 +43,7 @@ def makeFlock(theName, proximity) {
 		def getName() { name };
 		def getFlockrList() {
 			system.println("Flock:getFlockrLsit" + flockrList.asTable);
-			flockrList.asTable;
+			flockrList.asTable.map:{|profile| profile.username};
 		};
 		
 	};

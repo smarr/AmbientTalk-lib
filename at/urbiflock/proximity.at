@@ -219,7 +219,7 @@ def makeProximity(reteNode) {
 		def getReteNode(){ reteNode };
 		
 		def notifyFromNode(Token) {
-	system.println("P:notifyFromNode " +Token.getSign);
+				system.println("P:notifyFromNode " +Token.getSign);
 				if: Token.getSign then: {
 					system.println("P:listeners " + listeners);
 						listeners.each: {|listener| 
@@ -241,13 +241,13 @@ def makeIsFriendProximity(flockr) {
 	def isFriendProximity := extend: makeProximity(makeFilterNode(makeFilter({|RI| true}))) with: {
 		//  invoked whenever a buddy was manually added to this flockr's buddy list
 		def notifyBuddyAdded(profile) {
-	system.println("P:notifyBuddyAdded " +profile);
-			super^getReteNode().insert(makeToken(POSITIVE,profile));
+			system.println("P:notifyBuddyAdded " +profile);
+			super^getReteNode().insert(profile);
 		};
 
     //invoked whenever a buddy was manually removed from this flockr's buddy list
     def notifyBuddyRemoved(profile) {
-			super^getReteNode().remove(makeToken(NEGATIVE,profile));
+			super^getReteNode().remove(profile);
 		};
 		super^connect();	
 	};
@@ -263,6 +263,16 @@ def makeOrProximity(leftP, rightP) {
 	makeProximity( makeOrJoinNode(leftP.getReteNode , rightP.getReteNode ) );
 };
 
+def makeProfileChangedProximity(block) {
+		def newBlockStatements := `{ |profile| #@(block.method.bodyExpression.statements) };
+		def profilePredicate := eval: newBlockStatements in: block.context.lexicalScope;
+		def profileChangedProximity := extend: makeProximity(makeFilterNode( makeFilter( profilePredicate ) )) with: {
+			
+		};
+		
+		profileChangedProximity;
+};
+
 // the module object of this file
 object: {
 	// public stuff goes here
@@ -273,10 +283,10 @@ object: {
 		
 		def FEMALE := 1;
 		def MALE := 0;
+		
+		import /.at.support.timer;
 				
 		def testFriendsFlock(){
-			import /.at.support.timer;
-			
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
@@ -291,18 +301,16 @@ object: {
 		};
 		
 		def testFilterFriendFlock(){
-			import /.at.support.timer;
-			
+	
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
 			def profile2 := /.at.urbiflock.profile.makeProfile();
 			profile2.username := "flockr2";
-			
+			profile2.birthdate := "12/07/1985";
+			profile1.sex := "MALE";
 			// Adding predifined flocks
-			def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
-			flocks.add(FriendsFlock);
-			
+			flockr1.addFlock(makeFlock("GirlFriends", makeProfileChangedProximity({ profile.sex == FEMALE })));
 			flockr1.addBuddy(profile2);
 			
 			

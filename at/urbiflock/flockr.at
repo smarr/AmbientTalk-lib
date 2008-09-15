@@ -108,6 +108,7 @@ def makeFlockr(profile) {
 			};
 		};
 		def removeFlock(flock) { flocks.remove(flock) };
+		def addFlock(flock) { flocks.add(flock) };
 		def stop() { (publication != nil).ifTrue: { publication.cancel() } };
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
 	};
