@@ -306,35 +306,37 @@ object: {
 		import /.at.lang.futures exclude seconds, minutes, millisec;
 		enableFutures(false);
 				
-	/*	def testFriendsFlock(){
+		def testAsyncFriendsFlock(){
+			def [fut,res] := makeFuture();
 			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockr1";
+			profile1.username := "PF1.1";
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
 			def profile2 := /.at.urbiflock.profile.makeProfile();
-			profile2.username := "flockr2";
+			profile2.username := "PF2.1";
 			flockr1.addBuddy(profile2);
 			def friendFlock := flockr1.getFlock("FriendsFlock");
 			
 			when: seconds(5) elapsed: {
 			  self.assertEquals(1, friendFlock.getFlockrList.length);	
-			};			
-		};*/
-		
-
-			def testAsyncFriendsOrFilterFlock(){
+			  res.resolve(`ok);
+			};	
+			fut;		
+		};
+		/*
+		def testAsyncFriendsOrFilterFlock(){
 				def [fut,res] := makeFuture();
 				def profile1 := /.at.urbiflock.profile.makeProfile();
-				profile1.username := "flockrtest";
+				profile1.username := "PF2.1";
 
 				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr3";
+				profile2.username := "PF2.2";
 
 				def a := actor: {
 					import /.at.urbiflock.flockr;
 					import /.at.support.timer;
 					
 					def profile2 := /.at.urbiflock.profile.makeProfile();
-					profile2.username := "flockr3";
+					profile2.username := "PF2.2";
 					profile2.sex := "MALE";  
 					makeFlockr(profile2);
 					def sexChange() {
@@ -378,20 +380,20 @@ object: {
 				};
 				fut;			
 			};
-	
 		
-		
-		/*def testFriendsAndFilterFlock(){
+		def testAsyncFriendsAndFilterFlock(){
+			
+			def [fut, res] := makeFuture();
 			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockrtest";
+			profile1.username := "PF3.1";
 			
 			def profile2 := /.at.urbiflock.profile.makeProfile();
-			profile2.username := "flockr3";
+			profile2.username := "PF3.2";
 			
 			actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr3";
+				profile2.username := "PF3.2";
 				profile2.sex := "MALE";  
 				makeFlockr(profile2);
 			};
@@ -413,20 +415,23 @@ object: {
 				flockr1.removeBuddy(profile2);
 				when: seconds(2) elapsed: {
 					self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
+					res.resolve(`ok);
 				};
-			};			
-		};*/
+			};
+			fut;			
+		};
 		
-		/*def testFilterFriendFlock(){	
+		def testAsyncFilterFriendFlock(){	
+			def [fut,res] := makeFuture();
 			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockr1";
+			profile1.username := "PF4.1";
 			profile1.sex := "MALE";
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
 			
 			actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr2";
+				profile2.username := "PF4.2";
 				profile2.sex := "FEMALE";  
 				makeFlockr(profile2);
 			};
@@ -434,7 +439,7 @@ object: {
 			actor: {
 				import /.at.urbiflock.flockr;
 				def profile3 := /.at.urbiflock.profile.makeProfile();
-				profile3.username := "flockr3";
+				profile3.username := "PF4.3";
 				profile3.sex := "FEMALE";  
 				makeFlockr(profile3);
 			};
@@ -445,11 +450,13 @@ object: {
 			
 			when: seconds(3) elapsed: {
 			  self.assertEquals(2, girlFriendFlock.getFlockrList.length);	
-			};			
+			  res.resolve(`ok);
+			};
+			fut;			
 		};*/
 				
 		// unit tests for RETE network go here
-/*		
+		
 		def testChangedFired() {
 			def testChangeRemoteInterface := object: {
 				def age := 26;
@@ -870,8 +877,7 @@ object: {
       self.assertFalse(testOrNode.mleft.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 			self.assertFalse(testOrNode.mright.contains(makeToken(POSITIVE,testChangeRemoteInterface)));
 		};
-		
-		*/
+	
 		
 	};
 };
