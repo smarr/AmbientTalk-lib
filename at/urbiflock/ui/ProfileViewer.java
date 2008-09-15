@@ -44,6 +44,8 @@ import java.util.Vector;
 
 import javax.swing.BoxLayout;
 
+import edu.vub.at.actors.natives.NATFarReference;
+import edu.vub.at.actors.natives.NATRemoteFarRef;
 import edu.vub.at.objects.natives.NATBoolean;
 import edu.vub.at.objects.natives.NATText;
 import edu.vub.at.objects.natives.grammar.AGSymbol;
@@ -57,24 +59,20 @@ public class ProfileViewer extends Frame implements ActionListener {
 	private Profile profile_;
 	private Panel fieldsPanel_ = new Panel();
 	private Vector textFields_ = new Vector();
+	private Flockr localFlockr_;
 	
-	public ProfileViewer(Profile p, boolean editable) {
+	public ProfileViewer(Flockr theLocalFlockr, Profile p, boolean editable) {
 		super("Profile Viewer");
 
 		fieldsPanel_.setLayout(new BoxLayout(fieldsPanel_, BoxLayout.Y_AXIS));
 		editable_ = editable;
 		profile_ = p;
+		localFlockr_ = theLocalFlockr;
 		
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
 		add(fieldsPanel_);
-		
-		Iterator keysIterator = p.propertyHashMap().keySet().iterator();
-		while (keysIterator.hasNext()) {
-			AGSymbol key = (AGSymbol)keysIterator.next();
-			String value = ((NATText)(p.propertyHashMap().get(key))).javaValue;
-			addFieldPanel(key.toString(), value);
-		}
+		updateGUIWithProfile(p);
 		
 		Button addFieldButton = new Button("Add Field");
 		addFieldButton.setEnabled(editable_);
@@ -95,6 +93,13 @@ public class ProfileViewer extends Frame implements ActionListener {
 		        dispose();
 		    }
 		});
+		
+		localFlockr_.registerProfileChangedListener(this);
+	}
+	
+	public void dispose() {
+		localFlockr_.removeProfileChangedListener(this);
+		super.dispose();
 	}
 	
 	private void addFieldPanel(String fieldName, String fieldValue) {
@@ -227,18 +232,36 @@ public class ProfileViewer extends Frame implements ActionListener {
 		}
 	}
 	
-	public static void main(String[] args) {
-		final HashMap propertyMap = new HashMap();
-		propertyMap.put(AGSymbol.jAlloc("username"), NATText.atValue("foobar"));
-		propertyMap.put(AGSymbol.jAlloc("firstname"), NATText.atValue("foo"));
-		propertyMap.put(AGSymbol.jAlloc("lastname"), NATText.atValue("bar"));
-		ProfileViewer v = new ProfileViewer(new Profile() {
-			 public HashMap propertyHashMap() { return propertyMap; };
-			 public boolean isMandatoryField(AGSymbol symbol) { return false; };
-			 public void addField(AGSymbol name, NATText value) {  };
-			 public void removeField(AGSymbol fieldName) {  };
-			 public void setField(AGSymbol fieldName, NATText value) {  };
-		}, true);
+	/*
+	 * This event should only be signaled when viewing another (remote) flockr's profile,
+	 * since changes to a local flockr's own profile only happen by the use of this GUI.
+	 */
+	public void notifyProfileChanged(NATFarReference remoteFlockr, Profile profile) {
+		updateGUIWithProfile(profile);
 	}
+	
+	private void updateGUIWithProfile(Profile profile) {
+		fieldsPanel_.removeAll();
+		Iterator keysIterator = profile.propertyHashMap().keySet().iterator();
+		while (keysIterator.hasNext()) {
+			AGSymbol key = (AGSymbol)keysIterator.next();
+			String value = ((NATText)(profile.propertyHashMap().get(key))).javaValue;
+			addFieldPanel(key.toString(), value);
+		}
+	}
+	
+//	public static void main(String[] args) {
+//		final HashMap propertyMap = new HashMap();
+//		propertyMap.put(AGSymbol.jAlloc("username"), NATText.atValue("foobar"));
+//		propertyMap.put(AGSymbol.jAlloc("firstname"), NATText.atValue("foo"));
+//		propertyMap.put(AGSymbol.jAlloc("lastname"), NATText.atValue("bar"));
+//		ProfileViewer v = new ProfileViewer(new Profile() {
+//			 public HashMap propertyHashMap() { return propertyMap; };
+//			 public boolean isMandatoryField(AGSymbol symbol) { return false; };
+//			 public void addField(AGSymbol name, NATText value) {  };
+//			 public void removeField(AGSymbol fieldName) {  };
+//			 public void setField(AGSymbol fieldName, NATText value) {  };
+//		}, true);
+//	}
 	
 }

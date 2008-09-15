@@ -68,7 +68,7 @@ public class FlockViewer extends Frame {
 			public void actionPerformed(ActionEvent ae) {
 				int selected = unameList_.getSelectedIndex();
 				if (selected != -1) {
-					new ProfileViewer(f.getProfile(usernames_[selected]), false);
+					new ProfileViewer(owner_, f.getProfile(usernames_[selected]), false);
 				}
 			}
 		});
@@ -180,6 +180,10 @@ public class FlockViewer extends Frame {
 			}
 
 			public void removeFlock(Flock f) {}
+			
+			public void registerProfileChangedListener(Object l) {}
+			
+			public void removeProfileChangedListener(Object l) {}
 			
 		});
 	}

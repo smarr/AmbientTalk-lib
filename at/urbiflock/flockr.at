@@ -64,6 +64,7 @@ def makeFlockr(profile) {
 		       invoked whenever a nearby flockr's profile has changed
 		*/
 		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
+		def removeProfileChangedListener(l) { profileChangedListeners.remove(l) };
 		/* l should understand:
 		     notifyJoined(flockr : farref)
 		       invoked whenever a new flockr has joined the ad hoc network
@@ -132,7 +133,7 @@ def makeFlockr(profile) {
 		/.at.support.symbiosis.cast: 
 			(/.at.urbiflock.application.makeApplication(
 				"My Profile", 
-				{ jlobby.at.urbiflock.ui.ProfileViewer.new(myProfile, true) })) 
+				{ jlobby.at.urbiflock.ui.ProfileViewer.new(localInterface, myProfile, true) })) 
 		into: (jlobby.at.urbiflock.ui.Application));
 		
 	// "Flocks" flock list viewer application

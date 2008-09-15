@@ -155,6 +155,9 @@ public class FlockListViewer extends Frame {
 			public void removeFlock(Flock f) {
 				System.out.println("Removed flock "+f);
 			}
+			
+			public void registerProfileChangedListener(Object l) {}
+			public void removeProfileChangedListener(Object l) {}
 		});
 	}
 	
