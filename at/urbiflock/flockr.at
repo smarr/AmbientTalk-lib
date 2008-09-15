@@ -190,12 +190,13 @@ object: {
 			
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
-		  def flockr1 := makeFlockr(profile1);
-			flockr1.registerProfileChangedListener(object: {
+		  	def flockr1 := makeFlockr(profile1);
+			def listener := object: {
 				def notifyProfileChanged(flockr, newProfile) {
 					res.resolve(newProfile.username);
 				};
-			});
+			};
+			flockr1.registerProfileChangedListener(listener);
 			
 			def a := actor: {
 				import /.at.urbiflock.flockr;
@@ -207,6 +208,7 @@ object: {
 			when: fut becomes: { |uname|
 				self.assertEquals("flockr2", uname);
 			};
+			
 		};
 		
 		def testAsyncUpdateProfileInBuddyList() {

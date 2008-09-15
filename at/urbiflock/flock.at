@@ -45,6 +45,9 @@ def makeFlock(theName, proximity) {
 			system.println("Flock:getFlockrLsit" + flockrList.asTable);
 			flockrList.asTable.map:{|profile| profile.username};
 		};
+		def getProfile(uid) {
+			flockrList.at(flockrList.find: { |p| p.username == uid });
+		};
 		
 	};
 	
