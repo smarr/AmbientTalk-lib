@@ -115,8 +115,8 @@ def makeFlockr(profile) {
 	localInterface.registerProfileChangedListener(buddyList);
 	
 	// Adding predifined flocks
-	//def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
-	//flocks.add(FriendFlock);
+	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
+	flocks.add(FriendsFlock);
 
 	
 	// "My Profile" editor application

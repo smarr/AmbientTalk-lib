@@ -227,15 +227,15 @@ def makeProximity(reteNode) {
 		};
 		
 		def connect () {
-			reteNode.pass  := {|Token| self.notifyFromNode(Token) };
+			reteNode.pass := {|Token| self.notifyFromNode(Token) };
 		};
-		
+system.println("P:retenode " + reteNode);		
 		connect();
 	};
 };
 
 def makeIsFriendProximity(flockr) {
-	def isFriendProximity := extend: makeProximity(makeFilter({|RI| true})) with: {
+	def isFriendProximity := extend: makeProximity(makeFilterNode({|RI| true})) with: {
 		//  invoked whenever a buddy was manually added to this flockr's buddy list
 		def notifyBuddyAdded(profile) {
 			super^getReteNode().insert(makeToken(POSITIVE,profile));
@@ -245,10 +245,11 @@ def makeIsFriendProximity(flockr) {
     def notifyBuddyRemoved(profile) {
 			super^getReteNode().remove(makeToken(NEGATIVE,profile));
 		};
-		
+system.println("P:retenodeSuper " + super.getReteNode);
 		super^connect();	
 	};
 	flockr.registerBuddyListListener(isFriendProximity);
+	isFriendProximity;
 };
 
 def makeAndProximity(leftP, rightP) {
