@@ -6,11 +6,13 @@ import java.awt.GridLayout;
 import java.awt.Panel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.lang.reflect.UndeclaredThrowableException;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.Iterator;
 import java.util.Vector;
 
 import javax.swing.BoxLayout;
+
 import edu.vub.at.objects.natives.NATText;
 
 /**
@@ -45,6 +47,12 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		
 		pack();
 		setVisible(true);
+		
+		addWindowListener(new WindowAdapter() {
+			public void windowClosing(WindowEvent we) {
+		        dispose();
+		    }
+		});
 	}
 	
 	public Application findApplication(String name) {

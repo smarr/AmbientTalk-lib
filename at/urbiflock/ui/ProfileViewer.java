@@ -36,6 +36,8 @@ import java.awt.Panel;
 import java.awt.TextField;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
@@ -87,6 +89,12 @@ public class ProfileViewer extends Frame implements ActionListener {
 		
 		pack();
 		setVisible(true);
+		
+		addWindowListener(new WindowAdapter() {
+			public void windowClosing(WindowEvent we) {
+		        dispose();
+		    }
+		});
 	}
 	
 	private void addFieldPanel(String fieldName, String fieldValue) {
