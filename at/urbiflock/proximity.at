@@ -31,6 +31,7 @@ def HashMap := jlobby.java.util.HashMap;
 def Vector := /.at.collections.vector.Vector;
 
 
+
 //helper function to test locally the engine.
 def getId(profile) {
 	profile.username;
@@ -104,14 +105,20 @@ def makeChangeNode(filter) {
 		def memory := makeMemory({|RemoteInterface| getId(RemoteInterface)});
 		
 		def changeEvent(RemoteInterface) {
+			system.println("P: changeEvent" + RemoteInterface);
+			
 			if: filter.pass(RemoteInterface) then: {
 				if: !memory.contains(RemoteInterface) then: {
 					memory.insert(RemoteInterface);
+					system.println("P: changeEvent Positive" + RemoteInterface);
+					
 					super^passAsToken(POSITIVE,RemoteInterface);
 				};
 			} else: {
 				if: memory.contains(RemoteInterface) then: {
 					memory.remove(RemoteInterface);
+					system.println("P: changeEvent Negative" + RemoteInterface);
+					
 					super^passAsToken(NEGATIVE,RemoteInterface);
 				};
 			};
@@ -170,6 +177,8 @@ def makeAndJoinNode(fleft, fright){
 		def mright := makeMemory({|Token| getId(Token.getFlockr)});
 	  
 	  def rightPass(token){
+			system.println("P: RIGHT PASS " + token.getSign);
+		
 		  if: (token.getSign) then:{
 			  mright.insert(token);
 			  if: mleft.contains(token) then: {
@@ -186,6 +195,7 @@ def makeAndJoinNode(fleft, fright){
 	  };
 	
 	  def leftPass(token){
+			system.println("P: LEFT PASS " + token.getSign);
 		  if: (token.getSign) then:{
 			  mleft.insert(token);
 			  if: mright.contains(token) then: {
@@ -263,13 +273,17 @@ def makeOrProximity(leftP, rightP) {
 	makeProximity( makeOrJoinNode(leftP.getReteNode , rightP.getReteNode ) );
 };
 
-def makeProfileChangedProximity(block) {
+def makeDoesProfileMatchProximity(flockr, block) {
 		def newBlockStatements := `{ |profile| #@(block.method.bodyExpression.statements) };
 		def profilePredicate := eval: newBlockStatements in: block.context.lexicalScope;
-		def profileChangedProximity := extend: makeProximity(makeFilterNode( makeFilter( profilePredicate ) )) with: {
-			
+		def profileChangedProximity := extend: makeProximity(makeChangeNode( makeFilter( profilePredicate ) )) with: {
+			def notifyProfileChanged(farref, profile) {
+				system.println("P:notifyProfileChanged " +profile);
+				super^getReteNode().changeEvent(profile);
+			};
+			super^connect();	
 		};
-		
+		flockr.registerProfileChangedListener(profileChangedProximity);
 		profileChangedProximity;
 };
 
@@ -278,15 +292,21 @@ object: {
 	// public stuff goes here
   def makeFilter := &makeFilter;
 	def makeIsFriendProximity := &makeIsFriendProximity;
+	def makeDoesProfileMatchProximity := &makeDoesProfileMatchProximity;
+	def makeAndProximity := &makeAndProximity;
+	def makeOrProximity := &makeOrProximity;
 	
 	def ProximityTest := extend: /.at.unit.test.UnitTest.new("ProximityTest") with: {
+
 		
 		def FEMALE := 1;
 		def MALE := 0;
 		
 		import /.at.support.timer;
+		import /.at.lang.futures exclude seconds, minutes, millisec;
+		enableFutures(false);
 				
-		def testFriendsFlock(){
+	/*	def testFriendsFlock(){
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
@@ -298,28 +318,135 @@ object: {
 			when: seconds(5) elapsed: {
 			  self.assertEquals(1, friendFlock.getFlockrList.length);	
 			};			
-		};
+		};*/
 		
-		def testFilterFriendFlock(){
+
+			def testAsyncFriendsOrFilterFlock(){
+				def [fut,res] := makeFuture();
+				def profile1 := /.at.urbiflock.profile.makeProfile();
+				profile1.username := "flockrtest";
+
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr3";
+
+				def a := actor: {
+					import /.at.urbiflock.flockr;
+					import /.at.support.timer;
+					
+					def profile2 := /.at.urbiflock.profile.makeProfile();
+					profile2.username := "flockr3";
+					profile2.sex := "MALE";  
+					makeFlockr(profile2);
+					def sexChange() {
+						profile2.sex := "FEMALE";
+						network.offline();
+						when: seconds(2) elapsed: {
+							network.online();
+							makeFlockr(profile2);
+						};
+						2;
+					};
+				};
+
+				def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+				def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
+				def friendProximity := makeIsFriendProximity(flockr1);
+				def friendAndFemaleProximity := makeOrProximity(femaleProximity, friendProximity);
+
+				def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity);
+
+				flockr1.addFlock(FriendsAndFemaleFlock);
+				flockr1.addBuddy(profile2);
+
+				when: seconds(2) elapsed: {
+				  self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);	
+					flockr1.removeBuddy(profile2);
+					when: seconds(2) elapsed: {
+						self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);
 	
+						when:	a<-sexChange()@FutureMessage becomes: { |a|
+							system.println("RESOLVED: ");
+							self.assertEquals(2,a);
+								when: seconds(3) elapsed: {
+									self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
+									res.resolve(true);
+								};
+						} catch:  { |exc|
+						  system.println("Exception: " + exc.message);
+						};
+					};
+				};
+				fut;			
+			};
+	
+		
+		
+		/*def testFriendsAndFilterFlock(){
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockrtest";
+			
+			def profile2 := /.at.urbiflock.profile.makeProfile();
+			profile2.username := "flockr3";
+			
+			actor: {
+				import /.at.urbiflock.flockr;
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr3";
+				profile2.sex := "MALE";  
+				makeFlockr(profile2);
+			};
+
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);			
+	
+			
+			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
+			def friendProximity := makeIsFriendProximity(flockr1);
+			def friendAndFemaleProximity := makeAndProximity(femaleProximity, friendProximity);
+			
+			def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity);
+			
+			flockr1.addFlock(FriendsAndFemaleFlock);
+			flockr1.addBuddy(profile2);
+					
+			when: seconds(2) elapsed: {
+			  self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);	
+				flockr1.removeBuddy(profile2);
+				when: seconds(2) elapsed: {
+					self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
+				};
+			};			
+		};*/
+		
+		/*def testFilterFriendFlock(){	
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
-			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
-			def profile2 := /.at.urbiflock.profile.makeProfile();
-			profile2.username := "flockr2";
-			profile2.birthdate := "12/07/1985";
 			profile1.sex := "MALE";
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+			
+			actor: {
+				import /.at.urbiflock.flockr;
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr2";
+				profile2.sex := "FEMALE";  
+				makeFlockr(profile2);
+			};
+			
+			actor: {
+				import /.at.urbiflock.flockr;
+				def profile3 := /.at.urbiflock.profile.makeProfile();
+				profile3.username := "flockr3";
+				profile3.sex := "FEMALE";  
+				makeFlockr(profile3);
+			};
+			
 			// Adding predifined flocks
-			flockr1.addFlock(makeFlock("GirlFriends", makeProfileChangedProximity({ profile.sex == FEMALE })));
-			flockr1.addBuddy(profile2);
+			flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { profile.sex == "FEMALE" })));
+			def girlFriendFlock := flockr1.getFlock("GirlFriends");
 			
-			
-			def friendFlock := flockr1.getFlock("FriendsFlock");
-			
-			when: seconds(5) elapsed: {
-			  self.assertEquals(1, friendFlock.getFlockrList.length);	
+			when: seconds(3) elapsed: {
+			  self.assertEquals(2, girlFriendFlock.getFlockrList.length);	
 			};			
-		};
+		};*/
 				
 		// unit tests for RETE network go here
 /*		

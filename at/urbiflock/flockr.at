@@ -155,6 +155,7 @@ def makeFlockr(profile) {
 		notifyListeners: discoveryListeners with: <-notifyJoined(flockr);
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
+			system.println("F: discovered" + newProfile.username);
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
 		} catch: TimeoutException using: { |e|
 		};

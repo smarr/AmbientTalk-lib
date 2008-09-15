@@ -33,5 +33,5 @@
    /.at.urbiflock.flockr.Test(),
    /.at.urbiflock.profile.Test(),
    /.at.urbiflock.application.Test(),
-   /.at.urbiflock.proximity.Test()
+   /.at.urbiflock.proximity.ProximityTest()
  ]);
