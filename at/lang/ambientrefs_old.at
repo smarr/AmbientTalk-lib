@@ -117,15 +117,15 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 	  import TEventualRef exclude newInstance;
 
 	  // import cardinality and elasticity behaviour
-		import TCardinality;
-		import TElasticity;
+		import TCardinality alias init := initCardinality;
+		import TElasticity alias init := initElasticity;
 		
 		def inbox := Vector.new(); // to store messages sent to an unbound AR
 		def joinedbox := Vector.new(); // to store available matching objects
 		
 		// an ambient reference has two kinds of observers: disconnection
 		// and reconnection observers
-		import TObservable;
+		import TObservable alias init := initObservable;
 		
 		// creating a new instance of the base-level AR means creating
 		// a new proxy object + a new mirror
@@ -135,12 +135,12 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 		
 		def init(base) {
 			super^init(base); // initialize root mirror's base field
-			TCardinality^init(); // initialize cardinality state
-			TElasticity^init(); // initialize elasticity state
+			self.initCardinality(); // initialize cardinality state
+			self.initElasticity(); // initialize elasticity state
 			// initialize the observable trait, this will provide
 			// the 'observerCatalog' object with two fields storing this
 			// object's observers
-			TObservable^init(`disconnection, `reconnection);
+			self.initObservable(`disconnection, `reconnection);
 			
 			// When an Ambient Reference mirror is created, start the
 			// service discovery

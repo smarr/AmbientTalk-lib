@@ -70,13 +70,13 @@ def LeasedRefTraitModule := object: {
 		 */
 	
 		// a leased reference has expiration observers
-		import TObservable;
+		import TObservable alias init := initObservable;
 
 	  def init(objPrincipal, timeout) {
 			// initialize the observable trait, this will provide
 			// the 'observerCatalog' object with one field storing
 			// the expiration observers
-			TObservable^init(`expiration);
+			self.initObservable(`expiration);
 			// For leased references, delegate is the object to which base messages should be forwarded.
 			self.delegate := objPrincipal;
 			self.state := INITIAL;

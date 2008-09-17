@@ -38,11 +38,11 @@ import /.at.lang.leasedrefstrait;
 
 def createLeasingMirror(objPrincipal, timeout := LEASETIME) { mirror: {
 	
-	import TLeasedRef;
+	import TLeasedRef alias init := initLease;
 	
 	def init(base) {
 		super^init(base);
-		TLeasedRef^init(objPrincipal, timeout);
+		self.initLease(objPrincipal, timeout);
 	};
 	
 	// implement TEventualRef's required interface
@@ -120,11 +120,11 @@ def createLeasingWithSingleUseMirror(principal, timeout := LEASETIME, forSelecto
 def createClientLeasingMirror(remoteLease, timeout) {
 	mirror: {	 
 					
-		import TLeasedRef exclude pass; //transportStrategy;
+		import TLeasedRef alias init := initLease exclude pass; //transportStrategy;
 
 		def init(base) {
 			super^init(base);
-			TLeasedRef^init(remoteLease, timeout);
+			self.initLease(remoteLease, timeout);
 			self.activateTimer();
 		};
 

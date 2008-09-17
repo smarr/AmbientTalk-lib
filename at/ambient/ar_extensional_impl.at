@@ -70,7 +70,7 @@ def ARExtensionalImpl := object: {
 		                         typetagOrProtocol,
 		                         filter) {
 			extend: arMirror with: {
-				import TObservable;
+				import TObservable exclude init;
 	      TObservable^init(`discovered);
 
 		    def reach := Vector.new();

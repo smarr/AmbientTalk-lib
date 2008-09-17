@@ -304,7 +304,7 @@ def makeRebindableAdaptorFor(Type) {
 	object: { } taggedAs: [ RebindReceptor ] mirroredBy: (mirror: {
 
     import TEventualRef;
-    import TObservable;
+    import TObservable exclude init;
 
     def principal := nil;
     def joinedbox := [];
