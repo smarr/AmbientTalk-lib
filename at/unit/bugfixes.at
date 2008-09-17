@@ -317,6 +317,53 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(6, f(5));
 	};
 	
+	def testDiamondImport() {
+		def A := object: {
+			def a() { "A" };
+			def d() { "D" };
+		};
+		def B := object: {
+			import A;
+			def b() { "B" };
+		};
+		def C := object: {
+			import A;
+			def c() { "C" };
+		};
+		def D := object: {
+			import B alias d := e;
+			import C alias d := e;
+		};
+		self.assertEquals("A", D.a());
+		self.assertEquals("B", D.b());
+		self.assertEquals("C", D.c());
+		self.assertEquals("D", D.e());
+		self.assertFalse((reflect: D).respondsTo(`d));
+	};
+	
+	def testConflicts() {
+		def A1 := object: {
+			def a() { "A1" };
+		};
+		def A2 := object: {
+			def a() { "A2" };
+		};
+		def B := object: {
+			import A1;
+			def b() { "B" };
+		};
+		def C := object: {
+			import A2;
+			def c() { "C" };
+		};
+		self.assert: /.at.types.ImportConflict raisedIn: {
+			def D := object: {
+				import B;
+				import C; // A2's a conflicts with A1's a
+			}
+		};
+	};
+	
 };
 
 self
