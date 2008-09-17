@@ -28,6 +28,7 @@
 package at.urbiflock.ui;
 
 import java.awt.Button;
+import java.awt.Choice;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.awt.Frame;
@@ -38,15 +39,15 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.util.HashMap;
+import java.util.Calendar;
 import java.util.Iterator;
 import java.util.Vector;
 
 import javax.swing.BoxLayout;
 
 import edu.vub.at.actors.natives.NATFarReference;
-import edu.vub.at.actors.natives.NATRemoteFarRef;
-import edu.vub.at.objects.natives.NATBoolean;
+import edu.vub.at.objects.natives.NATNil;
+import edu.vub.at.objects.natives.NATNumber;
 import edu.vub.at.objects.natives.NATText;
 import edu.vub.at.objects.natives.grammar.AGSymbol;
 
@@ -102,15 +103,46 @@ public class ProfileViewer extends Frame implements ActionListener {
 		super.dispose();
 	}
 	
-	private void addFieldPanel(String fieldName, String fieldValue) {
+	private Component createComponentForFieldType(AbstractFieldType fieldType, Object fieldValue) {
+		if (fieldType.isString()) {
+			TextField tf = new TextField(((NATText)fieldValue).javaValue);
+			tf.setEditable(editable_);
+			return tf;
+		}
+		if (fieldType.isInteger()) {
+			TextField tf = new TextField(((NATNumber)fieldValue).toString());
+			tf.setEditable(editable_);
+			return tf;
+		}
+		if (fieldType.isEnumeration()) {
+			Choice chooser = new Choice();
+			AGSymbol[] choices = fieldType.getPossibleValues();
+			for (int i = 0; i < choices.length; i++) {
+				chooser.add(choices[i].toString());
+			}
+			chooser.select(((AGSymbol)fieldValue).toString());
+			chooser.setEnabled(editable_);
+			return chooser;
+		}
+		if (fieldType.isDate()) {
+			TextField tf = new TextField(((Calendar)fieldValue).getTime().toString());
+			tf.setEditable(editable_);
+			return tf;
+		}
+		return null;
+	}
+	
+	private void addFieldPanel(String fieldName, Object fieldValue) {
 		Panel thePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
 		Label label = new Label(fieldName);
 		thePanel.add(label);
-		TextField textField = new TextField(fieldValue);
-		textField.setName(fieldName);
-		textFields_.add(textField);
-		textField.setEditable(editable_);
-		thePanel.add(textField);
+		
+		AbstractFieldType fieldType = profile_.getFieldType(AGSymbol.jAlloc(fieldName));
+		Component theEditableComponent = createComponentForFieldType(fieldType, fieldValue);
+		theEditableComponent.setName(fieldName);
+		textFields_.add(theEditableComponent);
+		thePanel.add(theEditableComponent);
+		
 		Button removeFieldButton = new Button("remove");
 		removeFieldButton.setEnabled(editable_);
 		removeFieldButton.setActionCommand("removeField_" + fieldName);
@@ -121,17 +153,84 @@ public class ProfileViewer extends Frame implements ActionListener {
 		this.pack();
 	}
 	
+	private void showInvalidValueDialog(String fieldKey) {
+		new InvalidValueDialog(fieldKey);
+	}
+	
+	private class InvalidValueDialog extends Frame implements ActionListener {
+		
+		public InvalidValueDialog(String fieldKey) {
+			
+			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			add(new Label("Invalid value for field: " + fieldKey));
+			Button okButton = new Button("Ok");
+			okButton.addActionListener(this);
+			okButton.setActionCommand("ok");
+			add(okButton);
+		
+			pack();
+			setVisible(true);
+		}
+		
+		public void actionPerformed(ActionEvent ae) {
+			dispose();
+		}
+	}
+	
+	private boolean setProfileFieldWithValueFromComponent(Component component) {
+		AGSymbol key = AGSymbol.jAlloc(component.getName());
+		AbstractFieldType fieldType = profile_.getFieldType(key);
+		if (fieldType.isString()) {
+			NATText value = NATText.atValue(((TextField)component).getText());
+			if (fieldType.isPossibleValue(value)) {
+				profile_.setField(key, value);
+				return true;
+			} else {
+				showInvalidValueDialog(key.toString());
+				return false;
+			}
+		}
+		if (fieldType.isInteger()) {
+			NATNumber value = NATNumber.atValue(Integer.parseInt(((TextField)component).getText()));
+			if (fieldType.isPossibleValue(value)) {
+				profile_.setField(key, value);
+				return true;
+			} else {
+				showInvalidValueDialog(key.toString());
+				return false;
+			}
+		}
+		if (fieldType.isEnumeration()) {
+			AGSymbol value = AGSymbol.jAlloc(((Choice)component).getSelectedItem());
+			if (fieldType.isPossibleValue(value)) {
+				profile_.setField(key, value);
+				return true;
+			} else {
+				showInvalidValueDialog(key.toString());
+				return false;
+			}
+		}
+		if (fieldType.isDate()) {
+			// TODO
+			//showInvalidValueDialog(key.toString());
+			//return false;
+			return true;
+		}
+		return false;
+	}
+	
 	public void actionPerformed(ActionEvent ae) {
 		String command = ae.getActionCommand();
 		if (command == "ok") {
 			Iterator it = textFields_.iterator();
+			boolean fieldsOk = true;
 			while (it.hasNext()) {
-				TextField textField = (TextField)it.next();
-				AGSymbol key = AGSymbol.jAlloc(textField.getName());
-				NATText value = NATText.atValue(textField.getText());
-				profile_.setField(key, value);
+				Component component = (Component)it.next();
+				if (!setProfileFieldWithValueFromComponent(component)) {
+					fieldsOk = false;
+				}
 			}
-			this.dispose();
+			if (fieldsOk) { this.dispose(); };
 			return;
 		}
 		if (command == "addField") {
@@ -184,10 +283,12 @@ public class ProfileViewer extends Frame implements ActionListener {
 		
 		TextField fieldNameTextField_ = new TextField();
 		TextField fieldValueTextField_ = new TextField();
+		
 		Profile profile_;
 		ProfileViewer profileViewer_;
 		
 		public AddFieldDialog(ProfileViewer pv, Profile p) {
+			super("Add profile info");
 			profileViewer_ = pv;
 			profile_ = p;
 			
@@ -196,11 +297,20 @@ public class ProfileViewer extends Frame implements ActionListener {
 			fieldNamePanel.add(new Label("Name"));
 			fieldNamePanel.add(fieldNameTextField_);
 			add(fieldNamePanel);
-			Panel fieldValuePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
-			fieldNamePanel.add(new Label("Value"));
-			fieldNamePanel.add(fieldValueTextField_);
-			fieldNamePanel.add(fieldValuePanel);
-			add(fieldValuePanel);
+			//Panel fieldValuePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+			//fieldNamePanel.add(new Label("Value"));
+			//fieldNamePanel.add(fieldValueTextField_);
+			//add(fieldValuePanel);
+			
+			Panel fieldTypePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+			Choice typeChooser = new Choice();
+			AbstractFieldType[] types = p.possibleTypes();
+			for (int i = 0; i < types.length; i++) {
+				typeChooser.add((types[i]).name());
+			}
+			fieldTypePanel.add(typeChooser);
+			add(fieldTypePanel);
+			
 			Button okButton = new Button("Ok");
 			Button cancelButton = new Button("Cancel");
 			okButton.addActionListener(this);
@@ -220,8 +330,8 @@ public class ProfileViewer extends Frame implements ActionListener {
 				if (fieldNameTextField_.getText().length() == 0) {
 					return;
 				}
-				profile_.addField(AGSymbol.jAlloc(fieldNameTextField_.getText()), NATText.atValue(fieldValueTextField_.getText()));
-				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), fieldValueTextField_.getText());
+				profile_.addField(AGSymbol.jAlloc(fieldNameTextField_.getText()), new NATNil() /*NATText.atValue(fieldValueTextField_.getText())*/);
+				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), new NATNil() /*fieldValueTextField_.getText()*/);
 				this.dispose();
 				return;
 			}
@@ -245,7 +355,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 		Iterator keysIterator = profile.propertyHashMap().keySet().iterator();
 		while (keysIterator.hasNext()) {
 			AGSymbol key = (AGSymbol)keysIterator.next();
-			String value = ((NATText)(profile.propertyHashMap().get(key))).javaValue;
+			Object value = profile.propertyHashMap().get(key);
 			addFieldPanel(key.toString(), value);
 		}
 	}

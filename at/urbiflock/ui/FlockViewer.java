@@ -162,10 +162,12 @@ public class FlockViewer extends Frame {
 				return new Profile() {
 					public HashMap propertyHashMap() { return propertyMap; };
 					public boolean isMandatoryField(AGSymbol symbol) { return false; };
-					public void addField(AGSymbol name, NATText value) {  };
+					public void addField(AGSymbol name, Object value) {  };
 					public void removeField(AGSymbol fieldName) {  };
-					public void setField(AGSymbol fieldName, NATText value) {  };
+					public void setField(AGSymbol fieldName, Object value) {  };
 					public String username() { return "foobar"; };
+					public AbstractFieldType[] possibleTypes() { return null; };
+					public AbstractFieldType getFieldType(AGSymbol fieldName) { return null; };
 				};
 			}
 			public Profile[] listProfiles() {

@@ -31,9 +31,91 @@ def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryField
 deftype DuplicateField <: lobby.at.types.Exception;
 def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 
+deftype ChildObjectResponsibility <: lobby.at.types.Exception;
+def XChildObjectResponsibility := lobby.at.exceptions.createException(ChildObjectResponsibility);
 
-def makeProfileMandatoryFields() { 
-	isolate: {
+
+def AbstractFieldTypeObject := object: {
+	def isString() { false };
+	def isEnumeration() { false };
+	def isInteger() { false };
+	def isDate() { false };
+	def isPossibleValue(aValue) { false };
+	def getPossibleValues() { 
+		raise: XChildObjectResponsibility.new("getPossibleValues() not applicable for this type.") 
+	};
+	def name() { 
+		raise: XChildObjectResponsibility.new("name() should be overridden by children of AbstractFieldTypeObject.") 
+	};
+};
+
+def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
+	def isString() { true };
+	def isPossibleValue(aValue) { is: aValue taggedAs: /.at.types.Text };
+	def name() { "Text" };
+};
+
+def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
+	def possibleValues := [];
+	def isEnumeration() { true };
+	def getPossibleValues() { possibleValues };
+	def isPossibleValue(aValue) { possibleValues.contains(aValue); };
+	def init(thePossibleValues) {
+		possibleValues := thePossibleValues;
+	};
+	def name() { "Choice" };
+};
+
+def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
+	def lowerBound := nil;
+	def higherBound := nil;
+	def isInteger() { true };
+	def isPossibleValue(aValue) {
+		(is: aValue taggedAs: /.at.types.Number).and: {
+			((nil == lowerBound).or: { aValue >= lowerBound }).and: {
+				(nil == higherBound).or: { aValue <= higherBound }
+			} 
+		}
+	};
+	def name() { "Integer" };
+	def init(low, high) {
+		lowerBound := low;
+		higherBound := high;
+	};
+};
+
+
+def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
+	def lowerBound := nil;
+	def higherBound := nil;
+	def isDate() { true };
+	def isPossibleValue(aValue) {
+		def calendarClass := jlobby.java.lang.Class.forName("java.util.Calendar");
+		(calendarClass.isInstance(aValue)).and: {
+			((nil == lowerBound).or: { aValue.after(lowerBound) }).and: {
+				(nil == higherBound).or: { aValue.before(higherBound) }
+			} 
+		}
+	};
+	def name() { "Date" };
+	def init(low, high) {
+		lowerBound := low;
+		higherBound := high;
+	};
+};
+
+def makeProfileMandatoryFields() {
+	def theProfile := isolate: {
+		def fieldTypeMap := jlobby.java.util.HashMap.new(); 
+		def possibleTypes() { 
+			[
+			StringFieldTypeObject,
+			EnumerationFieldTypeObject,
+			IntegerTypeFieldObject,
+			DateTypeFieldObject
+			]
+		};
+				
 		// a unique username for a Flockr (type: string, mandatory)
 		def username := "";
 		// the Flockr's first name (type: string, mandatory)
@@ -41,10 +123,30 @@ def makeProfileMandatoryFields() {
 		// the Flockr's last name (type: string, mandatory)
 		def lastname := "";
 		// the Flockr's birthdate (type: java.util.Date, optional)
-		def birthdate := "";
+		def birthdate := jlobby.java.util.Calendar.getInstance();
 		// the Flockr's sex (type: `male | `female, optional)
-		def sex := "";
+		def sex := `Male;
+		
+		def getFieldType(fieldName) {
+			fieldTypeMap.get(fieldName);
+		};
+		
+		def checkFieldTypeForValue(field, value) {
+			(getFieldType(field)).isPossibleValue(value);
+		};
+		
+		def addFieldTypeMapping(field, typeObject) {
+			fieldTypeMap.put(field, (/.at.support.symbiosis.cast: typeObject into: (jlobby.at.urbiflock.ui.AbstractFieldType)));
+		};
 	};
+	
+	theProfile.addFieldTypeMapping(`username, StringFieldTypeObject.new());
+	theProfile.addFieldTypeMapping(`firstname, StringFieldTypeObject.new());
+	theProfile.addFieldTypeMapping(`lastname, StringFieldTypeObject.new());
+	theProfile.addFieldTypeMapping(`birthdate, DateTypeFieldObject.new(nil, nil));
+	theProfile.addFieldTypeMapping(`sex, EnumerationFieldTypeObject.new([ `Male, `Female ]));
+	
+	theProfile;
 };
 
 // the profile is a property list, but it's implemented as an isolate object
@@ -63,6 +165,7 @@ def makeProfile() {
 				theMap.put(field.name(), field.readField());
 			};
 			theMap.remove(`super);
+			theMap.remove(`fieldTypeMap);
 			theMap;
 		};
 		

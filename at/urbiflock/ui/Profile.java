@@ -37,8 +37,10 @@ public interface Profile {
 	
   public HashMap propertyHashMap();
   public boolean isMandatoryField(AGSymbol symbol);
-  public void addField(AGSymbol fieldName, NATText value);
+  public void addField(AGSymbol fieldName, Object value);
   public void removeField(AGSymbol fieldName);
-  public void setField(AGSymbol fieldName, NATText value);
+  public void setField(AGSymbol fieldName, Object value);
   public String username();
+  public AbstractFieldType[] possibleTypes();
+  public AbstractFieldType getFieldType(AGSymbol fieldName);
 }
