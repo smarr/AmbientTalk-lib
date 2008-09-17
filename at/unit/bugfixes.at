@@ -364,6 +364,24 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		};
 	};
 	
+	// test whether methods tagged as @Required are not included in the composite
+	def testRequiredMethodsAreFiltered() {
+		def T := object: {
+			def m() { self.n() };
+			def n() @[/.at.types.Required];
+		};
+		def o := object: {
+			import T;
+		};
+		self.assertFalse((reflect: o).respondsTo(`n));
+		
+		def o2 := object: {
+			import T;
+			def n() { 42 };
+		};
+		self.assertEquals(42, o2.m());
+	};
+	
 };
 
 self

@@ -74,5 +74,8 @@ deftype JavaException <: Exception;
 deftype ImportConflict <: Exception;
 deftype ObjectOffline <: Exception;
 
+// misc
+deftype Required; // to tag methods that a trait requires
+
 // make all definitions in this file public
 self
