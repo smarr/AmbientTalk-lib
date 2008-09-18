@@ -152,7 +152,7 @@ public class FlockViewer extends Frame {
 	}
 	
 	
-	public static void main(String[] args) {
+	/*public static void main(String[] args) {
 		final HashMap propertyMap = new HashMap();
 		propertyMap.put(AGSymbol.jAlloc("username"), NATText.atValue("foobar"));
 		propertyMap.put(AGSymbol.jAlloc("firstname"), NATText.atValue("foo"));
@@ -206,6 +206,6 @@ public class FlockViewer extends Frame {
 			public void removeBuddyListListener(Object l) {}
 			
 		});
-	}
+	}*/
 	
 }

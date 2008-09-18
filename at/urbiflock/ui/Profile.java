@@ -27,6 +27,7 @@
  */
 package at.urbiflock.ui;
 
+import java.util.Calendar;
 import java.util.HashMap;
 
 import edu.vub.at.objects.natives.NATBoolean;
@@ -37,10 +38,14 @@ public interface Profile {
 	
   public HashMap propertyHashMap();
   public boolean isMandatoryField(AGSymbol symbol);
-  public void addField(AGSymbol fieldName, Object value);
+  public void addField(AGSymbol fieldName, Object value, Object fieldType);
   public void removeField(AGSymbol fieldName);
   public void setField(AGSymbol fieldName, Object value);
   public String username();
   public AbstractFieldType[] possibleTypes();
   public AbstractFieldType getFieldType(AGSymbol fieldName);
+  public AbstractFieldType makeStringFieldTypeObject();
+  public AbstractFieldType makeEnumerationFieldTypeObject(Object[] possibleValues);
+  public AbstractFieldType makeIntegerTypeFieldObject(Object low, Object high);
+  public AbstractFieldType makeDateTypeFieldObject(Object low, Object high);
 }

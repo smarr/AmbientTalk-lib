@@ -3,6 +3,8 @@
  */
 package at.urbiflock.ui;
 
+import java.util.Calendar;
+
 import edu.vub.at.objects.natives.grammar.AGSymbol;
 
 /**
@@ -17,4 +19,5 @@ public interface AbstractFieldType {
 	public boolean isPossibleValue(Object aValue);
 	public String name();
 	public AGSymbol[] getPossibleValues();
+	public Object defaultValue();
 }

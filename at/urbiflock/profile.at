@@ -47,12 +47,16 @@ def AbstractFieldTypeObject := object: {
 	def name() { 
 		raise: XChildObjectResponsibility.new("name() should be overridden by children of AbstractFieldTypeObject.") 
 	};
+	def defaultValue() {
+		raise: XChildObjectResponsibility.new("defaultValue() should be overridden by children of AbstractFieldTypeObject.")
+	};
 };
 
 def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
 	def isString() { true };
 	def isPossibleValue(aValue) { is: aValue taggedAs: /.at.types.Text };
 	def name() { "Text" };
+	def defaultValue() { "" };
 };
 
 def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
@@ -64,6 +68,7 @@ def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
 		possibleValues := thePossibleValues;
 	};
 	def name() { "Choice" };
+	def defaultValue() { possibleValues[1] };
 };
 
 def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
@@ -78,12 +83,18 @@ def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
 		}
 	};
 	def name() { "Integer" };
+	def defaultValue() { 
+		if: (is: lowerBound taggedAs: /.at.types.Number) then: {  
+			lowerBound; 
+		} else: { 
+			0 
+		} 
+	};
 	def init(low, high) {
 		lowerBound := low;
 		higherBound := high;
 	};
 };
-
 
 def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 	def lowerBound := nil;
@@ -98,6 +109,18 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 		}
 	};
 	def name() { "Date" };
+	def defaultValue() { 
+		if: (nil == lowerBound) then: { 
+			0 
+		} else: {
+			def currentDate := jlobby.java.util.Calendar.getInstance(); 
+			if: ((nil != higherBound).and: { currentDate.after(higherBound) }) then: {
+				higherBound
+			} else: {
+				currentDate
+			}
+		} 
+	};
 	def init(low, high) {
 		lowerBound := low;
 		higherBound := high;
@@ -106,7 +129,9 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 
 def makeProfileMandatoryFields() {
 	def theProfile := isolate: {
+		
 		def fieldTypeMap := jlobby.java.util.HashMap.new(); 
+		
 		def possibleTypes() { 
 			[
 			StringFieldTypeObject,
@@ -138,6 +163,23 @@ def makeProfileMandatoryFields() {
 		def addFieldTypeMapping(field, typeObject) {
 			fieldTypeMap.put(field, (/.at.support.symbiosis.cast: typeObject into: (jlobby.at.urbiflock.ui.AbstractFieldType)));
 		};
+		
+		def removeFieldTypeMapping(field) {
+			fieldTypeMap.remove(field);
+		};
+		
+		def makeStringFieldTypeObject() {
+			StringFieldTypeObject.new();
+		};
+		def makeEnumerationFieldTypeObject(possibleValues) {
+			EnumerationFieldTypeObject.new(possibleValues);
+		};
+		def makeIntegerTypeFieldObject(low, high) {
+			IntegerTypeFieldObject.new(low, high);
+		};
+		def makeDateTypeFieldObject(low, high) {
+			DateTypeFieldObject.new(low, high);
+		};
 	};
 	
 	theProfile.addFieldTypeMapping(`username, StringFieldTypeObject.new());
@@ -151,7 +193,8 @@ def makeProfileMandatoryFields() {
 
 // the profile is a property list, but it's implemented as an isolate object
 def makeProfile() {
-	extend: makeProfileMandatoryFields() with: {
+	def theProfile := extend: makeProfileMandatoryFields() with: {
+		
 		def isMandatoryField(propName) {
 			(reflect: super).respondsTo(propName);
 		};
@@ -169,11 +212,12 @@ def makeProfile() {
 			theMap;
 		};
 		
-		def addField(propName, propVal) {
+		def addField(propName, propVal, propType) {
 			if: (reflect: self).respondsTo(propName) then: {
 				raise: XDuplicateField.new("Profile already has property: " + propName);
 			} else: {
 				(reflect: self).defineField(propName, propVal);
+				super.addFieldTypeMapping(propName, propType);
 			}
 		};
 		
@@ -182,6 +226,7 @@ def makeProfile() {
 				raise: XMandatoryFieldRemoval.new("Cannot remove mandatory property from profile: " + propName);
 			} else: {
 				(reflect: self).removeSlot(propName);
+				super.removeFieldTypeMapping(propName);
 			}
 		};
 		
@@ -192,7 +237,9 @@ def makeProfile() {
 				((reflect: super).grabField(propName)).writeField(propVal);
 			}
 		};
-	}
+	};
+	
+	theProfile;
 };
 
 def addProperty(profile, propName, propVal) {
@@ -222,7 +269,7 @@ object: {
 		def testAddAndRemoveProperty() {
 			def profile := makeProfile();
 			self.assertFalse((reflect: profile).respondsTo(`testProperty));
-			profile.addField(`testProperty, "testProperty");
+			profile.addField(`testProperty, "testProperty", StringFieldTypeObject.new());
 			self.assertTrue((reflect: profile).respondsTo(`testProperty));
 			self.assertEquals(profile.testProperty, "testProperty");
 			profile.removeField(`testProperty);
@@ -239,7 +286,7 @@ object: {
 		def testDuplicateProperty() {
 			def profile := makeProfile();
 			self.assert: DuplicateField raisedIn: { 
-				profile.addField(`username, "Zazawie");
+				profile.addField(`username, "Zazawie", StringFieldTypeObject.new());
 			};
 		};
 		

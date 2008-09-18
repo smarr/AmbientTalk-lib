@@ -37,6 +37,8 @@ import java.awt.Panel;
 import java.awt.TextField;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.ItemEvent;
+import java.awt.event.ItemListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.Calendar;
@@ -191,11 +193,16 @@ public class ProfileViewer extends Frame implements ActionListener {
 			}
 		}
 		if (fieldType.isInteger()) {
-			NATNumber value = NATNumber.atValue(Integer.parseInt(((TextField)component).getText()));
-			if (fieldType.isPossibleValue(value)) {
-				profile_.setField(key, value);
-				return true;
-			} else {
+			try {
+				NATNumber value = NATNumber.atValue(Integer.parseInt(((TextField)component).getText()));
+				if (fieldType.isPossibleValue(value)) {
+					profile_.setField(key, value);
+					return true;
+				} else {
+					showInvalidValueDialog(key.toString());
+					return false;
+				}
+			} catch(NumberFormatException e) {
 				showInvalidValueDialog(key.toString());
 				return false;
 			}
@@ -253,8 +260,8 @@ public class ProfileViewer extends Frame implements ActionListener {
 				}
 				Iterator tfIt = textFields_.iterator();
 				while (tfIt.hasNext()) {
-					TextField textField = (TextField)tfIt.next();
-					if (textField.getName().equals(fieldNameString)) {
+					Component field = (Component)tfIt.next();
+					if (field.getName().equals(fieldNameString)) {
 						tfIt.remove();
 					}
 				}
@@ -279,10 +286,15 @@ public class ProfileViewer extends Frame implements ActionListener {
 		}
 	}
 	
-	private class AddFieldDialog extends Frame implements ActionListener {
+	private class AddFieldDialog extends Frame implements ActionListener, ItemListener {
 		
 		TextField fieldNameTextField_ = new TextField();
 		TextField fieldValueTextField_ = new TextField();
+		Vector enumerationValuePanels_ = new Vector();
+		Vector enumerationValuesTextFields_ = new Vector();
+		Button addChoiceButton_;
+		boolean isShowingEnumerationType_ = false;
+		Choice typeChooser_;
 		
 		Profile profile_;
 		ProfileViewer profileViewer_;
@@ -303,12 +315,13 @@ public class ProfileViewer extends Frame implements ActionListener {
 			//add(fieldValuePanel);
 			
 			Panel fieldTypePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
-			Choice typeChooser = new Choice();
+			typeChooser_ = new Choice();
 			AbstractFieldType[] types = p.possibleTypes();
 			for (int i = 0; i < types.length; i++) {
-				typeChooser.add((types[i]).name());
+				typeChooser_.add((types[i]).name());
+				typeChooser_.addItemListener(this);
 			}
-			fieldTypePanel.add(typeChooser);
+			fieldTypePanel.add(typeChooser_);
 			add(fieldTypePanel);
 			
 			Button okButton = new Button("Ok");
@@ -324,14 +337,39 @@ public class ProfileViewer extends Frame implements ActionListener {
 			setVisible(true);
 		}
 		
+		private AbstractFieldType createTypeObject() {
+			String choice = typeChooser_.getSelectedItem();
+			AbstractFieldType result = null;
+			if (choice.equals("Text")) {
+				result = profile_.makeStringFieldTypeObject();
+			}
+			if (choice.equals("Integer")) {
+				result = profile_.makeIntegerTypeFieldObject(0, 100000);
+			}
+			if (choice.equals("Choice")) {
+				Vector enumerationValues = new Vector();
+				Iterator it = enumerationValuesTextFields_.iterator();
+				while (it.hasNext()) {
+					enumerationValues.add(AGSymbol.jAlloc(((TextField)it.next()).getText()));
+				}
+				result = profile_.makeEnumerationFieldTypeObject(enumerationValues.toArray());
+			}
+			if (choice.equals("Date")) {
+				result = profile_.makeDateTypeFieldObject(null, null);
+			}
+			return result;
+		}
+		
 		public void actionPerformed(ActionEvent ae) {
 			String command = ae.getActionCommand();
 			if (command == "ok") {
 				if (fieldNameTextField_.getText().length() == 0) {
 					return;
 				}
-				profile_.addField(AGSymbol.jAlloc(fieldNameTextField_.getText()), new NATNil() /*NATText.atValue(fieldValueTextField_.getText())*/);
-				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), new NATNil() /*fieldValueTextField_.getText()*/);
+				AGSymbol fieldName = AGSymbol.jAlloc(fieldNameTextField_.getText());
+				AbstractFieldType typeObject = createTypeObject();
+				profile_.addField(fieldName, typeObject.defaultValue(), typeObject);
+				profileViewer_.addFieldPanel(fieldNameTextField_.getText(), typeObject.defaultValue());
 				this.dispose();
 				return;
 			}
@@ -339,8 +377,62 @@ public class ProfileViewer extends Frame implements ActionListener {
 				this.dispose();
 				return;
 			}
+			if (command == "add") {
+				addEnumerationValuePanel(enumerationValuePanels_.size());
+				return;
+			}
+			// Remove enumeration value field
+			int position = Integer.parseInt(command);
+			remove((Panel)enumerationValuePanels_.elementAt(position));
+			enumerationValuePanels_.remove(position);
+			pack();
+		}
+		
+		private void addEnumerationValuePanel(int position) {
+			Panel enumerationValuePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+			TextField valueTf = new TextField();
+			valueTf.setName(Integer.toString(position));
+			enumerationValuesTextFields_.add(valueTf);
+			enumerationValuePanel.add(valueTf);
+			if (position > 0) {
+				Button removeButton = new Button("Remove");
+				removeButton.setName(Integer.toString(position));
+				removeButton.setActionCommand(Integer.toString(position));
+				removeButton.addActionListener(this);
+				enumerationValuePanel.add(removeButton);
+			}
+			enumerationValuePanels_.add(enumerationValuePanel);
+			add(enumerationValuePanel, (getComponentCount() - 3));
+			pack();
+		}
+		
+		public void itemStateChanged(ItemEvent ie) {
+			String value = (String)ie.getItem();
+			if ((value.equals("Choice")) && (!isShowingEnumerationType_)) {
+				addChoiceButton_ = new Button("Add choice");
+				addChoiceButton_.setName("add");
+				addChoiceButton_.setActionCommand("add");
+				addChoiceButton_.addActionListener(this);
+				add(addChoiceButton_, (getComponentCount() - 2));
+				addEnumerationValuePanel(0);
+				isShowingEnumerationType_ = true;
+				return;
+			}
+			if (!value.equals("Choice") && isShowingEnumerationType_) {
+				Iterator it = enumerationValuePanels_.iterator();
+				while (it.hasNext()) {
+					remove((Panel)it.next());
+				}
+				remove(addChoiceButton_);
+				enumerationValuePanels_ = new Vector();
+				enumerationValuesTextFields_ = new Vector();
+				isShowingEnumerationType_ = false;
+				pack();
+				return;
+			}
 		}
 	}
+	
 	
 	/*
 	 * This event should only be signaled when viewing another (remote) flockr's profile,
