@@ -385,6 +385,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 			int position = Integer.parseInt(command);
 			remove((Panel)enumerationValuePanels_.elementAt(position));
 			enumerationValuePanels_.remove(position);
+			enumerationValuesTextFields_.remove(position);
 			pack();
 		}
 		
