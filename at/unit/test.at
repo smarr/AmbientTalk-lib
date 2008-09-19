@@ -111,9 +111,11 @@ def consoleReporter := object: {
 // unit tests should delegate to this object
 def UnitTest := object: {
   def name := "Unnamed";
+	def parallel := true;
 
-  def init(newname) {
+  def init(newname, nparallel := true) {
 	  name := newname;
+		parallel := nparallel;
   };
 
 	// methods to assert the validity of programs
@@ -160,40 +162,63 @@ def UnitTest := object: {
 		
 		reporter.start(self.name, testMethods.length);
 		
-		testMethods.each: { |methName|
-			if: (methName.text ~= "^testAsync.*") then: {
-				// asynchronous unit test
+		def runAssync(methName, after) {
 				numAsyncTests := numAsyncTests + 1;
 				self.setUp();
 				def fut := (reflect: self).invoke(self, `(.#methName()));
 				FuturesModule.when: fut becomes: { |val|
 					reporter.success(methName);
-					asyncTestFinished();
+					after();
 				} catch: { |e|
 					if: (is: e taggedAs: AssertionFailed) then: {
-						reporter.failure(methName, e);
+						reporter.failure(methName, e);				
 					} else: {
 						reporter.error(methName, e);
 					};
-					asyncTestFinished();
+					after();
 				};
 				nil;
-			} else: {
-				// synchronous unit test
-				try: {
-					self.setUp();
-					(reflect: self).invoke(self, `(.#methName()));
-					self.tearDown();
-					reporter.success(methName);
-				} catch: AssertionFailed using: {|e|
-					reporter.failure(methName, e);
-				} catch: /.at.types.Exception using: { |e|
-					reporter.error(methName, e);
-				};
-			}
 		};
+		
+		def testMethod(index) {
+			if: (index <= testMethods.length) then: {
+				def methName := testMethods[index];
+				if: (methName.text ~= "^testAsync.*") then: {
+					// asynchronous unit test
+					if: self.parallel then: {
+						runAssync(methName, { asyncTestFinished() });
+						testMethod(index + 1);
+					} else: {
+						system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
+						runAssync(methName, { self.tearDown(); numAsyncTests := numAsyncTests - 1; testMethod(index + 1) });
+					};
+				} else: {
+					// synchronous unit test
+					try: {
+						if: !self.parallel then: {
+							system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
+						};
+						self.setUp();
+						(reflect: self).invoke(self, `(.#methName()));
+						self.tearDown();
+						reporter.success(methName);
+					} catch: AssertionFailed using: {|e|
+						reporter.failure(methName, e);
+					} catch: /.at.types.Exception using: { |e|
+						reporter.error(methName, e);
+					};
+					testMethod(index + 1);
+				}	
+			} else: {
+				if: !parallel then: {
+					reporter.stop(self.name);
+				};
+			};
+		};
+				
+		testMethod(1);
 		// only stop if there are no outstanding async unit tests
-		if: (0 == numAsyncTests) then: {
+		if: ((0 == numAsyncTests).and:{parallel}) then: {
 			reporter.stop(self.name);
 		};
 	};
@@ -273,7 +298,7 @@ def TestModule := object: {
 			def error(@args) { err := err + 1 };
 			def stop(@args) {
 				if: !((succ == 7).and: { fail == 1 } and: { err == 1}) then: {
-					system.println("Unit Test self-checking test failed!");
+					system.println("Unit Test self-checking test failed! "+ "succ: " + succ + " fail: " + fail + " err: " + err);
 				} else: {
 					system.println("Unit test module ok");
 				}
