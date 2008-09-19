@@ -33,16 +33,13 @@ def makeFlock(theName, proximity) {
 
 	def theFlock := object: {
 		def addFlockr(profile) {
-			system.println("FLOCK: addFlockr: " + profile);
 			if: !(flockrList.contains(profile)) then: {
-				system.println("Flock: yes!");
 				flockrList.add(profile);
 			};
 		};
 		def removeFlockr(profile) { flockrList.remove(profile) };
 		def getName() { name };
 		def getFlockrList() {
-			system.println("Flock:getFlockrLsit" + flockrList.asTable);
 			flockrList.asTable.map:{|profile| profile.username};
 		};
 		def getProfile(uid) {

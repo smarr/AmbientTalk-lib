@@ -111,7 +111,7 @@ def makeFlockr(profile) {
 		};
 		def removeFlock(flock) { flocks.remove(flock) };
 		def addFlock(flock) { flocks.add(flock) };
-		def stop() { (publication != nil).ifTrue: { publication.cancel() } };
+		def stop() { (publication != nil).ifTrue: { publication.cancel()} };
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
 	};
 		
@@ -128,6 +128,9 @@ def makeFlockr(profile) {
 	// Adding predifined flocks
 	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
 	flocks.add(FriendsFlock);
+	
+	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", ProximityModule.makeIsNearbyProximity(localInterface));
+	flocks.add(NearbyFlock);
 	
 	// "My Profile" editor application
 	applications.add(
@@ -155,7 +158,7 @@ def makeFlockr(profile) {
 		notifyListeners: discoveryListeners with: <-notifyJoined(flockr);
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
-			system.println("F: discovered" + newProfile.username);
+			system.println("Flockr: " + username + " discovered" + newProfile.username);
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
 		} catch: TimeoutException using: { |e|
 		};
