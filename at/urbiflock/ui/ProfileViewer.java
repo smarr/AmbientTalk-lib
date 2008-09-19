@@ -107,7 +107,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 	
 	private Component createComponentForFieldType(AbstractFieldType fieldType, Object fieldValue) {
 		if (fieldType.isString()) {
-			TextField tf = new TextField(((NATText)fieldValue).javaValue);
+			TextField tf = new TextField(((NATText)fieldValue).javaValue, fieldType.getFieldSize());
 			tf.setEditable(editable_);
 			return tf;
 		}
@@ -319,7 +319,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 	
 	private class AddFieldDialog extends Frame implements ActionListener, ItemListener {
 		
-		TextField fieldNameTextField_ = new TextField();
+		TextField fieldNameTextField_ = new TextField(10);
 		TextField fieldValueTextField_ = new TextField();
 		Vector enumerationValuePanels_ = new Vector();
 		Vector enumerationValuesTextFields_ = new Vector();
@@ -422,7 +422,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 		
 		private void addEnumerationValuePanel(int position) {
 			Panel enumerationValuePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
-			TextField valueTf = new TextField();
+			TextField valueTf = new TextField(20);
 			valueTf.setName(Integer.toString(position));
 			enumerationValuesTextFields_.add(valueTf);
 			enumerationValuePanel.add(valueTf);

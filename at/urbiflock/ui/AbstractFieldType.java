@@ -20,4 +20,5 @@ public interface AbstractFieldType {
 	public String name();
 	public AGSymbol[] getPossibleValues();
 	public Object defaultValue();
+	public int getFieldSize();
 }

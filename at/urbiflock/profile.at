@@ -50,13 +50,19 @@ def AbstractFieldTypeObject := object: {
 	def defaultValue() {
 		raise: XChildObjectResponsibility.new("defaultValue() should be overridden by children of AbstractFieldTypeObject.")
 	};
+	def fieldSize() {
+		raise: XChildObjectResponsibility.new("fieldSize() not applicable for this type.")
+	};
 };
 
 def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
+	def fieldSize := 20;
 	def isString() { true };
 	def isPossibleValue(aValue) { is: aValue taggedAs: /.at.types.Text };
 	def name() { "Text" };
 	def defaultValue() { "" };
+	def getFieldSize() { fieldSize };
+	def setFieldSize(newSize) { fieldSize := newSize };
 };
 
 def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
