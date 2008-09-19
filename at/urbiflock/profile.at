@@ -101,12 +101,12 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 	def higherBound := nil;
 	def isDate() { true };
 	def isPossibleValue(aValue) {
-		def calendarClass := jlobby.java.lang.Class.forName("java.util.Calendar");
-		(calendarClass.isInstance(aValue)).and: {
+		//def calendarClass := jlobby.java.lang.Class.forName("java.util.Calendar");
+		//(calendarClass.isInstance(aValue)).and: {
 			((nil == lowerBound).or: { aValue.after(lowerBound) }).and: {
 				(nil == higherBound).or: { aValue.before(higherBound) }
 			} 
-		}
+		//}
 	};
 	def name() { "Date" };
 	def defaultValue() { 

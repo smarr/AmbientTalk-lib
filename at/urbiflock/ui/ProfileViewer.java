@@ -127,9 +127,26 @@ public class ProfileViewer extends Frame implements ActionListener {
 			return chooser;
 		}
 		if (fieldType.isDate()) {
-			TextField tf = new TextField(((Calendar)fieldValue).getTime().toString());
-			tf.setEditable(editable_);
-			return tf;
+			Calendar calendar = (Calendar)fieldValue;
+			int day = calendar.get(Calendar.DAY_OF_MONTH);
+			int month = calendar.get(Calendar.MONTH);
+			int year = calendar.get(Calendar.YEAR);
+			TextField dayField = new TextField(Integer.toString(day));
+			TextField monthField = new TextField(Integer.toString(month + 1));
+			TextField yearField = new TextField(Integer.toString(year));
+			dayField.setName("day");
+			dayField.setEditable(editable_);
+			monthField.setEditable(editable_);
+			monthField.setName("month");
+			yearField.setEditable(editable_);
+			yearField.setName("year");
+			Panel datePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+			datePanel.add(dayField);
+			datePanel.add(new Label("/"));
+			datePanel.add(monthField);
+			datePanel.add(new Label("/"));
+			datePanel.add(yearField);
+			return datePanel;
 		}
 		return null;
 	}
@@ -218,10 +235,24 @@ public class ProfileViewer extends Frame implements ActionListener {
 			}
 		}
 		if (fieldType.isDate()) {
-			// TODO
-			//showInvalidValueDialog(key.toString());
-			//return false;
-			return true;
+			Panel datePanel = (Panel)component;
+			try {
+				int day = Integer.parseInt(((TextField)datePanel.getComponent(0)).getText());
+				int month = Integer.parseInt(((TextField)datePanel.getComponent(2)).getText());
+				int year = Integer.parseInt(((TextField)datePanel.getComponent(4)).getText());
+				Calendar calendar = Calendar.getInstance();
+				calendar.set(year, (month - 1), day);
+				if (fieldType.isPossibleValue(calendar)) {
+					profile_.setField(key, calendar);
+					return true;
+				} else {
+					showInvalidValueDialog(key.toString());
+					return false;
+				}
+			} catch(NumberFormatException e) {
+				showInvalidValueDialog(key.toString());
+				return false;
+			}
 		}
 		return false;
 	}
