@@ -25,7 +25,6 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 def Vector := /.at.collections.vector.Vector;
-def FlockrModule := /.at.urbiflock.flockr;
 
 def makeFlock(theName, proximity) {
 	def flockrList := Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });

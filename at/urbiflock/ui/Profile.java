@@ -46,6 +46,6 @@ public interface Profile {
   public AbstractFieldType getFieldType(AGSymbol fieldName);
   public AbstractFieldType makeStringFieldTypeObject();
   public AbstractFieldType makeEnumerationFieldTypeObject(Object[] possibleValues);
-  public AbstractFieldType makeIntegerTypeFieldObject(Object low, Object high);
+  public AbstractFieldType makeIntegerTypeFieldObject(int low, int high);
   public AbstractFieldType makeDateTypeFieldObject(Object low, Object high);
 }

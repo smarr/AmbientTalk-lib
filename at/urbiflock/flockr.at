@@ -189,7 +189,7 @@ object: {
 	def makeFlockr := &makeFlockr;
 	def uidOf := &uidOf;
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
+	def FlockrTest := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
 		
 		def testAsyncProfileExchange() {
 			def [fut,res] := makeFuture(seconds(10));

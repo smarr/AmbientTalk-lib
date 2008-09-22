@@ -268,7 +268,7 @@ def removeProperty(profile, propName) {
 object: {
 	def makeProfile := &makeProfile;
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("ProfileTest") with: {
+	def ProfileTest := extend: /.at.unit.test.UnitTest.new("ProfileTest") with: {
 		
 		// unit tests go here
 		

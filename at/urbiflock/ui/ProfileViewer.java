@@ -192,7 +192,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 		}
 		
 		public void actionPerformed(ActionEvent ae) {
-			dispose();
+			this.dispose();
 		}
 	}
 	

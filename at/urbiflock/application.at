@@ -46,7 +46,7 @@ object: {
 	
 	def makeApplication := &makeApplication;
 	
-	def Test := extend: /.at.unit.test.UnitTest.new("ApplicationTest") with: {
+	def ApplicationTest := extend: /.at.unit.test.UnitTest.new("ApplicationTest") with: {
 		
 		// unit tests go here
 		

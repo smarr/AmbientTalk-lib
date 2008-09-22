@@ -163,20 +163,26 @@ def UnitTest := object: {
 		reporter.start(self.name, testMethods.length);
 		
 		def runAssync(methName, after) {
-				numAsyncTests := numAsyncTests + 1;
-				self.setUp();
-				def fut := (reflect: self).invoke(self, `(.#methName()));
-				FuturesModule.when: fut becomes: { |val|
-					reporter.success(methName);
-					after();
-				} catch: { |e|
+			  def handleError(e) {
 					if: (is: e taggedAs: AssertionFailed) then: {
 						reporter.failure(methName, e);				
 					} else: {
 						reporter.error(methName, e);
 					};
 					after();
-				};
+			  };
+			
+				numAsyncTests := numAsyncTests + 1;
+				self.setUp();
+				
+				try: {
+					// test method starts with "testAsync" so it is expected to return a future
+					FuturesModule.when: (reflect: self).invoke(self, `(.#methName())) becomes: { |val|
+						reporter.success(methName);
+						after();
+					} catch: handleError;
+				} catch: /.at.types.Exception using: handleError;
+				
 				nil;
 		};
 		
