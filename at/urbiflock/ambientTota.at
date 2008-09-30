@@ -1,0 +1,279 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2008
+ * Authors: PROG Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+def Vector := /.at.collections.vector.Vector;
+
+// tupleSpaces are isolates so that we can experiment with ts that can be copied to other devices like in MultipleTSLinda
+def makeTupleSpace(){	
+	
+	  //private methods and data fields
+	  def localTS := Vector.new(); //contains local tuples
+	  def ambientTS := Vector.new(); // contains ambient tuples
+	  def localTSListeners := Vector.new();
+	  def seenTS := Vector.new(); // contains far references to seen TS.
+	  
+	 // methods to manage the registration of when:matches.
+	  def registerListener(l) {
+		  localTSListeners.add(l); 
+		  object: { 
+			  def cancel() { removeListener(l)};
+			};
+		};
+ 	  def removeListener(l) {
+		  localTSListeners.remove(l); 
+		};
+		def notifyListeners(tuple){
+		  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
+	  };
+	  
+	  //method belonging to the tuple propagation protocol
+	  def sendTuples(){
+		  def toSend := Vector.new();
+			ambientTS.each: {|tuple|
+				if: tuple.decidePropagation() then:{
+					toSend.add(tuple);
+				} else: {
+					if: tuple.decideDie() then: {
+		        system.println("dying young " +  tuple);
+						def ld := localTS.delete({|t| t == tuple});
+						def ad := ambientTS.delete({|t| t == tuple});
+					  system.println("delete local " + ld.asTable + "and delete ambient " + ad.asTable);
+					  //todo: propagate the delete to the ambient
+					};
+				}; 
+			};
+			system.println("sending tuples " + toSend.asTable);
+			toSend.asTable;
+	  };
+	
+		//todo: separate the public interface between local/remote.
+		// public interface
+		def publicInterface := object: {
+			
+			// usual operations to manage a local ts.
+			// add a tuple to the local ts
+	    def add(tuple){
+				system.println("add to local" + tuple);
+		    localTS.add(tuple);
+		    notifyListeners(tuple);
+		  };
+		  // delete from a ts all tuples matching the template
+		  // returns a vector with the deleted tuples.
+	    def delete(template) {
+		system.println("delete " + template);
+		    def toDelete := read(template);
+	  	  localTS.removeAll: template;
+		    toDelete;
+		  }; 
+		  // returns a vector with the tuples matching the template in the ts.
+			def read(template) { (localTS.filter: template).asTable};
+			
+			// operations to manage the ambient ts.
+						
+		  //publishes a tuple into the ambient ( ~ inject in TOTA)
+		  //note that this just exports a tuple to the ambient
+		  //but it does not store in the local ts
+		  def inject: tuple {
+			system.println("add to ambient" + tuple);
+		    ambientTS.add(tuple);
+				//notify all seen ts of the addition of a new tuple.
+				//todo first time, could receiveTuples be triggered twice? 
+		    seenTS.each: { |ts| system.println("receiveTuples?"); ts<-receiveTuples([tuple]) };
+		    object:{
+			    def cancel() { 
+				    ambientTS.removeAll: {|t| t == tuple};
+				    //TODO: propagate the delete to ambient
+				  };
+		    };
+		  };
+		
+		  // places a listener  on to the local TS ( ~ subscribe in TOTA)
+		  // for the addition of tuples matching a template
+		  // it returns a publication object to be able to unsusbscribe 
+		  def when: template matches: closure {
+			  def listener := object: {
+		     def notifyTupleInserted(tuple) {
+			    if: (template(tuple)) then: { 
+				    closure(tuple);
+				  };
+		     };
+		    };
+		    registerListener(listener);
+		  };
+		  
+		  // remote interface
+		  // interface to notify the discovery of a TS	
+			def notifyTSDiscovered(ts){
+				// add ts to seenTS vector so that it can be
+				// notified if I add a new tuple to the ambient.
+				if: !(seenTS.contains(ts)) then:{
+			    seenTS.add(ts);
+				  system.println("adding discovered ts " + ts);
+			  };
+        def toSend := sendTuples();
+        if: (toSend.length > 0) then: {
+					 system.println("notifyTSDiscovered: receiveTuples on " + ts);
+	         ts<-receiveTuples(toSend);
+				};
+		  };
+		
+		  // method belonging to the tuple propagation protocol
+		  def receiveTuples(tuples){
+			  //get all ambient tuples of the other ts
+			  tuples.each: { |tuple|
+			    if: !(ambientTS.contains({|t| t.getTupleId == tuple.getTupleId})) then: {
+			      tuple.doAction();
+			      tuple := tuple.changeTupleContent();
+			      //check if you have to insert it into your local tuple space
+			      if: tuple.decideStore() then: {
+				      add(tuple);
+			      };
+			      //todo: optimization to inject all tuples at once.
+			      inject: tuple;
+			    };
+			  };
+			}; 
+		
+		}; // end-of-public interface
+  publicInterface; 
+};
+
+def makeTuple(tupleId){
+	isolate: { |tupleId|
+
+		def getTupleId() { tupleId };
+		
+		// TOTA API
+		// default tuple behaviour = always percolate, 
+		// and store itself in every hop.
+    
+		// called in every tuple at pass() 
+		def decidePropagation(){ true };
+		// specifies operations on the local TS
+		def doAction(){};
+		// create a new tuple resulting from operations on the tuple itself
+		def changeTupleContent(){self};
+		// if true -> note gets added to local TS
+		def decideStore(){true};
+		// if true -> tuple gets unexported and deleted from local TS.
+		//new operation not in TOTA
+		def decideDie(){false};
+		
+	};
+};
+
+def extendTuple(tuple, closure) {
+	extend: tuple with: closure taggedAs: [/.at.types.Isolate];
+};
+
+// the module object of this file
+def AmbientTotaModule := object: {
+	// public stuff goes here
+	def makeTupleSpace := &makeTupleSpace;
+	def makeTuple := &makeTuple;
+	
+	def extendTuple: tuple  with: closure {
+		extendTuple(tuple, closure);
+	};
+	
+	def AmbientTotaTest := extend: /.at.unit.test.UnitTest.new("AmbientTotaTest", false) with: {
+		
+		import /.at.lang.futures;
+		enableFutures(false);
+		deftype TupleSpace;
+		
+		def testAsyncDiscoveryTuple() {
+			
+			def [fut,res] := makeFuture();
+			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+			def s := export: myTS as: TupleSpace;
+				
+			myTS.when: { |tuple| tuple.getTupleId == 123 } matches: { |tuple|
+				self.assertEquals(123, tuple.getTupleId);	
+				s.cancel();
+				a<-resolve(res); 
+			};
+	
+			def a := actor: { |TupleSpace|
+				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+		    def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
+			  def sT := aTS.inject: aTuple;
+				def s := whenever: TupleSpace discovered: { |ts|
+					aTS.notifyTSDiscovered(ts);
+				};
+				def resolve(res) {
+					s.cancel();
+					sT.cancel();
+					res<-resolve(`ok);
+				};    		
+		  };
+		
+			fut;
+		};
+		
+		
+		def testAsyncOneHopTuple() {
+			def [fut,res] := makeFuture();
+			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+			def s := export: myTS as: TupleSpace;
+				
+			myTS.when: {|tuple| tuple.getTupleId == 123 } matches: { |tuple|
+				self.assertEquals(123, tuple.getTupleId);	
+				s.cancel();
+				a<-resolve(res);
+			};
+	
+			def a := actor: { |TupleSpace|
+				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+		    def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
+				def oneHopTuple := /.at.urbiflock.ambientTota.extendTuple: aTuple with: {
+					 def dying := false;
+					 def decidePropagation() {!dying};
+					 def changeTupleContent() { dying := true; self};
+					 def decideDie(){ dying };
+				};
+				
+		    def sT := aTS.inject: oneHopTuple;
+				def s := whenever: TupleSpace discovered: { |ts|
+					aTS.notifyTSDiscovered(ts);
+				};
+				
+				def resolve(res) {
+					s.cancel();
+					sT.cancel();
+					res<-resolve(`ok);
+				};	
+		  };
+		
+			fut;
+		};
+		
+		
+	};
+};
+network.online();
+AmbientTotaModule;
