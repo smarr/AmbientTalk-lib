@@ -309,6 +309,44 @@ object: {
 			};
 		};
 		
+		def testAsyncMatchProfile() {
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockr3.1";
+			def flockr1 := makeFlockr(profile1);
+			
+			self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
+			
+			def [fut, res] := makeFuture(seconds(11));
+			/.at.support.timer.when: seconds(8) elapsed: {
+				res.resolve(`ok);
+			};
+			
+			actor: {
+				import /.at.urbiflock.flockr;
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr3.2";
+				profile2.firstname := "foo";
+			  	makeFlockr(profile2);
+			};
+			
+			when: fut becomes: { |signal|
+				self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1);
+				def newMatchingProfile := /.at.urbiflock.profile.makeProfile();
+				newMatchingProfile.setFieldShouldMatch(`firstname);
+				newMatchingProfile.firstname := "bar";
+				flockr1.updateMatchingProfile(newMatchingProfile);
+				
+				def [fut2, res2] := makeFuture(seconds(11));
+				/.at.support.timer.when: seconds(8) elapsed: {
+					res2.resolve(`ok);
+				};
+				
+				when: fut2 becomes: { |signal2|
+					self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
+				};
+			};
+		};
+		
 	};
 	
 };
