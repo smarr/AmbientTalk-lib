@@ -48,4 +48,7 @@ public interface Profile {
   public AbstractFieldType makeEnumerationFieldTypeObject(Object[] possibleValues);
   public AbstractFieldType makeIntegerTypeFieldObject(int low, int high);
   public AbstractFieldType makeDateTypeFieldObject(Object low, Object high);
+  public void setFieldShouldMatch(AGSymbol fieldName);
+  public void setFieldShouldNotMatch(AGSymbol fieldName);
+  public boolean fieldShouldMatch(AGSymbol fieldName);
 }

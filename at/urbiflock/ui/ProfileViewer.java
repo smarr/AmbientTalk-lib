@@ -63,6 +63,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 	private Panel fieldsPanel_ = new Panel();
 	private Vector textFields_ = new Vector();
 	private Flockr localFlockr_;
+	private Vector matchingFieldCheckBoxes_ = new Vector();
 	
 	public ProfileViewer(Flockr theLocalFlockr, Profile p, boolean editable) {
 		super("Profile Viewer");
@@ -105,7 +106,31 @@ public class ProfileViewer extends Frame implements ActionListener {
 		super.dispose();
 	}
 	
-	private Component createComponentForFieldType(AbstractFieldType fieldType, Object fieldValue) {
+	public Flockr getLocalFlockr() {
+		return localFlockr_;
+	}
+	
+	public Profile getProfile() {
+		return profile_;
+	}
+	
+	public Vector getFields() {
+		return textFields_;
+	}
+	
+	public Panel getFieldsPanel() {
+		return fieldsPanel_;
+	}
+	
+	public boolean isEditable() {
+		return editable_;
+	}
+	
+	public Vector getMatchingFieldCheckBoxes() {
+		return matchingFieldCheckBoxes_;
+	}
+	
+	public Component createComponentForFieldType(AbstractFieldType fieldType, Object fieldValue) {
 		if (fieldType.isString()) {
 			TextField tf = new TextField(((NATText)fieldValue).javaValue, fieldType.getFieldSize());
 			tf.setEditable(editable_);
@@ -151,8 +176,14 @@ public class ProfileViewer extends Frame implements ActionListener {
 		return null;
 	}
 	
-	private void addFieldPanel(String fieldName, Object fieldValue) {
+	public void addMatchingCheckboxForField(Panel panel, String fieldName) {
+		
+	}
+	
+	public void addFieldPanel(String fieldName, Object fieldValue) {
 		Panel thePanel = new Panel(new FlowLayout(FlowLayout.LEFT));
+		
+		addMatchingCheckboxForField(thePanel, fieldName);
 		Label label = new Label(fieldName);
 		thePanel.add(label);
 		
@@ -257,6 +288,8 @@ public class ProfileViewer extends Frame implements ActionListener {
 		return false;
 	}
 	
+	public void updateTheMatchingProfile() { }
+	
 	public void actionPerformed(ActionEvent ae) {
 		String command = ae.getActionCommand();
 		if (command == "ok") {
@@ -268,7 +301,10 @@ public class ProfileViewer extends Frame implements ActionListener {
 					fieldsOk = false;
 				}
 			}
-			if (fieldsOk) { this.dispose(); };
+			if (fieldsOk) { 
+				updateTheMatchingProfile();
+				this.dispose(); 
+			};
 			return;
 		}
 		if (command == "addField") {

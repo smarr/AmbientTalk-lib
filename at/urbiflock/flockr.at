@@ -51,8 +51,13 @@ def makeFlockr(profile) {
 	
 	def applications := (jlobby.java.util.Vector).new();
 	def flocks := Vector.new();
+	def proximities := Vector.new();
 	
 	def buddyList := /.at.urbiflock.buddylist.makeBuddyList();
+	
+	def matchingProfile := /.at.urbiflock.profile.makeProfile();
+	def profileMatchesProximity := nil;
+	def profileMatchingProximities := Vector.new();
 	
 	def notifyListeners: listeners with: message {
 		listeners.each: { |l| l <+ message };
@@ -72,6 +77,7 @@ def makeFlockr(profile) {
 		       invoked whenever an existing flockr has left the ad hoc network
 		*/
     def registerDiscoveryListener(l) { discoveryListeners.add(l) };
+	def removeDiscoveryListener(l) { discoveryListeners.remove(l) };
 		/* l should understand:
 		     notifyBuddyAdded(flockr : flockr, buddyProfile : profile)
 		       invoked whenever a buddy was manually added to this flockr's buddy list
@@ -86,6 +92,7 @@ def makeFlockr(profile) {
 		def updateFlockrWithUid(flockr, uid) {
 			uidFlockrMap.put(uid, flockr);
 		};
+		def getProfile() { myProfile };
 		def addBuddy(profile) { 
 			buddyList.addProfile(profile);
 			notifyListeners: buddyListListeners with: <-notifyBuddyAdded(profile);
@@ -111,6 +118,36 @@ def makeFlockr(profile) {
 		};
 		def removeFlock(flock) { flocks.remove(flock) };
 		def addFlock(flock) { flocks.add(flock) };
+		def getProximities() { proximities.asTable };
+		def addProximity(proximity) { proximities.add(proximity) };
+		def removeProximity(proximity) { proximities.remove(proximity) };
+		
+		def updateMatchingProfile(newProfile) {
+			// Clean up old individual profile field matching proximities
+			profileMatchingProximities.each: { |proximity| removeProfileChangedListener(proximity) };
+			proximities.remove(profileMatchesProximity);
+			matchingProfile := newProfile;
+			// Create new individual profile field matching proximities
+			profileMatchingProximities := ProximityModule.createProfileMatchingProximities(localInterface, matchingProfile);
+			profileMatchesProximity := ProximityModule.constructProfileMatchingReteFromProximities(localInterface, profileMatchingProximities);
+			proximities.add(profileMatchesProximity);
+			matchingProfilesFlock.setProximity(profileMatchesProximity);
+			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
+			// For each connected flockr, signal a profileChanged event to all the 
+			// individual profile field matching proximities.
+			// This way, the global profile matcher proximity is recomputed and the flock
+			// is updated.
+			while: { connectedFlockrsIterator.hasNext() } do: {
+				def flockrRef := connectedFlockrsIterator.next();
+				when: flockrRef<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
+					profileMatchingProximities.each: { |proximity| 
+						proximity<-notifyProfileChanged(flockrRef, newProfile);
+					}
+				} catch: TimeoutException using: { |e|
+				};
+			}
+		};
+		
 		def stop() { (publication != nil).ifTrue: { publication.cancel()} };
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
 	};
@@ -126,11 +163,21 @@ def makeFlockr(profile) {
 	localInterface.registerProfileChangedListener(buddyList);
 	
 	// Adding predifined flocks
-	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", ProximityModule.makeIsFriendProximity(localInterface));
+	def isFriendProximity := ProximityModule.makeIsFriendProximity(localInterface);
+	proximities.add(isFriendProximity);
+	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", isFriendProximity);
 	flocks.add(FriendsFlock);
 	
-	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", ProximityModule.makeIsNearbyProximity(localInterface));
+	def isNearbyProximity := ProximityModule.makeIsNearbyProximity(localInterface);
+	proximities.add(isNearbyProximity);
+	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity);
 	flocks.add(NearbyFlock);
+	
+	profileMatchingProximities := ProximityModule.createProfileMatchingProximities(localInterface, matchingProfile);
+	profileMatchesProximity := ProximityModule.constructProfileMatchingReteFromProximities(localInterface, profileMatchingProximities);
+	proximities.add(profileMatchesProximity);
+	def matchingProfilesFlock := FlockModule.makeFlock("Matching Profiles", profileMatchesProximity);
+	flocks.add(matchingProfilesFlock);
 	
 	// "My Profile" editor application
 	applications.add(
@@ -146,6 +193,14 @@ def makeFlockr(profile) {
 			(/.at.urbiflock.application.makeApplication(
 				"Flocks", 
 				{ jlobby.at.urbiflock.ui.FlockListViewer.new(localInterface) })) 
+		into: (jlobby.at.urbiflock.ui.Application));
+		
+	// "Profile matcher" doesProfileMatch proximity editor application
+	applications.add(
+		/.at.support.symbiosis.cast: 
+			(/.at.urbiflock.application.makeApplication(
+				"Profile matcher", 
+				{ jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(localInterface, matchingProfile) })) 
 		into: (jlobby.at.urbiflock.ui.Application));
 	
 	publication := export: remoteInterface as: FlockrT;

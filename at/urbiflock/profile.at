@@ -25,17 +25,18 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+
 deftype MandatoryFieldRemoval <: lobby.at.types.Exception;
 def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryFieldRemoval);
 
 deftype DuplicateField <: lobby.at.types.Exception;
 def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 
-deftype ChildObjectResponsibility <: lobby.at.types.Exception;
-def XChildObjectResponsibility := lobby.at.exceptions.createException(ChildObjectResponsibility);
 
-
-def AbstractFieldTypeObject := object: {
+def AbstractFieldTypeObject := isolate: {
+	deftype ChildObjectResponsibility <: lobby.at.types.Exception;
+	def XChildObjectResponsibility := lobby.at.exceptions.createException(ChildObjectResponsibility);
+	
 	def isString() { false };
 	def isEnumeration() { false };
 	def isInteger() { false };
@@ -136,7 +137,8 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 def makeProfileMandatoryFields() {
 	def theProfile := isolate: {
 		
-		def fieldTypeMap := jlobby.java.util.HashMap.new(); 
+		def fieldTypeMap := jlobby.java.util.HashMap.new();
+		def matchingFields := /.at.collections.vector.Vector.new();
 		
 		def possibleTypes() { 
 			[
@@ -172,6 +174,23 @@ def makeProfileMandatoryFields() {
 		
 		def removeFieldTypeMapping(field) {
 			fieldTypeMap.remove(field);
+		};
+		
+		def setFieldShouldMatch(fieldName) {
+			if: (!fieldShouldMatch(fieldName)) then: {
+				matchingFields.add(fieldName);
+			}
+		};
+		def setFieldShouldNotMatch(fieldName) {
+			if: (fieldShouldMatch(fieldName)) then: {
+				matchingFields.remove(fieldName);
+			}
+		};
+		def fieldShouldMatch(fieldName) {
+			matchingFields.contains(fieldName);
+		};
+		def getMatchingFields() {
+			matchingFields
 		};
 		
 		def makeStringFieldTypeObject() {
@@ -215,6 +234,7 @@ def makeProfile() {
 			};
 			theMap.remove(`super);
 			theMap.remove(`fieldTypeMap);
+			theMap.remove(`matchingFields);
 			theMap;
 		};
 		
@@ -233,6 +253,7 @@ def makeProfile() {
 			} else: {
 				(reflect: self).removeSlot(propName);
 				super.removeFieldTypeMapping(propName);
+				super.setFieldShouldNotMatch(propName);
 			}
 		};
 		
@@ -243,6 +264,15 @@ def makeProfile() {
 				((reflect: super).grabField(propName)).writeField(propVal);
 			}
 		};
+		
+		def fieldMatches(field, value) {
+			if: (nil != ((reflect: self).listFields().find: { |f| f.name() == field })) then: {
+				((reflect: self).grabField(field)).readField() == value;
+			} else: {
+				((reflect: super).grabField(field)).readField() == value;
+			}
+		};
+		
 	};
 	
 	theProfile;

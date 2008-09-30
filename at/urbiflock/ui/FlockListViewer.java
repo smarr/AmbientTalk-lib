@@ -122,7 +122,7 @@ public class FlockListViewer extends Frame {
 	    }
 	}
 	
-	public static void main(String[] args) {
+	/*public static void main(String[] args) {
 		new FlockListViewer(new Flockr() {
 
 			public void addBuddy(Profile profile) {}
@@ -161,7 +161,7 @@ public class FlockListViewer extends Frame {
 			public void registerBuddyListListener(Object l) {}
 			public void removeBuddyListListener(Object l) {}
 		});
-	}
+	}*/
 	
 }
 

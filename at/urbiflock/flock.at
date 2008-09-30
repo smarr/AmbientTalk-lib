@@ -26,9 +26,10 @@
  */
 def Vector := /.at.collections.vector.Vector;
 
-def makeFlock(theName, proximity) {
+def makeFlock(theName, theProximity) {
 	def flockrList := Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
 	def name := theName;
+	def proximity := theProximity;
 
 	def theFlock := object: {
 		def addFlockr(profile) {
@@ -44,7 +45,11 @@ def makeFlock(theName, proximity) {
 		def getProfile(uid) {
 			flockrList.at(flockrList.find: { |p| p.username == uid });
 		};
-		
+		def setProximity(newProximity) {
+			proximity.unregister(self);
+			proximity := newProximity;
+			proximity.register(self);
+		};
 	};
 	
 	proximity.register(theFlock);

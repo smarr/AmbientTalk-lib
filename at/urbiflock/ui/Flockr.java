@@ -14,4 +14,7 @@ public interface Flockr {
 	public void removeProfileChangedListener(Object l);
 	public void registerBuddyListListener(Object l);
 	public void removeBuddyListListener(Object l);
+	public void registerDiscoveryListener(Object l);
+	public void removeDiscoveryListener(Object l);
+	public void updateMatchingProfile(Profile p);
 }

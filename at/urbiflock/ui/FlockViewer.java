@@ -49,7 +49,7 @@ public class FlockViewer extends Frame {
 	
 	List unameList_ = new List();
 	final Flockr owner_;
-	final String[] usernames_;
+	private String[] usernames_;
 	final Flock flock_;
 	
 	public FlockViewer(final Flock f, Flockr owner) {
@@ -57,13 +57,9 @@ public class FlockViewer extends Frame {
 
 		flock_ = f;
 		owner_ = owner;
-		usernames_ = f.getFlockrList();
 		
 		unameList_ = new List();
-		unameList_.setMultipleMode(false);
-		for (int i = 0; i < usernames_.length; i++) {
-			unameList_.add(usernames_[i]);
-		}
+		updateFlockrList();
 		unameList_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 				int selected = unameList_.getSelectedIndex();
@@ -86,12 +82,24 @@ public class FlockViewer extends Frame {
 		    }
 		});
 		
+		owner_.registerDiscoveryListener(this);
 		owner_.registerBuddyListListener(this);
+		owner_.registerProfileChangedListener(this);
 	}
 	
 	public void dispose() {
 		owner_.removeBuddyListListener(this);
+		owner_.removeDiscoveryListener(this);
+		owner_.removeProfileChangedListener(this);
 		super.dispose();
+	}
+	
+	public void updateFlockrList() {
+		usernames_ = flock_.getFlockrList();
+		unameList_.removeAll();
+		for (int i = 0; i < usernames_.length; i++) {
+			unameList_.add(usernames_[i]);
+		}
 	}
 	
 	class PopupListener extends MouseAdapter {
@@ -143,13 +151,26 @@ public class FlockViewer extends Frame {
 	    }
 	}
 	
+	public void notifyJoined(Profile p) {
+		updateFlockrList();
+	}
+	
+	public void notifyLeft(Profile p) {
+		updateFlockrList();
+	}
+	
 	public void notifyBuddyAdded(Profile buddyProfile) {
-		unameList_.add(buddyProfile.username());
+		updateFlockrList();
 	}
 	
 	public void notifyBuddyRemoved(Profile buddyProfile) {
-		unameList_.remove(buddyProfile.username());
+		updateFlockrList();
 	}
+	
+	public void notifyProfileChanged(Profile p) {
+		updateFlockrList();
+	}
+	
 	
 	
 	/*public static void main(String[] args) {

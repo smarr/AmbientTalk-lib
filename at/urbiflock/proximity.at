@@ -37,6 +37,9 @@ def makeProximity(reteNode) {
 	
 		def register(listener) {
 			listeners.add(listener);
+		};	
+		def unregister(listener) {
+			listeners.remove(listener);
 		};
 	
 		def getReteNode(){ reteNode };
@@ -112,6 +115,23 @@ def makeDoesProfileMatchProximity(flockr, block) {
 		profileChangedProximity;
 };
 
+def createProfileMatchingProximities(flockr, matchingProfile) {
+	(matchingProfile.getMatchingFields()).map: { |fieldName|
+		makeDoesProfileMatchProximity(flockr,
+			{ (reflect: profile).invokeField(profile, fieldName) == 
+				 (reflect: matchingProfile).invokeField(matchingProfile, fieldName) })
+	};
+};
+
+def constructProfileMatchingReteFromProximities(flockr, proximities) {
+	def rete := makeDoesProfileMatchProximity(flockr, { true });
+	proximities.each: { |proximity|
+		rete := makeAndProximity(rete, proximity);
+	};
+	rete;
+};
+
+
 // the module object of this file
 def ProximityModule := object: {
 	// public stuff goes here
@@ -120,6 +140,8 @@ def ProximityModule := object: {
 	def makeAndProximity := &makeAndProximity;
 	def makeOrProximity := &makeOrProximity;
 	def makeIsNearbyProximity := &makeIsNearbyProximity;
+	def constructProfileMatchingReteFromProximities := &constructProfileMatchingReteFromProximities;
+	def createProfileMatchingProximities := &createProfileMatchingProximities;
 	
 	def ProximityTest := extend: /.at.unit.test.UnitTest.new("ProximityTest", false) with: {
 		def waitTime := 2;
