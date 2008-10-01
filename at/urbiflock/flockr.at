@@ -38,6 +38,7 @@ def uidOf(flockr) {
 	(/.at.support.util.getAnnotationOfType(flockr, FlockrT)).username;
 };
 
+
 def makeFlockr(profile) {
 	def myProfile := profile;
 	def username := profile.username;
@@ -128,8 +129,8 @@ def makeFlockr(profile) {
 			proximities.remove(profileMatchesProximity);
 			matchingProfile := newProfile;
 			// Create new individual profile field matching proximities
-			profileMatchingProximities := ProximityModule.createProfileMatchingProximities(localInterface, matchingProfile);
-			profileMatchesProximity := ProximityModule.constructProfileMatchingReteFromProximities(localInterface, profileMatchingProximities);
+			profileMatchingProximities := /.at.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
+			profileMatchesProximity := /.at.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
 			proximities.add(profileMatchesProximity);
 			matchingProfilesFlock.setProximity(profileMatchesProximity);
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
@@ -173,8 +174,8 @@ def makeFlockr(profile) {
 	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity);
 	flocks.add(NearbyFlock);
 	
-	profileMatchingProximities := ProximityModule.createProfileMatchingProximities(localInterface, matchingProfile);
-	profileMatchesProximity := ProximityModule.constructProfileMatchingReteFromProximities(localInterface, profileMatchingProximities);
+	profileMatchingProximities := /.at.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
+	profileMatchesProximity := /.at.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
 	proximities.add(profileMatchesProximity);
 	def matchingProfilesFlock := FlockModule.makeFlock("Matching Profiles", profileMatchesProximity);
 	flocks.add(matchingProfilesFlock);

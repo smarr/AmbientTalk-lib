@@ -32,6 +32,8 @@ def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryField
 deftype DuplicateField <: lobby.at.types.Exception;
 def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 
+def ProximityModule := /.at.urbiflock.proximity;
+
 
 def AbstractFieldTypeObject := isolate: {
 	deftype ChildObjectResponsibility <: lobby.at.types.Exception;
@@ -294,9 +296,28 @@ def removeProperty(profile, propName) {
 	}
 };
 
+
+def createProfileMatchingProximities(flockr, matchingProfile) {
+	(matchingProfile.getMatchingFields()).map: { |fieldName|
+		ProximityModule.makeDoesProfileMatchProximity(flockr,
+			{ (reflect: profile).invokeField(profile, fieldName) == 
+				 (reflect: matchingProfile).invokeField(matchingProfile, fieldName) })
+	};
+};
+
+def constructProfileMatchingProximityFromProximities(flockr, proximities) {
+	def result := ProximityModule.makeDoesProfileMatchProximity(flockr, { true });
+	proximities.each: { |proximity|
+		result := ProximityModule.makeAndProximity(result, proximity);
+	};
+	result;
+};
+
 // the module object of this file
 object: {
 	def makeProfile := &makeProfile;
+	def createProfileMatchingProximities := &createProfileMatchingProximities;
+	def constructProfileMatchingProximityFromProximities := &constructProfileMatchingProximityFromProximities;
 	
 	def ProfileTest := extend: /.at.unit.test.UnitTest.new("ProfileTest") with: {
 		
