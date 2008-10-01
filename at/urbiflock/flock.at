@@ -27,7 +27,7 @@
 def Vector := /.at.collections.vector.Vector;
 
 def makeFlock(theName, theProximity) {
-	def flockrList := Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
+	def flockrList := Vector.new(10, { |prof1, prof2| /.at.urbiflock.flockr.uidOf(prof1) == /.at.urbiflock.flockr.uidOf(prof2) });
 	def name := theName;
 	def proximity := theProximity;
 
