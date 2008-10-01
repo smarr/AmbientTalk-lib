@@ -35,7 +35,7 @@ def FlockModule := /.at.urbiflock.flock;
 deftype FlockrT;
 
 def uidOf(flockr) {
-	(/.at.support.util.getAnnotationOfType(flockr, FlockrT)).username;
+	/.at.support.util.getAnnotationOfType(flockr, FlockrT).username;
 };
 
 
@@ -72,9 +72,9 @@ def makeFlockr(profile) {
 		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
 		def removeProfileChangedListener(l) { profileChangedListeners.remove(l) };
 		/* l should understand:
-		     notifyJoined(flockr : farref)
+		     notifyJoined(profile : profile)
 		       invoked whenever a new flockr has joined the ad hoc network
-		     notifyLeft(flockr: farref)
+		     notifyLeft(profile : profile)
 		       invoked whenever an existing flockr has left the ad hoc network
 		*/
     def registerDiscoveryListener(l) { discoveryListeners.add(l) };
@@ -211,10 +211,10 @@ def makeFlockr(profile) {
 	// 2) all profile changed listeners get a notifyProfileChanged event
 	whenever: FlockrT discovered: { |flockr|
 		uidFlockrMap.put(uidOf(flockr), flockr);		
-		notifyListeners: discoveryListeners with: <-notifyJoined(flockr);
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
 			system.println("Flockr: " + username + " discovered" + newProfile.username);
+			notifyListeners: discoveryListeners with: <-notifyJoined(newProfile);
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
 		} catch: TimeoutException using: { |e|
 		};
