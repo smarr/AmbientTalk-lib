@@ -27,138 +27,136 @@
 
 def Vector := /.at.collections.vector.Vector;
 
-// tupleSpaces are isolates so that we can experiment with ts that can be copied to other devices like in MultipleTSLinda
 def makeTupleSpace(){	
 	
-	  //private methods and data fields
-	  def localTS := Vector.new(); //contains local tuples
-	  def ambientTS := Vector.new(); // contains ambient tuples
-	  def localTSListeners := Vector.new();
-	  def seenTS := Vector.new(); // contains far references to seen TS.
+	//private methods and data fields
+	def localTS := Vector.new(); //contains local tuples
+	def ambientTS := Vector.new(); // contains ambient tuples
+	def localTSListeners := Vector.new();
+	def seenTS := Vector.new(); // contains far references to seen TS.
 	  
-	 // methods to manage the registration of when:matches.
-	  def registerListener(l) {
-		  localTSListeners.add(l); 
-		  object: { 
-			  def cancel() { removeListener(l)};
-			};
+	// methods to manage the registration of when:matches.
+	def registerListener(l) {
+	  localTSListeners.add(l); 
+	  object: { 
+		  def cancel() { removeListener(l)};
 		};
- 	  def removeListener(l) {
-		  localTSListeners.remove(l); 
-		};
-		def notifyListeners(tuple){
-		  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
-	  };
+	};
+ 	def removeListener(l) {
+	  localTSListeners.remove(l); 
+	};
+	def notifyListeners(tuple){
+	  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
+	};
 	  
-	  //method belonging to the tuple propagation protocol
-	  def sendTuples(){
-		  def toSend := Vector.new();
-			ambientTS.each: {|tuple|
-				if: tuple.decidePropagation() then:{
-					toSend.add(tuple);
-				} else: {
-					if: tuple.decideDie() then: {
-		        system.println("dying young " +  tuple);
-						def ld := localTS.delete({|t| t == tuple});
-						def ad := ambientTS.delete({|t| t == tuple});
-					  system.println("delete local " + ld.asTable + "and delete ambient " + ad.asTable);
-					  //todo: propagate the delete to the ambient
-					};
-				}; 
-			};
-			system.println("sending tuples " + toSend.asTable);
-			toSend.asTable;
-	  };
-	
-		//todo: separate the public interface between local/remote.
-		// public interface
-		def publicInterface := object: {
-			
-			// usual operations to manage a local ts.
-			// add a tuple to the local ts
-	    def add(tuple){
-				system.println("add to local" + tuple);
-		    localTS.add(tuple);
-		    notifyListeners(tuple);
-		  };
-		  // delete from a ts all tuples matching the template
-		  // returns a vector with the deleted tuples.
-	    def delete(template) {
-		system.println("delete " + template);
-		    def toDelete := read(template);
-	  	  localTS.removeAll: template;
-		    toDelete;
-		  }; 
-		  // returns a vector with the tuples matching the template in the ts.
-			def read(template) { (localTS.filter: template).asTable};
-			
-			// operations to manage the ambient ts.
-						
-		  //publishes a tuple into the ambient ( ~ inject in TOTA)
-		  //note that this just exports a tuple to the ambient
-		  //but it does not store in the local ts
-		  def inject: tuple {
-			system.println("add to ambient" + tuple);
-		    ambientTS.add(tuple);
-				//notify all seen ts of the addition of a new tuple.
-				//todo first time, could receiveTuples be triggered twice? 
-		    seenTS.each: { |ts| system.println("receiveTuples?"); ts<-receiveTuples([tuple]) };
-		    object:{
-			    def cancel() { 
-				    ambientTS.removeAll: {|t| t == tuple};
-				    //TODO: propagate the delete to ambient
-				  };
-		    };
-		  };
-		
-		  // places a listener  on to the local TS ( ~ subscribe in TOTA)
-		  // for the addition of tuples matching a template
-		  // it returns a publication object to be able to unsusbscribe 
-		  def when: template matches: closure {
-			  def listener := object: {
-		     def notifyTupleInserted(tuple) {
-			    if: (template(tuple)) then: { 
-				    closure(tuple);
-				  };
-		     };
-		    };
-		    registerListener(listener);
-		  };
-		  
-		  // remote interface
-		  // interface to notify the discovery of a TS	
-			def notifyTSDiscovered(ts){
-				// add ts to seenTS vector so that it can be
-				// notified if I add a new tuple to the ambient.
-				if: !(seenTS.contains(ts)) then:{
-			    seenTS.add(ts);
-				  system.println("adding discovered ts " + ts);
-			  };
-        def toSend := sendTuples();
-        if: (toSend.length > 0) then: {
-					 system.println("notifyTSDiscovered: receiveTuples on " + ts);
-	         ts<-receiveTuples(toSend);
+	//method belonging to the tuple propagation protocol
+	def sendTuples(){
+	  def toSend := Vector.new();
+		ambientTS.each: {|tuple|
+			if: tuple.decidePropagation() then:{
+				toSend.add(tuple);
+			} else: {
+				if: tuple.decideDie() then: {
+	        system.println("dying young " +  tuple);
+					def ld := localTS.delete({|t| t == tuple});
+					def ad := ambientTS.delete({|t| t == tuple});
+				  system.println("delete local " + ld.asTable + "and delete ambient " + ad.asTable);
 				};
-		  };
-		
-		  // method belonging to the tuple propagation protocol
-		  def receiveTuples(tuples){
-			  //get all ambient tuples of the other ts
-			  tuples.each: { |tuple|
-			    if: !(ambientTS.contains({|t| t.getTupleId == tuple.getTupleId})) then: {
-			      tuple.doAction();
-			      tuple := tuple.changeTupleContent();
-			      //check if you have to insert it into your local tuple space
-			      if: tuple.decideStore() then: {
-				      add(tuple);
-			      };
-			      //todo: optimization to inject all tuples at once.
-			      inject: tuple;
-			    };
-			  };
 			}; 
+		};
+		system.println("sending tuples " + toSend.asTable);
+		toSend.asTable;
+	};
+	
+	//todo: separate the public interface between local/remote.
+	// public interface
+	def publicInterface := object: {
 		
-		}; // end-of-public interface
+		// usual operations to manage a local ts.
+		// add a tuple to the local ts
+	  def add(tuple){
+			system.println("add to local" + tuple);
+	    localTS.add(tuple);
+	    notifyListeners(tuple);
+	  };
+	  // delete from a ts all tuples matching the template
+	  // returns a table with the deleted tuples.
+	  def delete(template) {
+	  	system.println("delete " + template);
+		  def toDelete := read(template);
+	    localTS.removeAll: template;
+		  toDelete.asTable;
+		}; 
+		// returns a table with the tuples matching the template in the ts.
+		def read(template) { (localTS.filter: template).asTable};
+			
+		// operations to manage the ambient ts.
+						
+		//publishes a tuple into the ambient ( ~ inject in TOTA)
+		//note that this just exports a tuple to the ambient
+		//but it does not store in the local ts
+		def inject: tuple {
+			system.println("add to ambient" + tuple);
+		  ambientTS.add(tuple);
+			//notify all seen ts of the addition of a new tuple.
+			//todo first time, could receiveTuples be triggered twice? 
+		  seenTS.each: { |ts| ts<-receiveTuples([tuple]) };
+		  //return a publication object to be able to cancel the injection.
+		  object:{
+		    def cancel() { ambientTS.removeAll: {|t| t == tuple} };
+		  };
+		};
+		
+		// places a listener  on to the local TS ( ~ subscribe in TOTA)
+		// for the addition of tuples matching a template
+		// it returns a publication object to be able to unsusbscribe 
+		def when: template matches: closure {
+		  def listener := object: {
+		    def notifyTupleInserted(tuple) {
+		      if: (template(tuple)) then: { 
+			      closure(tuple);
+			    };
+		    };
+		  };
+		  registerListener(listener);
+		};
+		  
+		// remote interface
+		// methods belonging to the tuple propatation protocol
+		
+		// notifies the discovery of a TS	and 
+		// starts the propagation protocol (sender side)
+		def notifyTSDiscovered(ts){
+	  	// add ts to seenTS vector so that it can be
+			// notified if I add a new tuple to the ambient.
+			if: !(seenTS.contains(ts)) then:{
+		    seenTS.add(ts);
+			  system.println("adding discovered ts " + ts);
+		  };
+      def toSend := sendTuples();
+      if: (toSend.length > 0) then: {
+				 system.println("notifyTSDiscovered: receiveTuples on " + ts);
+	       ts<-receiveTuples(toSend);
+			};
+    };
+		
+		// iterates over all ambient tuples of the other ts 
+		// and triggers the propagation protocol (receiver side)
+		def receiveTuples(tuples){
+		  tuples.each: { |tuple|
+		    if: !(ambientTS.contains({|t| t.getTupleId == tuple.getTupleId})) then: {
+		      // tota propagation protocol (receiver side)
+		      tuple.doAction();
+			    tuple := tuple.changeTupleContent();
+			    //check if you have to insert it into your local tuple space
+			    if: tuple.decideStore() then: { add(tuple) };
+			    //todo: optimization to inject all tuples at once.
+			    inject: tuple;
+		    };
+		  };
+	  }; 
+		
+	}; // end-of-public interface
   publicInterface; 
 };
 
@@ -267,8 +265,7 @@ def AmbientTotaModule := object: {
 					sT.cancel();
 					res<-resolve(`ok);
 				};	
-		  };
-		
+		  };		
 			fut;
 		};
 		
