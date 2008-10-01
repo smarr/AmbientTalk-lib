@@ -32,6 +32,7 @@ def makeFlock(theName, theProximity) {
 	def proximity := theProximity;
 
 	def theFlock := object: {
+		
 		def addFlockr(profile) {
 			if: !(flockrList.contains(profile)) then: {
 				flockrList.add(profile);
@@ -46,13 +47,13 @@ def makeFlock(theName, theProximity) {
 			flockrList.at(flockrList.find: { |p| p.username == uid });
 		};
 		def setProximity(newProximity) {
-			proximity.unregister(self);
+			subscription.cancel();
 			proximity := newProximity;
-			proximity.register(self);
+			subscription := proximity.register(self);
 		};
 	};
 	
-	proximity.register(theFlock);
+	def subscription := proximity.register(theFlock);
 	
 	theFlock;
 };

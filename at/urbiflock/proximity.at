@@ -25,23 +25,24 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// private stuff goes here
-//import /.at.urbiflock.flockr;
 def HashMap := jlobby.java.util.HashMap;
 def Vector := /.at.collections.vector.Vector;
 def Rete := /.at.urbiflock.rete.makeRete({|profile| profile.username});
 
+// a proximity is an object wrapping a rete node 
+// + the behaviour for storing and notifying observers of changes in the rete.
+// In Urbiflock, flocks get registered to proximities. 
 def makeProximity(reteNode) {
+	//public interface of proximity
 	object: {
 		def listeners := Vector.new();
 	
-		def register(listener) {
+		def register(listener) { 
 			listeners.add(listener);
+			object: {
+				def cancel() {listeners.remove(listener)};
+			} 
 		};	
-		def unregister(listener) {
-			listeners.remove(listener);
-		};
-	
 		def getReteNode(){ reteNode };
 		
 		def notifyFromNode(Token) {
@@ -52,21 +53,21 @@ def makeProximity(reteNode) {
 						listeners.each: {|listener| listener.removeFlockr(Token.getFlockr); };					 
 				};
 		};
-		
-		def connect () {
+		def connect() {
 			reteNode.pass := {|Token| self.notifyFromNode(Token) };
 		};	
 		connect();
 	};
 };
 
+//default proximities offered by the framework
+// encodes the friendship relationships based on the buddy list
 def makeIsFriendProximity(flockr) {
 	def isFriendProximity := extend: makeProximity(Rete.makeFilterNode(Rete.makeFilter({|RI| true}))) with: {
 		//  invoked whenever a buddy was manually added to this flockr's buddy list
 		def notifyBuddyAdded(profile) {
 			super^getReteNode().insert(profile);
 		};
-
     //invoked whenever a buddy was manually removed from this flockr's buddy list
     def notifyBuddyRemoved(profile) {
 			super^getReteNode().remove(profile);
@@ -77,13 +78,13 @@ def makeIsFriendProximity(flockr) {
 	isFriendProximity;
 };
 
+// encodes physical proximity function
 def makeIsNearbyProximity(flockr) {
 	def isNearbyProximity := extend: makeProximity(Rete.makeFilterNode(Rete.makeFilter({|RI| true}))) with: {
 		//  invoked whenever a buddy comes nearby
 		def notifyJoined(profile) {
 			super^getReteNode().insert(profile);
 		};
-
     //invoked whenever a flockr comes nearby
     def notifyLeft(profile) {
 			super^getReteNode().remove(profile);
@@ -94,14 +95,7 @@ def makeIsNearbyProximity(flockr) {
 	isNearbyProximity;
 };
 
-def makeAndProximity(leftP, rightP) {
-	makeProximity( Rete.makeAndJoinNode(leftP.getReteNode , rightP.getReteNode ) );
-};
-
-def makeOrProximity(leftP, rightP) {
-	makeProximity( Rete.makeOrJoinNode(leftP.getReteNode , rightP.getReteNode ) );
-};
-
+//encodes a proximity fucntion that test an attribute of a flockr profile. 
 def makeDoesProfileMatchProximity(flockr, block) {
 		def newBlockStatements := `{ |profile| #@(block.method.bodyExpression.statements) };
 		def profilePredicate := eval: newBlockStatements in: block.context.lexicalScope;
@@ -114,16 +108,25 @@ def makeDoesProfileMatchProximity(flockr, block) {
 		flockr.registerProfileChangedListener(profileChangedProximity);
 		profileChangedProximity;
 };
+// encodes a proximity function implementing the and operator on two given proximities.
+def makeAndProximity(leftP, rightP) {
+	makeProximity( Rete.makeAndJoinNode(leftP.getReteNode , rightP.getReteNode ) );
+};
 
+// encodes a proximity function implementing the or operator on two given proximities.
+def makeOrProximity(leftP, rightP) {
+	makeProximity( Rete.makeOrJoinNode(leftP.getReteNode , rightP.getReteNode ) );
+};
 
 // the module object of this file
 def ProximityModule := object: {
 	// public stuff goes here
 	def makeIsFriendProximity := &makeIsFriendProximity;
 	def makeDoesProfileMatchProximity := &makeDoesProfileMatchProximity;
+	def makeIsNearbyProximity := &makeIsNearbyProximity;	
 	def makeAndProximity := &makeAndProximity;
 	def makeOrProximity := &makeOrProximity;
-	def makeIsNearbyProximity := &makeIsNearbyProximity;
+
 	
 	def ProximityTest := extend: /.at.unit.test.UnitTest.new("ProximityTest", false) with: {
 		def waitTime := 2;
