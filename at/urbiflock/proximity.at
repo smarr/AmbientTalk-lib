@@ -133,32 +133,6 @@ def ProximityModule := object: {
 		import /.at.support.timer;
 		import /.at.lang.futures exclude seconds, minutes, millisec;
 		enableFutures(false);
-		
-	/*	def testAsyncNearbyFlock(){
-			def [fut,res] := makeFuture();
-			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "PF5.1";
-		
-			def a := actor: {
-				import /.at.urbiflock.flockr;
-				def profile52 := /.at.urbiflock.profile.makeProfile();
-				profile52.username := "PF5.2";
-				def flockr52 := makeFlockr(profile52);
-				def stopFlockrs(){
-					flockr52.stop();
-				};
-			};	
-			
-			def nearbyFlock := flockr1.getFlock("NearbyFlock");
-			when: seconds(waitTime) elapsed: {
-			  self.assertEquals(1, nearbyFlock.getFlockrList.length);	
-				when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
-					flockr1.stop();
-			  	res.resolve(`ok);
-				};
-			};	
-			fut;		
-		};*/
 				
 		def testAsyncFriendsFlock(){
 			def [fut,res] := makeFuture();
@@ -179,108 +153,93 @@ def ProximityModule := object: {
 		};
 		
 		def testAsyncFriendsOrFilterFlock(){
-				def [fut,res] := makeFuture();
-				def profile1 := /.at.urbiflock.profile.makeProfile();
-				profile1.username := "PF2.1";
+			def [fut,res] := makeFuture();
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "PF2.1";
+			def profile2 := /.at.urbiflock.profile.makeProfile();
+			profile2.username := "PF2.2";
 
+			def a := actor: {
+				import /.at.support.timer;
+				
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "PF2.2";
-
-				def a := actor: {
-					import /.at.urbiflock.flockr;
-					import /.at.support.timer;
-					
-					def profile2 := /.at.urbiflock.profile.makeProfile();
-					profile2.username := "PF2.2";
-					profile2.sex := "MALE";  
-					def flockr22 := makeFlockr(profile2);
-					def sexChange() {
-						profile2.sex := "FEMALE";
-						network.offline();
-						when: seconds(waitTime) elapsed: {
-							network.online();
-							flockr22.stop();
-							flockr22 := makeFlockr(profile2);
-						};
-						2;
-					};
-					def stopFlockrs(){
-						flockr22.stop();
-						
-					};
-				};
-
-				def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
-				def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
-				def friendProximity := makeIsFriendProximity(flockr1);
-				def friendAndFemaleProximity := makeOrProximity(femaleProximity, friendProximity);
-
-				def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity);
-
-				flockr1.addFlock(FriendsAndFemaleFlock);
-				flockr1.addBuddy(profile2);
-
-				when: seconds(waitTime) elapsed: {
-					system.println("test2" + FriendsAndFemaleFlock.getFlockrList);
-				  self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);	
-					flockr1.removeBuddy(profile2);
+				profile2.sex := "MALE";  
+				def flockr22 := /.at.urbiflock.flockr.makeFlockr(profile2);
+				def sexChange() {
+					profile2.sex := "FEMALE";
+					network.offline();
 					when: seconds(waitTime) elapsed: {
-						self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);
-	
-						when:	a<-sexChange()@FutureMessage becomes: { |val|
-							self.assertEquals(2,val);
-								when: seconds(waitTime*3) elapsed: {
-									self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
-									when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
-										flockr1.stop();
-										res.resolve(true);
-									};
+						network.online();
+						flockr22.stop();
+						flockr22 := /.at.urbiflock.flockr.makeFlockr(profile2);
+					};
+					nil;
+				};
+				def stopFlockrs(){
+					flockr22.stop();
+				};
+		  };
+
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
+			def friendProximity := makeIsFriendProximity(flockr1);
+			def friendAndFemaleProximity := makeOrProximity(femaleProximity, friendProximity);
+			def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity);
+
+			flockr1.addFlock(FriendsAndFemaleFlock);
+			flockr1.addBuddy(profile2);
+
+			when: seconds(waitTime) elapsed: {
+			  self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);	
+				flockr1.removeBuddy(profile2);
+				when: seconds(waitTime) elapsed: {
+					self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);
+					when:	a<-sexChange()@FutureMessage becomes: { |val|
+							when: seconds(waitTime*3) elapsed: {
+								self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
+								when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
+									flockr1.stop();
+									res.resolve(true);
 								};
-						} catch:  { |exc|
-						  system.println("Exception: " + exc.message);
-						};
+							};
 					};
 				};
-				fut;			
 			};
+			fut;			
+		};
 		
 		def testAsyncFriendsAndFilterFlock(){
 			
 			def [fut, res] := makeFuture();
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "PF3.1";
-			
 			def profile2 := /.at.urbiflock.profile.makeProfile();
 			profile2.username := "PF3.2";
 			
 			def a := actor: {
-				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "PF3.2";
 				profile2.sex := "MALE";  
-				def flockr32 := makeFlockr(profile2);
+				def flockr32 := /.at.urbiflock.flockr.makeFlockr(profile2);
 				def stopFlockrs(){
 					flockr32.stop();
 				};
 			};
 
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);			
-			
 			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
 			def friendProximity := makeIsFriendProximity(flockr1);
 			def friendAndFemaleProximity := makeAndProximity(femaleProximity, friendProximity);
-			
 			def FriendsAndFemaleFlock2 := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock2", friendAndFemaleProximity);
 			
 			flockr1.addFlock(FriendsAndFemaleFlock2);
 			flockr1.addBuddy(profile2);
 					
-			when: seconds(waitTime) elapsed: {
-				system.println("test3" + FriendsAndFemaleFlock2.getFlockrList);
+			when: seconds(waitTime*3) elapsed: {
 			  self.assertEquals(1, FriendsAndFemaleFlock2.getFlockrList.length);	
 				flockr1.removeBuddy(profile2);
 				when: seconds(waitTime) elapsed: {
-					system.println("test31" + FriendsAndFemaleFlock2.getFlockrList);
 					self.assertEquals(0, FriendsAndFemaleFlock2.getFlockrList.length);
 					when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
 						flockr1.stop();
@@ -299,32 +258,32 @@ def ProximityModule := object: {
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
 			
 			def a := actor: {
-				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "PF4.2";
 				profile2.sex := "FEMALE";  
-				def flockr42 := makeFlockr(profile2);
+				def flockr42 := /.at.urbiflock.flockr.makeFlockr(profile2);
 				def stopFlockrs(){
 					flockr42.stop();
 				};
 			};
 			
 			def b := actor: {
-				import /.at.urbiflock.flockr;
 				def profile3 := /.at.urbiflock.profile.makeProfile();
 				profile3.username := "PF4.3";
 				profile3.sex := "FEMALE";  
-				def flockr43 := makeFlockr(profile3);
+				def flockr43 := /.at.urbiflock.flockr.makeFlockr(profile3);
 				def stopFlockrs(){
 					flockr43.stop();
 				};
 			};
 			
 			// Adding predifined flocks
-			flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { profile.sex == "FEMALE" })));
+			def matchingProfile := /.at.urbiflock.profile.makeProfile();
+			matchingProfile.sex := "FEMALE";
+			flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { profile.sex == matchingProfile.sex })));
 			def girlFriendFlock := flockr1.getFlock("GirlFriends");
 			
-			when: seconds(waitTime*3) elapsed: {
+			when: seconds(waitTime*4) elapsed: {
 			  self.assertEquals(2, girlFriendFlock.getFlockrList.length);	
 			  def f := group: [a<-stopFlockrs()@FutureMessage, b<-stopFlockrs()@FutureMessage];
 				when: f becomes: {|ack| 
@@ -334,5 +293,31 @@ def ProximityModule := object: {
 			};
 			fut;			
 		};
+		
+		/*	def testAsyncNearbyFlock(){
+				def [fut,res] := makeFuture();
+				def profile1 := /.at.urbiflock.profile.makeProfile();
+				profile1.username := "PF5.1";
+
+				def a := actor: {
+					def profile2 := /.at.urbiflock.profile.makeProfile();
+					profile2.username := "PF5.2";
+					def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+					def stopFlockrs(){
+						flockr2.stop();
+					};
+				};	
+
+				def nearbyFlock := flockr1.getFlock("NearbyFlock");
+				when: seconds(waitTime) elapsed: {
+				  self.assertEquals(1, nearbyFlock.getFlockrList.length);	
+					when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
+						flockr1.stop();
+				  	res.resolve(`ok);
+					};
+				};	
+				fut;		
+			};*/
+			
 	};
 };
