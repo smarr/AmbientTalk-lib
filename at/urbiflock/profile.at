@@ -300,13 +300,13 @@ def removeProperty(profile, propName) {
 def createProfileMatchingProximities(flockr, matchingProfile) {
 	(matchingProfile.getMatchingFields()).map: { |fieldName|
 		ProximityModule.makeDoesProfileMatchProximity(flockr,
-			{ (reflect: profile).invokeField(profile, fieldName) == 
-				 (reflect: matchingProfile).invokeField(matchingProfile, fieldName) })
+			{ |profile| (reflect: profile).invokeField(profile, fieldName) == 
+					 (reflect: matchingProfile).invokeField(matchingProfile, fieldName) })
 	};
 };
 
 def constructProfileMatchingProximityFromProximities(flockr, proximities) {
-	def result := ProximityModule.makeDoesProfileMatchProximity(flockr, { true });
+	def result := ProximityModule.makeDoesProfileMatchProximity(flockr, { |profile| true });
 	proximities.each: { |proximity|
 		result := ProximityModule.makeAndProximity(result, proximity);
 	};
