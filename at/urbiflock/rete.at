@@ -114,7 +114,7 @@ def makeChangeNode(filter) {
 };
 
 def makeOrJoinNode(fleft, fright){
-  extend: makeFilterNode(makeFilter(makeFilter({|v| true}))) with: {
+  extend: makeFilterNode(makeFilter({|v| true})) with: {
 	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
 		def mright := makeMemory({|Token| getId(Token.getFlockr)});
 	  
