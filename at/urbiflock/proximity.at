@@ -103,9 +103,7 @@ def makeIsNearbyProximity(flockr) {
 
 //encodes a proximity fucntion that test an attribute of a flockr profile. 
 def makeDoesProfileMatchProximity(flockr, block) {
-		def newBlockStatements := `{ |profile| #@(block.method.bodyExpression.statements) };
-		def profilePredicate := eval: newBlockStatements in: block.context.lexicalScope;
-		def profileChangedProximity := extend: makeProximity(Rete.makeChangeNode( Rete.makeFilter( profilePredicate ) )) with: {
+		def profileChangedProximity := extend: makeProximity(Rete.makeChangeNode( Rete.makeFilter( block ) )) with: {
 			def notifyProfileChanged(farref, profile) {
 				super^getReteNode().changeEvent(profile);
 			};
@@ -188,7 +186,7 @@ def ProximityModule := object: {
 		  };
 
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
-			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
+			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
 			def friendProximity := makeIsFriendProximity(flockr1);
 			def friendAndFemaleProximity := makeOrProximity(femaleProximity, friendProximity);
 			def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity);
@@ -234,7 +232,7 @@ def ProximityModule := object: {
 			};
 
 			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);			
-			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { profile.sex == "MALE" });
+			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
 			def friendProximity := makeIsFriendProximity(flockr1);
 			def friendAndFemaleProximity := makeAndProximity(femaleProximity, friendProximity);
 			def FriendsAndFemaleFlock2 := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock2", friendAndFemaleProximity);
@@ -286,7 +284,7 @@ def ProximityModule := object: {
 			// Adding predifined flocks
 			def matchingProfile := /.at.urbiflock.profile.makeProfile();
 			matchingProfile.sex := "FEMALE";
-			flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { profile.sex == matchingProfile.sex })));
+			flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == matchingProfile.sex })));
 			def girlFriendFlock := flockr1.getFlock("GirlFriends");
 			
 			when: seconds(waitTime*4) elapsed: {
