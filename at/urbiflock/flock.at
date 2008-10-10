@@ -44,7 +44,10 @@ def makeFlock(theName, theProximity) {
 			flockrList.asTable.map:{|profile| profile.username};
 		};
 		def getProfile(uid) {
-			flockrList.at(flockrList.find: { |p| p.username == uid });
+			def idx := flockrList.find: { |p| p.username == uid };
+			if: (idx != nil) then: {
+				flockrList.at(idx);				
+			}
 		};
 		def setProximity(newProximity) {
 			subscription.cancel();

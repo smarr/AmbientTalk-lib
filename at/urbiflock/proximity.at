@@ -72,6 +72,9 @@ def makeIsFriendProximity(flockr) {
     def notifyBuddyRemoved(profile) {
 			super^getReteNode().remove(profile);
 		};
+		// COMMENT Tom: why do we call 'connect' here? The parent already connect itself
+		// when it is created (in makeProximity). It could be useful if we would override
+		// 'connect()' in this child object, but we don't.
 		super^connect();	
 	};
 	flockr.registerBuddyListListener(isFriendProximity);
@@ -89,6 +92,9 @@ def makeIsNearbyProximity(flockr) {
     def notifyLeft(profile) {
 			super^getReteNode().remove(profile);
 		};
+		// COMMENT Tom: why do we call 'connect' here? The parent already connect itself
+		// when it is created (in makeProximity). It could be useful if we would override
+		// 'connect()' in this child object, but we don't.
 		super^connect();	
 	};
 	flockr.registerDiscoveryListener(isNearbyProximity);

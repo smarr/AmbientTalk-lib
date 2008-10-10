@@ -34,6 +34,7 @@ def FlockModule := /.at.urbiflock.flock;
 // type identifying remote Flockr Users
 deftype FlockrT;
 
+// given a Flockr near or far reference, returns its username (a string)
 def uidOf(flockr) {
 	/.at.support.util.getAnnotationOfType(flockr, FlockrT).username;
 };
@@ -50,6 +51,12 @@ def makeFlockr(profile) {
 	def discoveryListeners := Vector.new();
 	def buddyListListeners := Vector.new();
 	
+	// COMMENT tom: I think it would be better to represent the list of applications
+	// as a normal AT vector. Then, when launching the application launcher, we convert
+	// the vector into an AT table. The ApplicationLauncher class constructor must then
+	// take an Application[] array as parameter. Because of this, the elements in the table
+	// will be automatically coerced into an Application, such that we do not have to
+	// explicitly use the cast:into: function as is now done below.
 	def applications := (jlobby.java.util.Vector).new();
 	def flocks := Vector.new();
 	def proximities := Vector.new();
@@ -78,7 +85,7 @@ def makeFlockr(profile) {
 		       invoked whenever an existing flockr has left the ad hoc network
 		*/
     def registerDiscoveryListener(l) { discoveryListeners.add(l) };
-	def removeDiscoveryListener(l) { discoveryListeners.remove(l) };
+		def removeDiscoveryListener(l) { discoveryListeners.remove(l) };
 		/* l should understand:
 		     notifyBuddyAdded(flockr : flockr, buddyProfile : profile)
 		       invoked whenever a buddy was manually added to this flockr's buddy list
@@ -111,11 +118,9 @@ def makeFlockr(profile) {
 		def getFlocks() { flocks.asTable };
 		def getFlock(name) { 
 			def flockIndex := flocks.find: { |flock| name == flock.getName};
-			if: !(flockIndex == nil ) then: {
+			if: !(flockIndex == nil) then: {
 				flocks.at(flockIndex);
-			} else: {
-				nil;
-			};
+			}; // else return nil
 		};
 		def removeFlock(flock) { flocks.remove(flock) };
 		def addFlock(flock) { flocks.add(flock) };
@@ -163,7 +168,7 @@ def makeFlockr(profile) {
 	// BuddyList is interested in Profile changes (update cached profiles)
 	localInterface.registerProfileChangedListener(buddyList);
 	
-	// Adding predifined flocks
+	// Adding predefined flocks
 	def isFriendProximity := ProximityModule.makeIsFriendProximity(localInterface);
 	proximities.add(isFriendProximity);
 	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", isFriendProximity);
@@ -173,7 +178,7 @@ def makeFlockr(profile) {
 	proximities.add(isNearbyProximity);
 	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity);
 	flocks.add(NearbyFlock);
-	
+		
 	profileMatchingProximities := /.at.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
 	profileMatchesProximity := /.at.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
 	proximities.add(profileMatchesProximity);
@@ -213,15 +218,14 @@ def makeFlockr(profile) {
 		uidFlockrMap.put(uidOf(flockr), flockr);		
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
-			system.println("Flockr: " + username + " discovered" + newProfile.username);
+			system.println("DEBUG: Flockr: " + username + " discovered" + newProfile.username);
 			notifyListeners: discoveryListeners with: <-notifyJoined(newProfile);
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
 		} catch: TimeoutException using: { |e|
 		};
 		
-		/*
-		Problem? What if a flockr disconnects, then reconnects and the addFlockr event
-		is signalled before the removeFlockr event
+		/* FIXME: What if a flockr disconnects, then reconnects and the addFlockr event
+		   is signalled before the removeFlockr event. Can this ever happen?
 		*/
 		
 		when: flockr disconnected: {
