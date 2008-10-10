@@ -21,10 +21,10 @@ import edu.vub.at.objects.natives.NATText;
  */
 public class ApplicationLauncher extends Frame implements ActionListener {
 	
-	Vector applications_ = new Vector();
+	Application[] applications_;
 	Panel applicationGridPanel_;
 	
-	public ApplicationLauncher(Vector applications) {
+	public ApplicationLauncher(Application[] applications) {
 		applications_ = applications;
 		
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -35,9 +35,8 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		applicationGridPanel_ = new Panel(gridLayout);
 		add(applicationGridPanel_);
 		
-		Iterator it = applications_.iterator();
-		while (it.hasNext()) {
-			Application app = (Application)it.next();
+		for (int i = 0; i < applications_.length; i++) {
+			Application app = applications_[i];
 			String appName = app.getName().javaValue;
 			Button button = new Button(appName);
 			button.setActionCommand(appName);
@@ -56,10 +55,9 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 	}
 	
 	public Application findApplication(String name) {
-		Iterator it = applications_.iterator();
 		Application result = null;
-		while (it.hasNext()) {
-			Application app = (Application)it.next();
+		for (int i = 0; i < applications_.length; i++) {
+			Application app = applications_[i];
 			if (app.getName().javaValue.equals(name)) {
 				result = app;
 			}
@@ -99,7 +97,7 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		apps.add(app3);
 		apps.add(app4);
 		apps.add(app5);
-		ApplicationLauncher launcher = new ApplicationLauncher(apps);
+		ApplicationLauncher launcher = new ApplicationLauncher((Application[])apps.toArray());
 	}
 
 }

@@ -51,13 +51,7 @@ def makeFlockr(profile) {
 	def discoveryListeners := Vector.new();
 	def buddyListListeners := Vector.new();
 	
-	// COMMENT tom: I think it would be better to represent the list of applications
-	// as a normal AT vector. Then, when launching the application launcher, we convert
-	// the vector into an AT table. The ApplicationLauncher class constructor must then
-	// take an Application[] array as parameter. Because of this, the elements in the table
-	// will be automatically coerced into an Application, such that we do not have to
-	// explicitly use the cast:into: function as is now done below.
-	def applications := (jlobby.java.util.Vector).new();
+	def applications := Vector.new();
 	def flocks := Vector.new();
 	def proximities := Vector.new();
 	
@@ -155,7 +149,7 @@ def makeFlockr(profile) {
 		};
 		
 		def stop() { (publication != nil).ifTrue: { publication.cancel()} };
-		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications) };
+		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) };
 	};
 		
 	def remoteInterface := object: {
@@ -187,27 +181,21 @@ def makeFlockr(profile) {
 	
 	// "My Profile" editor application
 	applications.add(
-		/.at.support.symbiosis.cast: 
-			(/.at.urbiflock.application.makeApplication(
-				"My Profile", 
-				{ jlobby.at.urbiflock.ui.ProfileViewer.new(localInterface, myProfile, true) })) 
-		into: (jlobby.at.urbiflock.ui.Application));
+		(/.at.urbiflock.application.makeApplication(
+			"My Profile", 
+			{ jlobby.at.urbiflock.ui.ProfileViewer.new(localInterface, myProfile, true) })));
 		
 	// "Flocks" flock list viewer application
 	applications.add(
-		/.at.support.symbiosis.cast: 
-			(/.at.urbiflock.application.makeApplication(
-				"Flocks", 
-				{ jlobby.at.urbiflock.ui.FlockListViewer.new(localInterface) })) 
-		into: (jlobby.at.urbiflock.ui.Application));
+		(/.at.urbiflock.application.makeApplication(
+			"Flocks", 
+			{ jlobby.at.urbiflock.ui.FlockListViewer.new(localInterface) })));
 		
 	// "Profile matcher" doesProfileMatch proximity editor application
 	applications.add(
-		/.at.support.symbiosis.cast: 
-			(/.at.urbiflock.application.makeApplication(
-				"Profile matcher", 
-				{ jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(localInterface, matchingProfile) })) 
-		into: (jlobby.at.urbiflock.ui.Application));
+		(/.at.urbiflock.application.makeApplication(
+			"Profile matcher", 
+			{ jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(localInterface, matchingProfile) })));
 	
 	publication := export: remoteInterface as: FlockrT;
 	
