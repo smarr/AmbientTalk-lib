@@ -77,6 +77,16 @@ def retrieveTestMethodNames(obj) {
 	methodNames;
 };
 
+def whenDone: val do: closure {
+	if: (is: val taggedAs: FuturesModule.Future) then: {
+		FuturesModule.when: val becomes: { |realVal|
+			closure();
+		}
+	} else: {
+		closure();
+	}
+};
+
 def consoleReporter := object: {
 	def numSuccess := 0;
 	def numFailed := 0;
@@ -148,21 +158,12 @@ def UnitTest := object: {
 	
 	def runTest(reporter := consoleReporter.new()) {
 		def numAsyncTests := 0; // count number of outstanding async unit tests
-		
-		def asyncTestFinished() {
-			self.tearDown();
-			numAsyncTests := numAsyncTests - 1;
-			// last async test fininshed?
-			if: (0 == numAsyncTests) then: {
-				reporter.stop(self.name);
-			};
-		};
-		
+				
 		def testMethods := retrieveTestMethodNames(self);
 		
 		reporter.start(self.name, testMethods.length);
 		
-		def runAssync(methName, after) {
+		def run: methName then: after {
 			  def handleError(e) {
 					if: (is: e taggedAs: AssertionFailed) then: {
 						reporter.failure(methName, e);				
@@ -173,16 +174,15 @@ def UnitTest := object: {
 			  };
 			
 				numAsyncTests := numAsyncTests + 1;
-				self.setUp();
-				
-				try: {
-					// test method starts with "testAsync" so it is expected to return a future
-					FuturesModule.when: (reflect: self).invoke(self, `(.#methName())) becomes: { |val|
-						reporter.success(methName);
-						after();
-					} catch: handleError;
-				} catch: /.at.types.Exception using: handleError;
-				
+				whenDone: self.setUp() do: {
+					try: {
+						// test method starts with "testAsync" so it is expected to return a future
+						FuturesModule.when: (reflect: self).invoke(self, `(.#methName())) becomes: { |val|
+							reporter.success(methName);
+							after();
+						} catch: handleError;
+					} catch: /.at.types.Exception using: handleError;	
+				};
 				nil;
 		};
 		
@@ -192,28 +192,43 @@ def UnitTest := object: {
 				if: (methName.text ~= "^testAsync.*") then: {
 					// asynchronous unit test
 					if: self.parallel then: {
-						runAssync(methName, { asyncTestFinished() });
+						run: methName then: {
+							whenDone: self.tearDown() do: {
+								numAsyncTests := numAsyncTests - 1;
+								// last async test fininshed?
+								if: (0 == numAsyncTests) then: {
+									reporter.stop(self.name);
+								};	
+							}
+						};
 						testMethod(index + 1);
 					} else: {
 						system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
-						runAssync(methName, { self.tearDown(); numAsyncTests := numAsyncTests - 1; testMethod(index + 1) });
+						run: methName then: {
+							whenDone: self.tearDown() do: {
+								numAsyncTests := numAsyncTests - 1;
+								testMethod(index + 1)	
+							}
+						};
 					};
 				} else: {
 					// synchronous unit test
-					try: {
-						if: !self.parallel then: {
-							system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
-						};
-						self.setUp();
-						(reflect: self).invoke(self, `(.#methName()));
-						self.tearDown();
-						reporter.success(methName);
-					} catch: AssertionFailed using: {|e|
-						reporter.failure(methName, e);
-					} catch: /.at.types.Exception using: { |e|
-						reporter.error(methName, e);
+					if: !self.parallel then: {
+						system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
 					};
-					testMethod(index + 1);
+					whenDone: self.setUp() do: {
+						try: {
+							(reflect: self).invoke(self, `(.#methName()));
+						}	catch: AssertionFailed using: {|e|
+							reporter.failure(methName, e);
+						} catch: /.at.types.Exception using: { |e|
+							reporter.error(methName, e);
+						};
+						whenDone: self.tearDown() do: {
+							reporter.success(methName);
+							testMethod(index + 1);
+						}
+					}
 				}	
 			} else: {
 				if: !parallel then: {

@@ -260,95 +260,88 @@ object: {
 	// run these unit tests sequentially
 	def FlockrTest := extend: /.at.unit.test.UnitTest.new("FlockrTest", false) with: {
 		
-		def testAsyncProfileExchange() {
-			def [fut,res] := makeFuture(seconds(10));
-			
+		def flockr1;
+		def actorHostingFlockr2;
+		
+		def setUp() {
+			// create two new flockrs, one in this actor, the other in a new actor
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
-		  def flockr1 := makeFlockr(profile1);
+		  flockr1 := makeFlockr(profile1);
 		
-			def listener := object: {
-				def notifyProfileChanged(flockr, newProfile) {
-					res.resolve(newProfile.username);
-				};
-			};
-			flockr1.registerProfileChangedListener(listener);
-			
-			def a := actor: {
+		  actorHostingFlockr2 := actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2";
+				profile2.firstname := "Flockr 2 first name";
 			  def flockr2 := makeFlockr(profile2);
 			  def goOffline() { flockr2.goOffline(); `ok };
-			};
+		  }
+		};
+		
+		def tearDown() {
+			// clean up the flockrs created for each test
+			flockr1.goOffline();
+			actorHostingFlockr2<-goOffline()@FutureMessage;
+			// because we return a future, tearDown will wait
+			// until the second flock has been taken offline before
+			// starting the next test
+		};
+		
+		// test whether two flockrs can discover one another
+		def testAsyncProfileExchange() {
+			def [fut,res] := makeFuture(seconds(10));
 			
+			flockr1.registerProfileChangedListener(object: {
+				def notifyProfileChanged(flockr, newProfile) {
+					res.resolve(newProfile.username);
+				};
+			});
+
 			when: fut becomes: { |uname|
 				self.assertEquals("flockr2", uname);
-				// clean up the flockrs created in this test
-				flockr1.goOffline();
-				a<-goOffline()@FutureMessage;
 			};
 			
 		};
 		
 		def testAsyncUpdateProfileInBuddyList() {
-			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockr2.1";
-			def flockr1 := makeFlockr(profile1);
 			def profile2 := /.at.urbiflock.profile.makeProfile();
-			profile2.username := "flockr2.2";
+			profile2.username := "flockr2";
 			profile2.firstname := "Jef";
 			flockr1.addBuddy(profile2);
-			self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Jef");
-			
-			def a := actor: {
-				import /.at.urbiflock.flockr;
-				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr2.2";
-				profile2.firstname := "Marcel";
-			  def flockr2 := makeFlockr(profile2);
-			  def goOffline() { flockr2.goOffline(); `ok };
-			};
-			
+			self.assertEquals((flockr1.getBuddy("flockr2")).firstname, "Jef");
+						
 			// We wait 5 seconds for the event to be delivered and the profile to be updated.
 			// If this test fails, maybe the update did not happen within 5 seconds.			
 			/.at.support.timer.when: seconds(5) elapsedWithFuture: {
-				self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Marcel");
-				// clean up the flockrs created in this test
-				flockr1.goOffline();
-				a<-goOffline()@FutureMessage;
+				self.assertEquals((flockr1.getBuddy("flockr2")).firstname, "Flockr 2 first name");
 			};
 		};
 		
 		def testAsyncMatchProfile() {
-			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockr3.1";
-			def flockr1 := makeFlockr(profile1);
-
-			self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
-
-			def a := actor: {
-				import /.at.urbiflock.flockr;
-				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr3.2";
-				profile2.firstname := "foo";
-			  def flockr2 :=	makeFlockr(profile2);
-				def goOffline() { flockr2.goOffline(); `ok };
-			};
-
+			// we assume that after 5 seconds, flockr1 and flockr2 will have discovered one another
 			/.at.support.timer.when: seconds(5) elapsedWithFuture: {
-				self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1);
+				// flockr2 should be in flockr1's Flock of Matching Profiles (because no filter was set,
+				// this flock matches everything)
+				self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1, "flockr2 not in expected flock");
+				
+				// let's create a new profile to be used as a filter
 				def newMatchingProfile := /.at.urbiflock.profile.makeProfile();
 				newMatchingProfile.setFieldShouldMatch(`firstname);
-				newMatchingProfile.firstname := "bar";
+				newMatchingProfile.firstname := "bar"; // this won't match flockr2's current first name
 				flockr1.updateMatchingProfile(newMatchingProfile);
 
 				/.at.support.timer.when: seconds(5) elapsedWithFuture: {
-					self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
+					// now, flockr2 should no longer be in flockr1's list of matching profiles
+					self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0, "flockr2 still in expected flock");
 					
-					// clean up the flockrs created in this test
-					flockr1.goOffline();
-					a<-goOffline()@FutureMessage;
+					// now, let's adapt the filter such that it matches the name of flockr2
+					newMatchingProfile.firstname := "Flockr 2 first name";
+					flockr1.updateMatchingProfile(newMatchingProfile);
+					/.at.support.timer.when: seconds(5) elapsedWithFuture: {
+						// now, flockr2 should again be in flockr1's Matching Profiles flock
+					  self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1, "flockr2 not in expected flock after profile change");
+				  };
 				};
 			};
 		};
