@@ -144,6 +144,18 @@ def TimerModule := object: {
 		}
 	};
 	
+	// a variant of when:elapsed: which returns a future that will be
+	// resolved or ruined by executing the given closure after the given timeout
+	def when: timeout elapsedWithFuture: closure {
+		def [fut,res] := /.at.lang.futures.makeFuture();
+		when: timeout elapsed: {
+			try: {
+				res.resolve(closure());
+			} catch: /.at.types.Exception using: { |e| res.ruin(e) };
+		};
+		fut
+	};
+	
 	def has: period passedSince: timestamp {
 	  now() - timestamp > period
 	};

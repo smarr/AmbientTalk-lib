@@ -241,6 +241,7 @@ def makeFlockr(profile) {
 			};
 			
 		} catch: TimeoutException using: { |e|
+			// ignore this Flockr
 		};
 		
 	};
@@ -256,14 +257,16 @@ object: {
 	def makeFlockr := &makeFlockr;
 	def uidOf := &uidOf;
 	
-	def FlockrTest := extend: /.at.unit.test.UnitTest.new("FlockrTest") with: {
+	// run these unit tests sequentially
+	def FlockrTest := extend: /.at.unit.test.UnitTest.new("FlockrTest", false) with: {
 		
 		def testAsyncProfileExchange() {
 			def [fut,res] := makeFuture(seconds(10));
 			
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
-		  	def flockr1 := makeFlockr(profile1);
+		  def flockr1 := makeFlockr(profile1);
+		
 			def listener := object: {
 				def notifyProfileChanged(flockr, newProfile) {
 					res.resolve(newProfile.username);
@@ -271,23 +274,20 @@ object: {
 			};
 			flockr1.registerProfileChangedListener(listener);
 			
-			def [testFut, testRes] := makeFuture(seconds(11));
-			/.at.support.timer.when: seconds(8) elapsed: {
-				testRes.resolve(`ok);
-			};
-			
 			def a := actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2";
-			    def flockr2 := makeFlockr(profile2);
+			  def flockr2 := makeFlockr(profile2);
+			  def goOffline() { flockr2.goOffline(); `ok };
 			};
 			
 			when: fut becomes: { |uname|
 				self.assertEquals("flockr2", uname);
+				// clean up the flockrs created in this test
+				flockr1.goOffline();
+				a<-goOffline()@FutureMessage;
 			};
-			
-			testFut;
 			
 		};
 		
@@ -301,23 +301,22 @@ object: {
 			flockr1.addBuddy(profile2);
 			self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Jef");
 			
-			// We wait 10 seconds for the event to be delivered and the profile to be updated.
-			// If this test fails, maybe the update did not happen within 10 seconds.
-			def [fut, res] := makeFuture(seconds(11));
-			/.at.support.timer.when: seconds(8) elapsed: {
-				res.resolve(`ok);
-			};
-	
-			actor: {
+			def a := actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2.2";
 				profile2.firstname := "Marcel";
-			  makeFlockr(profile2);
+			  def flockr2 := makeFlockr(profile2);
+			  def goOffline() { flockr2.goOffline(); `ok };
 			};
-						
-			when: fut becomes: { |signal|
-				self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Marcel");	
+			
+			// We wait 5 seconds for the event to be delivered and the profile to be updated.
+			// If this test fails, maybe the update did not happen within 5 seconds.			
+			/.at.support.timer.when: seconds(5) elapsedWithFuture: {
+				self.assertEquals((flockr1.getBuddy("flockr2.2")).firstname, "Marcel");
+				// clean up the flockrs created in this test
+				flockr1.goOffline();
+				a<-goOffline()@FutureMessage;
 			};
 		};
 		
@@ -328,33 +327,28 @@ object: {
 
 			self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
 
-			def [fut, res] := makeFuture(seconds(11));
-			/.at.support.timer.when: seconds(8) elapsed: {
-				res.resolve(`ok);
-			};
-
-			actor: {
+			def a := actor: {
 				import /.at.urbiflock.flockr;
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "flockr3.2";
 				profile2.firstname := "foo";
-			  	makeFlockr(profile2);
+			  def flockr2 :=	makeFlockr(profile2);
+				def goOffline() { flockr2.goOffline(); `ok };
 			};
 
-			when: fut becomes: { |signal|
+			/.at.support.timer.when: seconds(5) elapsedWithFuture: {
 				self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1);
 				def newMatchingProfile := /.at.urbiflock.profile.makeProfile();
 				newMatchingProfile.setFieldShouldMatch(`firstname);
 				newMatchingProfile.firstname := "bar";
 				flockr1.updateMatchingProfile(newMatchingProfile);
 
-				def [fut2, res2] := makeFuture(seconds(11));
-				/.at.support.timer.when: seconds(8) elapsed: {
-					res2.resolve(`ok);
-				};
-
-				when: fut2 becomes: { |signal2|
+				/.at.support.timer.when: seconds(5) elapsedWithFuture: {
 					self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
+					
+					// clean up the flockrs created in this test
+					flockr1.goOffline();
+					a<-goOffline()@FutureMessage;
 				};
 			};
 		};
