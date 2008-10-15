@@ -114,7 +114,7 @@ def makeFlockr(profile) {
 		def getFlocks() { flocks.asTable };
 		def getFlock(name) { 
 			def flockIndex := flocks.find: { |flock| name == flock.getName};
-			if: !(flockIndex == nil) then: {
+			if: (nil != flockIndex) then: {
 				flocks.at(flockIndex);
 			}; // else return nil
 		};
