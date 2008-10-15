@@ -36,8 +36,20 @@ def makeFlock(theName, theProximity) {
 	def proximity := theProximity;
 	def listeners := Vector.new();
 
+  def proximityListener := object: {
+	  def addFlockr(profile) {
+		  if: !(flockrList.contains(profile)) then: {
+			  flockrList.add(profile);
+			  listeners.each: { |listener| listener<-notifyFlockrAdded(profile) };
+		  };
+	  };
+	  def removeFlockr(profile) {
+		  flockrList.remove(profile);
+		  listeners.each: { |listener| listener<-notifyFlockrRemoved(profile) }; 
+	  };
+	};
+	
 	def theFlock := object: {
-		
 		def addListener(aListener) {
 			listeners.add(aListener);
 			object: { def cancel() { listeners.remove(aListener) } };
@@ -53,27 +65,17 @@ def makeFlock(theName, theProximity) {
 			}
 		};
 		def setProximity(newProximity) {
+			// ToThinkAbout: shouldn't the listeners vector be cleaned??
 			flockrList := makeFlockrList;
 			subscription.cancel();
 			proximity := newProximity;
-			subscription := proximity.register(self);
+			//ToThinkAbout: should it be a fresh listener?
+			subscription := proximity.register(proximityListener);
 		};
-		def addFlockr(profile) {
-			system.println("AT add flockr: " + profile.username());
-			if: !(flockrList.contains(profile)) then: {
-				flockrList.add(profile);
-				listeners.each: { |listener| listener<-notifyFlockrAdded(profile) };
-			};
-		};
-		def removeFlockr(profile) {
-			flockrList.remove(profile);
-			system.println("AT remove flockr: " + profile.username());
-			system.println("listeners: " + listeners);
-			listeners.each: { |listener| listener<-notifyFlockrRemoved(profile) }; 
-		};
+		
 	};
-	
-	def subscription := proximity.register(theFlock);
+		
+	def subscription := proximity.register(proximityListener);
 	
 	theFlock;
 };
