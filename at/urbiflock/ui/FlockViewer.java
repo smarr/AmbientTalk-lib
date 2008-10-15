@@ -37,20 +37,20 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.util.HashMap;
-
-import edu.vub.at.objects.natives.NATText;
-import edu.vub.at.objects.natives.grammar.AGSymbol;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.Vector;
 
 /**
  * A viewer for flocks of flockrs. Clicking on a flockr opens a profile viewer on the flockr.
  */
-public class FlockViewer extends Frame {
+public class FlockViewer extends Frame implements FlockListener {
 	
 	List unameList_ = new List();
 	final Flockr owner_;
-	private String[] usernames_;
+	private Vector usernames_;
 	final Flock flock_;
+	Subscription flockSubscription_;
 	
 	public FlockViewer(final Flock f, Flockr owner) {
 		super("Flock Viewer");
@@ -59,12 +59,12 @@ public class FlockViewer extends Frame {
 		owner_ = owner;
 		
 		unameList_ = new List();
-		updateFlockrList();
+		updateFlockrList(flock_.getFlockrList());
 		unameList_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 				int selected = unameList_.getSelectedIndex();
 				if (selected != -1) {
-					new ProfileViewer(owner_, f.getProfile(usernames_[selected]), false);
+					new ProfileViewer(owner_, f.getProfile((String)usernames_.get(selected)), false);
 				}
 			}
 		});
@@ -82,23 +82,34 @@ public class FlockViewer extends Frame {
 		    }
 		});
 		
-		owner_.registerDiscoveryListener(this);
-		owner_.registerBuddyListListener(this);
-		owner_.registerProfileChangedListener(this);
+		flockSubscription_ = flock_.addListener(this);
 	}
 	
 	public void dispose() {
-		owner_.removeBuddyListListener(this);
-		owner_.removeDiscoveryListener(this);
-		owner_.removeProfileChangedListener(this);
+		flockSubscription_.cancel();
 		super.dispose();
 	}
 	
-	public void updateFlockrList() {
-		usernames_ = flock_.getFlockrList();
-		unameList_.removeAll();
-		for (int i = 0; i < usernames_.length; i++) {
-			unameList_.add(usernames_[i]);
+	public void updateFlockrList(String[] usernames) {
+		usernames_ = new Vector(Arrays.asList(usernames));
+		Iterator it = usernames_.iterator();
+		while (it.hasNext()) {
+			unameList_.add((String)it.next());
+		}
+	}
+	
+	public void addFlockrWithProfile(Profile p) {
+		if (usernames_.contains(p.username())) {
+			return;
+		}
+		usernames_.add(p.username());
+		unameList_.add(p.username());
+	}
+	
+	public void removeFlockrWithProfile(Profile p) {
+		if (usernames_.contains(p.username())) {
+			usernames_.remove(p.username());
+			unameList_.remove(p.username());
 		}
 	}
 	
@@ -115,7 +126,7 @@ public class FlockViewer extends Frame {
 				public void actionPerformed(ActionEvent ae) {
 					int selected = unameList_.getSelectedIndex();
 					if (selected != -1) {
-						owner_.addBuddy(flock_.getProfile(usernames_[selected]));
+						owner_.addBuddy(flock_.getProfile((String)usernames_.get(selected)));
 					}
 				}
 			});
@@ -123,7 +134,7 @@ public class FlockViewer extends Frame {
 				public void actionPerformed(ActionEvent ae) {
 					int selected = unameList_.getSelectedIndex();
 					if (selected != -1) {
-						owner_.removeBuddy(flock_.getProfile(usernames_[selected]));
+						owner_.removeBuddy(flock_.getProfile((String)usernames_.get(selected)));
 					}
 				}
 			});
@@ -141,7 +152,7 @@ public class FlockViewer extends Frame {
 	        if (e.isPopupTrigger()) {
 				int selected = unameList_.getSelectedIndex();
 				if (selected != -1) {
-					boolean isFriend = owner_.isBuddy(usernames_[selected]);
+					boolean isFriend = owner_.isBuddy((String)usernames_.get(selected));
 					addBuddyItem.setEnabled(!isFriend);
 					removeBuddyItem.setEnabled(isFriend);
 		            buddyMenu.show(e.getComponent(),
@@ -151,26 +162,14 @@ public class FlockViewer extends Frame {
 	    }
 	}
 	
-	public void notifyJoined(Profile p) {
-		updateFlockrList();
-	}
 	
-	public void notifyLeft(Profile p) {
-		updateFlockrList();
+	public void notifyFlockrAdded(Profile p) {	
+		addFlockrWithProfile(p);
 	}
-	
-	public void notifyBuddyAdded(Profile buddyProfile) {
-		updateFlockrList();
+
+	public void notifyFlockrRemoved(Profile p) {
+		removeFlockrWithProfile(p);
 	}
-	
-	public void notifyBuddyRemoved(Profile buddyProfile) {
-		updateFlockrList();
-	}
-	
-	public void notifyProfileChanged(Profile p) {
-		updateFlockrList();
-	}
-	
 	
 	
 	/*public static void main(String[] args) {

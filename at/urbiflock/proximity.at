@@ -46,6 +46,7 @@ def makeProximity(reteNode) {
 		def getReteNode(){ reteNode };
 		
 		def notifyFromNode(Token) {
+			system.println("notifyFromNode: " + Token.getSign);
 				if: Token.getSign then: {
 						listeners.each: {|listener| 
 							listener.addFlockr(Token.getFlockr); };				

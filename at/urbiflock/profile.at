@@ -298,17 +298,24 @@ def removeProperty(profile, propName) {
 
 
 def createProfileMatchingProximities(flockr, matchingProfile) {
-	(matchingProfile.getMatchingFields()).map: { |fieldName|
+	def proximities := (matchingProfile.getMatchingFields()).map: { |fieldName|
 		ProximityModule.makeDoesProfileMatchProximity(flockr,
-			{ |profile| (reflect: profile).invokeField(profile, fieldName) == 
+			{ |profile|
+				(reflect: profile).invokeField(profile, fieldName) == 
 					 (reflect: matchingProfile).invokeField(matchingProfile, fieldName) })
 	};
+	if: (proximities.isEmpty()) then: {
+		proximities.add(ProximityModule.makeDoesProfileMatchProximity(flockr, { |profile| true }));
+	};
+	proximities;
 };
 
 def constructProfileMatchingProximityFromProximities(flockr, proximities) {
-	def result := ProximityModule.makeDoesProfileMatchProximity(flockr, { |profile| true });
-	proximities.each: { |proximity|
-		result := ProximityModule.makeAndProximity(result, proximity);
+	def result := proximities.at(1);
+	if: (proximities.length() > 1) then: {
+		(proximities.select(2, proximities.length())).each: { |proximity|
+			result := ProximityModule.makeAndProximity(result, proximity);
+		};
 	};
 	result;
 };

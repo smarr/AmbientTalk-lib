@@ -34,22 +34,21 @@ def makeFlock(theName, theProximity) {
 	def flockrList := makeFlockrList;
 	def name := theName;
 	def proximity := theProximity;
+	def listeners := Vector.new();
 
 	def theFlock := object: {
 		
-		def addFlockr(profile) {
-			if: !(flockrList.contains(profile)) then: {
-				flockrList.add(profile);
-			};
+		def addListener(aListener) {
+			listeners.add(aListener);
+			object: { def cancel() { listeners.remove(aListener) } };
 		};
-		def removeFlockr(profile) { flockrList.remove(profile) };
 		def getName() { name };
 		def getFlockrList() {
-			flockrList.asTable.map:{|profile| profile.username};
+		    flockrList.asTable.map:{|profile| profile.username};
 		};
 		def getProfile(uid) {
 			def idx := flockrList.find: { |p| p.username == uid };
-			if: (idx != nil) then: {
+			if: (nil != idx) then: {
 				flockrList.at(idx);				
 			}
 		};
@@ -58,6 +57,19 @@ def makeFlock(theName, theProximity) {
 			subscription.cancel();
 			proximity := newProximity;
 			subscription := proximity.register(self);
+		};
+		def addFlockr(profile) {
+			system.println("AT add flockr: " + profile.username());
+			if: !(flockrList.contains(profile)) then: {
+				flockrList.add(profile);
+				listeners.each: { |listener| listener<-notifyFlockrAdded(profile) };
+			};
+		};
+		def removeFlockr(profile) {
+			flockrList.remove(profile);
+			system.println("AT remove flockr: " + profile.username());
+			system.println("listeners: " + listeners);
+			listeners.each: { |listener| listener<-notifyFlockrRemoved(profile) }; 
 		};
 	};
 	
