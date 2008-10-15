@@ -77,16 +77,6 @@ def retrieveTestMethodNames(obj) {
 	methodNames;
 };
 
-def whenDone: val do: closure {
-	if: (is: val taggedAs: FuturesModule.Future) then: {
-		FuturesModule.when: val becomes: { |realVal|
-			closure();
-		}
-	} else: {
-		closure();
-	}
-};
-
 def consoleReporter := object: {
 	def numSuccess := 0;
 	def numFailed := 0;
@@ -174,7 +164,7 @@ def UnitTest := object: {
 			  };
 			
 				numAsyncTests := numAsyncTests + 1;
-				whenDone: self.setUp() do: {
+				FuturesModule.whenAny: self.setUp() becomes: { |ignoredValue|
 					try: {
 						// test method starts with "testAsync" so it is expected to return a future
 						FuturesModule.when: (reflect: self).invoke(self, `(.#methName())) becomes: { |val|
@@ -193,7 +183,7 @@ def UnitTest := object: {
 					// asynchronous unit test
 					if: self.parallel then: {
 						run: methName then: {
-							whenDone: self.tearDown() do: {
+							FuturesModule.whenAny: self.tearDown() becomes: { |ignoredValue|
 								numAsyncTests := numAsyncTests - 1;
 								// last async test fininshed?
 								if: (0 == numAsyncTests) then: {
@@ -205,7 +195,7 @@ def UnitTest := object: {
 					} else: {
 						system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
 						run: methName then: {
-							whenDone: self.tearDown() do: {
+							FuturesModule.whenAny: self.tearDown() becomes: { |ignoredValue|
 								numAsyncTests := numAsyncTests - 1;
 								testMethod(index + 1)	
 							}
@@ -216,7 +206,7 @@ def UnitTest := object: {
 					if: !self.parallel then: {
 						system.println("Starting test " + methName + "("+index+"/"+ testMethods.length +")");
 					};
-					whenDone: self.setUp() do: {
+					FuturesModule.whenAny: self.setUp() becomes: { |ignoredValue|
 						try: {
 							(reflect: self).invoke(self, `(.#methName()));
 						}	catch: AssertionFailed using: {|e|
@@ -224,7 +214,7 @@ def UnitTest := object: {
 						} catch: /.at.types.Exception using: { |e|
 							reporter.error(methName, e);
 						};
-						whenDone: self.tearDown() do: {
+						FuturesModule.whenAny: self.tearDown() becomes: { |ignoredValue|
 							reporter.success(methName);
 							testMethod(index + 1);
 						}

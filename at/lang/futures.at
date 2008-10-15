@@ -494,6 +494,24 @@ def FuturesModule := object: {
 		};
 		whenFuture; // when returns a future itself
 	};
+	
+	// an extension of when:becomes: that accepts any language value, not just a future
+	def whenAny: val becomes: closure catch: exc using: handler {
+		if: (is: val taggedAs: Future) then: {
+			when: val becomes: { |realVal|
+				closure(realVal);
+			} catch: exc using: handler;
+		} else: {
+			closure(val);
+		}
+	};
+	
+	def whenAny: val becomes: closure {
+		whenAny: val becomes: closure catch: Exception using: { |e|
+			system.println("[futures.at] Warning: re-raising uncaught exception in whenAny:becomes: because no catch-clause specified: " + e);
+			raise: e; // raise the uncaught exception
+		}
+	};
 
   // groups a table of futures into a single future which is resolved
   // with a table of values or ruined with an exception
