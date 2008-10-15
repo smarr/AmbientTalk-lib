@@ -44,6 +44,7 @@ def makeFlockr(profile) {
 	def myProfile := profile;
 	def username := profile.username;
 	def publication; // the pub object by which I am exported
+	def discPubli; // the pub object by which I discover the rest of flockrs.
 	
 	def uidFlockrMap := jlobby.java.util.HashMap.new();
 	
@@ -147,8 +148,20 @@ def makeFlockr(profile) {
 				};
 			}
 		};
-		
-		def stop() { (publication != nil).ifTrue: { publication.cancel()} };
+		// puts a flockr offline: 
+		// stops a flockr from being exported to the network
+		// + from discovering other flockrs in the network
+		// + from the table of exported objects
+		def goOffline() { 
+			(publication != nil).ifTrue: { publication.cancel()}; 
+		  (discPubli != nil).ifTrue: { discPubli.cancel()};  
+			try: { 
+	      takeOffline: remoteInterface;
+	    } catch: /.at.types.IllegalOperation using: { |e|
+		  	system.println("[flockr.at] WARNING: flockr used only locally: "+e.message);
+	  	};
+	    nil;
+		};
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) };
 	};
 		
@@ -202,11 +215,11 @@ def makeFlockr(profile) {
 	// whenever a new Flockr is discovered:
 	// 1) all discovery listeners get a notifyJoined event
 	// 2) all profile changed listeners get a notifyProfileChanged event
-	whenever: FlockrT discovered: { |flockr|
+	discPubli := whenever: FlockrT discovered: { |flockr|
 		uidFlockrMap.put(uidOf(flockr), flockr);		
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
-			system.println("DEBUG: Flockr: " + username + " discovered" + newProfile.username);
+			system.println("DEBUG: Flockr: " + username + "discovered" + newProfile.username);
 			notifyListeners: discoveryListeners with: <-notifyJoined(newProfile);
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
 		} catch: TimeoutException using: { |e|
@@ -217,12 +230,13 @@ def makeFlockr(profile) {
 		*/
 		
 		when: flockr disconnected: {
+			system.println("DEBUG: Flockr:" + username + "noticed a disconnection from " + flockr);
+			//Comment elisa: why do not remove all of them? anycase the reference gets replaced when they got rediscovered.
 			if: !(buddyList.contains(uidOf(flockr))) then: {
 				uidFlockrMap.remove(uidOf(flockr));
 			}; 
 			notifyListeners: discoveryListeners with: <-notifyLeft(flockr);
-		};
-				
+		};				
 	};
 	
 	localInterface;
@@ -303,42 +317,42 @@ object: {
 		};
 		
 		def testAsyncMatchProfile() {
-			def profile1 := /.at.urbiflock.profile.makeProfile();
-			profile1.username := "flockr3.1";
-			def flockr1 := makeFlockr(profile1);
-			
-			self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
-			
-			def [fut, res] := makeFuture(seconds(11));
-			/.at.support.timer.when: seconds(8) elapsed: {
-				res.resolve(`ok);
-			};
-			
-			actor: {
-				import /.at.urbiflock.flockr;
-				def profile2 := /.at.urbiflock.profile.makeProfile();
-				profile2.username := "flockr3.2";
-				profile2.firstname := "foo";
-			  	makeFlockr(profile2);
-			};
-			
-			when: fut becomes: { |signal|
-				self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1);
-				def newMatchingProfile := /.at.urbiflock.profile.makeProfile();
-				newMatchingProfile.setFieldShouldMatch(`firstname);
-				newMatchingProfile.firstname := "bar";
-				flockr1.updateMatchingProfile(newMatchingProfile);
-				
-				def [fut2, res2] := makeFuture(seconds(11));
-				/.at.support.timer.when: seconds(8) elapsed: {
-					res2.resolve(`ok);
-				};
-				
-				when: fut2 becomes: { |signal2|
+					def profile1 := /.at.urbiflock.profile.makeProfile();
+					profile1.username := "flockr3.1";
+					def flockr1 := makeFlockr(profile1);
+
 					self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
+
+					def [fut, res] := makeFuture(seconds(11));
+					/.at.support.timer.when: seconds(8) elapsed: {
+						res.resolve(`ok);
+					};
+
+					actor: {
+						import /.at.urbiflock.flockr;
+						def profile2 := /.at.urbiflock.profile.makeProfile();
+						profile2.username := "flockr3.2";
+						profile2.firstname := "foo";
+					  	makeFlockr(profile2);
+					};
+
+					when: fut becomes: { |signal|
+						self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1);
+						def newMatchingProfile := /.at.urbiflock.profile.makeProfile();
+						newMatchingProfile.setFieldShouldMatch(`firstname);
+						newMatchingProfile.firstname := "bar";
+						flockr1.updateMatchingProfile(newMatchingProfile);
+
+						def [fut2, res2] := makeFuture(seconds(11));
+						/.at.support.timer.when: seconds(8) elapsed: {
+							res2.resolve(`ok);
+						};
+
+						when: fut2 becomes: { |signal2|
+							self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0);
+						};
+					};
 				};
-			};
-		};
 		
 	};
 	

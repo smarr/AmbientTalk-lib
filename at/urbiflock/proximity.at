@@ -72,10 +72,6 @@ def makeIsFriendProximity(flockr) {
     def notifyBuddyRemoved(profile) {
 			super^getReteNode().remove(profile);
 		};
-		// COMMENT Tom: why do we call 'connect' here? The parent already connect itself
-		// when it is created (in makeProximity). It could be useful if we would override
-		// 'connect()' in this child object, but we don't.
-		super^connect();	
 	};
 	flockr.registerBuddyListListener(isFriendProximity);
 	isFriendProximity;
@@ -84,18 +80,26 @@ def makeIsFriendProximity(flockr) {
 // encodes physical proximity function
 def makeIsNearbyProximity(flockr) {
 	def isNearbyProximity := extend: makeProximity(Rete.makeFilterNode(Rete.makeFilter({|RI| true}))) with: {
+		// keep track of the profiles to pass in notifyLeft
+		def uidProfileMap := jlobby.java.util.HashMap.new();
+		
 		//  invoked whenever a buddy comes nearby
 		def notifyJoined(profile) {
+			uidProfileMap.put(profile.username, profile);		
 			super^getReteNode().insert(profile);
 		};
     //invoked whenever a flockr comes nearby
-    def notifyLeft(profile) {
-			super^getReteNode().remove(profile);
+    def notifyLeft(flockr) {
+	    def uid := /.at.urbiflock.flockr.uidOf(flockr);
+			if: (uidProfileMap.containsKey(uid)) then: {
+				def profile := uidProfileMap.get(uid);
+				uidProfileMap.remove(uid);
+				super^getReteNode().remove(profile);
+			} else: {
+				// this should never happen if discovery works fine!
+				raise: /.at.exceptions.XIllegalOperation.new("cannot nofityLeft for a non-joined flockr " + uid);
+			};
 		};
-		// COMMENT Tom: why do we call 'connect' here? The parent already connect itself
-		// when it is created (in makeProximity). It could be useful if we would override
-		// 'connect()' in this child object, but we don't.
-		super^connect();	
 	};
 	flockr.registerDiscoveryListener(isNearbyProximity);
 	isNearbyProximity;
@@ -107,7 +111,6 @@ def makeDoesProfileMatchProximity(flockr, block) {
 			def notifyProfileChanged(farref, profile) {
 				super^getReteNode().changeEvent(profile);
 			};
-			super^connect();	
 		};
 		flockr.registerProfileChangedListener(profileChangedProximity);
 		profileChangedProximity;
@@ -150,7 +153,7 @@ def ProximityModule := object: {
 			
 			when: seconds(waitTime) elapsed: {
 			  self.assertEquals(1, friendFlock.getFlockrList.length);	
-				flockr1.stop();
+				flockr1.goOffline();
 			  res.resolve(`ok);
 			};	
 			fut;		
@@ -175,13 +178,13 @@ def ProximityModule := object: {
 					network.offline();
 					when: seconds(waitTime) elapsed: {
 						network.online();
-						flockr22.stop();
+						flockr22.goOffline();
 						flockr22 := /.at.urbiflock.flockr.makeFlockr(profile2);
 					};
 					nil;
 				};
 				def stopFlockrs(){
-					flockr22.stop();
+					flockr22.goOffline();
 				};
 		  };
 
@@ -203,7 +206,7 @@ def ProximityModule := object: {
 							when: seconds(waitTime*3) elapsed: {
 								self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
 								when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
-									flockr1.stop();
+									flockr1.goOffline();
 									res.resolve(true);
 								};
 							};
@@ -211,7 +214,7 @@ def ProximityModule := object: {
 				};
 			};
 			fut;			
-		};
+		}; 
 		
 		def testAsyncFriendsAndFilterFlock(){
 			
@@ -227,7 +230,7 @@ def ProximityModule := object: {
 				profile2.sex := "MALE";  
 				def flockr32 := /.at.urbiflock.flockr.makeFlockr(profile2);
 				def stopFlockrs(){
-					flockr32.stop();
+					flockr32.goOffline();
 				};
 			};
 
@@ -246,7 +249,7 @@ def ProximityModule := object: {
 				when: seconds(waitTime) elapsed: {
 					self.assertEquals(0, FriendsAndFemaleFlock2.getFlockrList.length);
 					when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
-						flockr1.stop();
+						flockr1.goOffline();
 						res.resolve(`ok);			
 					};
 				};
@@ -267,7 +270,7 @@ def ProximityModule := object: {
 				profile2.sex := "FEMALE";  
 				def flockr42 := /.at.urbiflock.flockr.makeFlockr(profile2);
 				def stopFlockrs(){
-					flockr42.stop();
+					flockr42.goOffline();
 				};
 			};
 			
@@ -277,7 +280,7 @@ def ProximityModule := object: {
 				profile3.sex := "FEMALE";  
 				def flockr43 := /.at.urbiflock.flockr.makeFlockr(profile3);
 				def stopFlockrs(){
-					flockr43.stop();
+					flockr43.goOffline();
 				};
 			};
 			
@@ -291,37 +294,42 @@ def ProximityModule := object: {
 			  self.assertEquals(2, girlFriendFlock.getFlockrList.length);	
 			  def f := group: [a<-stopFlockrs()@FutureMessage, b<-stopFlockrs()@FutureMessage];
 				when: f becomes: {|ack| 
-					flockr1.stop(); 
+					flockr1.goOffline(); 
 					res.resolve(`ok); 
 				}; 
 			};
 			fut;			
-		};
+		}; 
 		
-		/*	def testAsyncNearbyFlock(){
-				def [fut,res] := makeFuture();
-				def profile1 := /.at.urbiflock.profile.makeProfile();
-				profile1.username := "PF5.1";
+		def testAsyncNearbyFlock(){
+			def [fut,res] := makeFuture();
+			
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "PF5.1";
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+				
+			def a := actor: {
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "PF5.2";
+				def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+				def stopFlockrs(){
+					flockr2.goOffline();						
+				};
+			};	
 
-				def a := actor: {
-					def profile2 := /.at.urbiflock.profile.makeProfile();
-					profile2.username := "PF5.2";
-					def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-					def stopFlockrs(){
-						flockr2.stop();
-					};
-				};	
-
-				def nearbyFlock := flockr1.getFlock("NearbyFlock");
-				when: seconds(waitTime) elapsed: {
-				  self.assertEquals(1, nearbyFlock.getFlockrList.length);	
-					when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
-						flockr1.stop();
-				  	res.resolve(`ok);
-					};
-				};	
-				fut;		
-			};*/
+			def nearbyFlock := flockr1.getFlock("NearbyFlock");
+			when: seconds(waitTime*2) elapsed: {
+			  self.assertEquals(1, nearbyFlock.getFlockrList.length);	
+				when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
+					when: seconds(waitTime) elapsed: {
+						self.assertEquals(0, nearbyFlock.getFlockrList.length);	
+						flockr1.goOffline();
+			  	  res.resolve(`ok);
+		      };
+				};
+			};	
+			fut;		
+		};
 			
 	};
 };
