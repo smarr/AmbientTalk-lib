@@ -80,26 +80,15 @@ def makeIsFriendProximity(flockr) {
 // encodes physical proximity function
 def makeIsNearbyProximity(flockr) {
 	def isNearbyProximity := extend: makeProximity(Rete.makeFilterNode(Rete.makeFilter({|RI| true}))) with: {
-		// keep track of the profiles to pass in notifyLeft
-		def uidProfileMap := jlobby.java.util.HashMap.new();
 		
 		//  invoked whenever a buddy comes nearby
 		def notifyJoined(profile) {
-			uidProfileMap.put(profile.username, profile);		
 			super^getReteNode().insert(profile);
 		};
     //invoked whenever a flockr comes nearby
-    def notifyLeft(flockr) {
-	    def uid := /.at.urbiflock.flockr.uidOf(flockr);
-			if: (uidProfileMap.containsKey(uid)) then: {
-				def profile := uidProfileMap.get(uid);
-				uidProfileMap.remove(uid);
-				super^getReteNode().remove(profile);
-			} else: {
-				// this should never happen if discovery works fine!
-				raise: /.at.exceptions.XIllegalOperation.new("cannot nofityLeft for a non-joined flockr " + uid);
-			};
-		};
+    def notifyLeft(profile) {
+			super^getReteNode().remove(profile);
+	  };		
 	};
 	flockr.registerDiscoveryListener(isNearbyProximity);
 	isNearbyProximity;
@@ -284,7 +273,7 @@ def ProximityModule := object: {
 				};
 			};
 			
-			// Adding predifined flocks
+			// Adding predefined flocks
 			def matchingProfile := /.at.urbiflock.profile.makeProfile();
 			matchingProfile.sex := "FEMALE";
 			flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == matchingProfile.sex })));
@@ -298,7 +287,7 @@ def ProximityModule := object: {
 					res.resolve(`ok); 
 				}; 
 			};
-			fut;			
+			fut;
 		}; 
 		
 		def testAsyncNearbyFlock(){
@@ -316,7 +305,7 @@ def ProximityModule := object: {
 					flockr2.goOffline();						
 				};
 			};	
-
+			
 			def nearbyFlock := flockr1.getFlock("NearbyFlock");
 			when: seconds(waitTime*2) elapsed: {
 			  self.assertEquals(1, nearbyFlock.getFlockrList.length);	
@@ -329,7 +318,6 @@ def ProximityModule := object: {
 				};
 			};	
 			fut;		
-		};
-			
+		};			
 	};
 };
