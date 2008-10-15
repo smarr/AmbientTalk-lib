@@ -237,9 +237,13 @@ def ProximityModule := object: {
 				flockr1.removeBuddy(profile2);
 				when: seconds(waitTime) elapsed: {
 					self.assertEquals(0, FriendsAndFemaleFlock2.getFlockrList.length);
-					when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
-						flockr1.goOffline();
+					flockr1.addBuddy(profile2);
+					when: seconds(waitTime*3) elapsed: {
+					  self.assertEquals(1, FriendsAndFemaleFlock2.getFlockrList.length);
+					  when: a<-stopFlockrs()@FutureMessage becomes: { |ack|
+					  	flockr1.goOffline();
 						res.resolve(`ok);			
+					  };
 					};
 				};
 			};
