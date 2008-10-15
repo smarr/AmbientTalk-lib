@@ -25,9 +25,13 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 def Vector := /.at.collections.vector.Vector;
+def makeFlockrList(){
+	Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
+};
 
 def makeFlock(theName, theProximity) {
-	def flockrList := Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
+	
+	def flockrList := makeFlockrList;
 	def name := theName;
 	def proximity := theProximity;
 
@@ -50,6 +54,7 @@ def makeFlock(theName, theProximity) {
 			}
 		};
 		def setProximity(newProximity) {
+			flockrList := makeFlockrList;
 			subscription.cancel();
 			proximity := newProximity;
 			subscription := proximity.register(self);
