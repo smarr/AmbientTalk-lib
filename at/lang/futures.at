@@ -72,9 +72,7 @@ def FutureMirror := mirror: {
 
   // a future is a special kind of far reference
   // therefore, this mirror mixes in the 'far reference' behaviour
-  // Because a future is pass-by-reference, we do not inherit the
-  // parameter-passing behaviour of the far ref trait
-  import TEventualRef exclude pass;
+  import TEventualRef;
   
 	// constructor: used to initialize the state of the new future
 	def init(@args) {
@@ -223,7 +221,7 @@ def FutureMirror := mirror: {
 
 	def toString() {
 		if: (state == RESOLVED) then: {
-			  "resolved future:" + resolvedValue;
+      "resolved future:" + resolvedValue;
 		} else: {
 			if: (state == RUINED) then: {
 				"ruined future:" + resolvedValue;
@@ -233,12 +231,25 @@ def FutureMirror := mirror: {
 		};
 	};
 	
-	// to satisfy the required interface of TEventualRef, not really required
-	def transportStrategy := { }
-	/*	def [fut, res]/.at.lang.futures.makeFuture();
-		originalFuture<-resolveWithValue(fut)@[/.at.lang.futures.MetaMessage];
-		fut
-	};*/
+	// a unresolved future is pass-by-reference
+	// a resolved future gets pass by copy, i.e. the remote 
+	// site gets a resolved future which can access locally.
+	// Note that resolvedValue may be pass-by-reference or by-copy.
+	def transportStrategy() { 
+		if: isFullyResolved() then: {
+		  { |resolvedValue|
+			  def [fut, res] := /.at.lang.futures.makeFuture();
+			  if: (is: resolvedValue taggedAs: /.at.types.Exception) then:{
+				  res.ruin(resolvedValue);
+			  } else:{res.resolve(resolvedValue)};    
+		    fut
+	    }
+	  } else: {
+		  // a unresolved future is pass-by-reference 
+		  def res := super^pass();
+		  { |res| res }
+		};
+	 };
 };
 
 def makeFuture(timeout := nil) {
@@ -265,7 +276,7 @@ def constructResolverFor(future, timeout := nil) {
 };
 
 def constructLeaseFor(future, timeout) {
-  def futureLease := LeasingModule.singleCallLease: timeout for: future;
+  def futureLease := LeasingModule.singleCallLease: timeout revokedOn: [`resolveWithValue, `ruinWithException] for: future;
   // We force the lease timer to start ticking since by default it  
   // is activated when the leased object becomes remotely referenced.
 	(reflect: futureLease).activateTimer();
@@ -284,9 +295,10 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 	extend: msg with: { |type,futureMaker|
 
     // return value of the message send is the associated future
+		// which can be leased or not depending on the futureMaker
     def sendTo(@args) {
 	    def [future, resolver] := futureMaker();
-	    // extend the original message (this object's parent)
+      // extend the original message (this object's parent)
 	    def msgWithFuture := extend: super with: { |future|
 		    // the process method is invoked when an async message arrives
 			  def process(behaviour) {
@@ -320,12 +332,12 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 	    // other values for their asynchronous message sends, even if the message
 	    // is tagged as a future message
 	    if: (res == nil) then: {
-			  if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
-				  // normally OK because executed at sender-side (so future will still be a near ref here)
-				  (reflect: future).getPrincipal();
+		    if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
+					// normally OK because executed at sender-side (so future will still be a near ref here)
+					(reflect: future).getPrincipal();
 			  } else: {
-			    future;
-			  }
+          future;
+				};
 	    } else: {
 		    res
 	    }
@@ -349,11 +361,11 @@ def futurize(msg, future, type := FutureMessage) {
 	    // is tagged as a future message
 	    if: (res == nil) then: {
 			  if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
-				  // normally OK because executed at sender-side (so future will still be a near ref here)
-				  (reflect: future).getPrincipal();
+					// normally OK because executed at sender-side (so future will still be a near ref here)
+					(reflect: future).getPrincipal();
 			  } else: {
-			    future;
-			  }
+          future;
+				};
 	    } else: {
 		    res
 	    }
@@ -403,6 +415,9 @@ deftype OneWayMessage <: /.at.types.AsyncMessage;
 // Addition for the integration of leasing and futures:
 
 // type that signifies that futures objects are leased for a given timeout
+// note that the lease is parameter-passed in the futurized message, 
+// (in place of the future). The return value of a message send
+// is still the future (rather than the lease!)
 deftype DueType <: FutureMessage; 
 def Due(timeout) {
 	extend: DueType with: { |timeout,makeFutureC,futurizePerSendC,DueType|
@@ -423,6 +438,10 @@ def FuturesModule := object: {
 	// support for first-class futures: returns a pair
 	// [ future, resolver]. The resolver can be used to easily resolve
 	// or ruin the corresponding future
+	// if a timeout is given, returns a pair [lease, resolver]  
+	// where the lease timer gets immediately activated. Note that 
+	// then a lease will get parameter-passed rather than the future, 
+	// unless it is explicitely extracted, i.e. (reflect: lease).getPrincipal
   def makeFuture := &makeFuture;
 
   // is actually only exported to be used by the MultiFuturesModule!
@@ -466,7 +485,7 @@ def FuturesModule := object: {
 					if: (is: exc taggedAs: excType) then: {
 						notify(excBlock, exc);
 					} else: {
-						system.println("[futures.at] Warning: uncaught exception: " + exc + ". Can only cath: " + excType);
+						system.println("[futures.at] Warning: uncaught exception: " + exc + ". Can only catch: " + excType);
 					};
 				};
 			// note that <-addResolutionListener is a message directed to the future's mirror
@@ -679,9 +698,9 @@ def FuturesModule := object: {
    extend: /.at.unit.test.UnitTest.new("futures test") with: {
     enableFutures(false);
 
-    def foo() { 5 };    
-    
-   def testAsyncFutureCreation() {
+    def foo() { 5 };  
+		
+    def testAsyncFutureCreation() {
       def [fut,res] := makeFuture();
       self.assertEquals("<unresolved future>", print: fut);
       res.resolve(5);
@@ -715,7 +734,7 @@ def FuturesModule := object: {
 			};
     };
 
-		def testAsyncDueResolvingTest(){
+		def testAsyncDueResolving(){
 			//TEST 1: Resolving the future within the timeout period
 			//This test uses the AR future as return value of the test.
 			def a := actor: {
@@ -725,15 +744,15 @@ def FuturesModule := object: {
 			};
 			deftype AsyncDueResolvingTestT;
 			def ref := /.at.lang.ambientrefs_old.ambient: AsyncDueResolvingTestT;
-			def future := ref<-test()@Due(LeasingModule.seconds(10));
+			def future := ref<-test()@Due(seconds(10));
 			when: future becomes: { |v|
 			 	self.assertEquals(5,v);
 			} catch: TimeoutException using: { |e|
 			  self.fail("testAsyncDue1: Unexpected ruined future");
 			};
-   	};
-		
-		def testAsyncLocalDueRuiningTest() {
+    };
+	
+		def testAsyncDueLocalRuining() {
 			//TEST 2.1: ruining a future (for a intra actor asynchrnous message) with a TimeoutException
       def ref := eventualref: { |rcv,msg|
 	      if: !(msg.selector	== `(test)) then: {
@@ -742,15 +761,15 @@ def FuturesModule := object: {
 	    } to: (actor: {
 				def test() { 42 };
 			});
-			def future := ref<-test()@Due(LeasingModule.seconds(4));
+			def future := ref<-test()@Due(seconds(4));
 			when: future becomes: { |v|
 			 	self.fail("Unexpected resolved future. Value = " + v);
 			} catch: TimeoutException using:  { |e|
 				nil
 	    };
 	  };
-	
-	  def testAsyncRemoteDueRuiningTest() {
+
+	  def testAsyncDueRemoteRuining() {
 			//TEST 2.2: ruining a future (for a inter actor asynchrnous message) with a TimeoutException
 			def a := actor: {
 				deftype AsyncDueRuiningTestT;
@@ -767,16 +786,52 @@ def FuturesModule := object: {
 			};
 	    deftype AsyncDueRuiningTestT;
       def ref := /.at.lang.ambientrefs_old.ambient: AsyncDueRuiningTestT; 
-			def future := ref<-test()@Due(LeasingModule.seconds(4));
+			def future := ref<-test()@Due(seconds(4));
 			when: future becomes: { |v|
 			 	self.fail("Unexpected resolved future. Value = " + v);
 			} catch: TimeoutException using:  { |e|
 				nil
 	    };
-	  };
+	  }; 
 	
-   };
-  };
-};
+		def testAsyncDuePassingResolvedFuture(){
+			// Resolving the future within the timeout period
+			// and then passing it to another actor.
+			// future should be passed by copy.
+			def [fut, res] := makeFuture();
+			def unitt := self;
+			def o := object: {
+				 	def test() { 5 };
+					def receive(future,c){
+						if: (c == 2) then: { unitt.assertEquals("<resolved future:5>", print: future) };
+						when: future becomes: { |val| 
+							if: (c == 2) then: { 
+								 unitt.assertEquals(5,val);
+								 res.resolve(`ok);
+							}
+						};
+					};
+			};
+			def a := actor: { |o, unitt|
+				import /.at.lang.futures;
+				enableFutures(false);
+				//Testing with @Due, to make sure it doesn't affect behaviour
+				def future := o<-test()@Due(seconds(5));
+	      unitt<-assertEquals("<unresolved future>", print: future);
+				o<-receive(future,1);
+        when: future becomes: { |val|
+          unitt<-assertEquals("<resolved future:5>", print: future);
+					unitt<-assertEquals(5,val);
+					o<-receive(future,2);
+        } catch: TimeoutException using:  { |e|
+					self.fail("Unexpected ruined future. " + e);
+		    };
+			};
+			fut;
+    };
+
+   }; // end extend: Test with:
+  }; // end FuturesTest
+}; //end FuturesModule
 
 

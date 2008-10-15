@@ -96,6 +96,8 @@ def FirstClassRefModule := object: {
 			}
 		};
 		
+		// the object to which meta level messages should be forwarded 
+		// if they are not understood by this first class ref itself.
 		def delegate := NilEventualRef;
 		
 		// ensure that a reference object does not become a far reference
@@ -114,7 +116,7 @@ def FirstClassRefModule := object: {
 		};
 		
 		def typeTags() {
-			(self.super)^typeTags() + [/.at.types.FarReference];
+			/.at.support.util.makeSetUnion( ((self.super).typeTags()), [/.at.types.FarReference]);
 		};
 		
 		// disallow meta-level operations on far references

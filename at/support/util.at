@@ -30,6 +30,7 @@
  *  - macro for executing code upon object arrival
  *  - annotation retrieval from asynchronous messages
  *  - creating assignment selectors ending in :=
+ *  - helper functions for native tables
  * @author tvcutsem
  */
 
@@ -125,6 +126,24 @@ def makeMutator(selector) {
 def primitiveSelectors := [`super,`super:=,`new,`init,`==];
 def isPrimitive(selector) { primitiveSelectors.contains(selector) };
 
+// helper functions for native tables
+
+// concatenates two native tables values without duplicates 
+def makeSetUnion(t1, t2){
+	def ti := [];
+	t1.each: { |elt|
+	  if: (!ti.contains(elt)) then: {
+		  ti := ti + ([elt]);
+	  };
+	};
+	t2.each: { |elt|
+	  if: (!ti.contains(elt)) then: {
+		  ti := ti + ([elt]);
+	  };
+	};
+	ti; 
+};
+
 def UtilTest() {
   extend: /.at.unit.test.UnitTest.new("UtilTest") with: {
     import /.at.lang.futures; enableFutures(false);
@@ -180,6 +199,19 @@ def UtilTest() {
 		    self.assertLessThan(rnd, 30);
 		  };
     };
+
+		def testConcatenationToSet() {
+			self.assertEquals("[]", print: (makeSetUnion([],[])));
+			def t := makeSetUnion([], [1,2]);
+			self.assertEquals("[1, 2]", print: t);
+			def t2 := [2,3];
+			def t3 := makeSetUnion(t,t2);
+			self.assertEquals("[1, 2, 3]", print: t3);
+			self.assertEquals("[1, 2]", print: t);
+			self.assertEquals("[2, 3]", print: t2);
+		  self.assertEquals("[1, 2, 3, 3]", print: (t3 + ([3])));
+		  self.assertEquals("[1, 2, 3]", print: makeSetUnion(t, [3]));
+		};
     
   };
 };
