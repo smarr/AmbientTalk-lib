@@ -53,10 +53,10 @@ def makeTupleSpace(){
 	def sendTuples(){
 	  def toSend := Vector.new();
 		ambientTS.each: {|tuple|
-			if: tuple.decidePropagation() then:{
+			if: tuple.decidePropagation(self) then:{
 				toSend.add(tuple);
 			} else: {
-				if: tuple.decideDie() then: {
+				if: tuple.decideDie(self) then: {
 	        system.println("dying young " +  tuple);
 					def ld := localTS.delete({|t| t == tuple});
 					def ad := ambientTS.delete({|t| t == tuple});
@@ -64,7 +64,6 @@ def makeTupleSpace(){
 				};
 			}; 
 		};
-		system.println("sending tuples " + toSend.asTable);
 		toSend.asTable;
 	};
 	
@@ -75,7 +74,7 @@ def makeTupleSpace(){
 		// usual operations to manage a local ts.
 		// add a tuple to the local ts
 	  def add(tuple){
-			system.println("add to local" + tuple);
+			system.println("add to local " + tuple.getTupleId);
 	    localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };
@@ -96,7 +95,7 @@ def makeTupleSpace(){
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
 		def inject: tuple {
-			system.println("add to ambient" + tuple);
+			system.println("add to ambient " + tuple.getTupleId );
 		  ambientTS.add(tuple);
 			//notify all seen ts of the addition of a new tuple.
 			//todo first time, could receiveTuples be triggered twice? 
@@ -131,7 +130,6 @@ def makeTupleSpace(){
 			// notified if I add a new tuple to the ambient.
 			if: !(seenTS.contains(ts)) then:{
 		    seenTS.add(ts);
-			  system.println("adding discovered ts " + ts);
 		  };
       def toSend := sendTuples();
       if: (toSend.length > 0) then: {
@@ -144,12 +142,13 @@ def makeTupleSpace(){
 		// and triggers the propagation protocol (receiver side)
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
-		    if: !(ambientTS.contains({|t| t.getTupleId == tuple.getTupleId})) then: {
+		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
+			system.println("receivingTuple " + tuple.getTupleId + " in " + self);
 		      // tota propagation protocol (receiver side)
-		      tuple.doAction();
-			    tuple := tuple.changeTupleContent();
+		      tuple.doAction(self);
+			    tuple := tuple.changeTupleContent(self);
 			    //check if you have to insert it into your local tuple space
-			    if: tuple.decideStore() then: { add(tuple) };
+			    if: tuple.decideStore(self) then: { add(tuple) };
 			    //todo: optimization to inject all tuples at once.
 			    inject: tuple;
 		    };
@@ -170,16 +169,16 @@ def makeTuple(tupleId){
 		// and store itself in every hop.
     
 		// called in every tuple at pass() 
-		def decidePropagation(){ true };
+		def decidePropagation(ts){ true };
 		// specifies operations on the local TS
-		def doAction(){};
+		def doAction(ts){};
 		// create a new tuple resulting from operations on the tuple itself
-		def changeTupleContent(){self};
+		def changeTupleContent(ts){self};
 		// if true -> note gets added to local TS
-		def decideStore(){true};
+		def decideStore(ts){true};
 		// if true -> tuple gets unexported and deleted from local TS.
 		//new operation not in TOTA
-		def decideDie(){false};
+		def decideDie(ts){false};
 		
 	};
 };
@@ -250,9 +249,9 @@ def AmbientTotaModule := object: {
 		    def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
 				def oneHopTuple := /.at.urbiflock.ambientTota.extendTuple: aTuple with: {
 					 def dying := false;
-					 def decidePropagation() {!dying};
-					 def changeTupleContent() { dying := true; self};
-					 def decideDie(){ dying };
+					 def decidePropagation(ts) {!dying};
+					 def changeTupleContent(ts) { dying := true; self};
+					 def decideDie(ts){ dying };
 				};
 				
 		    def sT := aTS.inject: oneHopTuple;

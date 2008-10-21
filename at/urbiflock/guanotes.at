@@ -1,0 +1,189 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2008
+ * Authors: PROG Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+def AmbientTotaModule := /.at.urbiflock.ambientTota;
+
+def makeGuanotes(aFlockr) { 
+	
+	def guanotesTS := extend: AmbientTotaModule.makeTupleSpace() with: {
+		 def flockr := aFlockr;
+	};
+	
+  // local interface
+  object:{
+	
+ 	  def currentFlock(flockName){
+	    guanotesTS.flockr.getFlock(flockName).getFlockrList();
+    };
+
+    //installs a listener for guanotes matching the predicate
+    // replaced the old listenGuanotes for this:
+    def when: predicate received: block {
+	   guanotesTS.when: predicate matches: { |guanote|
+		   block(guanote);  
+		 };
+   };   
+
+    def sendGuanote(aGuanote){
+		  guanotesTS.inject: aGuanote;
+    }; 
+  
+    // guanote has 3 predefined fields
+    def makeGuanote(from, to, message){
+	   //generate ids on ambientTota
+	    AmbientTotaModule.extendTuple: AmbientTotaModule.makeTuple("uid1")  with: {
+		    def sender := from;  // fill in by at interface with gui
+		    def receiver := to;  // an object which contains flock
+		    def msg := message;
+		    // currently inheriting the default, i.e. a tuple that hops forever.
+		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.flockr)};
+		system.println("makeGuanote: from " + sender+ " to " + receiver + " msg " + msg);
+	    };
+    };
+
+    // done by framework!
+    def p;
+    def s;
+    def goOnline(){
+	    deftype Guanotes;
+	    p := export: guanotesTS as: Guanotes;
+	    s := whenever: Guanotes discovered: { |ts|
+			  guanotesTS.notifyTSDiscovered(ts);
+		  };
+    };
+    def goOffline(){
+	    (p != nil).ifTrue: { p.cancel()}; 
+		  (s != nil).ifTrue: { s.cancel()};
+    };
+  };
+};
+// the module object of this file
+def GuanotesModule := object: {
+	// public stuff goes here
+	  def makeGuanotes := &makeGuanotes;
+	
+		def GuanotesTest := extend: /.at.unit.test.UnitTest.new("GuanotesTest", false) with: {
+			//tests
+			import /.at.lang.futures;
+		  enableFutures(false);
+		
+			def flockr1;
+			def myGuanotes;
+			
+			def setUp() {
+				def profile1 := /.at.urbiflock.profile.makeProfile();
+				profile1.username := "flockr1";
+			  flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+			
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr2";
+		  	flockr1.addBuddy(profile2);
+		    
+		    myGuanotes := makeGuanotes(flockr1);
+				myGuanotes.goOnline();
+				
+			};
+			
+			def tearDown() {
+				flockr1.goOffline();
+				myGuanotes.goOffline();
+			};
+					
+			def testAsyncHelloWorldGuanote(){
+				def [fut,res] := makeFuture();
+				
+				def to := isolate: { 
+					def name := "flockr2"; 
+					def shouldReceive(flockr) { flockr.getProfile.username == name}; 
+				};				
+				def aGuanote := myGuanotes.makeGuanote(flockr1.getProfile.username, to, "HelloWorld");
+				myGuanotes.sendGuanote(aGuanote);
+		
+				def a := actor: { |res|	
+					def profile2 := /.at.urbiflock.profile.makeProfile();
+					profile2.username := "flockr2";
+				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+			    myGuanotes.goOnline();
+				  // this should be composed via gui interface for every flock where a flockr is registered.
+					myGuanotes.when: { |guanote| guanote.receiver.name == profile2.username} received: { |guanote|
+					  //gui.popUpNote(guanote);
+						system.println("received guanote " + guanote.msg + " from " + guanote.sender);
+						flockr2.goOffline();
+						myGuanotes.goOffline();
+						res<-resolve(`ok);
+					};
+			  };
+				fut;
+			}; 
+			
+		/*		def testAsyncHelloWorldGuanoteToFlock(){
+					def [fut,res] := makeFuture();
+					
+					// sending to a flatten flock
+        	def to := isolate: { 
+						def names;
+						def init(){
+							names := myGuanotes.currentFlock("FriendsFlock"); 
+						}; 
+						def shouldReceive(flockr) { 
+							system.println("names " + names);
+							names.contains(flockr.getProfile.username);
+						}; 
+					}; 
+					// to comment. 
+					//Second option to send guanotes to a dynamic flock defined at receiver
+					def to := object: {
+						def flock := "FriendsFlock"; 
+						def shouldReceive(flockr) { 
+							(flockr.getFlock(name) != nil);
+						};
+					};
+					
+					def aGuanote := myGuanotes.makeGuanote(flockr1.getProfile.username, to.new(), "HelloWorld");
+					myGuanotes.sendGuanote(aGuanote);
+
+					def a := actor: { |res|	
+						def profile2 := /.at.urbiflock.profile.makeProfile();
+						profile2.username := "flockr2";
+					  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+				    myGuanotes.goOnline();
+					  // this should be composed via gui interface for every flock where a flockr is registered.
+						myGuanotes.when: { |guanote| guanote.receiver.names.contains( profile2.username)} received: { |guanote|
+						  //gui.popUpNote(guanote);
+							system.println("received guanote " + guanote.msg + " from " + guanote.sender);
+							flockr2.goOffline();
+							myGuanotes.goOffline();
+							res<-resolve(`ok);
+						};
+				  };
+					fut;
+				};*/
+			
+		}; // endGuanotesTest
+
+} // endGuanotesModule
