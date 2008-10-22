@@ -65,12 +65,19 @@ def makeFlock(theName, theProximity) {
 			}
 		};
 		def setProximity(newProximity) {
-			// ToThinkAbout: shouldn't the listeners vector be cleaned??
+			def oldFlockList := flockrList;
+			def flatlist := oldFlockList.asTable.map:{|profile| profile.username};
+			system.println("oldFlockrlist " + flatlist);
 			flockrList := makeFlockrList;
 			subscription.cancel();
 			proximity := newProximity;
-			//ToThinkAbout: should it be a fresh listener?
 			subscription := proximity.register(proximityListener);
+			oldFlockList.each: { |profile| 
+				system.println("feeding network with profile " + profile.username);
+				// passing nil as far reference. 
+				// Save because the rete engine doesn't use flockr but profiles.
+				proximity<-notifyProfileChanged(nil, profile);
+			};
 		};
 		
 	};
