@@ -22,7 +22,7 @@ public class DoesProfileMatchProximityEditor extends ProfileViewer {
 	}
 	
 	
-	public void updateTheMatchingProfile() {
+	public void updateTheProfile() {
 		Iterator it = getMatchingFieldCheckBoxes().iterator();
 		while (it.hasNext()) {
 			Checkbox current = (Checkbox)it.next();

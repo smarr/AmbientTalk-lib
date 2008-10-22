@@ -97,6 +97,15 @@ def makeFlockr(profile) {
 			uidFlockrMap.put(uid, flockr);
 		};
 		def getProfile() { myProfile };
+		
+		def updateProfile() {
+			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(remoteInterface, myProfile);
+			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
+			while: { connectedFlockrsIterator.hasNext() } do: {
+				connectedFlockrsIterator.next()<-profileChanged(remoteInterface, myProfile);
+			};
+		};
+		
 		def addBuddy(profile) { 
 			buddyList.addProfile(profile);
 			notifyListeners: buddyListListeners with: <-notifyBuddyAdded(profile);
@@ -275,6 +284,10 @@ object: {
 				profile2.username := "flockr2";
 				profile2.firstname := "Flockr 2 first name";
 			  def flockr2 := makeFlockr(profile2);
+			def setFlockr2Firstname(name) { 
+				profile2.firstname := name;
+				flockr2.updateProfile();
+			};
 			  def goOffline() { flockr2.goOffline(); `ok };
 		  }
 		};
@@ -341,6 +354,13 @@ object: {
 					/.at.support.timer.when: seconds(5) elapsedWithFuture: {
 						// now, flockr2 should again be in flockr1's Matching Profiles flock
 					  self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1, "flockr2 not in expected flock after profile change");
+					
+					  // Should not match anymore, flock should be updated
+					  actorHostingFlockr2<-setFlockr2Firstname("bleh");
+					  /.at.support.timer.when: seconds(5) elapsedWithFuture: {
+					    // now, flockr2 should not be in flockr1's Matching Profiles flock
+					    self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0, "flockr2 not expected in flock after profile change");
+					  };
 				  };
 				};
 			};

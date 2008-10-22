@@ -288,7 +288,9 @@ public class ProfileViewer extends Frame implements ActionListener {
 		return false;
 	}
 	
-	public void updateTheMatchingProfile() { }
+	public void updateTheProfile() { 
+		localFlockr_.updateProfile();
+	}
 	
 	public void actionPerformed(ActionEvent ae) {
 		String command = ae.getActionCommand();
@@ -302,7 +304,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 				}
 			}
 			if (fieldsOk) { 
-				updateTheMatchingProfile();
+				updateTheProfile();
 				this.dispose(); 
 			};
 			return;
@@ -506,7 +508,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 	 * This event should only be signaled when viewing another (remote) flockr's profile,
 	 * since changes to a local flockr's own profile only happen by the use of this GUI.
 	 */
-	public void notifyProfileChanged(NATFarReference remoteFlockr, Profile profile) {
+	public void notifyProfileChanged(Object remoteFlockr, Profile profile) {
 		updateGUIWithProfile(profile);
 	}
 	

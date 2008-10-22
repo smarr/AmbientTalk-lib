@@ -100,6 +100,13 @@ def makeDoesProfileMatchProximity(flockr, block) {
 			def notifyProfileChanged(farref, profile) {
 				super^getReteNode().changeEvent(profile);
 			};
+			
+			def notifyFromNode(Token) {
+				system.println("DEBUG: notifyFromNode: " + Token.getSign);
+				super^notifyFromNode(Token);
+			};
+			
+			super^connect();
 		};
 		flockr.registerProfileChangedListener(profileChangedProximity);
 		profileChangedProximity;
