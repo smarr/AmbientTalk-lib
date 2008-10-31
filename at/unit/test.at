@@ -209,13 +209,13 @@ def UnitTest := object: {
 					FuturesModule.whenAny: self.setUp() becomes: { |ignoredValue|
 						try: {
 							(reflect: self).invoke(self, `(.#methName()));
+							reporter.success(methName);
 						}	catch: AssertionFailed using: {|e|
 							reporter.failure(methName, e);
 						} catch: /.at.types.Exception using: { |e|
 							reporter.error(methName, e);
 						};
 						FuturesModule.whenAny: self.tearDown() becomes: { |ignoredValue|
-							reporter.success(methName);
 							testMethod(index + 1);
 						}
 					}
@@ -279,6 +279,8 @@ def TestModule := object: {
 	def TestSuite := TestSuite;
 	def ConsoleReporter := consoleReporter;
 	
+	// returns a future that is resolved by a boolean indicating whether or not
+	// the self-test was successful
 	def selfTest() {
 		// a unit test to test the unit test
 		def weekDayTest := extend: UnitTest.new("WeekDayTest") with: {
@@ -299,22 +301,36 @@ def TestModule := object: {
 		  def testError() { self.assertEquals("sun", dow[8]) }; // raises index out of bounds -> error
 		  def testFailure() { self.assertNotEquals(dow[2], dow[2]) }; // test correct handling of failure
 		};
+		
+		def [fut,res] := /.at.lang.futures.makeFuture();
 
-		// expecting  6 success, 1 failure and 1 error
+		// expecting 7 success, 1 failure and 1 error
 		def unittesttester := object: {
 			def succ := 0; def fail := 0; def err := 0;
 			def start(@args) { nil };
-			def success(@args) { succ := succ + 1 };
-			def failure(@args) { fail := fail + 1 };
-			def error(@args) { err := err + 1 };
+			def success(@args) {
+				//system.println("Success in self-test: "+args);
+				succ := succ + 1
+			};
+			def failure(@args) {
+				//system.println("Failure in unit test self-test: "+args);
+				fail := fail + 1
+			};
+			def error(@args) {
+				//system.println("Error in unit test self-test: "+args);
+				err := err + 1
+			};
 			def stop(@args) {
 				if: !((succ == 7).and: { fail == 1 } and: { err == 1}) then: {
-					system.println("Unit Test self-checking test failed! "+ "succ: " + succ + " fail: " + fail + " err: " + err);
+					system.println("Unit Test self-checking test failed! Expected 7/1/1, got "+ "succ: " + succ + " fail: " + fail + " err: " + err);
+					res.resolve(false);
 				} else: {
 					system.println("Unit test module ok");
-				}
+					res.resolve(true);
+				};
 			};
 		};
-		weekDayTest.runTest(unittesttester);	
+		weekDayTest.runTest(unittesttester);
+		fut;
 	}
 }

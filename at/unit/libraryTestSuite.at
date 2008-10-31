@@ -50,9 +50,10 @@ def LibraryTestSuiteModule := object: {
 
   def testATDistribution() {
     // first perform a self-test to see if unit tests work
-    /.at.unit.test.selfTest();
-    // then perform the standard unit test suite
-    StandardTestSuite.runTest();
+    /.at.unit.test.selfTest()<-ifTrue: {
+	    // then perform the standard unit test suite
+	    StandardTestSuite.runTest();
+    };
   };
   
 };
