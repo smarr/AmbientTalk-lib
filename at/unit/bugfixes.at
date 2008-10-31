@@ -382,6 +382,12 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(42, o2.m());
 	};
 	
+	def testMirageMirroredByIntrospectiveMirror() {
+		def nativeObj := object: { };
+		def newMirage := object: { def m() { 42 } } mirroredBy: (reflect: nativeObj);
+		self.assertEquals(42, newMirage.m());
+	};
+	
 };
 
 self
