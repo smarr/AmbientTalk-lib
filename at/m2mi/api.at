@@ -139,6 +139,8 @@ def M2MIModule := object: {
 	
 	// ambienttalk-enabled handles
 	
+	deftype M2MIRef;
+	
 	/**
 	 * An ambientTalkHandle wraps an M2MI handle and enforces asynchronous access to it.
 	 *
@@ -151,7 +153,7 @@ def M2MIModule := object: {
 	 */
 	def makeAmbientTalkHandle(typetag, m2miHandleCreator) {
 		def m2miHandle := m2miHandleCreator(toInterface: typetag);
-		object: { } mirroredBy: (mirror: {
+		object: { } taggedAs: [M2MIRef] mirroredBy: (mirror: {
 			
 			// the reference wrappers around the M2MI handles are
 			// first-class far references, so mix in the far reference
@@ -160,7 +162,7 @@ def M2MIModule := object: {
 			
 			// M2MI reference equality is based on their underlying M2MI handles
 			def ==(otherRef) {
-				otherRef.equals(m2miHandle);
+				(is: otherRef taggedAs: M2MIRef).and: { otherRef.equals(m2miHandle) }
 			};
 			
 			def equals(otherM2MIHandle) {

@@ -270,12 +270,28 @@ def discover(type, handler, registerWithTracker) {
 };
 
 def export(service, type) {
-	def trackerResponder := object: {
-		def reportTo(serviceTracker) {
-			serviceTracker<-respond(service);
-		}
+	def trackerResponder;
+	
+	if: (is: service taggedAs: /.at.types.Isolate) then: {
+		trackerResponder := object: {
+			def reportTo(serviceTracker) {
+				serviceTracker<-respond(service);
+			}
+		};
+	} else: {
+		trackerResponder := object: {
+			def reportTo(serviceTracker) {	
+				serviceTracker<-respond(unireference: Tracker for: service);
+			}
+		};
 	};
-	export: trackerResponder asTypeTag: type;
+	
+	// force the trackerResponder to be a unireference to a Tracker
+	// if we do not do this, then the discovery module may crash when
+	// it broadcasts its unihandle to its Tracker object via its omnihandle
+	// because the M2MI lib running on this JVM will not be able to
+	// deserialize the Unihandle class
+	export: (unireference: Tracker for: trackerResponder) asTypeTag: type;
 };
 
 def DiscoveryModule := object: {
