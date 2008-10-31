@@ -176,6 +176,10 @@ def isolatelambda: clo closeOver: variableNames {
 // an alias for the above method
 def script: clo carrying: variableNames { isolatelambda: clo closeOver: variableNames };
 
+def script: clo {
+	script: clo carrying: [];
+};
+
 /**
  * Defines an isolate object with a custom serialization strategy.
  * Example:
