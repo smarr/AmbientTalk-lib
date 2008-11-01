@@ -27,6 +27,12 @@
 
 def Vector := /.at.collections.vector.Vector;
 
+def rand() { 
+  // we should provide something more random, e.g. IP addres + PID + now()
+	def aRandomNumber := /.at.support.symbiosis.long((print: self).length);
+  /.at.support.util.randomNumberBetween(0, (/.at.support.timer.now() - aRandomNumber).intValue); 
+};
+		
 def makeTupleSpace(){	
 	
 	//private methods and data fields
@@ -50,13 +56,15 @@ def makeTupleSpace(){
 	};
 	  
 	//method belonging to the tuple propagation protocol
-	def sendTuples(){
+	def sendTuples(ts){
 	  def toSend := Vector.new();
 		ambientTS.each: {|tuple|
-			if: tuple.decidePropagation(self) then:{
+			if: tuple.decidePropagation(ts) then:{
+				system.println("decidePropagation true for tuple " + tuple.getTupleId);
 				toSend.add(tuple);
 			} else: {
-				if: tuple.decideDie(self) then: {
+				system.println("decidePropagation false for tuple " + tuple.getTupleId);
+				if: tuple.decideDie(ts) then: {
 	        system.println("dying young " +  tuple);
 					def ld := localTS.delete({|t| t == tuple});
 					def ad := ambientTS.delete({|t| t == tuple});
@@ -70,7 +78,6 @@ def makeTupleSpace(){
 	//todo: separate the public interface between local/remote.
 	// public interface
 	def publicInterface := object: {
-		
 		// usual operations to manage a local ts.
 		// add a tuple to the local ts
 	  def add(tuple){
@@ -131,9 +138,9 @@ def makeTupleSpace(){
 			if: !(seenTS.contains(ts)) then:{
 		    seenTS.add(ts);
 		  };
-      def toSend := sendTuples();
+      def toSend := sendTuples(self);
       if: (toSend.length > 0) then: {
-				 system.println("notifyTSDiscovered: receiveTuples on " + ts);
+				 system.println("notifyTSDiscovered: sending tuples to " + ts);
 	       ts<-receiveTuples(toSend);
 			};
     };
@@ -143,7 +150,7 @@ def makeTupleSpace(){
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
-			system.println("receivingTuple " + tuple.getTupleId + " in " + self);
+			system.println("receivingTuple " + tuple.getTupleId);
 		      // tota propagation protocol (receiver side)
 		      tuple.doAction(self);
 			    tuple := tuple.changeTupleContent(self);
@@ -159,11 +166,13 @@ def makeTupleSpace(){
   publicInterface; 
 };
 
-def makeTuple(tupleId){
+def makeTuple(tupleId := nil){
+	//keeping this for unit testing purposes.
+	if: (tupleId == nil) then: {tupleId := rand()};
+	
 	isolate: { |tupleId|
 
 		def getTupleId() { tupleId };
-		
 		// TOTA API
 		// default tuple behaviour = always percolate, 
 		// and store itself in every hop.

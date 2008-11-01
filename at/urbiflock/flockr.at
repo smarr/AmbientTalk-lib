@@ -97,7 +97,7 @@ def makeFlockr(profile) {
 			uidFlockrMap.put(uid, flockr);
 		};
 		def getProfile() { myProfile };
-		
+		def getUsername(){ username };
 		def updateProfile() {
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(remoteInterface, myProfile);
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
@@ -228,7 +228,7 @@ def makeFlockr(profile) {
 	discSubscription := whenever: FlockrT discovered: { |flockr|
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
-			system.println("DEBUG: Flockr: " + username + "discovered" + newProfile.username);
+		//	system.println("DEBUG: Flockr: " + username + "discovered" + newProfile.username);
 
       // keep track of the flockr far reference via its UID
 			uidFlockrMap.put(uidOf(flockr), flockr);
@@ -240,9 +240,7 @@ def makeFlockr(profile) {
 			   is signalled before the removeFlockr event. Can this ever happen?
 			*/
 			when: flockr disconnected: {
-				system.println("DEBUG: Flockr:" + username + "noticed a disconnection from " + flockr);
-				//Comment elisa: why do not remove all of them? anycase the reference gets replaced when they got rediscovered.
-				//if: !(buddyList.contains(uidOf(flockr))) then: {
+			//	system.println("DEBUG: Flockr:" + username + "noticed a disconnection from " + flockr);
 				uidFlockrMap.remove(uidOf(flockr));
 				// Note: the 'newProfile' profile may be outdated by now, but it only serves
 				// to remove all profiles with the same username from the RETE network
@@ -357,6 +355,9 @@ object: {
 					
 					  // Should not match anymore, flock should be updated
 					  actorHostingFlockr2<-setFlockr2Firstname("bleh");
+					//		newMatchingProfile.firstname := "bleh";
+						//	flockr1.updateMatchingProfile(newMatchingProfile);
+					  
 					  /.at.support.timer.when: seconds(5) elapsedWithFuture: {
 					    // now, flockr2 should not be in flockr1's Matching Profiles flock
 					    self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 0, "flockr2 not expected in flock after profile change");

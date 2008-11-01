@@ -25,66 +25,95 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 def AmbientTotaModule := /.at.urbiflock.ambientTota;
+def FutureModule := /.at.lang.futures;
+
+def Vector := /.at.collections.vector.Vector;
 
 def makeGuanotes(aFlockr) { 
-	
+	// guanotesTS also encapsulates the remote interface
 	def guanotesTS := extend: AmbientTotaModule.makeTupleSpace() with: {
-		 def flockr := aFlockr;
+		def flockr := aFlockr;
+		def connectedFlockrs := Vector.new();
+		def getFlockrId(){
+			 flockr.getUsername;
+		 };
+		def getConnectedFlockrs(){
+		  connectedFlockrs.asTable();
+	  };
 	};
-	
   // local interface
   object:{
-	
+	  //added for testing - to think if it should go to local interface or not.
+	  def getConnectedFlockrs(){ guanotesTS.getConnectedFlockrs };
+	  //helper function to flatten a flock.
+	  //maybe move to flock.at?
  	  def currentFlock(flockName){
 	    guanotesTS.flockr.getFlock(flockName).getFlockrList();
     };
-
     //installs a listener for guanotes matching the predicate
     // replaced the old listenGuanotes for this:
     def when: predicate received: block {
-	   guanotesTS.when: predicate matches: { |guanote|
-		   block(guanote);  
-		 };
-   };   
-
+	    guanotesTS.when: predicate matches: { |guanote|
+		    block(guanote);  
+		  };
+    };   
+    // injects a guanote into the ambient.
     def sendGuanote(aGuanote){
 		  guanotesTS.inject: aGuanote;
     }; 
-  
     // guanote has 3 predefined fields
-    def makeGuanote(from, to, message){
+    def makeGuanote(from, to, msg){
 	   //generate ids on ambientTota
-	    AmbientTotaModule.extendTuple: AmbientTotaModule.makeTuple("uid1")  with: {
+	    AmbientTotaModule.extendTuple: AmbientTotaModule.makeTuple()  with: {
 		    def sender := from;  // fill in by at interface with gui
 		    def receiver := to;  // an object which contains flock
-		    def msg := message;
+		    def message := msg;
+			system.println("making guanote " + self.tupleId + " from " + from + " msg " + msg);
 		    // currently inheriting the default, i.e. a tuple that hops forever.
-		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.flockr)};
-		system.println("makeGuanote: from " + sender+ " to " + receiver + " msg " + msg);
+		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.flockr.getUsername)};
+        def decidePropagation(guanotesSenderTS){ 
+	       { |return|
+	          guanotesSenderTS.getConnectedFlockrs.each: { |username| 
+		          if: receiver.shouldReceive(username) then: { system.println("propagating true for " + self.getTupleId + " to " + username);return(true) }
+		        };
+		        false;
+		     }.escape()
+	      }; 
 	    };
     };
-
-    // done by framework!
-    def p;
-    def s;
+		
+		def extendGuanote: tuple  with: closure {
+			extend: guanote with: closure taggedAs: [/.at.types.Isolate];
+		};
+		
+    // this should be done by framework!
+    def p; def s; def swd;
     def goOnline(){
 	    deftype Guanotes;
 	    p := export: guanotesTS as: Guanotes;
-	    s := whenever: Guanotes discovered: { |ts|
-			  guanotesTS.notifyTSDiscovered(ts);
+	    s := whenever: Guanotes discovered: { |farRefGuanotesTS|
+			  FutureModule.when: farRefGuanotesTS<-getFlockrId()@FutureModule.FutureMessage becomes: { |username|
+				  guanotesTS.connectedFlockrs.add(username);
+					swd := whenever: farRefGuanotesTS disconnected: {
+					  guanotesTS.connectedFlockrs.remove(username);
+					};
+					guanotesTS.notifyTSDiscovered(farRefGuanotesTS);
+			  };
 		  };
     };
     def goOffline(){
 	    (p != nil).ifTrue: { p.cancel()}; 
 		  (s != nil).ifTrue: { s.cancel()};
+		  (swd != nil).ifTrue: {swd.cancel()};
     };
   };
-};
+}; // end-make-Guanotes
+
 // the module object of this file
 def GuanotesModule := object: {
 	// public stuff goes here
 	  def makeGuanotes := &makeGuanotes;
-	
+		
 		def GuanotesTest := extend: /.at.unit.test.UnitTest.new("GuanotesTest", false) with: {
 			//tests
 			def waitTime := 2;
@@ -97,21 +126,19 @@ def GuanotesModule := object: {
 			def test := self;
 			
 			def setUp() {
+				// one flockr1 with 2 friends: flockr2 and flockr3.
 				def profile1 := /.at.urbiflock.profile.makeProfile();
 				profile1.username := "flockr1";
 			  flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
-			
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2";
 		  	flockr1.addBuddy(profile2);
-		
 				def profile3 := /.at.urbiflock.profile.makeProfile();
 				profile3.username := "flockr3";
 		  	flockr1.addBuddy(profile3);
-		    
+		    //setting up guanotes of flockr1
 		    myGuanotes := makeGuanotes(flockr1);
 				myGuanotes.goOnline();
-				
 			};
 			
 			def tearDown() {
@@ -120,24 +147,25 @@ def GuanotesModule := object: {
 				system.println("shutted down flockr1 and its guanotes");
 			};
 					
-			def testAsyncHelloWorldGuanote(){
+			def testAsyncGuanoteToFlockr(){
 				def [fut,res] := makeFuture();
 				// sending a guanote to a flockr.
 				def to := isolate: { 
 					def name := "flockr2"; 
-					def shouldReceive(flockr) { flockr.getProfile.username == name}; 
+				//	def shouldReceive(flockr) { flockr.getProfile.username == name}; 
+				  def shouldReceive(flockrId) { flockrId == name}; 
 				};				
-				def aGuanote := myGuanotes.makeGuanote(flockr1.getProfile.username, to, "HelloWorld");
+				def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to, "HelloWorld");
 				myGuanotes.sendGuanote(aGuanote);
 		    // actor containing flockr2
-				def a := actor: { |res|	
+				def a := actor: { |res,test|	
 					def profile2 := /.at.urbiflock.profile.makeProfile();
 					profile2.username := "flockr2";
 				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
 			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.goOnline();
 				  // this should be composed via gui interface for every flock where a flockr is registered.
-					myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2)} received: { |guanote|
+					myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2.getUsername)} received: { |guanote|
 					  //gui.popUpNote(guanote);
 						test<-assertEquals("flockr1", guanote.sender);
 						flockr2.goOffline();
@@ -148,7 +176,7 @@ def GuanotesModule := object: {
 				fut;
 			}; 
 			
-			def testAsyncHelloWorldGuanoteToFlock(){
+			def testAsyncGuanoteToFlock(){
 				def [fut,res] := makeFuture();
 				// sending a guanote to a flatten flock, i.e. a list of flockrs.
 		    def to := isolate: { 
@@ -156,9 +184,8 @@ def GuanotesModule := object: {
 					def init(flockName){
 							names := myGuanotes.currentFlock(flockName); 
 					}; 
-				  def shouldReceive(flockr) { 
-					  names.contains(flockr.getProfile.username);
-				  }; 
+				 // def shouldReceive(flockr) { names.contains(flockr.getProfile.username) }; 
+				  def shouldReceive(flockrId) { names.contains(flockrId) };
 				}; 
 				//Second option to send guanotes to a dynamic flock defined at receiver
 				/*def to := object: {
@@ -169,7 +196,7 @@ def GuanotesModule := object: {
 				};*/
 				// waiting some time to be sure that flockr2,flockr3 belong to the flockr1 "FriendsFlock".			
 				when: seconds(waitTime) elapsed: {
-				  def aGuanote := myGuanotes.makeGuanote(flockr1.getProfile.username, to.new("FriendsFlock"), "HelloWorld");
+				  def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to.new("FriendsFlock"), "HelloWorld");
 				  myGuanotes.sendGuanote(aGuanote);
 			  };
 				// actor containing flockr2, which belongs to flockr1 "FriendsFlock"
@@ -179,7 +206,7 @@ def GuanotesModule := object: {
 				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
 			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.goOnline();
-       	  myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2)} received: { |guanote|
+       	  myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2.getUsername)} received: { |guanote|
 					  test<-assertEquals("flockr1", guanote.sender);
 						flockr2.goOffline();
 						myGuanotes.goOffline();
@@ -187,9 +214,9 @@ def GuanotesModule := object: {
 					};
 			  };
 				fut;
-			};	
+			};	// end-testAsyncGuanoteToFlock
 				
-			def testAsyncHelloWorldGuanoteToFlockIndirectReception(){
+			def testAsyncGuanoteToFlockIndirectReception(){
 					def [fut,res] := makeFuture();
 					def [futTest,resTest] := makeFuture();
 					// sending a guanote to a flatten flock, i.e. a list of flockrs.
@@ -199,13 +226,12 @@ def GuanotesModule := object: {
 							names := myGuanotes.currentFlock(flockName); 
 							system.println(names);
 						}; 
-						def shouldReceive(flockr) { 
-							names.contains(flockr.getProfile.username);
-						}; 
+						// def shouldReceive(flockr) { names.contains(flockr.getProfile.username) }; 
+						def shouldReceive(flockrId) { names.contains(flockrId) };
 					}; 
           // waiting some time to be sure that flockr2,flockr3 belong to the flockr1 "FriendsFlock".			
 					when: seconds(waitTime) elapsed: {
-						def aGuanote := myGuanotes.makeGuanote(flockr1.getProfile.username, to.new("FriendsFlock"), "HelloWorld");
+						def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to.new("FriendsFlock"), "HelloWorld");
 					  myGuanotes.sendGuanote(aGuanote);
 				  };
 				  // testing guanotes get received even if sender and receiver aren't connected at the same time.
@@ -216,7 +242,7 @@ def GuanotesModule := object: {
 					  def flockr3 := /.at.urbiflock.flockr.makeFlockr(profile3);
 				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr3);
 				    def goOnline() { myGuanotes.goOnline()};
-						myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr3)} received: { |guanote|
+						myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr3.getUsername)} received: { |guanote|
 							test<-assertEquals("flockr1", guanote.sender);
 							flockr3.goOffline();
 							myGuanotes.goOffline();
@@ -235,7 +261,7 @@ def GuanotesModule := object: {
 							flockr2.goOffline();
 							myGuanotes.goOffline();
 				    };
-						myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2)} received: { |guanote|
+						myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2.getUsername)} received: { |guanote|
 							test<-assertEquals("flockr1", guanote.sender);
 							// shutting down flockr1 
 							test<-tearDown();
@@ -250,8 +276,70 @@ def GuanotesModule := object: {
 					  };
 					};
 					futTest;
-				};
-			
+				}; // end-testAsyncGuanoteToFlockIndirectReception
+				
+				def testAsyncGuanoteToFlockNoReception(){
+					def [fut,res] := makeFuture();
+					// sending a guanote to a flatten flock, i.e. a list of flockrs.
+			    def to := isolate: { 
+						def names;
+						def init(flockName){
+								names := myGuanotes.currentFlock(flockName); 
+						}; 
+					  def shouldReceive(flockrId) { names.contains(flockrId) };
+					}; 
+					// waiting some time to be sure that flockr2,flockr3 belong to the flockr1 "FriendsFlock".			
+					when: seconds(waitTime) elapsed: {
+					  def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to.new("FriendsFlock"), "HelloWorld");
+					  myGuanotes.sendGuanote(aGuanote);
+				  };
+					// flockr2 sends also a "Dag wereld" guanote to its friends when it gets the one of flockr1
+					def aFlockr2 := actor: { |res, test|	
+						def profile2 := /.at.urbiflock.profile.makeProfile();
+						profile2.username := "flockr2";
+					  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+						def profile4 := /.at.urbiflock.profile.makeProfile();
+						profile4.username := "flockr4";
+						flockr2.addBuddy(profile4); // assuming that the guanote of flockr1 arrives after the addBuddy has been proccessed.
+				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+				    myGuanotes.goOnline();
+	       	  myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2.getUsername)} received: { |guanote|
+						  test<-assertEquals("flockr1", guanote.sender);
+							def to := isolate: { 
+							  def names;
+								def init(flockName){
+									names := myGuanotes.currentFlock(flockName); 
+								}; 
+								def shouldReceive(flockrId) { names.contains(flockrId) };
+						  };
+						  def aGuanote := myGuanotes.makeGuanote(flockr2.getUsername, to.new("FriendsFlock"), "DagWereld");
+							myGuanotes.sendGuanote(aGuanote);
+							flockr2.goOffline();
+							myGuanotes.goOffline();
+							res<-resolve(`ok);
+						};
+				  };
+					// actor containing flockr3, which doesn't belong to flockr1 "FriendsFlock" 
+					// but it will receive a guanote from flockr2 which is one of its friends.
+				  def aFlockr4 := actor: { |res, test|	
+								def profile4 := /.at.urbiflock.profile.makeProfile();
+								profile4.username := "flockr4";
+							  def flockr4 := /.at.urbiflock.flockr.makeFlockr(profile4);
+						 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr4);
+						    myGuanotes.goOnline();
+								myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr4.getUsername)} received: { |guanote|
+									test<-assertEquals("flockr2", guanote.sender);
+									test<-assertEquals("DagWereld", guanote.message);
+									test<-assertEquals(2, myGuanotes.getConnectedFlockrs.length);
+									test<-assertTrue(myGuanotes.getConnectedFlockrs.contains("flockr1"));
+									flockr4.goOffline();
+									myGuanotes.goOffline();
+									res<-resolve(`ok);
+								};
+						  };
+					fut;
+				};	// end-testAsyncGuanoteToFlockNoReception
+			 
 		}; // endGuanotesTest
 
 } // endGuanotesModule
