@@ -97,7 +97,7 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		apps.add(app3);
 		apps.add(app4);
 		apps.add(app5);
-		ApplicationLauncher launcher = new ApplicationLauncher((Application[])apps.toArray());
+		ApplicationLauncher launcher = new ApplicationLauncher((Application[])apps.toArray(new Application[apps.size()]));
 	}
 
 }
