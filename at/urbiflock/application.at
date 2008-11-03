@@ -43,6 +43,25 @@ def makeApplication(initName, localOwnerInterface) {
 				[localOwnerInterface.remoteInterface, localOwnerInterface.getProfile ]
 			}
 		};
+		
+		/* l should understand:
+		     notifyApplicationJoined(flockr : farref to flockr, buddyProfile : profile, app : farref to application)
+		       invoked whenever an application was discovered
+		     notifyApplicationLeft(flockr : farref to flockr, buddyProfile : profile, app : farref to application)
+		       invoked whenever an application is no longer present
+		  returns: an object whose cancel method cancels the registration
+		*/
+		def registerApplicationListener(type, l) {
+			def discSub := whenever: type discovered: { |remoteApp|
+				when: remoteApp<-getOwnerAndProfile()@FutureMessage becomes: { |ownerAndProfile|
+					def [flockr, itsProfile] := ownerAndProfile;
+					l<-notifyApplicationJoined(flockr, itsProfile, remoteApp);
+					when: remoteApp disconnected: {
+						l<-notifyApplicationLeft(flockr, itsProfile, remoteApp);
+					}
+				};
+			};
+		};
 				
 		def start();
 		def pause();
@@ -111,17 +130,17 @@ object: {
 				deftype TestApp1;
 				def testApp := /.at.urbiflock.application.makeApplication("testApp", flockr2);
 				testApp.export(TestApp1);
-				flockr2.registerApplication(testApp);
+				flockr2.addApplication(testApp);
 		  };
 			
 			deftype TestApp1;
 			def testApp := makeApplication("testApp", flockr1);
-			flockr1.registerApplication(testApp);
+			flockr1.addApplication(testApp);
 			
 			def test := self;
 			
 		  future: { |return|
-				flockr1.registerApplicationListener(TestApp1, object: {
+				testApp.registerApplicationListener(TestApp1, object: {
 					def notifyApplicationJoined(flockr, profile, app) {
 						test.assertEquals("uid2", /.at.urbiflock.flockr.uidOf(flockr), "flockr does not match");
 						test.assertEquals("uid2", profile.username, "profile does not match");

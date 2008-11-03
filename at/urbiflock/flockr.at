@@ -91,26 +91,7 @@ def makeFlockr(profile) {
 		def registerBuddyListListener(l) { buddyListListeners.add(l) };
 		def removeBuddyListListener(l) { buddyListListeners.remove(l) };
 		
-		/* l should understand:
-		     notifyApplicationJoined(flockr : farref to flockr, buddyProfile : profile, app : farref to application)
-		       invoked whenever an application was discovered
-		     notifyApplicationLeft(flockr : farref to flockr, buddyProfile : profile, app : farref to application)
-		       invoked whenever an application is no longer present
-		  returns: an object whose cancel method cancels the registration
-		*/
-		def registerApplicationListener(type, l) {
-			def discSub := whenever: type discovered: { |remoteApp|
-				when: remoteApp<-getOwnerAndProfile()@FutureMessage becomes: { |ownerAndProfile|
-					def [flockr, itsProfile] := ownerAndProfile;
-					l<-notifyApplicationJoined(flockr, itsProfile, remoteApp);
-					when: remoteApp disconnected: {
-						l<-notifyApplicationLeft(flockr, itsProfile, remoteApp);
-					}
-				};
-			};
-		};
-		
-		def registerApplication(app) { applications.add(app) };
+		def addApplication(app) { applications.add(app) };
 		
 		def getFlockrWithUid(uid) {
 			uidFlockrMap.get(uid);
