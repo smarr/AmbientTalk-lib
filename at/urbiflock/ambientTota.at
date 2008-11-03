@@ -56,23 +56,19 @@ def makeTupleSpace(){
 	};
 	  
 	//method belonging to the tuple propagation protocol
-	def sendTuples(ts){
-	  def toSend := Vector.new();
-		ambientTS.each: {|tuple|
-			if: tuple.decidePropagation(ts) then:{
-				system.println("decidePropagation true for tuple " + tuple.getTupleId);
-				toSend.add(tuple);
-			} else: {
-				system.println("decidePropagation false for tuple " + tuple.getTupleId);
-				if: tuple.decideDie(ts) then: {
-	        system.println("dying young " +  tuple);
-					def ld := localTS.delete({|t| t == tuple});
-					def ad := ambientTS.delete({|t| t == tuple});
-				  system.println("delete local " + ld.asTable + "and delete ambient " + ad.asTable);
-				};
-			}; 
-		};
-		toSend.asTable;
+	def sendTuple(tuple, ts){
+		// toThink: this method could be called twice via inject and discovery when the ts discover.
+		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
+		if: tuple.decidePropagation(ts) then:{
+		  true;
+		} else: {
+			if: tuple.decideDie(ts) then: {
+	      system.println("dying young " +  tuple);
+				localTS.removeAll:{|t| t == tuple};
+				ambientTS.removeAll: {|t| t == tuple};
+ 		  };
+		  false;
+		}; 
 	};
 	
 	//todo: separate the public interface between local/remote.
@@ -102,11 +98,13 @@ def makeTupleSpace(){
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
 		def inject: tuple {
-			system.println("add to ambient " + tuple.getTupleId );
+			system.println("injectingTuple " + tuple.getTupleId + " in " + self);
 		  ambientTS.add(tuple);
 			//notify all seen ts of the addition of a new tuple.
-			//todo first time, could receiveTuples be triggered twice? 
-		  seenTS.each: { |ts| ts<-receiveTuples([tuple]) };
+		  if: (sendTuple(tuple, self)) then: {
+				system.println("add to ambient " + tuple.getTupleId );
+			  seenTS.each: { |ts| ts<-receiveTuples([tuple]) };
+			};
 		  //return a publication object to be able to cancel the injection.
 		  object:{
 		    def cancel() { ambientTS.removeAll: {|t| t == tuple} };
@@ -138,10 +136,12 @@ def makeTupleSpace(){
 			if: !(seenTS.contains(ts)) then:{
 		    seenTS.add(ts);
 		  };
-      def toSend := sendTuples(self);
+      //def toSend := sendTuples(self);
+			def toSend := Vector.new();
+			ambientTS.each: { |tuple| if: (sendTuple(tuple, self)) then: { toSend.add(tuple)}};
       if: (toSend.length > 0) then: {
 				 system.println("notifyTSDiscovered: sending tuples to " + ts);
-	       ts<-receiveTuples(toSend);
+	       ts<-receiveTuples(toSend.asTable);
 			};
     };
 		
@@ -150,14 +150,14 @@ def makeTupleSpace(){
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
-			system.println("receivingTuple " + tuple.getTupleId);
+			system.println("receivingTuple " + tuple.getTupleId + " in " + self);
 		      // tota propagation protocol (receiver side)
 		      tuple.doAction(self);
 			    tuple := tuple.changeTupleContent(self);
 			    //check if you have to insert it into your local tuple space
 			    if: tuple.decideStore(self) then: { add(tuple) };
 			    //todo: optimization to inject all tuples at once.
-			    inject: tuple;
+			    self.inject: tuple;
 		    };
 		  };
 	  }; 
@@ -167,7 +167,7 @@ def makeTupleSpace(){
 };
 
 def makeTuple(tupleId := nil){
-	//keeping this for unit testing purposes.
+	//todo: keeping this for unit testing purposes.
 	if: (tupleId == nil) then: {tupleId := rand()};
 	
 	isolate: { |tupleId|
@@ -211,6 +211,7 @@ def AmbientTotaModule := object: {
 		import /.at.lang.futures;
 		enableFutures(false);
 		deftype TupleSpace;
+		// todo : add network online in the setup of tests.
 		
 		def testAsyncDiscoveryTuple() {
 			
@@ -280,5 +281,4 @@ def AmbientTotaModule := object: {
 		
 	};
 };
-network.online();
 AmbientTotaModule;
