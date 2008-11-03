@@ -32,18 +32,18 @@ import /.at.lang.futures;
 // - an owner (Flockr)
 def makeApplication(initName, localOwnerInterface) {
 	def exportPublication;
-	
-	def remoteApplicationInterface := object: {
-		def name() { initName };
-		def getOwnerAndProfile() {
-			[localOwnerInterface.remoteInterface, localOwnerInterface.getProfile ]
-		}
-	};
-	
+		
 	object: {
 		def name() { initName };
-		def owner() { localOwnerInterface.remoteInterface };
+		def owner() { localOwnerInterface };
 		
+		def remoteApplicationInterface := object: {
+			def name() { initName };
+			def getOwnerAndProfile() {
+				[localOwnerInterface.remoteInterface, localOwnerInterface.getProfile ]
+			}
+		};
+				
 		def start();
 		def pause();
 		def unpause();
@@ -51,12 +51,12 @@ def makeApplication(initName, localOwnerInterface) {
 			(exportPublication != nil).ifTrue: {
 				exportPublication.cancel();
 				exportPublication := nil;
-				takeOffline: remoteApplicationInterface;
+				takeOffline: self.remoteApplicationInterface;
 			};
 		};
 		
 		def export(asType) {
-			exportPublication := export: remoteApplicationInterface as: asType;
+			exportPublication := export: self.remoteApplicationInterface as: asType;
 		}
 	}
 };
