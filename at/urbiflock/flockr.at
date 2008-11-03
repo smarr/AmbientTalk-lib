@@ -196,31 +196,54 @@ def makeFlockr(profile) {
 		
 		def createFlockFromFieldMatchers(flockName, fieldMatchersVector, shouldBeFriend, shouldBeNearby) {
 			def theChainedProximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true });
-			if: (fieldMatchersVector.size() > 0) then: {
-				def iterator := fieldMatchersVector.iterator();
-				while: { iterator.hasNext() } do: {
-					def fieldMatcher := iterator.next();
-					def fieldName := fieldMatcher.get(0);
-					def fieldType := fieldMatcher.get(1);
-					def comparatorSymbol := fieldMatcher.get(2);
-					def fieldValue := fieldMatcher.get(3);
-					def proximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(
-						localInterface, 
-						{ |profile| 
-							def value := (reflect: profile).invokeField(profile, fieldName);
-							def comparatorMethod := (reflect: value).select(value, comparatorSymbol);
-							(reflect: value).invoke(value, comparatorMethod);
-						});
-					theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	
-				};
+			def iterator := fieldMatchersVector.iterator();
+			def proximities := Vector.new();
+			while: { iterator.hasNext() } do: {
+				def fieldMatcher := iterator.next();
+				def fieldName := fieldMatcher.get(0);
+				def fieldType := fieldMatcher.get(1);
+				def comparatorSymbol := fieldMatcher.get(2);
+				def fieldValue := fieldMatcher.get(3);
+				def proximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(
+					localInterface, 
+					{ |profile| 
+						def value := (reflect: profile).invokeField(profile, fieldName);
+						def comparatorMethod := (reflect: value).select(value, comparatorSymbol);
+						(reflect: value).invoke(value, comparatorMethod);
+					});
+				proximities.add(proximity);
+				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	
 			};
+			def isFriendProximity := nil;
+			def isNearbyProximity := nil;
 			if: shouldBeFriend then: {
-				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, /.at.urbiflock.proximity.makeIsFriendProximity(localInterface));
+				isFriendProximity := /.at.urbiflock.proximity.makeIsFriendProximity(localInterface);
+				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, isFriendProximity);
 			};
 			if: shouldBeNearby then: {
-				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, /.at.urbiflock.proximity.makeIsNearbyProximity(localInterface));
+				isNearbyProximity := /.at.urbiflock.proximity.makeIsNearbyProximity(localInterface);
+				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, isNearbyProximity);
 			};
-			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity));		
+			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity));
+			
+			if: (nil != isFriendProximity) then: {
+				buddyList.listProfiles.each: { |profile|
+					isFriendProximity<-notifyBuddyAdded(profile);
+				};
+			};
+			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
+			while: { connectedFlockrsIterator.hasNext() } do: {
+				def flockrRef := connectedFlockrsIterator.next();
+				when: flockrRef<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
+					if: (nil != isNearbyProximity) then: {
+						isNearbyProximity<-notifyJoined(newProfile);
+					};
+					proximities.each: { |proximity| 
+						proximity<-notifyProfileChanged(flockrRef, newProfile);
+					};
+				} catch: TimeoutException using: { |e|
+				};
+			}		
 		};
 	};
 	
