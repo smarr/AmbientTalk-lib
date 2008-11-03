@@ -27,9 +27,11 @@
  */
 package at.urbiflock.ui;
 
+import java.awt.Button;
 import java.awt.Frame;
 import java.awt.List;
 import java.awt.MenuItem;
+import java.awt.Panel;
 import java.awt.PopupMenu;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -38,23 +40,29 @@ import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
+import javax.swing.BoxLayout;
+
 /**
  * A viewer for the list of flocks defined for a given flockr.
  * Clicking on a flock opens a flock viewer on the flock.
  */
-public class FlockListViewer extends Frame {
+public class FlockListViewer extends Frame implements ActionListener {
 	
 	final List listOfFlocks_;
+	final Button newFlockButton_;
 	final Flockr owner_;
 	Flock[] flocks_;
 	
 	public FlockListViewer(final Flockr owner) {
 		super("Flock List Viewer");
+		
+		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+		
 		owner_ = owner;
 
 		listOfFlocks_ = new List();
 		listOfFlocks_.setMultipleMode(false);
-		
+				
 		flocks_ = owner.getFlocks();
 
 		for (int i = 0; i < flocks_.length; i++) {
@@ -74,6 +82,11 @@ public class FlockListViewer extends Frame {
 		listOfFlocks_.addMouseListener(new PopupListener());
 		
 		add(listOfFlocks_);
+		
+		newFlockButton_ = new Button("New");
+		newFlockButton_.setActionCommand("New");
+		newFlockButton_.addActionListener(this);
+		add(newFlockButton_);
 		
 		pack();
 		setVisible(true);
@@ -95,7 +108,7 @@ public class FlockListViewer extends Frame {
 			removeItem.addActionListener(new ActionListener() {
 				public void actionPerformed(ActionEvent ae) {
 					int selected = listOfFlocks_.getSelectedIndex();
-					if (selected != -1) {
+					if ((selected != -1) & !(flocks_[selected].isDefaultFlock())) {
 						owner_.removeFlock(flocks_[selected]);
 						listOfFlocks_.remove(selected);
 					}
@@ -120,6 +133,14 @@ public class FlockListViewer extends Frame {
 				}
 	        }
 	    }
+	}
+
+	public void actionPerformed(ActionEvent ae) {
+		String command = ae.getActionCommand();
+		if (command == "New") {
+			owner_.openFlockEditorOnNewFlock();
+			return;
+		}
 	}
 	
 	/*public static void main(String[] args) {

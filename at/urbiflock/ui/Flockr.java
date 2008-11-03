@@ -1,6 +1,6 @@
 package at.urbiflock.ui;
 
-import edu.vub.at.objects.natives.NATObject;
+import java.util.Vector;
 
 public interface Flockr {
 
@@ -18,4 +18,13 @@ public interface Flockr {
 	public void removeDiscoveryListener(Object l);
 	public void updateMatchingProfile(Profile p);
 	public void updateProfile();
+	public void openFlockEditorOnNewFlock();
+	public void deleteFlock(Flock f);
+	public Profile getProfile();
+	public void createFlockFromFieldMatchers(
+			String flockName, 
+			Vector fieldMatchers, 
+			boolean shouldBeFriend, 
+			boolean shouldBeNearby
+		);
 }

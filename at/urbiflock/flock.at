@@ -35,6 +35,7 @@ def makeFlock(theName, theProximity) {
 	def name := theName;
 	def proximity := theProximity;
 	def listeners := Vector.new();
+	def defaultFlock := false;
 
   def proximityListener := object: {
 	  def addFlockr(profile) {
@@ -78,6 +79,14 @@ def makeFlock(theName, theProximity) {
 				// Save because the rete engine doesn't use flockr but profiles.
 				proximity<-notifyProfileChanged(nil, profile);
 			};
+		};
+		
+		def makeDefaultFlock() {
+			defaultFlock := true;
+		};
+		
+		def isDefaultFlock() {
+			defaultFlock
 		};
 		
 	};

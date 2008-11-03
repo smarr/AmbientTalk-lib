@@ -51,4 +51,5 @@ public interface Profile {
   public void setFieldShouldMatch(AGSymbol fieldName);
   public void setFieldShouldNotMatch(AGSymbol fieldName);
   public boolean fieldShouldMatch(AGSymbol fieldName);
+  public AbstractFieldType getFieldTypeWithName(String typeName);
 }

@@ -33,4 +33,5 @@ public interface Flock {
 	public Profile[] listProfiles();
 	public String getName();
 	public Subscription addListener(FlockListener l);
+	public boolean isDefaultFlock();
 }

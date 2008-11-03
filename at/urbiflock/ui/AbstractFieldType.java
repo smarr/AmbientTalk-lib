@@ -21,4 +21,5 @@ public interface AbstractFieldType {
 	public AGSymbol[] getPossibleValues();
 	public Object defaultValue();
 	public int getFieldSize();
+	public AGSymbol[] comparators();
 }

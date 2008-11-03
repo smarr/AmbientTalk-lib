@@ -184,6 +184,47 @@ def makeFlockr(profile) {
 		} taggedAs: [ extend: FlockrT with: { |username| }];
 		
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) };
+		
+		def openFlockEditorOnNewFlock() {
+			jlobby.at.urbiflock.ui.FlockEditor.new(/.at.urbiflock.flock.makeFlock(
+					"new flock", 
+					/.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true })),
+				localInterface);
+		};
+		
+		def createFlockFromFieldMatchers(flockName, fieldMatchersVector, shouldBeFriend, shouldBeNearby) {
+			system.println("Saving flock " + flockName + "...");
+			system.println("Should be friend: " + shouldBeFriend);
+			system.println("Should be nearby: " + shouldBeNearby);
+			system.println("Profile matchers: " + fieldMatchersVector);
+			
+			def theChainedProximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true });
+			if: (fieldMatchersVector.size() > 0) then: {
+				def iterator := fieldMatchersVector.iterator();
+				while: { iterator.hasNext() } do: {
+					def fieldMatcher := iterator.next();
+					def fieldName := fieldMatcher.get(0);
+					def fieldType := fieldMatcher.get(1);
+					def comparatorSymbol := fieldMatcher.get(2);
+					def fieldValue := fieldMatcher.get(3);
+					def proximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(
+						localInterface, 
+						{ |profile| 
+							def value := (reflect: profile).invokeField(profile, fieldName);
+							def comparatorMethod := (reflect: value).select(value, comparatorSymbol);
+							(reflect: value).invoke(value, comparatorMethod);
+						});
+					theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	
+				};
+			};
+			if: shouldBeFriend then: {
+				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, /.at.urbiflock.proximity.makeIsFriendProximity(localInterface));
+			};
+			if: shouldBeNearby then: {
+				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, /.at.urbiflock.proximity.makeIsNearbyProximity(localInterface));
+			};
+			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity));		
+		};
 	};
 	
 	// BuddyList is interested in Profile changes (update cached profiles)
@@ -193,23 +234,27 @@ def makeFlockr(profile) {
 	def isFriendProximity := ProximityModule.makeIsFriendProximity(localInterface);
 	proximities.add(isFriendProximity);
 	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", isFriendProximity);
+	FriendsFlock.makeDefaultFlock();
 	flocks.add(FriendsFlock);
 	
 	def isNearbyProximity := ProximityModule.makeIsNearbyProximity(localInterface);
 	proximities.add(isNearbyProximity);
 	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity);
+	NearbyFlock.makeDefaultFlock();
 	flocks.add(NearbyFlock);
 		
 	profileMatchingProximities := /.at.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
 	profileMatchesProximity := /.at.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
 	proximities.add(profileMatchesProximity);
 	def matchingProfilesFlock := FlockModule.makeFlock("Matching Profiles", profileMatchesProximity);
+	matchingProfilesFlock.makeDefaultFlock();
 	flocks.add(matchingProfilesFlock);
 	
+
 	/.at.urbiflock.application.makeFrameworkApplications(localInterface).each: { |application|
 		applications.add(application);
 	};
-	
+
 	publication := export: localInterface.remoteInterface as: FlockrT;
 	
 	// whenever a new Flockr is discovered:
@@ -352,7 +397,9 @@ object: {
 					  self.assertEquals(flockr1.getFlock("Matching Profiles").getFlockrList().length(), 1, "flockr2 not in expected flock after profile change");
 					
 					  // Should not match anymore, flock should be updated
-					  actorHostingFlockr2<-setFlockr2Firstname("bleh");
+					  //actorHostingFlockr2<-setFlockr2Firstname("bleh");
+					newMatchingProfile.firstname := "bleh";
+					flockr1.updateMatchingProfile(newMatchingProfile);
 					//		newMatchingProfile.firstname := "bleh";
 						//	flockr1.updateMatchingProfile(newMatchingProfile);
 					  

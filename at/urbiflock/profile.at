@@ -32,6 +32,9 @@ def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryField
 deftype DuplicateField <: lobby.at.types.Exception;
 def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 
+deftype InvalidFieldType <: lobby.at.types.Exception;
+def XInvalidFieldType := lobby.at.exceptions.createException(InvalidFieldType);
+
 def ProximityModule := /.at.urbiflock.proximity;
 
 
@@ -56,6 +59,9 @@ def AbstractFieldTypeObject := isolate: {
 	def fieldSize() {
 		raise: XChildObjectResponsibility.new("fieldSize() not applicable for this type.")
 	};
+	def comparators() {
+		raise: XChildObjectResponsibility.new("comparators() should be overridden by children of AbstractFieldTypeObject.")
+	};
 };
 
 def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
@@ -66,6 +72,7 @@ def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
 	def defaultValue() { "" };
 	def getFieldSize() { fieldSize };
 	def setFieldSize(newSize) { fieldSize := newSize };
+	def comparators() { [ `== ] };
 };
 
 def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
@@ -78,6 +85,7 @@ def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
 	};
 	def name() { "Choice" };
 	def defaultValue() { possibleValues[1] };
+	def comparators() { [ `== ] };
 };
 
 def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
@@ -99,6 +107,7 @@ def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
 			0 
 		} 
 	};
+	def comparators() { [ `==, `<, `> ] };
 	def init(low, high) {
 		lowerBound := low;
 		higherBound := high;
@@ -130,6 +139,7 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 			}
 		} 
 	};
+	def comparators() { [ `==, `<, `> ] };
 	def init(low, high) {
 		lowerBound := low;
 		higherBound := high;
@@ -164,6 +174,14 @@ def makeProfileMandatoryFields() {
 		
 		def getFieldType(fieldName) {
 			fieldTypeMap.get(fieldName);
+		};
+		
+		def getFieldTypeWithName(typeName) {
+			def found := (possibleTypes().filter: { |type| type.name() == typeName });
+			if: (found.length != 1) then: {
+				raise: XInvalidFieldType.new("Profile field type: " + typeName + " not found.");
+			};
+			found[1];
 		};
 		
 		def checkFieldTypeForValue(field, value) {

@@ -97,13 +97,6 @@ def makeFrameworkApplications(localFlockrI) {
 			jlobby.at.urbiflock.ui.FlockListViewer.new(localFlockrI)
 		}
 	}
-	,
-	// "Profile matcher" doesProfileMatch proximity editor application
-	extend: makeApplication("Profile matcher", localFlockrI) with: {
-		def start() {
-		  jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(localFlockrI, localFlockrI.getMatchingProfile)
-	  }
-	}
 	]
 };
 
