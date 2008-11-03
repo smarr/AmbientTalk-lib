@@ -37,7 +37,7 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		
 		for (int i = 0; i < applications_.length; i++) {
 			Application app = applications_[i];
-			String appName = app.getName().javaValue;
+			String appName = app.name().javaValue;
 			Button button = new Button(appName);
 			button.setActionCommand(appName);
 			button.addActionListener(this);
@@ -58,7 +58,7 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		Application result = null;
 		for (int i = 0; i < applications_.length; i++) {
 			Application app = applications_[i];
-			if (app.getName().javaValue.equals(name)) {
+			if (app.name().javaValue.equals(name)) {
 				result = app;
 			}
 		}
@@ -72,23 +72,23 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 	
 	public static void main(String[] args) {
 		Application app1 = new Application() {
-			public NATText getName() { return NATText.atValue("app1"); }
+			public NATText name() { return NATText.atValue("app1"); }
 			public void start() { System.out.println("app1 started"); }
 		};
 		Application app2 = new Application() {
-			public NATText getName() { return NATText.atValue("app2"); }
+			public NATText name() { return NATText.atValue("app2"); }
 			public void start() { System.out.println("app2 started"); }
 		};
 		Application app3 = new Application() {
-			public NATText getName() { return NATText.atValue("jkfkjsfbbskf dfdfj,n defn f"); }
+			public NATText name() { return NATText.atValue("jkfkjsfbbskf dfdfj,n defn f"); }
 			public void start() { System.out.println("jkfkjsfbbskf dfdfj,n defn f started"); }
 		};
 		Application app4 = new Application() {
-			public NATText getName() { return NATText.atValue("app4"); }
+			public NATText name() { return NATText.atValue("app4"); }
 			public void start() { System.out.println("app4 started"); }
 		};
 		Application app5 = new Application() {
-			public NATText getName() { return NATText.atValue("app5"); }
+			public NATText name() { return NATText.atValue("app5"); }
 			public void start() { System.out.println("app5 started"); }
 		};
 		Vector apps = new Vector();

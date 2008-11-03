@@ -181,6 +181,7 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 					(shouldCreateIsFriendProximity_ & shouldBeFriend),
 					(shouldCreateIsNearbyProximity_ & shouldBeNearby)
 					);
+			dispose();
 			return;
 		}
 		if (command == "addProximity") {

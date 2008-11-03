@@ -183,7 +183,9 @@ def makeFlockr(profile) {
 			};
 		} taggedAs: [ extend: FlockrT with: { |username| }];
 		
-		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) };
+		def openApplicationLauncher() { 
+			jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) 
+		};
 		
 		def openFlockEditorOnNewFlock() {
 			jlobby.at.urbiflock.ui.FlockEditor.new(/.at.urbiflock.flock.makeFlock(
@@ -193,11 +195,6 @@ def makeFlockr(profile) {
 		};
 		
 		def createFlockFromFieldMatchers(flockName, fieldMatchersVector, shouldBeFriend, shouldBeNearby) {
-			system.println("Saving flock " + flockName + "...");
-			system.println("Should be friend: " + shouldBeFriend);
-			system.println("Should be nearby: " + shouldBeNearby);
-			system.println("Profile matchers: " + fieldMatchersVector);
-			
 			def theChainedProximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true });
 			if: (fieldMatchersVector.size() > 0) then: {
 				def iterator := fieldMatchersVector.iterator();
