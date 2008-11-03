@@ -39,16 +39,12 @@
  * matching a given type. Most often, the object will be
  * a message whose type tag must be retrieved for its properties.
  * If no type tag is found, nil is returned.
- *
- * TODO: if the obj parameter to getAnnotationOfType is a far reference,
- * this function may crash on the call to obj.super, since accessing a field
- * synchronously is prohibited on a far ref.
  */
 def getAnnotationOfType(obj, type) {
   def anns;
   def idx;
   { |return|
-	  while: { !(nil == obj) } do: {
+	  while: { nil != obj } do: {
 	    anns := tagsOf: obj;
 	    idx := anns.find: { |tag|
 	      tag.isSubtypeOf(type)
@@ -56,8 +52,13 @@ def getAnnotationOfType(obj, type) {
 	    if: (nil != idx) then: {
 		    return(anns[idx]);
 	    };
-	    obj := obj.super;
-	  };
+	
+	    if: (is: obj taggedAs: /.at.types.FarReference) then: {
+		    return(nil); // stop searching
+	    } else: {
+			  obj := obj.super; // continue searching
+	    }
+		};
 	  nil
 	}.escape;
 };

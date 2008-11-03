@@ -110,6 +110,8 @@ def makeFlockr(profile) {
 			};
 		};
 		
+		def registerApplication(app) { applications.add(app) };
+		
 		def getFlockrWithUid(uid) {
 			uidFlockrMap.get(uid);
 		};
@@ -179,29 +181,29 @@ def makeFlockr(profile) {
 				};
 			}
 		};
-		// puts a flockr offline: 
+		
+		// takes a flockr offline: 
 		// stops a flockr from being exported to the network
 		// + from discovering other flockrs in the network
-		// + from the table of exported objects
+		// + removes it from the table of exported objects
 		def goOffline() { 
 			(publication != nil).ifTrue: { publication.cancel()}; 
 		  (discSubscription != nil).ifTrue: { discSubscription.cancel()};  
 			try: { 
-	      takeOffline: remoteInterface;
-	    } catch: /.at.types.IllegalOperation using: { |e|
-		  	system.println("[flockr.at] WARNING: flockr used only locally: "+e.message);
-	  	};
+	      takeOffline: self.remoteInterface;
+	    } catch: /.at.types.IllegalOperation using: { |e| /*flockr used only locally*/ };
 	    nil;
 		};
+		
+		def remoteInterface := object: {
+			def getProfile() { profile };
+			def profileChanged(flockr, newProfile) {
+				notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
+			};
+		} taggedAs: [ extend: FlockrT with: { |username| }];
+		
 		def openApplicationLauncher() { jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) };
 	};
-		
-	def remoteInterface := object: {
-		def getProfile() { profile };
-		def profileChanged(flockr, newProfile) {
-			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
-		};
-	} taggedAs: [ extend: FlockrT with: { |username| }];
 	
 	// BuddyList is interested in Profile changes (update cached profiles)
 	localInterface.registerProfileChangedListener(buddyList);
@@ -225,10 +227,9 @@ def makeFlockr(profile) {
 	
 	/.at.urbiflock.application.makeFrameworkApplications(localInterface).each: { |application|
 		applications.add(application);
-		application.start(localInterface);
 	};
 	
-	publication := export: remoteInterface as: FlockrT;
+	publication := export: localInterface.remoteInterface as: FlockrT;
 	
 	// whenever a new Flockr is discovered:
 	// 1) all discovery listeners get a notifyJoined event
@@ -290,10 +291,12 @@ object: {
 				profile2.username := "flockr2";
 				profile2.firstname := "Flockr 2 first name";
 			  def flockr2 := makeFlockr(profile2);
-			def setFlockr2Firstname(name) { 
-				profile2.firstname := name;
-				flockr2.updateProfile();
-			};
+			  
+			  def getFlock() { flockr2.remoteInterface };
+			  def setFlockr2Firstname(name) { 
+				  profile2.firstname := name;
+				  flockr2.updateProfile();
+			  };
 			  def goOffline() { flockr2.goOffline(); `ok };
 		  }
 		};
@@ -305,6 +308,12 @@ object: {
 			// because we return a future, tearDown will wait
 			// until the second flock has been taken offline before
 			// starting the next test
+		};
+		
+		def testAsyncUidOf() {			
+			when: actorHostingFlockr2<-getFlock()@FutureMessage becomes: { |remoteFlockr|
+				self.assertEquals("flockr2", /.at.urbiflock.flockr.uidOf(remoteFlockr), "uidOf does not work");
+			};
 		};
 		
 		// test whether two flockrs can discover one another

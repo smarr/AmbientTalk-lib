@@ -25,59 +25,64 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+import /.at.lang.futures;
+
 // All Urbiflock applications have:
 // - a name (String)
 // - an owner (Flockr)
-def makeApplication(initName, initOwner) {
+def makeApplication(initName, localOwnerInterface) {
 	def exportPublication;
 	
-	def remoteInterface := object: {
-		def getOwnerAndProfile() { [initOwner, initOwner.getProfile ] }
+	def remoteApplicationInterface := object: {
+		def name() { initName };
+		def getOwnerAndProfile() {
+			[localOwnerInterface.remoteInterface, localOwnerInterface.getProfile ]
+		}
 	};
 	
 	object: {
 		def name() { initName };
-		def owner() { initOwner };
+		def owner() { localOwnerInterface.remoteInterface };
 		
-		def start(atFlockr);
+		def start();
 		def pause();
 		def unpause();
 		def stop() {
 			(exportPublication != nil).ifTrue: {
 				exportPublication.cancel();
 				exportPublication := nil;
-				takeOffline: remoteInterface;
+				takeOffline: remoteApplicationInterface;
 			};
 		};
 		
 		def export(asType) {
-			exportPublication := export: remoteInterface as: asType;
+			exportPublication := export: remoteApplicationInterface as: asType;
 		}
 	}
 };
 
 // returns a table of the applications installed by default into the framework
-def makeFrameworkApplications(forFlockr) {
+// localFlockrI should be a 'local interface' to a flockr
+def makeFrameworkApplications(localFlockrI) {
 	[
 	// "My Profile" editor application
-	extend: makeApplication("My Profile", forFlockr) with: {
-		def start(atFlockr) { // atFlockr should be a 'local interface' to a flockr
-			jlobby.at.urbiflock.ui.ProfileViewer.new(atFlockr, atFlockr.getProfile, true) })
+	extend: makeApplication("My Profile", localFlockrI) with: {
+		def start() {
+			jlobby.at.urbiflock.ui.ProfileViewer.new(localFlockrI, localFlockrI.getProfile, true)
 		}
 	}
 	,
 	// "Flocks" flock list viewer application
-	extend: makeApplication("Flocks", forFlockr) with: {
-		def start(atFlockr) { // atFlockr should be a 'local interface' to a flockr
-			jlobby.at.urbiflock.ui.FlockListViewer.new(atFlockr) })
+	extend: makeApplication("Flocks", localFlockrI) with: {
+		def start() {
+			jlobby.at.urbiflock.ui.FlockListViewer.new(localFlockrI)
 		}
 	}
 	,
 	// "Profile matcher" doesProfileMatch proximity editor application
-	extend: makeApplication("Profile matcher", forFlockr) with: {
-		def start(atFlockr) { // atFlockr should be a 'local interface' to a flockr
-		  // TODO: where should I get matchingProfile?
-		  jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(atFlockr, atFlockr.getMatchingProfile)
+	extend: makeApplication("Profile matcher", localFlockrI) with: {
+		def start() {
+		  jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(localFlockrI, localFlockrI.getMatchingProfile)
 	  }
 	}
 	]
@@ -92,6 +97,42 @@ object: {
 	def ApplicationTest := extend: /.at.unit.test.UnitTest.new("ApplicationTest") with: {
 		
 		// unit tests go here
+		
+		def testAsyncDiscoverApplication() {			
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "uid1";
+			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+						
+			actor: {
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "uid2";
+				def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+				
+				deftype TestApp1;
+				def testApp := /.at.urbiflock.application.makeApplication("testApp", flockr2);
+				testApp.export(TestApp1);
+				flockr2.registerApplication(testApp);
+		  };
+			
+			deftype TestApp1;
+			def testApp := makeApplication("testApp", flockr1);
+			flockr1.registerApplication(testApp);
+			
+			def test := self;
+			
+		  future: { |return|
+				flockr1.registerApplicationListener(TestApp1, object: {
+					def notifyApplicationJoined(flockr, profile, app) {
+						test.assertEquals("uid2", /.at.urbiflock.flockr.uidOf(flockr), "flockr does not match");
+						test.assertEquals("uid2", profile.username, "profile does not match");
+						when: app<-name()@FutureMessage becomes: { |nam|
+							test.assertEquals("testApp", nam, "app does not match");
+							return(`ok);
+						}
+					}
+				});
+			}			
+		};
 		
 	};
 	
