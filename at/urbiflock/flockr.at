@@ -90,6 +90,26 @@ def makeFlockr(profile) {
 		*/
 		def registerBuddyListListener(l) { buddyListListeners.add(l) };
 		def removeBuddyListListener(l) { buddyListListeners.remove(l) };
+		
+		/* l should understand:
+		     notifyApplicationJoined(flockr : farref to flockr, buddyProfile : profile, app : farref to application)
+		       invoked whenever an application was discovered
+		     notifyApplicationLeft(flockr : farref to flockr, buddyProfile : profile, app : farref to application)
+		       invoked whenever an application is no longer present
+		  returns: an object whose cancel method cancels the registration
+		*/
+		def registerApplicationListener(type, l) {
+			def discSub := whenever: type discovered: { |remoteApp|
+				when: remoteApp<-getOwnerAndProfile()@FutureMessage becomes: { |ownerAndProfile|
+					def [flockr, itsProfile] := ownerAndProfile;
+					l<-notifyApplicationJoined(flockr, itsProfile, remoteApp);
+					when: remoteApp disconnected: {
+						l<-notifyApplicationLeft(flockr, itsProfile, remoteApp);
+					}
+				};
+			};
+		};
+		
 		def getFlockrWithUid(uid) {
 			uidFlockrMap.get(uid);
 		};
@@ -97,6 +117,7 @@ def makeFlockr(profile) {
 			uidFlockrMap.put(uid, flockr);
 		};
 		def getProfile() { myProfile };
+		def getMatchingProfile() { matchingProfile };
 		def getUsername(){ username };
 		def updateProfile() {
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(remoteInterface, myProfile);
@@ -202,23 +223,10 @@ def makeFlockr(profile) {
 	def matchingProfilesFlock := FlockModule.makeFlock("Matching Profiles", profileMatchesProximity);
 	flocks.add(matchingProfilesFlock);
 	
-	// "My Profile" editor application
-	applications.add(
-		(/.at.urbiflock.application.makeApplication(
-			"My Profile", 
-			{ jlobby.at.urbiflock.ui.ProfileViewer.new(localInterface, myProfile, true) })));
-		
-	// "Flocks" flock list viewer application
-	applications.add(
-		(/.at.urbiflock.application.makeApplication(
-			"Flocks", 
-			{ jlobby.at.urbiflock.ui.FlockListViewer.new(localInterface) })));
-		
-	// "Profile matcher" doesProfileMatch proximity editor application
-	applications.add(
-		(/.at.urbiflock.application.makeApplication(
-			"Profile matcher", 
-			{ jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(localInterface, matchingProfile) })));
+	/.at.urbiflock.application.makeFrameworkApplications(localInterface).each: { |application|
+		applications.add(application);
+		application.start(localInterface);
+	};
 	
 	publication := export: remoteInterface as: FlockrT;
 	

@@ -25,26 +25,69 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-// private stuff goes here
-
-def makeApplication(theName, theCode) {
-	isolate: {
-		def name := theName;
-		def code := theCode;
+// All Urbiflock applications have:
+// - a name (String)
+// - an owner (Flockr)
+def makeApplication(initName, initOwner) {
+	def exportPublication;
+	
+	def remoteInterface := object: {
+		def getOwnerAndProfile() { [initOwner, initOwner.getProfile ] }
+	};
+	
+	object: {
+		def name() { initName };
+		def owner() { initOwner };
 		
-		def getName() { name };
-		
-		def start() {
-			code();
+		def start(atFlockr);
+		def pause();
+		def unpause();
+		def stop() {
+			(exportPublication != nil).ifTrue: {
+				exportPublication.cancel();
+				exportPublication := nil;
+				takeOffline: remoteInterface;
+			};
 		};
+		
+		def export(asType) {
+			exportPublication := export: remoteInterface as: asType;
+		}
 	}
+};
+
+// returns a table of the applications installed by default into the framework
+def makeFrameworkApplications(forFlockr) {
+	[
+	// "My Profile" editor application
+	extend: makeApplication("My Profile", forFlockr) with: {
+		def start(atFlockr) { // atFlockr should be a 'local interface' to a flockr
+			jlobby.at.urbiflock.ui.ProfileViewer.new(atFlockr, atFlockr.getProfile, true) })
+		}
+	}
+	,
+	// "Flocks" flock list viewer application
+	extend: makeApplication("Flocks", forFlockr) with: {
+		def start(atFlockr) { // atFlockr should be a 'local interface' to a flockr
+			jlobby.at.urbiflock.ui.FlockListViewer.new(atFlockr) })
+		}
+	}
+	,
+	// "Profile matcher" doesProfileMatch proximity editor application
+	extend: makeApplication("Profile matcher", forFlockr) with: {
+		def start(atFlockr) { // atFlockr should be a 'local interface' to a flockr
+		  // TODO: where should I get matchingProfile?
+		  jlobby.at.urbiflock.ui.DoesProfileMatchProximityEditor.new(atFlockr, atFlockr.getMatchingProfile)
+	  }
+	}
+	]
 };
 
 // the module object of this file
 object: {
-	// public stuff goes here
 	
 	def makeApplication := &makeApplication;
+	def makeFrameworkApplications := &makeFrameworkApplications;
 	
 	def ApplicationTest := extend: /.at.unit.test.UnitTest.new("ApplicationTest") with: {
 		
