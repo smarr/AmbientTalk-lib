@@ -208,8 +208,12 @@ def makeFlockr(profile) {
 					localInterface, 
 					{ |profile| 
 						def value := (reflect: profile).invokeField(profile, fieldName);
-						def comparatorMethod := (reflect: value).select(value, comparatorSymbol);
-						(reflect: value).invoke(value, comparatorMethod);
+						(reflect: value).invoke(
+							value, 
+							object: { 
+								def selector() { comparatorSymbol };
+								def arguments() { [ fieldValue ] }; 
+							});
 					});
 				proximities.add(proximity);
 				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	

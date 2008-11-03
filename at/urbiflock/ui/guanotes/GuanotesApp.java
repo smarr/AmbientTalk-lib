@@ -72,7 +72,7 @@ public interface GuanotesApp extends Application {
 			};
 		}
 
-		public String getName() { return "Guanotes"; }
+		public String name() { return "Guanotes"; }
 
 		public void start() {}
 		
