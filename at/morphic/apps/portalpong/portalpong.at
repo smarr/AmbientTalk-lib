@@ -152,10 +152,10 @@ deftype PortalMorphT;
 def PortalMorph := extend: RectangleMorph with: { |PortalTrait|
 	def init() {
 		super^init(0,0,40,40);
-		PortalTrait^init();
+		portalInit();
 	};
 	/.at.lang.traits.use: {
-		import PortalTrait;
+		import PortalTrait alias init := portalInit;
 	};
 } taggedAs: [ PortalMorphT, /.at.types.Isolate ];
 
@@ -275,7 +275,7 @@ def BallMorph := extend: CircleMorph with: { |BounceTrait,PortalMorphT,FieldMorp
 	def init(controller,x,y,radius,dx,dy) {
 		super^init(x,y,radius);
 		ballController := controller;
-		BounceTrait^init(dx,dy);
+		bounceInit(dx,dy);
 	};
 	
 	def animate() {
@@ -331,7 +331,8 @@ def BallMorph := extend: CircleMorph with: { |BounceTrait,PortalMorphT,FieldMorp
 	};
 	
 	/.at.lang.traits.use: {
-		import BounceTrait alias animate := bounceAnimate,
+		import BounceTrait alias init := bounceInit,
+		                         animate := bounceAnimate,
 		                         touchedLeft   := bounceLeft,
 		                         touchedRight  := bounceRight,
 		                         touchedTop    := bounceTop,
