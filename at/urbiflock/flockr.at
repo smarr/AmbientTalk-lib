@@ -300,13 +300,6 @@ def makeFlockr(profile) {
 	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity);
 	NearbyFlock.makeDefaultFlock();
 	flocks.add(NearbyFlock);
-		
-	profileMatchingProximities := /.at.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
-	profileMatchesProximity := /.at.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
-	proximities.add(profileMatchesProximity);
-	def matchingProfilesFlock := FlockModule.makeFlock("Matching Profiles", profileMatchesProximity);
-	matchingProfilesFlock.makeDefaultFlock();
-	flocks.add(matchingProfilesFlock);
 	
 
 	/.at.urbiflock.application.makeFrameworkApplications(localInterface).each: { |application|
