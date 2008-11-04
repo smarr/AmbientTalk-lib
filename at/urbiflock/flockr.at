@@ -194,22 +194,39 @@ def makeFlockr(profile) {
 				localInterface);
 		};
 		
+		// Create a new flock using:
+		// flockName: the name of the flock.
+		// fieldMatchersVector: a vector containing a representation of the profile properties from the GUI.
+		// shouldBeFriend: should the flockr be in the buddy list?
+		// shouldBeNearby: should the flockr be nearby?
 		def createFlockFromFieldMatchers(flockName, fieldMatchersVector, shouldBeFriend, shouldBeNearby) {
+			// The initial proximity matches with every flockr.
 			def theChainedProximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true });
 			def iterator := fieldMatchersVector.iterator();
+			// We keep the simple proximities to be able to notify them later on.
 			def simpleProximities := Vector.new();
 			simpleProximities.add(theChainedProximity);
-			def first := true;
+			// A field matcher is a vector which contains a representation of the
+			// profile properties that the user filled out in the GUI.
+			// Here we iterate over each field matcher and create the corresponding proximity.
 			while: { iterator.hasNext() } do: {
 				def fieldMatcher := iterator.next();
+				// The name of the profile field.
 				def fieldName := fieldMatcher.get(0);
+				// The type of the profile field.
 				def fieldType := fieldMatcher.get(1);
+				// The comparator (e.g. ==, <, >...).
 				def comparatorSymbol := fieldMatcher.get(2);
+				// The actual value of the profile field.
 				def fieldValue := fieldMatcher.get(3);
+				// Make the proximity for this field:
 				def proximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(
 					localInterface, 
 					{ |profile| 
-						if: (reflect: profile).respondsTo(`fieldName) then: {
+						// If the flockr's profile doesn't have the field, do not match.
+						if: (reflect: profile).respondsTo(fieldName) then: {
+							// If it does, lookup the value and compare it with our value
+							// using the comparator operator.
 							def value := (reflect: profile).invokeField(profile, fieldName);
 							(reflect: value).invoke(
 								value, 
@@ -221,33 +238,37 @@ def makeFlockr(profile) {
 							false;
 						};
 					});
-				/*def proximityCombinator := 
-					(if: first then: {
-						/.at.urbiflock.proximity.makeOrProximity;
-					} else: {
-						/.at.urbiflock.proximity.makeAndProximity;
-					});*/
+				// We keep the simple proximities to be able to notify them later on.
 				simpleProximities.add(proximity);
+				// The resulting global proximity is a chained AND-proximity of all simple proximities.
 				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	
 			};
+			// Should the flockr be a friend?
 			def isFriendProximity := nil;
+			// Should the flockr be nearby?
 			def isNearbyProximity := nil;
+			// If so, add the corresponding proximity.
 			if: shouldBeFriend then: {
 				isFriendProximity := /.at.urbiflock.proximity.makeIsFriendProximity(localInterface);
 				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, isFriendProximity);
 			};
+			// If so, add the corresponding proximity.
 			if: shouldBeNearby then: {
 				isNearbyProximity := /.at.urbiflock.proximity.makeIsNearbyProximity(localInterface);
 				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, isNearbyProximity);
 			};
+			// Here the global proximity is ready, but the sub-proximities still 
+			// have to be initialized (by notifying them).
 			proximities.add(theChainedProximity);
 			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity));
 			
+			// Notify the isFriendProximity with all the existing buddies.
 			if: (nil != isFriendProximity) then: {
 				buddyList.listProfiles.each: { |profile|
 					isFriendProximity<-notifyBuddyAdded(profile);
 				};
 			};
+			// Notify the profile proximities and the isNearby proximity by iterating over all connected flockrs.
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
 			while: { connectedFlockrsIterator.hasNext() } do: {
 				def flockrRef := connectedFlockrsIterator.next();

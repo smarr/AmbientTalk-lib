@@ -153,8 +153,11 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 	public void actionPerformed(ActionEvent e) {
 		String command = e.getActionCommand();
 		if (command == "Save") {
+			// Here a new flock is being created.
 			boolean shouldBeFriend = false;
 			boolean shouldBeNearby = false;
+			// Keep a representation of the GUI contents such that they can
+			// be processed by the part of the framework written in AmbientTalk.
 			Vector fieldMatchers = new Vector();
 			Iterator proximityPanelIterator = theProximityPanels_.iterator();
 			while (proximityPanelIterator.hasNext()) {
@@ -167,6 +170,7 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 					shouldBeNearby = ((Checkbox)proximityPanel.getComponent(0)).getState();
 					break;
 				}
+				// For each profile field proximity panel, create a fieldMatcher representation.
 				ProfileFieldMatchProximityPanel fieldPanel = (ProfileFieldMatchProximityPanel)proximityPanel;
 				Vector fieldMatcher = new Vector();
 				fieldMatcher.add(AGSymbol.jAlloc(fieldPanel.getFieldName()));
@@ -175,6 +179,7 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 				fieldMatcher.add(fieldPanel.getFieldValue());
 				fieldMatchers.add(fieldMatcher);
 			}
+			// Make the local flockr create a new flock using the information extracted from the GUI.
 			owner_.createFlockFromFieldMatchers(
 					flockNameField_.getText(), 
 					fieldMatchers,
