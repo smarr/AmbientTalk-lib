@@ -59,10 +59,11 @@ def makeGuanotes(aFlockr) {
 		    def sender := from;  // fill in by at interface with gui
 		    def receiver := to;  // an object which contains flock
 		    def message := msg;
-			system.println("making guanote " + self.tupleId + " from " + from + " msg " + msg + " to " + to.names);
+		//	system.println("making guanote " + self.tupleId + " from " + from + " msg " + msg + " to " + to.names);
 		    // currently inheriting the default, i.e. a tuple that hops forever.
 		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.flockr.getUsername)};
         def decidePropagation(guanotesSenderTS){ 
+	       // receiver.shouldReceive(guanotesSenderTS.getReceiverFlockr());
 	       { |return|
 	          guanotesSenderTS.getConnectedFlockrs.each: { |username| 
 		          if: receiver.shouldReceive(username) then: { system.println("propagating true for " + self.getTupleId + " to " + username);return(true) 
@@ -76,6 +77,25 @@ def makeGuanotes(aFlockr) {
 		// helper function to extend guanotes without having to worry about isolate type tag.
 		def extendGuanote: tuple  with: closure {
 			extend: guanote with: closure taggedAs: [/.at.types.Isolate];
+		};
+		//helper functions to create receiver object.
+		def makeReceiverFlockr(username){
+			isolate: { 
+			  def shouldReceive(flockrId) { flockrId == username}; 
+			};
+		};
+		def makeReceiverFlock(flockName, currentFlock := true){
+    	def receiver := isolate: { 
+	      def flockrIds;
+				def shouldReceive(flockrId) { flockrIds.contains(flockrId) };
+			};
+			if: (currentFlock) then: { 
+				receiver.flockrIds := self.currentFlock(flockName); 
+			} else:{
+				receiver.flockrIds := [flockName];
+				// todo dynamic flocks
+			};
+			receiver;
 		};
     // overriding methods from application interface
 		def start() {
@@ -164,11 +184,7 @@ def GuanotesModule := object: {
 			def testAsyncGuanoteToFlockr(){
 				def [fut,res] := makeFuture();
 				// sending a guanote to a flockr.
-				def to := isolate: { 
-					def names := "flockr2"; 
-				//	def shouldReceive(flockr) { flockr.getProfile.username == name}; 
-				  def shouldReceive(flockrId) { flockrId == names}; 
-				};			
+				def to := myGuanotes.makeReceiverFlockr("flockr2");
 					
 				def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to, "HelloWorld");
 				myGuanotes.sendGuanote(aGuanote);
@@ -194,14 +210,6 @@ def GuanotesModule := object: {
 			def testAsyncGuanoteToFlock(){
 				def [fut,res] := makeFuture();
 				// sending a guanote to a flatten flock, i.e. a list of flockrs.
-		    def to := isolate: { 
-					def names;
-					def init(flockName){
-							names := myGuanotes.currentFlock(flockName); 
-					}; 
-				 // def shouldReceive(flockr) { names.contains(flockr.getProfile.username) }; 
-				  def shouldReceive(flockrId) { names.contains(flockrId) };
-				}; 
 				//Second option to send guanotes to a dynamic flock defined at receiver
 				/*def to := object: {
 				  def flock := "FriendsFlock"; 
@@ -211,7 +219,7 @@ def GuanotesModule := object: {
 				};*/
 				// waiting some time to be sure that flockr2,flockr3 belong to the flockr1 "FriendsFlock".			
 				when: seconds(waitTime) elapsed: {
-				  def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to.new("FriendsFlock"), "HelloWorld");
+				  def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, myGuanotes.makeReceiverFlock("FriendsFlock"), "HelloWorld");
 				  myGuanotes.sendGuanote(aGuanote);
 			  };
 				// actor containing flockr2, which belongs to flockr1 "FriendsFlock"

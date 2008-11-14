@@ -29,8 +29,9 @@ def Vector := /.at.collections.vector.Vector;
 
 def rand() { 
   // we should provide something more random, e.g. IP addres + PID + now()
-	def aRandomNumber := /.at.support.symbiosis.long((print: self).length);
-  /.at.support.util.randomNumberBetween(0, (/.at.support.timer.now() - aRandomNumber).intValue); 
+//	def aRandomNumber := /.at.support.symbiosis.long((print: self).length);
+//  /.at.support.util.randomNumberBetween(0, (/.at.support.timer.now() + aRandomNumber).intValue); 
+ /.at.support.util.randomNumberBetween(0, 555555); 
 };
 		
 def makeTupleSpace(){	
@@ -101,9 +102,9 @@ def makeTupleSpace(){
 			system.println("injectingTuple " + tuple.getTupleId + " in " + self);
 		  ambientTS.add(tuple);
 			//notify all seen ts of the addition of a new tuple.
-		  if: (sendTuple(tuple, self)) then: {
-				system.println("add to ambient " + tuple.getTupleId );
-			  seenTS.each: { |ts| ts<-receiveTuples([tuple]) };
+		  system.println("add to ambient " + tuple.getTupleId );
+			seenTS.each: { |ts| 
+				if: (sendTuple(tuple, self)) then: { ts<-receiveTuples([tuple]) };
 			};
 		  //return a publication object to be able to cancel the injection.
 		  object:{
@@ -130,7 +131,7 @@ def makeTupleSpace(){
 		
 		// notifies the discovery of a TS	and 
 		// starts the propagation protocol (sender side)
-		def notifyTSDiscovered(ts){
+		def notifyTSDiscovered(ts){ // tsDescriptor
 	  	// add ts to seenTS vector so that it can be
 			// notified if I add a new tuple to the ambient.
 			if: !(seenTS.contains(ts)) then:{
