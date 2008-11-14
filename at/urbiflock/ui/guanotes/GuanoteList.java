@@ -36,6 +36,8 @@ import java.awt.Panel;
 import java.awt.ScrollPane;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.Vector;
@@ -78,6 +80,19 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		add(buttonPanel);
 		
 		guanoteList_.setFont(Font.decode("Arial-BOLD-14"));
+		
+		guanoteList_.addMouseListener(new MouseAdapter() {
+			public void mouseClicked(MouseEvent me) {
+				if (me.getClickCount() > 1) {
+					int idx = guanoteList_.getSelectedIndex();
+					if (idx != -1) {
+						Guanote g = (Guanote) guanoteListModel_.get(idx);
+						GuanoteReader reader = new GuanoteReader(g);
+						reader.setVisible(true);
+					}
+				}
+			}
+		});
 		
 		newGuanote_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
