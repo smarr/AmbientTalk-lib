@@ -110,40 +110,64 @@ object: {
 		
 		// unit tests go here
 		
-		def testAsyncDiscoverApplication() {			
+		def flockr1;
+		def actorHostingFlockr2;
+		deftype TestApp1;
+	  
+		def setUp() {
+			// create two new flockrs, one in this actor, the other in a new actor
 			def profile1 := /.at.urbiflock.profile.makeProfile();
 			profile1.username := "uid1";
-			def flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
-						
-			actor: {
+		  flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+		
+		  actorHostingFlockr2 := actor: {
+				import /.at.urbiflock.flockr;
+				deftype TestApp1;
+				
 				def profile2 := /.at.urbiflock.profile.makeProfile();
 				profile2.username := "uid2";
-				def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-				
-				deftype TestApp1;
+				profile2.firstname := "Flockr 2 first name";
+			  def flockr2 := makeFlockr(profile2);
+			  
 				def testApp := /.at.urbiflock.application.makeApplication("testApp", flockr2);
 				testApp.export(TestApp1);
 				flockr2.addApplication(testApp);
-		  };
 			
-			deftype TestApp1;
+			  def getFlock() { flockr2.remoteInterface };
+			
+			  def goOffline() { flockr2.goOffline(); `ok };
+		  }
+		};
+		
+		def tearDown() {
+			// clean up the flockrs created for each test
+			flockr1.goOffline();
+			actorHostingFlockr2<-goOffline()@FutureMessage;
+			// because we return a future, tearDown will wait
+			// until the second flock has been taken offline before
+			// starting the next test
+		};
+		
+		def testAsyncDiscoverApplication() {
 			def testApp := makeApplication("testApp", flockr1);
 			flockr1.addApplication(testApp);
 			
-			def test := self;
+			def [fut, res] := makeFuture();
 			
-		  future: { |return|
-				testApp.registerApplicationListener(TestApp1, object: {
-					def notifyApplicationJoined(flockr, profile, app) {
-						test.assertEquals("uid2", /.at.urbiflock.flockr.uidOf(flockr), "flockr does not match");
-						test.assertEquals("uid2", profile.username, "profile does not match");
-						when: app<-name()@FutureMessage becomes: { |nam|
-							test.assertEquals("testApp", nam, "app does not match");
-							return(`ok);
-						}
-					}
-				});
-			}			
+			testApp.registerApplicationListener(TestApp1, object: {
+				def notifyApplicationJoined(flockr, profile, app) {
+					res.resolve([flockr, profile, app]);
+				}
+			});
+			
+			when: fut becomes: { |args|
+				def [flockr, profile, app] := args;
+				self.assertEquals("uid2", /.at.urbiflock.flockr.uidOf(flockr), "flockr does not match");
+				self.assertEquals("uid2", profile.username, "profile does not match");
+				when: app<-name()@FutureMessage becomes: { |nam|
+					self.assertEquals("testApp", nam, "app does not match");
+				}
+			};
 		};
 		
 	};
