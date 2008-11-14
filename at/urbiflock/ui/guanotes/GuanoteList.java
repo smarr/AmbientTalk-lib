@@ -29,6 +29,7 @@ package at.urbiflock.ui.guanotes;
 
 
 import java.awt.Button;
+import java.awt.Color;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.List;
@@ -80,6 +81,7 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		add(buttonPanel);
 		
 		guanoteList_.setFont(Font.decode("Arial-BOLD-14"));
+		guanoteList_.setBackground(Color.YELLOW);
 		
 		guanoteList_.addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent me) {
