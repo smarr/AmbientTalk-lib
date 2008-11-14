@@ -71,23 +71,23 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 	}
 	
 	public static void main(String[] args) {
-		Application app1 = new Application() {
+		Application app1 = new Application._EmptyApp() {
 			public String name() { return "app1"; }
 			public void start() { System.out.println("app1 started"); }
 		};
-		Application app2 = new Application() {
+		Application app2 = new Application._EmptyApp() {
 			public String name() { return "app2"; }
 			public void start() { System.out.println("app2 started"); }
 		};
-		Application app3 = new Application() {
+		Application app3 = new Application._EmptyApp() {
 			public String name() { return "jkfkjsfbbskf dfdfj,n defn f"; }
 			public void start() { System.out.println("jkfkjsfbbskf dfdfj,n defn f started"); }
 		};
-		Application app4 = new Application() {
+		Application app4 = new Application._EmptyApp() {
 			public String name() { return "app4"; }
 			public void start() { System.out.println("app4 started"); }
 		};
-		Application app5 = new Application() {
+		Application app5 = new Application._EmptyApp() {
 			public String name() { return "app5"; }
 			public void start() { System.out.println("app5 started"); }
 		};

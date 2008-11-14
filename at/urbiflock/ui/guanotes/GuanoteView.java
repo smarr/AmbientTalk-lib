@@ -54,8 +54,9 @@ public abstract class GuanoteView extends Frame {
 	protected final TextField to_ = new TextField();
 	protected final TextArea message_ = new TextArea();
 	protected final Panel contentPanel_ = new Panel();
+	protected final Panel headers_ = new Panel();
 
-	public GuanoteView(Guanote  g, String title) {
+	public GuanoteView(Guanote g, String title) {
 		super(title);
 		
 		try {
@@ -77,10 +78,9 @@ public abstract class GuanoteView extends Frame {
 		
 		contentPanel_.setLayout(new BoxLayout(contentPanel_, BoxLayout.Y_AXIS));
 		
-		Panel headers = new Panel();
         GridBagLayout gridbag = new GridBagLayout();
         GridBagConstraints c = new GridBagConstraints();
-        headers.setLayout(gridbag);
+        headers_.setLayout(gridbag);
 
         c.fill = GridBagConstraints.BOTH;
         
@@ -88,12 +88,12 @@ public abstract class GuanoteView extends Frame {
         c.weightx = 0;
 		Label fromLbl = new Label("From: ");
         gridbag.setConstraints(fromLbl, c);
-        headers.add(fromLbl);
+        headers_.add(fromLbl);
 		
         // FROM TEXTFIELD
         c.weightx = 1.0;
         gridbag.setConstraints(from_, c);
-        headers.add(from_);
+        headers_.add(from_);
                 
         // new row
         c.gridy = 1;
@@ -102,15 +102,15 @@ public abstract class GuanoteView extends Frame {
         c.weightx = 0;
 		Label toLbl = new Label("To: ");
         gridbag.setConstraints(toLbl, c);
-        headers.add(toLbl);
+        headers_.add(toLbl);
         
         // TO TEXTFIELD
         c.weightx = 1.0;
         c.gridwidth = GridBagConstraints.REMAINDER;
         gridbag.setConstraints(to_, c);
-        headers.add(to_);
+        headers_.add(to_);
 		
-		contentPanel_.add(headers);
+		contentPanel_.add(headers_);
 		contentPanel_.add(message_);
 		add(contentPanel_);
 		

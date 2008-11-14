@@ -27,7 +27,16 @@
  */
 package at.urbiflock.ui.guanotes;
 
+import edu.vub.at.objects.ATTypeTag;
+
+import java.util.Vector;
+
 import at.urbiflock.ui.Application;
+import at.urbiflock.ui.Flock;
+import at.urbiflock.ui.FlockListener;
+import at.urbiflock.ui.Flockr;
+import at.urbiflock.ui.Profile;
+import at.urbiflock.ui.Subscription;
 
 /**
  * The Java interface to an AmbientTalk Guanote urbiflock application.
@@ -73,12 +82,61 @@ public interface GuanotesApp extends Application {
 		}
 
 		public String name() { return "Guanotes"; }
-
-		public void start() {}
 		
 		public void send(Guanote g) throws Exception {
 			System.out.println("Guanote "+g+" sent");
 		}
+		public Flockr owner() {
+			return new Flockr() {
+				public void addBuddy(Profile profile) {}
+				public void createFlockFromFieldMatchers(String flockName,
+						Vector fieldMatchers, boolean shouldBeFriend,
+						boolean shouldBeNearby) {}
+				public void deleteFlock(Flock f) {}
+				public Profile getBuddy(String uid) { return null; }
+				public Flock[] getFlocks() {
+					return new Flock[] {
+						new Flock() {
+							public Subscription addListener(FlockListener l) {
+								return null;
+							}
+							public String[] getFlockrList() {
+								return new String[0];
+							}
+							public String getName() { return "testflock"; }
+							public Profile getProfile(String username) {
+								return null;
+							}
+							public boolean isDefaultFlock() {
+								return false;
+							}
+							public Profile[] listProfiles() {
+								return new Profile[0];
+							}	
+						}
+					};
+				}
+				public Profile getProfile() { return null; }
+				public boolean isBuddy(String uid) { return false; }
+				public void openFlockEditorOnNewFlock() {}
+				public void registerBuddyListListener(Object l) {}
+				public void registerDiscoveryListener(Object l) {}
+				public void registerProfileChangedListener(Object l) {}
+				public void removeBuddy(Profile profile) {}
+				public void removeBuddyListListener(Object l) {}
+				public void removeDiscoveryListener(Object l) {}
+				public void removeFlock(Flock f) {}
+				public void removeProfileChangedListener(Object l) {}
+				public void updateMatchingProfile(Profile p) {}
+				public void updateProfile() {}
+			};
+		}
+
+		public void export(ATTypeTag t) {}
+		public void start() {}
+		public void pause() {}
+		public void stop() {}
+		public void unpause() {}
 		
 	};
 }

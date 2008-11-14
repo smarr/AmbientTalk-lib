@@ -30,11 +30,16 @@ package at.urbiflock.ui.guanotes;
 import edu.vub.at.objects.natives.NATText;
 
 import java.awt.Button;
+import java.awt.GridBagConstraints;
 import java.awt.Panel;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 import javax.swing.BoxLayout;
+import javax.swing.JComboBox;
+
+import at.urbiflock.ui.Flock;
+import at.urbiflock.ui.Flockr;
 
 /**
  * The UI of a Guanote Editor. This GUI allows the user to
@@ -72,7 +77,34 @@ public class GuanoteEditor extends GuanoteView {
 		
 		from_.setEditable(false);
 		
+		// add a combobox containing the names of the user's flocks
+		final JComboBox flockList = new JComboBox();
+		String[] flockNames = getFlockNames(app);
+		for (int i = 0; i < flockNames.length; i++) {
+			flockList.addItem(flockNames[i]);
+		}
+        
+        headers_.add(flockList);
+		
+		flockList.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent ae) {
+				to_.setText(to_.getText()
+				  + (to_.getText().equals("") ? "" : ", ")
+				  + flockList.getSelectedItem());
+			}
+		});
+		
 		pack();
+	}
+	
+	private String[] getFlockNames(GuanotesApp app) {
+		Flockr owner = app.owner();
+		Flock[] flocks = owner.getFlocks();
+		String[] names = new String[flocks.length];
+		for (int i = 0; i < names.length; i++) {
+			names[i] = flocks[i].getName();
+		}
+		return names;
 	}
 	
 	protected void sendGuanote() {
