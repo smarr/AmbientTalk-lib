@@ -76,6 +76,10 @@ def makeGuanotes(aFlockr) {
 	      def getSenderName(){sender};
 	    };
     };
+    //temporal function for Gui purposes
+    def makeGuanoteFromNames(from, to, msg){
+	     makeGuanote(from, makeReceiverFlockr(to), msg);
+    };
 		// helper function to extend guanotes without having to worry about isolate type tag.
 		def extendGuanote: tuple  with: closure {
 			extend: guanote with: closure taggedAs: [/.at.types.Isolate];
@@ -146,7 +150,7 @@ def makeGuanotes(aFlockr) {
 	  };
 	};
 	// add application to a flockr.
-	aFlockr.addApplication(self);
+	aFlockr.addApplication(localInterface);
 	// assigning guanotesTS as the remote interface.
 	localInterface.remoteApplicationInterface := guanotesTS;
 	
@@ -196,10 +200,8 @@ def GuanotesModule := object: {
 					
 			def testAsyncGuanoteToFlockr(){
 				def [fut,res] := makeFuture();
-				// sending a guanote to a flockr.
-				def to := myGuanotes.makeReceiverFlockr("flockr2");
-					
-				def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, to, "HelloWorld");
+				// sending a guanote to a flockr.	
+				def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, myGuanotes.makeReceiverFlockr("flockr2"), "HelloWorld");
 				myGuanotes.sendGuanote(aGuanote);
 		    // actor containing flockr2
 				def a := actor: { |res,test|	
@@ -209,13 +211,14 @@ def GuanotesModule := object: {
 			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.start();
 				  // this should be composed via gui interface for every flock where a flockr is registered.
-					myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2.getUsername)} received: { |guanote|
-					  //gui.popUpNote(guanote);
-						test<-assertEquals("flockr1", guanote.sender);
-						flockr2.goOffline();
-						myGuanotes.stop();
-						res<-resolve(`ok);
-					};
+					myGuanotes.listenForGuanotesToOwner( object:{
+					  def guanoteReceived(guanote) {
+						  test<-assertEquals("flockr1", guanote.sender);
+						  flockr2.goOffline();
+						  myGuanotes.stop();
+						  res<-resolve(`ok);
+						}
+					});
 			  };
 				fut;
 			}; 
