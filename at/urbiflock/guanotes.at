@@ -71,7 +71,9 @@ def makeGuanotes(aFlockr) {
 		        };
 		        false;
 		     }.escape()
-	      }; 
+	      };
+	      def getReceiverList(){ receiver.getReceiverList()}; 
+	      def getSenderName(){sender};
 	    };
     };
 		// helper function to extend guanotes without having to worry about isolate type tag.
@@ -82,12 +84,14 @@ def makeGuanotes(aFlockr) {
 		def makeReceiverFlockr(username){
 			isolate: { 
 			  def shouldReceive(flockrId) { flockrId == username}; 
+			  def getReceiverList(){ [flockrId]};
 			};
 		};
 		def makeReceiverFlock(flockName, currentFlock := true){
     	def receiver := isolate: { 
 	      def flockrIds;
 				def shouldReceive(flockrId) { flockrIds.contains(flockrId) };
+				def getReceiverList(){ flockrsId };
 			};
 			if: (currentFlock) then: { 
 				receiver.flockrIds := self.currentFlock(flockName); 
@@ -97,9 +101,18 @@ def makeGuanotes(aFlockr) {
 			};
 			receiver;
 		};
+		//
+		def listenForGuanotesToOwner(listener){
+			self.when: { |guanote| guanote.receiver.shouldReceive(self.owner.getUsername)} received: { |guanote|
+			 listener<-guanoteReceived(guanote);
+			};
+		};
+		
     // overriding methods from application interface
 		def start() {
 			super^start();
+			//setup the gui
+			def gui := jlobby.at.urbiflock.ui.guanotes.GuanoteList.new(self);
 		  //exporting guanotes as application
 		  self.export(Guanotes);
 		  //discovery other guanotes
