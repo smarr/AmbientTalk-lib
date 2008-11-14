@@ -504,12 +504,14 @@ public class ProfileViewer extends Frame implements ActionListener {
 	}
 	
 	
-	/*
+	/**
 	 * This event should only be signaled when viewing another (remote) flockr's profile,
 	 * since changes to a local flockr's own profile only happen by the use of this GUI.
 	 */
 	public void notifyProfileChanged(Object remoteFlockr, Profile profile) {
-		updateGUIWithProfile(profile);
+		if (profile_.username().equals(profile.username())) {
+			updateGUIWithProfile(profile);
+		}
 	}
 	
 	private void updateGUIWithProfile(Profile profile) {
