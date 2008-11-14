@@ -117,7 +117,7 @@ public class GuanoteList extends Frame implements GuanoteListener {
 	}
 	
 	public void guanoteReceived(Guanote g) throws Exception {
-		guanoteList_.add(shorten(g.toString()));
+		guanoteList_.add(shorten(g.getSenderName() + ": " + g.message()));
 		guanoteListModel_.add(g);
 	}
 	
