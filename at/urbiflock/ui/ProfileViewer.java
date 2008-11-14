@@ -304,8 +304,8 @@ public class ProfileViewer extends Frame implements ActionListener {
 				}
 			}
 			if (fieldsOk) { 
+				this.dispose();
 				updateTheProfile();
-				this.dispose(); 
 			};
 			return;
 		}

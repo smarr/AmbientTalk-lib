@@ -75,6 +75,11 @@ public class GuanoteEditor extends GuanoteView {
 			}
 		});
 		
+		try {
+			from_.setText(app.owner().getProfile().username());
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 		from_.setEditable(false);
 		
 		// add a combobox containing the names of the user's flocks

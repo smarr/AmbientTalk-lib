@@ -67,3 +67,6 @@ uidField.addActionListener(object: {
 
 loginWindow.pack();
 loginWindow.setVisible(true);
+
+// go online
+network.online();
