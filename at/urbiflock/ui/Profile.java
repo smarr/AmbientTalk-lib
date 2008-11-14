@@ -27,11 +27,9 @@
  */
 package at.urbiflock.ui;
 
-import java.util.Calendar;
 import java.util.HashMap;
+import java.util.Set;
 
-import edu.vub.at.objects.natives.NATBoolean;
-import edu.vub.at.objects.natives.NATText;
 import edu.vub.at.objects.natives.grammar.AGSymbol;
 
 public interface Profile {
@@ -52,4 +50,5 @@ public interface Profile {
   public void setFieldShouldNotMatch(AGSymbol fieldName);
   public boolean fieldShouldMatch(AGSymbol fieldName);
   public AbstractFieldType getFieldTypeWithName(String typeName);
+  public Set getFieldNamesSet();
 }

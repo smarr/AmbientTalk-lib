@@ -89,9 +89,12 @@ def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
 };
 
 def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
+	def fieldSize := 10;
 	def lowerBound := nil;
 	def higherBound := nil;
 	def isInteger() { true };
+	def getFieldSize() { fieldSize };
+	def setFieldSize(newSize) { fieldSize := newSize };
 	def isPossibleValue(aValue) {
 		(is: aValue taggedAs: /.at.types.Number).and: {
 			((nil == lowerBound).or: { aValue >= lowerBound }).and: {
@@ -128,10 +131,10 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 	};
 	def name() { "Date" };
 	def defaultValue() { 
+		def currentDate := jlobby.java.util.Calendar.getInstance(); 
 		if: (nil == lowerBound) then: { 
-			0 
+			currentDate; 
 		} else: {
-			def currentDate := jlobby.java.util.Calendar.getInstance(); 
 			if: ((nil != higherBound).and: { currentDate.after(higherBound) }) then: {
 				higherBound
 			} else: {
@@ -256,6 +259,10 @@ def makeProfile() {
 			theMap.remove(`fieldTypeMap);
 			theMap.remove(`matchingFields);
 			theMap;
+		};
+		
+		def getFieldNamesSet() {
+			propertyHashMap().keySet();
 		};
 		
 		def addField(propName, propVal, propType) {

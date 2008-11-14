@@ -152,42 +152,48 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 
 	public void actionPerformed(ActionEvent e) {
 		String command = e.getActionCommand();
+		String fieldName = "";
 		if (command == "Save") {
-			// Here a new flock is being created.
-			boolean shouldBeFriend = false;
-			boolean shouldBeNearby = false;
-			// Keep a representation of the GUI contents such that they can
-			// be processed by the part of the framework written in AmbientTalk.
-			Vector fieldMatchers = new Vector();
-			Iterator proximityPanelIterator = theProximityPanels_.iterator();
-			while (proximityPanelIterator.hasNext()) {
-				Panel proximityPanel = (Panel)((Panel)(proximityPanelIterator.next())).getComponent(0);
-				if (proximityPanel.equals(isFriendPanel_)) {
-					shouldBeFriend = ((Checkbox)proximityPanel.getComponent(0)).getState();
-					break;
+			try {
+				// Here a new flock is being created.
+				boolean shouldBeFriend = false;
+				boolean shouldBeNearby = false;
+				// Keep a representation of the GUI contents such that they can
+				// be processed by the part of the framework written in AmbientTalk.
+				Vector fieldMatchers = new Vector();
+				Iterator proximityPanelIterator = theProximityPanels_.iterator();
+				while (proximityPanelIterator.hasNext()) {
+					Panel proximityPanel = (Panel)((Panel)(proximityPanelIterator.next())).getComponent(0);
+					if (proximityPanel.equals(isFriendPanel_)) {
+						shouldBeFriend = ((Checkbox)proximityPanel.getComponent(0)).getState();
+						break;
+					}
+					if (proximityPanel.equals(isNearbyPanel_)) {
+						shouldBeNearby = ((Checkbox)proximityPanel.getComponent(0)).getState();
+						break;
+					}
+					// For each profile field proximity panel, create a fieldMatcher representation.
+					ProfileFieldMatchProximityPanel fieldPanel = (ProfileFieldMatchProximityPanel)proximityPanel;
+					Vector fieldMatcher = new Vector();
+					fieldName = fieldPanel.getFieldName();
+					fieldMatcher.add(AGSymbol.jAlloc(fieldName));
+					fieldMatcher.add(fieldPanel.getFieldType());
+					fieldMatcher.add(fieldPanel.getComparator());
+					fieldMatcher.add(fieldPanel.getFieldValue());
+					fieldMatchers.add(fieldMatcher);
 				}
-				if (proximityPanel.equals(isNearbyPanel_)) {
-					shouldBeNearby = ((Checkbox)proximityPanel.getComponent(0)).getState();
-					break;
-				}
-				// For each profile field proximity panel, create a fieldMatcher representation.
-				ProfileFieldMatchProximityPanel fieldPanel = (ProfileFieldMatchProximityPanel)proximityPanel;
-				Vector fieldMatcher = new Vector();
-				fieldMatcher.add(AGSymbol.jAlloc(fieldPanel.getFieldName()));
-				fieldMatcher.add(fieldPanel.getFieldType());
-				fieldMatcher.add(fieldPanel.getComparator());
-				fieldMatcher.add(fieldPanel.getFieldValue());
-				fieldMatchers.add(fieldMatcher);
+				// Make the local flockr create a new flock using the information extracted from the GUI.
+				owner_.createFlockFromFieldMatchers(
+						flockNameField_.getText(), 
+						fieldMatchers,
+						(shouldCreateIsFriendProximity_ & shouldBeFriend),
+						(shouldCreateIsNearbyProximity_ & shouldBeNearby)
+				);
+				dispose();
+				return;
+			} catch(IllegalArgumentException exc) {
+				showInvalidValueDialog(fieldName);
 			}
-			// Make the local flockr create a new flock using the information extracted from the GUI.
-			owner_.createFlockFromFieldMatchers(
-					flockNameField_.getText(), 
-					fieldMatchers,
-					(shouldCreateIsFriendProximity_ & shouldBeFriend),
-					(shouldCreateIsNearbyProximity_ & shouldBeNearby)
-					);
-			dispose();
-			return;
 		}
 		if (command == "addProximity") {
 			theProximitiesPanel_.remove(addProximityButton_);
@@ -231,6 +237,30 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 	
 	public Flockr getFlockr() {
 		return owner_;
+	}
+	
+	private void showInvalidValueDialog(String fieldKey) {
+		new InvalidValueDialog(fieldKey);
+	}
+	
+	private class InvalidValueDialog extends Frame implements ActionListener {
+		
+		public InvalidValueDialog(String fieldKey) {
+			
+			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			add(new Label("Invalid value for field: " + fieldKey));
+			Button okButton = new Button("Ok");
+			okButton.addActionListener(this);
+			okButton.setActionCommand("ok");
+			add(okButton);
+		
+			pack();
+			setVisible(true);
+		}
+		
+		public void actionPerformed(ActionEvent ae) {
+			this.dispose();
+		}
 	}
 
 }

@@ -137,7 +137,7 @@ public class ProfileViewer extends Frame implements ActionListener {
 			return tf;
 		}
 		if (fieldType.isInteger()) {
-			TextField tf = new TextField(((NATNumber)fieldValue).toString());
+			TextField tf = new TextField(((NATNumber)fieldValue).toString(), fieldType.getFieldSize());
 			tf.setEditable(editable_);
 			return tf;
 		}
