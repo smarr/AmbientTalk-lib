@@ -123,6 +123,9 @@ public class GuanoteEditor extends GuanoteView {
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
+		// close window after sending
+		this.setVisible(false);
+		this.dispose();
 	}
 	
 	public static void main(String[] args) {
