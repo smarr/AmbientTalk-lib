@@ -230,7 +230,7 @@ public class ChatFrame
 	/**
 	 * Register the given chat frame listener. Henceforth, whenever the user
 	 * sends a line of text in this chat frame, the given chat frame listener's
-	 * {@link ChatFrameListener#send(String) send()} method will be called with
+	 * {@link ChatFrameListener#sendGuanote(String) send()} method will be called with
 	 * the line of text.
 	 *
 	 * @param  theListener  Chat frame listener.

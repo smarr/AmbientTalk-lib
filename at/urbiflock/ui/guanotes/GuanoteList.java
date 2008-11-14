@@ -95,18 +95,25 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		
 		this.addWindowListener(new WindowAdapter() {
 			public void windowClosing(WindowEvent e) {
+				try {
+				    guanotes_.stop();		
+				} catch(Exception exc) {
+					exc.printStackTrace();
+				}
+				
 				setVisible(false);
 				dispose();
 			}
 		});
 		
 		try {
-		    guanotes_.addGuanoteListener(this);			
+		    guanotes_.listenForGuanotesToOwner(this);		
 		} catch(Exception e) {
 			e.printStackTrace();
 		}
 		
 		pack();
+		this.setVisible(true);
 	}
 	
 	public void guanoteReceived(Guanote g) throws Exception {
@@ -137,14 +144,13 @@ public class GuanoteList extends Frame implements GuanoteListener {
 	
 	public static void main(String[] args) {
 		GuanoteList gui = new GuanoteList(GuanotesApp._TESTAPP_);
-		gui.setVisible(true);
 		
 		try {
 			gui.guanoteReceived(new Guanote() {
-				public String sender() { return "sender"; };
-				public String receiver() { return "rcvr"; };
+				public String getSenderName() { return "sender"; };
+				public String[] getReceiverList() { return new String[] { "rcvr" }; };
 				public String message() { return "test body test test test"; };
-				public String toString() { return sender() +": "+message(); }
+				public String toString() { return getSenderName() +": "+message(); }
 			});
 		} catch (Exception e) {
 			e.printStackTrace();

@@ -98,13 +98,19 @@ public class GuanoteEditor extends GuanoteView {
 	}
 	
 	private String[] getFlockNames(GuanotesApp app) {
-		Flockr owner = app.owner();
-		Flock[] flocks = owner.getFlocks();
-		String[] names = new String[flocks.length];
-		for (int i = 0; i < names.length; i++) {
-			names[i] = flocks[i].getName();
+		Flockr owner;
+		try {
+			owner = app.owner();
+			Flock[] flocks = owner.getFlocks();
+			String[] names = new String[flocks.length];
+			for (int i = 0; i < names.length; i++) {
+				names[i] = flocks[i].getName();
+			}
+			return names;
+		} catch (Exception e) {
+			e.printStackTrace();
+			return null;
 		}
-		return names;
 	}
 	
 	protected void sendGuanote() {
@@ -112,8 +118,8 @@ public class GuanoteEditor extends GuanoteView {
 		String sdr = this.from_.getText();
 		String msg = this.message_.getText();
 		try {
-			Guanote g = guanotes_.makeGuanote(rcvr, sdr, msg);
-			guanotes_.send(g);
+			Guanote g = guanotes_.makeGuanoteFromNames(rcvr, sdr, msg);
+			guanotes_.sendGuanote(g);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -121,10 +127,10 @@ public class GuanoteEditor extends GuanoteView {
 	
 	public static void main(String[] args) {
 		GuanoteEditor gui = new GuanoteEditor(GuanotesApp._TESTAPP_, new Guanote() {
-			public String sender() { return "you"; };
-			public String receiver() { return ""; };
+			public String getSenderName() { return "you"; };
+			public String[] getReceiverList() { return new String[] { "" }; };
 			public String message() { return "Your text here..."; };
-			public String toString() { return sender() +": "+message(); }
+			public String toString() { return getSenderName() +": "+message(); }
 		});
 		gui.setVisible(true);
 	}

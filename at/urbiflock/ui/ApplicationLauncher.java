@@ -8,12 +8,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.util.Iterator;
 import java.util.Vector;
 
 import javax.swing.BoxLayout;
-
-import edu.vub.at.objects.natives.NATText;
 
 /**
  * The Application Launcher UI - a grid from where the installed applications
@@ -24,7 +21,7 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 	Application[] applications_;
 	Panel applicationGridPanel_;
 	
-	public ApplicationLauncher(Application[] applications) {
+	public ApplicationLauncher(Application[] applications) throws Exception {
 		applications_ = applications;
 		
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -54,7 +51,7 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		});
 	}
 	
-	public Application findApplication(String name) {
+	public Application findApplication(String name) throws Exception {
 		Application result = null;
 		for (int i = 0; i < applications_.length; i++) {
 			Application app = applications_[i];
@@ -67,29 +64,33 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 	
 	public void actionPerformed(ActionEvent ae) {
 		String command = ae.getActionCommand();
-		(findApplication(command)).start();
+		try {
+			(findApplication(command)).start();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public static void main(String[] args) {
 		Application app1 = new Application._EmptyApp() {
-			public String name() { return "app1"; }
-			public void start() { System.out.println("app1 started"); }
+			public String name() throws Exception { return "app1"; }
+			public void start() throws Exception { System.out.println("app1 started"); }
 		};
 		Application app2 = new Application._EmptyApp() {
-			public String name() { return "app2"; }
-			public void start() { System.out.println("app2 started"); }
+			public String name() throws Exception { return "app2"; }
+			public void start() throws Exception { System.out.println("app2 started"); }
 		};
 		Application app3 = new Application._EmptyApp() {
-			public String name() { return "jkfkjsfbbskf dfdfj,n defn f"; }
-			public void start() { System.out.println("jkfkjsfbbskf dfdfj,n defn f started"); }
+			public String name() throws Exception { return "jkfkjsfbbskf dfdfj,n defn f"; }
+			public void start() throws Exception { System.out.println("jkfkjsfbbskf dfdfj,n defn f started"); }
 		};
 		Application app4 = new Application._EmptyApp() {
-			public String name() { return "app4"; }
-			public void start() { System.out.println("app4 started"); }
+			public String name() throws Exception { return "app4"; }
+			public void start() throws Exception { System.out.println("app4 started"); }
 		};
 		Application app5 = new Application._EmptyApp() {
-			public String name() { return "app5"; }
-			public void start() { System.out.println("app5 started"); }
+			public String name() throws Exception { return "app5"; }
+			public void start() throws Exception { System.out.println("app5 started"); }
 		};
 		Vector apps = new Vector();
 		apps.add(app1);
@@ -97,7 +98,11 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		apps.add(app3);
 		apps.add(app4);
 		apps.add(app5);
-		ApplicationLauncher launcher = new ApplicationLauncher((Application[])apps.toArray(new Application[apps.size()]));
+		try {
+			ApplicationLauncher launcher = new ApplicationLauncher((Application[])apps.toArray(new Application[apps.size()]));
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 }

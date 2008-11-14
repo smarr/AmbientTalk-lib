@@ -60,8 +60,13 @@ public abstract class GuanoteView extends Frame {
 		super(title);
 		
 		try {
-			from_.setText(g.sender());
-			to_.setText(g.receiver());
+			from_.setText(g.getSenderName());
+			String[] receivers = g.getReceiverList();
+			StringBuffer allReceivers = new StringBuffer("");
+			for (int i = 0; i < receivers.length; i++) {
+				allReceivers = allReceivers.append(receivers[i]);
+			}
+			to_.setText(allReceivers.toString());
 			message_.setText(g.message());
 		} catch (Exception e) {
 			e.printStackTrace();

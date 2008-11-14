@@ -56,10 +56,10 @@ public class GuanoteReader extends GuanoteView {
 	
 	public static void main(String[] args) {
 		GuanoteReader gui = new GuanoteReader(new Guanote() {
-			public String sender() { return "sender"; };
-			public String receiver() { return "rcvr"; };
+			public String getSenderName() { return "sender"; };
+			public String[] getReceiverList() { return new String[] { "rcvr" }; };
 			public String message() { return "test body test test test"; };
-			public String toString() { return sender() +": "+message(); }
+			public String toString() { return getSenderName() +": "+message(); }
 		});
 		gui.setVisible(true);
 	}

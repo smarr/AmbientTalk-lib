@@ -45,35 +45,35 @@ import at.urbiflock.ui.Subscription;
  */
 public interface GuanotesApp extends Application {
 
-	public Guanote makeGuanote(String receiver, String sender, String message) throws Exception;
-	public void send(Guanote g) throws Exception;
-	public void addGuanoteListener(GuanoteListener l) throws Exception;
+	public Guanote makeGuanoteFromNames(String receiver, String sender, String message) throws Exception;
+	public void sendGuanote(Guanote g) throws Exception;
+	public void listenForGuanotesToOwner(GuanoteListener l) throws Exception;
 	
 	
 	
 	// for testing purposes only
 	
 	public static final GuanotesApp _TESTAPP_ = new GuanotesApp() {
-		public void addGuanoteListener(GuanoteListener l) throws Exception {
+		public void listenForGuanotesToOwner(GuanoteListener l) throws Exception {
 		}
-		public Guanote makeGuanote(final String receiver, final String sender,
+		public Guanote makeGuanoteFromNames(final String receiver, final String sender,
 				final String message) throws Exception {
 			return new Guanote() {
 				public String message() throws Exception {
 					return message;
 				}
 
-				public String receiver() throws Exception {
-					return receiver;
+				public String[] getReceiverList() throws Exception {
+					return new String[] { receiver };
 				}
 
-				public String sender() throws Exception {
+				public String getSenderName() throws Exception {
 					return sender;
 				}
 				
 				public String toString() {
 					try {
-						return "from " + sender() + ": " + message();
+						return "from " + getSenderName() + ": " + message();
 					} catch (Exception e) {
 						return "Guanote " + e.getMessage();
 					}
@@ -81,12 +81,12 @@ public interface GuanotesApp extends Application {
 			};
 		}
 
-		public String name() { return "Guanotes"; }
+		public String name() throws Exception { return "Guanotes"; }
 		
-		public void send(Guanote g) throws Exception {
+		public void sendGuanote(Guanote g) throws Exception {
 			System.out.println("Guanote "+g+" sent");
 		}
-		public Flockr owner() {
+		public Flockr owner() throws Exception {
 			return new Flockr() {
 				public void addBuddy(Profile profile) {}
 				public void createFlockFromFieldMatchers(String flockName,
@@ -133,9 +133,9 @@ public interface GuanotesApp extends Application {
 		}
 
 		public void export(ATTypeTag t) {}
-		public void start() {}
+		public void start() throws Exception {}
 		public void pause() {}
-		public void stop() {}
+		public void stop() throws Exception {}
 		public void unpause() {}
 		
 	};

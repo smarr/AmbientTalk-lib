@@ -34,23 +34,23 @@ package at.urbiflock.ui.guanotes;
  */
 public interface Guanote {
 	
-	public String sender() throws Exception;
-	public String receiver() throws Exception;
+	public String getSenderName() throws Exception;
+	public String[] getReceiverList() throws Exception;
 	public String message() throws Exception;
 	
 	public static Guanote _EMPTY_ = new Guanote() {
 		public String message() throws Exception {
 			return "";
 		}
-		public String receiver() throws Exception {
-			return "";
+		public String[] getReceiverList() throws Exception {
+			return new String[] { "" };
 		}
-		public String sender() throws Exception {
+		public String getSenderName() throws Exception {
 			return "";
 		}
 		public String toString() {
 			try {
-				return "from " + sender() + ": " + message();
+				return "from " + getSenderName() + ": " + message();
 			} catch (Exception e) {
 				return "Guanote " + e.getMessage();
 			}
