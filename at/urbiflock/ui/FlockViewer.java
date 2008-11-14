@@ -27,7 +27,10 @@
  */
 package at.urbiflock.ui;
 
+import java.awt.BorderLayout;
+import java.awt.FlowLayout;
 import java.awt.Frame;
+import java.awt.Label;
 import java.awt.List;
 import java.awt.MenuItem;
 import java.awt.PopupMenu;
@@ -53,8 +56,11 @@ public class FlockViewer extends Frame implements FlockListener {
 	Subscription flockSubscription_;
 	
 	public FlockViewer(final Flock f, Flockr owner) {
-		super("Flock Viewer");
+		super("Viewing flock " + f.getName());
 
+		setLayout(new BorderLayout());
+		add(new Label(f.getName()), BorderLayout.NORTH);
+		
 		flock_ = f;
 		owner_ = owner;
 		
@@ -71,7 +77,7 @@ public class FlockViewer extends Frame implements FlockListener {
 		
 		unameList_.addMouseListener(new PopupListener());
 		
-		add(unameList_);
+		add(unameList_, BorderLayout.CENTER);
 		
 		pack();
 		setVisible(true);

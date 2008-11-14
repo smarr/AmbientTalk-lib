@@ -25,10 +25,10 @@ public class ApplicationLauncher extends Frame implements ActionListener {
 		applications_ = applications;
 		
 		this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
-		
+				
 		GridLayout gridLayout = new GridLayout();
-		gridLayout.setColumns(4);
-		gridLayout.setRows(0);
+		gridLayout.setColumns(3);
+		// gridLayout.setRows(0);
 		applicationGridPanel_ = new Panel(gridLayout);
 		add(applicationGridPanel_);
 		
