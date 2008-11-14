@@ -66,6 +66,7 @@ def makeGuanotes(aFlockr) {
 	       // receiver.shouldReceive(guanotesSenderTS.getReceiverFlockr());
 	       { |return|
 	          guanotesSenderTS.getConnectedFlockrs.each: { |username| 
+		system.println("propagating to " + username + "??");
 		          if: receiver.shouldReceive(username) then: { system.println("propagating true for " + self.getTupleId + " to " + username);return(true) 
 		          } else: { system.println("propagating false for " + self.getTupleId + " to " + username);};
 		        };
@@ -77,7 +78,8 @@ def makeGuanotes(aFlockr) {
 	    };
     };
     //temporal function for Gui purposes
-    def makeGuanoteFromNames(from, to, msg){
+    def makeGuanoteFromNames(to, from, msg){
+	system.println("guanote to " + to);
 	     makeGuanote(from, makeReceiverFlockr(to), msg);
     };
 		// helper function to extend guanotes without having to worry about isolate type tag.
