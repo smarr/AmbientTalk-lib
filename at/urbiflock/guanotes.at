@@ -59,7 +59,7 @@ def makeGuanotes(aFlockr) {
 		    def sender := from;  // fill in by at interface with gui
 		    def receiver := to;  // an object which contains flock
 		    def message := msg;
-		//	system.println("making guanote " + self.tupleId + " from " + from + " msg " + msg + " to " + to.names);
+			system.println("making guanote " + self.tupleId + " from " + from + " msg " + msg + " to " + receiver.getReceiverList);
 		    // currently inheriting the default, i.e. a tuple that hops forever.
 		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.flockr.getUsername)};
         def decidePropagation(guanotesSenderTS){ 
@@ -79,17 +79,16 @@ def makeGuanotes(aFlockr) {
     };
     //temporal function for Gui purposes
     def makeGuanoteFromNames(to, from, msg){
-	system.println("guanote to " + to);
 	     makeGuanote(from, makeReceiverFlockr(to), msg);
     };
-		// helper function to extend guanotes without having to worry about isolate type tag.
+		// helper function to extend guanotes without having to worry about the isolate type tag.
 		def extendGuanote: tuple  with: closure {
 			extend: guanote with: closure taggedAs: [/.at.types.Isolate];
 		};
-		//helper functions to create receiver object.
-		def makeReceiverFlockr(username){
+		//helper functions to create receiver objects.
+		def makeReceiverFlockr(flockrId){
 			isolate: { 
-			  def shouldReceive(flockrId) { flockrId == username}; 
+			  def shouldReceive(username) { flockrId == username}; 
 			  def getReceiverList(){ [flockrId]};
 			};
 		};
@@ -97,7 +96,7 @@ def makeGuanotes(aFlockr) {
     	def receiver := isolate: { 
 	      def flockrIds;
 				def shouldReceive(flockrId) { flockrIds.contains(flockrId) };
-				def getReceiverList(){ flockrsId };
+				def getReceiverList(){ flockrIds };
 			};
 			if: (currentFlock) then: { 
 				receiver.flockrIds := self.currentFlock(flockName); 
@@ -107,19 +106,16 @@ def makeGuanotes(aFlockr) {
 			};
 			receiver;
 		};
-		//
+		// places a listener for guanotes where the flockr owner is the receiver.
 		def listenForGuanotesToOwner(listener){
 			self.when: { |guanote| guanote.receiver.shouldReceive(self.owner.getUsername)} received: { |guanote|
 			 listener<-guanoteReceived(guanote);
 			};
 		};
-		
-    // overriding methods from application interface
-		def start() {
-			super^start();
-			//setup the gui
-			def gui := jlobby.at.urbiflock.ui.guanotes.GuanoteList.new(self);
-		  //exporting guanotes as application
+		// makes guanotes to goOnline. 
+		// Behaviour not written in the start method for unit testing purposes.
+		def goOnline(){
+			//exporting guanotes as application
 		  self.export(Guanotes);
 		  //discovery other guanotes
 		  subscription := self.registerApplicationListener( Guanotes, object:{
@@ -133,6 +129,14 @@ def makeGuanotes(aFlockr) {
 			  };
 		  });
 		};
+    // overriding methods from application interface
+		def start() {
+			super^start();
+			//setup the gui
+			jlobby.at.urbiflock.ui.guanotes.GuanoteList.new(self);
+		  self.goOnline();
+		};
+		
 		def stop(){
 			super^stop();
 			if: (subscription != nil) then: {subscription.cancel()};
@@ -155,7 +159,7 @@ def makeGuanotes(aFlockr) {
 	aFlockr.addApplication(localInterface);
 	// assigning guanotesTS as the remote interface.
 	localInterface.remoteApplicationInterface := guanotesTS;
-	
+	//return value
 	localInterface;
 }; // end-makeGuanotes
 
@@ -189,7 +193,7 @@ def GuanotesModule := object: {
 		  	flockr1.addBuddy(profile3);
 		    //setting up guanotes of flockr1
 		    myGuanotes := makeGuanotes(flockr1);
-		    myGuanotes.start();
+		    myGuanotes.goOnline();
 			};
 			
 			def tearDown() {
@@ -211,7 +215,7 @@ def GuanotesModule := object: {
 					profile2.username := "flockr2";
 				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
 			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
-			    myGuanotes.start();
+			    myGuanotes.goOnline();
 				  // this should be composed via gui interface for every flock where a flockr is registered.
 					myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
@@ -239,7 +243,7 @@ def GuanotesModule := object: {
 					profile2.username := "flockr2";
 				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
 			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
-			    myGuanotes.start();
+			    myGuanotes.goOnline();
        	  myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
 					    test<-assertEquals("flockr1", guanote.sender);
@@ -267,7 +271,7 @@ def GuanotesModule := object: {
 						profile3.username := "flockr3";
 					  def flockr3 := /.at.urbiflock.flockr.makeFlockr(profile3);
 				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr3);
-				    def goOnline() { myGuanotes.start()};
+				    def goOnline() { myGuanotes.goOnline()};
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
 							  test<-assertEquals("flockr1", guanote.sender);
@@ -285,7 +289,7 @@ def GuanotesModule := object: {
 						profile2.username := "flockr2";
 					  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
 				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
-				    myGuanotes.start();
+				    myGuanotes.goOnline();
 				    def goOffline() {
 							flockr2.goOffline();
 							myGuanotes.stop();
@@ -330,7 +334,7 @@ def GuanotesModule := object: {
 						profile4.username := "flockr4";
 						flockr2.addBuddy(profile4); // assuming that the guanote of flockr1 arrives after the addBuddy has been proccessed.
 				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
-				    myGuanotes.start();
+				    myGuanotes.goOnline();
 	       	  myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr2.getUsername)} received: { |guanote|
 						  test<-assertEquals("flockr1", guanote.sender);
 							def to := isolate: { 
@@ -355,7 +359,7 @@ def GuanotesModule := object: {
 								profile4.username := "flockr4";
 							  def flockr4 := /.at.urbiflock.flockr.makeFlockr(profile4);
 						 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr4);
-						    myGuanotes.start();
+						    myGuanotes.goOnline();
 								myGuanotes.when: { |guanote| guanote.receiver.shouldReceive(flockr4.getUsername)} received: { |guanote|
 									test<-assertEquals("flockr2", guanote.sender);
 									test<-assertEquals("DagWereld", guanote.message);
