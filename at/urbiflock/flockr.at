@@ -52,6 +52,7 @@ def makeFlockr(profile) {
 	def profileChangedListeners := Vector.new();
 	def discoveryListeners := Vector.new();
 	def buddyListListeners := Vector.new();
+	def flocksListeners := Vector.new();
 	
 	def applications := Vector.new();
 	def flocks := Vector.new();
@@ -90,6 +91,15 @@ def makeFlockr(profile) {
 		*/
 		def registerBuddyListListener(l) { buddyListListeners.add(l) };
 		def removeBuddyListListener(l) { buddyListListeners.remove(l) };
+		
+		/* l should understand:
+		 	 notifyFlockAdded(flock: Flock)
+				invoked whenever a new flock is added.
+			notifyFlockRemoved(flock: Flock)
+				invoked whenever a flock is removed.
+		*/
+		def registerFlocksListener(l) { flocksListeners.add(l) };
+		def removeFlocksListener(l) { flocksListeners.remove(l) };
 		
 		def addApplication(app) { applications.add(app) };
 		
@@ -131,8 +141,14 @@ def makeFlockr(profile) {
 				flocks.at(flockIndex);
 			}; // else return nil
 		};
-		def removeFlock(flock) { flocks.remove(flock) };
-		def addFlock(flock) { flocks.add(flock) };
+		def removeFlock(flock) {
+			flocks.remove(flock, { |f1,f2| f1.getName() == f2.getName() });
+			notifyListeners: flocksListeners with: <-notifyFlockRemoved(flock);
+		};
+		def addFlock(flock) { 
+			flocks.add(flock);
+			notifyListeners: flocksListeners with: <-notifyFlockAdded(flock);
+		};
 		def getProximities() { proximities.asTable };
 		def addProximity(proximity) { proximities.add(proximity) };
 		def removeProximity(proximity) { proximities.remove(proximity) };

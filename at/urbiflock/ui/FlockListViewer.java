@@ -62,11 +62,9 @@ public class FlockListViewer extends Frame implements ActionListener {
 
 		listOfFlocks_ = new List();
 		listOfFlocks_.setMultipleMode(false);
-				
-		flocks_ = owner.getFlocks();
-
+		
+		flocks_ = owner_.getFlocks();
 		for (int i = 0; i < flocks_.length; i++) {
-			int flockIdx = i;
 			listOfFlocks_.add(flocks_[i].getName());
 		}
 
@@ -96,6 +94,12 @@ public class FlockListViewer extends Frame implements ActionListener {
 		        dispose();
 		    }
 		});
+		owner_.registerFlocksListener(this);
+	}
+	
+	public void dispose() {
+		owner_.removeFlocksListener(this);
+		super.dispose();
 	}
 	
 	class PopupListener extends MouseAdapter {
@@ -110,7 +114,6 @@ public class FlockListViewer extends Frame implements ActionListener {
 					int selected = listOfFlocks_.getSelectedIndex();
 					if ((selected != -1) & !(flocks_[selected].isDefaultFlock())) {
 						owner_.removeFlock(flocks_[selected]);
-						listOfFlocks_.remove(selected);
 					}
 				}
 			});
@@ -141,6 +144,16 @@ public class FlockListViewer extends Frame implements ActionListener {
 			owner_.openFlockEditorOnNewFlock();
 			return;
 		}
+	}
+	
+	public void notifyFlockAdded(Flock flock) {
+		flocks_ = owner_.getFlocks();
+		listOfFlocks_.add(flock.getName());
+	}
+	
+	public void notifyFlockRemoved(Flock flock) {
+		flocks_ = owner_.getFlocks();
+		listOfFlocks_.remove(flock.getName());
 	}
 	
 	/*public static void main(String[] args) {
