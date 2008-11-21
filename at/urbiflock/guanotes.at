@@ -26,16 +26,14 @@
  */
 def AmbientTotaModule := /.at.urbiflock.ambientTota;
 def FutureModule := /.at.lang.futures;
+def HashMap := jlobby.java.util.HashMap;
 
-def Vector := /.at.collections.vector.Vector;
 deftype Guanotes;
 
 def makeGuanotes(aFlockr) { 
-	def subscription;
+	def subscription;	
   // local interface of guanotes
   def localInterface := extend: /.at.urbiflock.application.makeApplication("Guanotes", aFlockr) with:{
-	  //added for testing - to think if it should go to local interface or not.
-	  def getConnectedFlockrs(){ guanotesTS.getConnectedFlockrs };
 	  //helper function to flatten a flock.
 	  //maybe move to flock.at?
  	  def currentFlock(flockName){
@@ -63,20 +61,13 @@ def makeGuanotes(aFlockr) {
 		    // currently inheriting the default, i.e. a tuple that hops forever.
 		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.flockr.getUsername)};
         def decidePropagation(guanotesSenderTS){ 
-	       // receiver.shouldReceive(guanotesSenderTS.getReceiverFlockr());
-	       { |return|
-	          guanotesSenderTS.getConnectedFlockrs.each: { |username| 
-		system.println("propagating to " + username + "??");
-		          if: receiver.shouldReceive(username) then: { system.println("propagating true for " + self.getTupleId + " to " + username);return(true) 
-		          } else: { system.println("propagating false for " + self.getTupleId + " to " + username);};
-		        };
-		        false;
-		     }.escape()
+	        receiver.shouldReceive(guanotesSenderTS.getReceiverFlockrId());		
 	      };
 	      def getReceiverList(){ receiver.getReceiverList()}; 
 	      def getSenderName(){sender};
 	    };
     };
+
     //temporal function for Gui purposes
     def makeGuanoteFromNames(to, from, msg){
 	     makeGuanote(from, makeReceiverFlockr(to), msg);
@@ -120,12 +111,12 @@ def makeGuanotes(aFlockr) {
 		  //discovery other guanotes
 		  subscription := self.registerApplicationListener( Guanotes, object:{
 			  def notifyApplicationJoined(flockr, profile, remoteGuanotesTs){
-				  guanotesTS.connectedFlockrs.add(profile.username);
+				  guanotesTS.connectedFlockrs.put(remoteGuanotesTs ,profile.username);
 				  guanotesTS.notifyTSDiscovered(remoteGuanotesTs);
 			  };
 			  def notifyApplicationLeft(flockr, profile, remoteGuanotesTs){
-				system.println(" " + guanotesTS.getFlockrId +  " detected disconnection of " + profile.username);
-				  guanotesTS.connectedFlockrs.remove(profile.username);
+					system.println(" " + guanotesTS.getFlockrId +  " detected disconnection of " + profile.username);
+				  guanotesTS.connectedFlockrs.remove(remoteGuanotesTs);
 			  };
 		  });
 		};
@@ -140,20 +131,23 @@ def makeGuanotes(aFlockr) {
 		def stop(){
 			super^stop();
 			if: (subscription != nil) then: {subscription.cancel()};
-		};	
+		};			
   }; // end-localInterface
 	// guanotesTS encapsulates the tuple space and the remote interface of guanotes
 	def guanotesTS := extend: localInterface.remoteApplicationInterface with: {	
 		import AmbientTotaModule.makeTupleSpace();
 		// specific behaviour for guanotes
 		def flockr := aFlockr;
-		def connectedFlockrs := Vector.new();
+		def connectedFlockrs := HashMap.new();
+		
 		def getFlockrId(){
 			 flockr.getUsername;
-		 };
-		def getConnectedFlockrs(){
-		  connectedFlockrs.asTable();
-	  };
+		 };		
+		//Gets the flockr id we are about to send guannotes
+		def getReceiverFlockrId() {
+			connectedFlockrs.get(self.getCurrentReceiverTs());
+		};
+		
 	};
 	// add application to a flockr.
 	aFlockr.addApplication(localInterface);

@@ -41,6 +41,7 @@ def makeTupleSpace(){
 	def ambientTS := Vector.new(); // contains ambient tuples
 	def localTSListeners := Vector.new();
 	def seenTS := Vector.new(); // contains far references to seen TS.
+	def currentReceiverTs := nil;
 	  
 	// methods to manage the registration of when:matches.
 	def registerListener(l) {
@@ -55,11 +56,14 @@ def makeTupleSpace(){
 	def notifyListeners(tuple){
 	  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
 	};
+	
+
 	  
 	//method belonging to the tuple propagation protocol
-	def sendTuple(tuple, ts){
+	def sendTuple(tuple, ts, toTs){
 		// toThink: this method could be called twice via inject and discovery when the ts discover.
 		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
+		currentReceiverTs := toTs;
 		if: tuple.decidePropagation(ts) then:{
 		  true;
 		} else: {
@@ -104,7 +108,7 @@ def makeTupleSpace(){
 			//notify all seen ts of the addition of a new tuple.
 		  system.println("add to ambient " + tuple.getTupleId );
 			seenTS.each: { |ts| 
-				if: (sendTuple(tuple, self)) then: { ts<-receiveTuples([tuple]) };
+				if: (sendTuple(tuple, self, ts)) then: { ts<-receiveTuples([tuple]) };
 			};
 		  //return a publication object to be able to cancel the injection.
 		  object:{
@@ -139,7 +143,7 @@ def makeTupleSpace(){
 		  };
       //def toSend := sendTuples(self);
 			def toSend := Vector.new();
-			ambientTS.each: { |tuple| if: (sendTuple(tuple, self)) then: { toSend.add(tuple)}};
+			ambientTS.each: { |tuple| if: (sendTuple(tuple, self, ts)) then: { toSend.add(tuple)}};
       if: (toSend.length > 0) then: {
 				 system.println("notifyTSDiscovered: sending tuples to " + ts);
 	       ts<-receiveTuples(toSend.asTable);
@@ -151,7 +155,7 @@ def makeTupleSpace(){
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
-			system.println("receivingTuple " + tuple.getTupleId + " in " + self);
+					system.println("receivingTuple " + tuple.getTupleId + " in " + self);
 		      // tota propagation protocol (receiver side)
 		      tuple.doAction(self);
 			    tuple := tuple.changeTupleContent(self);
@@ -161,7 +165,11 @@ def makeTupleSpace(){
 			    self.inject: tuple;
 		    };
 		  };
-	  }; 
+	  };
+	
+		def getCurrentReceiverTs() {
+			currentReceiverTs;
+		}; 
 		
 	}; // end-of-public interface
   publicInterface; 
