@@ -131,6 +131,8 @@ public interface GuanotesApp extends Application {
 				public void removeProfileChangedListener(Object l) {}
 				public void updateMatchingProfile(Profile p) {}
 				public void updateProfile() {}
+				public void setHasOpenFlockEditor(boolean b) {}
+				public boolean hasOpenFlockEditor() { return false; }
 			};
 		}
 

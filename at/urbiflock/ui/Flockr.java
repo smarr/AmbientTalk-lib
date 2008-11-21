@@ -29,4 +29,6 @@ public interface Flockr {
 			boolean shouldBeFriend, 
 			boolean shouldBeNearby
 		);
+	public void setHasOpenFlockEditor(boolean b);
+	public boolean hasOpenFlockEditor();
 }

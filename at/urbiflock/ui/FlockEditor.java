@@ -55,6 +55,12 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 	public FlockEditor(Flock flock, Flockr flockr) {
 		super("Flock Editor");
 		
+		if (flockr.hasOpenFlockEditor()) {
+			new OpenFlockEditorDialog();
+			dispose();
+			return;
+		}
+		
 		theFlock_ = flock;
 		owner_ = flockr;
 	
@@ -99,8 +105,15 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 		    }
 		});
 		
+		owner_.setHasOpenFlockEditor(true);
+		
 		pack();
 		setVisible(true);
+	}
+	
+	public void dispose() {
+		owner_.setHasOpenFlockEditor(false);
+		super.dispose();
 	}
 	
 	private void addEmptyProximityPanel() {
@@ -254,6 +267,22 @@ public class FlockEditor extends Frame implements ActionListener, ItemListener {
 			okButton.setActionCommand("ok");
 			add(okButton);
 		
+			pack();
+			setVisible(true);
+		}
+		
+		public void actionPerformed(ActionEvent ae) {
+			this.dispose();
+		}
+	}
+	
+	private class OpenFlockEditorDialog extends Frame implements ActionListener {
+		public OpenFlockEditorDialog() {
+			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			add(new Label("You have already an open Flock Editor."));
+			Button okButton = new Button("Ok");
+			okButton.addActionListener(this);
+			add(okButton);
 			pack();
 			setVisible(true);
 		}

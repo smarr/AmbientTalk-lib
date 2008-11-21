@@ -293,6 +293,10 @@ public class ProfileViewer extends Frame implements ActionListener {
 	}
 	
 	public void actionPerformed(ActionEvent ae) {
+		if (editable_ && localFlockr_.hasOpenFlockEditor()) {
+			new OpenFlockEditorDialog();
+			return;
+		}
 		String command = ae.getActionCommand();
 		if (command == "ok") {
 			Iterator it = textFields_.iterator();
@@ -343,6 +347,22 @@ public class ProfileViewer extends Frame implements ActionListener {
 		public MandatoryFieldRemovalDialog() {
 			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 			add(new Label("Cannot remove mandatory field!"));
+			Button okButton = new Button("Ok");
+			okButton.addActionListener(this);
+			add(okButton);
+			pack();
+			setVisible(true);
+		}
+		
+		public void actionPerformed(ActionEvent ae) {
+			this.dispose();
+		}
+	}
+	
+	private class OpenFlockEditorDialog extends Frame implements ActionListener {
+		public OpenFlockEditorDialog() {
+			this.setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
+			add(new Label("First close the Flock Editor before making any changes to your profile."));
 			Button okButton = new Button("Ok");
 			okButton.addActionListener(this);
 			add(okButton);

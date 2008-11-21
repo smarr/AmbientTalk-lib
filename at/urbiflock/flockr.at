@@ -64,6 +64,8 @@ def makeFlockr(profile) {
 	def profileMatchesProximity := nil;
 	def profileMatchingProximities := Vector.new();
 	
+	def hasOpenFlockEditorF := false;
+	
 	def notifyListeners: listeners with: message {
 		listeners.each: { |l| l <+ message };
 	};
@@ -148,6 +150,12 @@ def makeFlockr(profile) {
 		def addFlock(flock) { 
 			flocks.add(flock);
 			notifyListeners: flocksListeners with: <-notifyFlockAdded(flock);
+		};
+		def hasOpenFlockEditor() {
+			hasOpenFlockEditorF
+		};
+		def setHasOpenFlockEditor(b) {
+			hasOpenFlockEditorF := b;
 		};
 		def getProximities() { proximities.asTable };
 		def addProximity(proximity) { proximities.add(proximity) };
