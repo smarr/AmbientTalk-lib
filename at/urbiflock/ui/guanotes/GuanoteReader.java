@@ -27,10 +27,14 @@
  */
 package at.urbiflock.ui.guanotes;
 
+import java.awt.Button;
 import java.awt.Color;
 import java.awt.Font;
+import java.awt.Panel;
 import java.awt.TextArea;
 import java.awt.TextField;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
@@ -43,9 +47,41 @@ import javax.swing.BoxLayout;
  * @author tvcutsem
  */
 public class GuanoteReader extends GuanoteView {
+
+	private final Button replyButton_ = new Button("reply");
 	
-	public GuanoteReader(Guanote g) {
+	public GuanoteReader(final Guanote g) {
 		super(g, "Guanote Reader");
+		
+		Panel buttonPanel = new Panel();
+		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
+		buttonPanel.add(replyButton_);
+		add(buttonPanel);
+		
+		replyButton_.addActionListener(new ActionListener() {
+			public void actionPerformed(ActionEvent ae) {
+				GuanoteEditor gui = new GuanoteEditor(GuanotesApp._TESTAPP_, new Guanote() {
+					public String getSenderName() { return "myself"; };
+					public String[] getReceiverList() { return new String[] { "" }; };
+					public String message() { try {
+						return "You wrote: "+ g.message();
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					return null; 
+					};
+					public String toString() { try {
+						return g.getSenderName() +": "+message();
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					return null; }
+				});
+				gui.setVisible(true);
+			}
+		});
 		
 		from_.setEditable(false);
 		to_.setEditable(false);

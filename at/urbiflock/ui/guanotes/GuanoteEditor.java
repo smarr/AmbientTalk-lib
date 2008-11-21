@@ -28,6 +28,7 @@
 package at.urbiflock.ui.guanotes;
 
 import edu.vub.at.objects.natives.NATText;
+import edu.vub.at.parser.NATParser;
 
 import java.awt.Button;
 import java.awt.GridBagConstraints;
@@ -123,8 +124,9 @@ public class GuanoteEditor extends GuanoteView {
 		String sdr = this.from_.getText();
 		String msg = this.message_.getText();
 		try {
-			Guanote g = guanotes_.makeGuanoteFromNames(rcvr, sdr, msg);
-			guanotes_.sendGuanote(g);
+		    String[] names = rcvr.split(",");
+			guanotes_.makeGuanoteFromNames(names, sdr, msg);
+			//guanotes_.sendGuanote(g);
 		} catch (Exception e) {
 			e.printStackTrace();
 		}

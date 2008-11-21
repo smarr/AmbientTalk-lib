@@ -45,7 +45,7 @@ import at.urbiflock.ui.Subscription;
  */
 public interface GuanotesApp extends Application {
 
-	public Guanote makeGuanoteFromNames(String receiver, String sender, String message) throws Exception;
+	public Guanote makeGuanoteFromNames(String[] names, String sender, String message) throws Exception;
 	public void sendGuanote(Guanote g) throws Exception;
 	public void listenForGuanotesToOwner(GuanoteListener l) throws Exception;
 	
@@ -54,17 +54,19 @@ public interface GuanotesApp extends Application {
 	// for testing purposes only
 	
 	public static final GuanotesApp _TESTAPP_ = new GuanotesApp() {
+		
 		public void listenForGuanotesToOwner(GuanoteListener l) throws Exception {
+		
 		}
-		public Guanote makeGuanoteFromNames(final String receiver, final String sender,
-				final String message) throws Exception {
+		
+		public Guanote makeGuanoteFromNames(final String[] receiver, final String sender, final String message) throws Exception {
 			return new Guanote() {
 				public String message() throws Exception {
 					return message;
 				}
 
 				public String[] getReceiverList() throws Exception {
-					return new String[] { receiver };
+					return  receiver;
 				}
 
 				public String getSenderName() throws Exception {
