@@ -56,9 +56,6 @@ def makeTupleSpace(){
 	def notifyListeners(tuple){
 	  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
 	};
-	
-
-	  
 	//method belonging to the tuple propagation protocol
 	def sendTuple(tuple, ts, toTs){
 		// toThink: this method could be called twice via inject and discovery when the ts discover.
@@ -68,7 +65,7 @@ def makeTupleSpace(){
 		  true;
 		} else: {
 			if: tuple.decideDie(ts) then: {
-	      system.println("dying young " +  tuple);
+	      system.println("AmbientTota: dying young " +  tuple);
 				localTS.removeAll:{|t| t == tuple};
 				ambientTS.removeAll: {|t| t == tuple};
  		  };
@@ -82,14 +79,13 @@ def makeTupleSpace(){
 		// usual operations to manage a local ts.
 		// add a tuple to the local ts
 	  def add(tuple){
-			system.println("add to local " + tuple.getTupleId);
 	    localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };
 	  // delete from a ts all tuples matching the template
 	  // returns a table with the deleted tuples.
 	  def delete(template) {
-	  	system.println("delete " + template);
+	  	system.println("AmbientTota:delete " + template);
 		  def toDelete := read(template);
 	    localTS.removeAll: template;
 		  toDelete.asTable;
@@ -103,10 +99,8 @@ def makeTupleSpace(){
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
 		def inject: tuple {
-			system.println("injectingTuple " + tuple.getTupleId + " in " + self);
 		  ambientTS.add(tuple);
 			//notify all seen ts of the addition of a new tuple.
-		  system.println("add to ambient " + tuple.getTupleId );
 			seenTS.each: { |ts| 
 				if: (sendTuple(tuple, self, ts)) then: { ts<-receiveTuples([tuple]) };
 			};
@@ -145,7 +139,6 @@ def makeTupleSpace(){
 			def toSend := Vector.new();
 			ambientTS.each: { |tuple| if: (sendTuple(tuple, self, ts)) then: { toSend.add(tuple)}};
       if: (toSend.length > 0) then: {
-				 system.println("notifyTSDiscovered: sending tuples to " + ts);
 	       ts<-receiveTuples(toSend.asTable);
 			};
     };
@@ -155,7 +148,6 @@ def makeTupleSpace(){
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
-					system.println("receivingTuple " + tuple.getTupleId + " in " + self);
 		      // tota propagation protocol (receiver side)
 		      tuple.doAction(self);
 			    tuple := tuple.changeTupleContent(self);
