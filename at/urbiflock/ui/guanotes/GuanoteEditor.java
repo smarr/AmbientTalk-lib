@@ -32,9 +32,13 @@ import edu.vub.at.parser.NATParser;
 
 import java.awt.Button;
 import java.awt.GridBagConstraints;
+import java.awt.MenuItem;
 import java.awt.Panel;
+import java.awt.PopupMenu;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 
 import javax.swing.BoxLayout;
 import javax.swing.JComboBox;
@@ -49,6 +53,67 @@ import at.urbiflock.ui.Flockr;
  * @author tvcutsem
  */
 public class GuanoteEditor extends GuanoteView {
+	
+	class PopupListener extends MouseAdapter {
+		MenuItem expandItem = new MenuItem("Expand flock");
+		PopupMenu menu = new PopupMenu();
+
+		public PopupListener() {
+			to_.add(menu);
+			menu.add(expandItem);
+			
+			expandItem.addActionListener(new ActionListener() {
+				public void actionPerformed(ActionEvent ae) {
+					String fieldText = to_.getText();
+					String flockName = to_.getSelectedText();
+					int start = to_.getSelectionStart();
+					int end = to_.getSelectionEnd();
+					
+					try {
+						guanotes_.owner().getFlocks();
+						Flock[] flocks = guanotes_.owner().getFlocks();
+						String[] names = new String[flocks.length];
+						
+						for (int i = 0; i < names.length; i++) {
+							if ( flocks[i].getName().equals(flockName) ) {
+								String[] flockrs = flocks[i].getFlockrList();
+								String flockrsNames = "";
+								if (flockrs.length > 0) {
+									flockrsNames = flockrs[0];
+									for (int j = 1; j < flockrs.length; j++) {
+										flockrsNames +=  ","+flockrs[j];
+									}
+								}
+								to_.setText(fieldText.substring(0, start) + flockrsNames + fieldText.substring(end, fieldText.length()));
+								
+								return;
+							}
+						}
+						
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					
+				}
+			});
+		}
+		
+		public void mousePressed(MouseEvent e) {
+		    maybeShowPopup(e);
+		}
+
+		public void mouseReleased(MouseEvent e) {
+		      maybeShowPopup(e);
+		}
+
+		private void maybeShowPopup(MouseEvent e) {
+			if (e.getClickCount() == 2) {
+				menu.show(e.getComponent(),e.getX(), e.getY());
+		    }
+		}	
+	}
+	
 
 	private final Button sendButton_ = new Button("Send");
 	private final Button discardButton_ = new Button("Discard");
@@ -56,6 +121,9 @@ public class GuanoteEditor extends GuanoteView {
 	public GuanoteEditor(GuanotesApp app, Guanote g) {
 		super(g, "Guanote Editor");
 		guanotes_ = app;
+		
+		to_.addMouseListener(new PopupListener());
+
 		
 		Panel buttonPanel = new Panel();
 		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
@@ -146,3 +214,6 @@ public class GuanoteEditor extends GuanoteView {
 	}
 
 }
+
+
+

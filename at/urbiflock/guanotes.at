@@ -48,8 +48,14 @@ def makeGuanotes(aFlockr) {
 	  //helper function to flatten a flock.
 	  //maybe move to flock.at?
  	  def currentFlock(flockName){
-	    aFlockr.getFlock(flockName).getFlockrList();
+	    def flock := aFlockr.getFlock(flockName);
+			if: flock != nil then: {
+				flock.getFlockrList();
+			} else: {
+				[];
+			};
     };
+
     //installs a listener for guanotes matching the predicate
     // replaced the old listenGuanotes for this:
     def when: predicate received: block {
@@ -69,48 +75,55 @@ def makeGuanotes(aFlockr) {
 		    def receiver := to;  // an object which contains flock
 		    def message := msg;
 	      // currently inheriting the default, i.e. a tuple that hops forever.
-		    def decideStore(guanotesReceiverTS){ receiver.shouldReceive(guanotesReceiverTS.owner.getUsername)};
-        def decidePropagation(guanotesSenderTS){ 
-	        def bol := receiver.shouldReceive(guanotesSenderTS.getReceiverFlockrId());	
+		    def decideStore(guanotesReceiverTS){ true };//receiver.shouldReceive(self,guanotesReceiverTS.owner.getUsername) };
+        def decidePropagation(guanotesSenderTS) { 
+	        def bol := receiver.shouldReceive( guanotesSenderTS );	
 	        system.println("Guanotes: propagating " + bol + " guanote from " + sender + " to " +guanotesSenderTS.getReceiverFlockrId() + " msg " +msg + "tupleID " +self.getTupleId);
-	        bol;	
+	        bol;
 	      };
 	      def getReceiverList(){ receiver.getReceiverList()}; 
 	      def getSenderName(){sender};
 	    };
     };
     //temporal function for Gui purposes
-    def makeGuanoteFromNames(to, from, msg){
-	     makeGuanote(from, makeReceiverFlockr(to), msg);
+		//change it to do this directly from java
+    def makeGuanoteFromNames(to, from, msg) {
+			sendGuanote( makeGuanote(from, makeReceiver(to), msg));			
     };
+
 		// helper function to extend guanotes without having to worry about the isolate type tag.
 		def extendGuanote: tuple  with: closure {
 			extend: guanote with: closure taggedAs: [/.at.types.Isolate];
 		};
-		//helper functions to create receiver objects.
-		def makeReceiverFlockr(flockrId){
-			isolate: { 
-			  def shouldReceive(username) { flockrId == username}; 
-			  def getReceiverList(){ [flockrId]};
-			};
-		};
-		def makeReceiverFlock(flockName, currentFlock := true){
-    	def receiver := isolate: { 
-	      def flockrIds;
-				def shouldReceive(flockrId) { flockrIds.contains(flockrId) };
+		
+		def makeReceiver(flockrIds){
+    	def receiver := isolate: { |flockrIds|
+				def flockrNames := [];
+				def flocks := [];
+				def shouldReceive(guanotesTS) {
+					if: !(flockrNames.contains(guanotesTS.getReceiverFlockrId)) then: {
+						flocks.inject: false into: { |result, flock|
+							  result.or: { guanotesTS.currentFlock(flock).contains(guanotesTS.getReceiverFlockrId) }
+						}
+					}else: { 
+						true;
+					}
+				};
 				def getReceiverList(){ flockrIds };
-			};
-			if: (currentFlock) then: { 
-				receiver.flockrIds := self.currentFlock(flockName); 
-			} else:{
-				receiver.flockrIds := [flockName];
-				// todo dynamic flocks
+			};			
+			flockrIds.each: {|id| 
+					if: id ~= ".*Flock" then: { 
+						receiver.flocks :=  receiver.flocks + [id] 
+					}
+			 		else: { receiver.flockrNames :=  receiver.flockrNames + [id] }  
 			};
 			receiver;
 		};
+		
 		// places a listener for guanotes where the flockr owner is the receiver.
-		def listenForGuanotesToOwner(listener){
-			when: { |guanote| guanote.receiver.shouldReceive(self.owner.getUsername)} received: { |guanote|
+		def listenForGuanotesToOwner(listener) {
+			//Think about this ! the true determines which guanotes have to be displayed.
+			when: { |guanote| true} received: { |guanote|
 			 listener<-guanoteReceived(guanote);
 			};
 		};	
