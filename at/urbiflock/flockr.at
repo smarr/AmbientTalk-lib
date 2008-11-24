@@ -146,6 +146,7 @@ def makeFlockr(profile) {
 		def removeFlock(flock) {
 			flocks.remove(flock, { |f1,f2| f1.getName() == f2.getName() });
 			notifyListeners: flocksListeners with: <-notifyFlockRemoved(flock);
+			removeProfileChangedListener(flock);
 		};
 		def addFlock(flock) { 
 			flocks.add(flock);
@@ -214,7 +215,8 @@ def makeFlockr(profile) {
 		def openFlockEditorOnNewFlock() {
 			jlobby.at.urbiflock.ui.FlockEditor.new(/.at.urbiflock.flock.makeFlock(
 					"new flock", 
-					/.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true })),
+					/.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true }),
+					localInterface),
 				localInterface);
 		};
 		
@@ -284,7 +286,7 @@ def makeFlockr(profile) {
 			// Here the global proximity is ready, but the sub-proximities still 
 			// have to be initialized (by notifying them).
 			proximities.add(theChainedProximity);
-			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity));
+			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity, localInterface));
 			
 			// Notify the isFriendProximity with all the existing buddies.
 			if: (nil != isFriendProximity) then: {
@@ -315,13 +317,13 @@ def makeFlockr(profile) {
 	// Adding predefined flocks
 	def isFriendProximity := ProximityModule.makeIsFriendProximity(localInterface);
 	proximities.add(isFriendProximity);
-	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", isFriendProximity);
+	def FriendsFlock := FlockModule.makeFlock("FriendsFlock", isFriendProximity, localInterface);
 	FriendsFlock.makeDefaultFlock();
 	flocks.add(FriendsFlock);
 	
 	def isNearbyProximity := ProximityModule.makeIsNearbyProximity(localInterface);
 	proximities.add(isNearbyProximity);
-	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity);
+	def NearbyFlock := FlockModule.makeFlock("NearbyFlock", isNearbyProximity, localInterface);
 	NearbyFlock.makeDefaultFlock();
 	flocks.add(NearbyFlock);
 	

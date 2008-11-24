@@ -29,11 +29,12 @@ def makeFlockrList(){
 	Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
 };
 
-def makeFlock(theName, theProximity) {
+def makeFlock(theName, theProximity, owner) {
 	
 	def flockrList := makeFlockrList;
 	def name := theName;
 	def proximity := theProximity;
+	def theOwningFlockr := owner;
 	def listeners := Vector.new();
 	def defaultFlock := false;
 
@@ -81,6 +82,13 @@ def makeFlock(theName, theProximity) {
 			};
 		};
 		
+		def notifyProfileChanged(flockr, newProfile) {
+			def indexOfProfileToReplace := flockrList.indexOf(newProfile);
+			if: (nil != indexOfProfileToReplace) then: {
+				flockrList.atPut(indexOfProfileToReplace, newProfile);
+			};
+		};
+		
 		def makeDefaultFlock() {
 			defaultFlock := true;
 		};
@@ -92,6 +100,7 @@ def makeFlock(theName, theProximity) {
 	};
 		
 	def subscription := proximity.register(proximityListener);
+	theOwningFlockr.registerProfileChangedListener(theFlock);
 	
 	theFlock;
 };

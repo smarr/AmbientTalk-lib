@@ -195,7 +195,7 @@ def ProximityModule := object: {
 			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
 			def friendProximity := makeIsFriendProximity(flockr1);
 			def friendAndFemaleProximity := makeOrProximity(femaleProximity, friendProximity);
-			def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity);
+			def FriendsAndFemaleFlock := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock", friendAndFemaleProximity, flockr1);
 
 			flockr1.addFlock(FriendsAndFemaleFlock);
 			flockr1.addBuddy(profile2);
@@ -218,7 +218,7 @@ def ProximityModule := object: {
 			def femaleProximity := makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
 			def friendProximity := makeIsFriendProximity(flockr1);
 			def friendAndFemaleProximity := makeAndProximity(femaleProximity, friendProximity);
-			def FriendsAndFemaleFlock2 := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock2", friendAndFemaleProximity);
+			def FriendsAndFemaleFlock2 := /.at.urbiflock.flock.makeFlock("FriendsAndFemaleFlock2", friendAndFemaleProximity, flockr1);
 			
 			flockr1.addFlock(FriendsAndFemaleFlock2);
 			flockr1.addBuddy(profile2);
@@ -251,7 +251,7 @@ def ProximityModule := object: {
 			  // Adding predefined flocks
 			  def matchingProfile := /.at.urbiflock.profile.makeProfile();
 			  matchingProfile.sex := "FEMALE";
-			  flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == matchingProfile.sex })));
+			  flockr1.addFlock(/.at.urbiflock.flock.makeFlock("GirlFriends", makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == matchingProfile.sex }), flockr1));
 			  def girlFriendFlock := flockr1.getFlock("GirlFriends");
 			
 			  when: seconds(waitTime*2) elapsedWithFuture: {
