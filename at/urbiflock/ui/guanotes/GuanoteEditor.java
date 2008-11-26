@@ -119,8 +119,17 @@ public class GuanoteEditor extends GuanoteView {
 	private final Button discardButton_ = new Button("Discard");
 	private final GuanotesApp guanotes_;
 	public GuanoteEditor(GuanotesApp app, Guanote g) {
-		super(g, "Guanote Editor");
+		super(g, "New Guanote");
+		try {
+			this.setTitle(app.owner().getProfile().username() + ":: New Guanote");
+		} catch (Exception e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
 		guanotes_ = app;
+		
+		from_.setVisible(false);
+		fromLbl.setVisible(false);
 		
 		to_.addMouseListener(new PopupListener());
 
@@ -192,7 +201,7 @@ public class GuanoteEditor extends GuanoteView {
 		String sdr = this.from_.getText();
 		String msg = this.message_.getText();
 		try {
-		    String[] names = rcvr.split(",");
+		    String[] names = (rcvr.replaceAll(" ","")).split(",");
 			guanotes_.makeGuanoteFromNames(names, sdr, msg);
 			//guanotes_.sendGuanote(g);
 		} catch (Exception e) {

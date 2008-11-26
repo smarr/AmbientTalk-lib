@@ -61,9 +61,8 @@ public class GuanoteList extends Frame implements GuanoteListener {
 	
 	private final GuanotesApp guanotes_;
 	
-	public GuanoteList(GuanotesApp app) {
-		super("Guanotes");
-		
+	public GuanoteList(final GuanotesApp app) {
+		super("Guanotes Inbox");
 		guanotes_ = app;
 		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
@@ -80,8 +79,9 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		
 		add(buttonPanel);
 		
-		guanoteList_.setFont(Font.decode("Arial-BOLD-14"));
-		guanoteList_.setBackground(Color.YELLOW);
+		guanoteList_.setFont(Font.decode("Marker Felt-18"));
+
+		guanoteList_.setBackground(new Color(205,198,97));
 		
 		guanoteList_.addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent me) {
@@ -89,7 +89,7 @@ public class GuanoteList extends Frame implements GuanoteListener {
 					int idx = guanoteList_.getSelectedIndex();
 					if (idx != -1) {
 						Guanote g = (Guanote) guanoteListModel_.get(idx);
-						GuanoteReader reader = new GuanoteReader(g);
+						GuanoteReader reader = new GuanoteReader(app,g);
 						reader.setVisible(true);
 					}
 				}
@@ -130,6 +130,8 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		}
 		
 		pack();
+		this.setSize(400, 200);
+
 		this.setVisible(true);
 	}
 	

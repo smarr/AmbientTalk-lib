@@ -50,8 +50,10 @@ public class GuanoteReader extends GuanoteView {
 
 	private final Button replyButton_ = new Button("reply");
 	
-	public GuanoteReader(final Guanote g) {
-		super(g, "Guanote Reader");
+	public GuanoteReader(final GuanotesApp app, final Guanote g) {
+		super(g, "");
+		this.setTitle("Guanote from: "+ from_.getText());
+		
 		
 		Panel buttonPanel = new Panel();
 		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
@@ -60,9 +62,22 @@ public class GuanoteReader extends GuanoteView {
 		
 		replyButton_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
-				GuanoteEditor gui = new GuanoteEditor(GuanotesApp._TESTAPP_, new Guanote() {
-					public String getSenderName() { return "myself"; };
-					public String[] getReceiverList() { return new String[] { "" }; };
+				GuanoteEditor gui = new GuanoteEditor(app, new Guanote() {
+					public String getSenderName() { try {
+						return app.owner().getProfile().username();
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					return null; };
+					public String[] getReceiverList() { try {
+						return new String[] {  g.getSenderName() };
+					} catch (Exception e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+					}
+					return null; 
+					};
 					public String message() { try {
 						return "You wrote: "+ g.message();
 					} catch (Exception e) {
@@ -91,7 +106,7 @@ public class GuanoteReader extends GuanoteView {
 	}
 	
 	public static void main(String[] args) {
-		GuanoteReader gui = new GuanoteReader(new Guanote() {
+		GuanoteReader gui = new GuanoteReader(GuanotesApp._TESTAPP_,new Guanote() {
 			public String getSenderName() { return "sender"; };
 			public String[] getReceiverList() { return new String[] { "rcvr" }; };
 			public String message() { return "test body test test test"; };

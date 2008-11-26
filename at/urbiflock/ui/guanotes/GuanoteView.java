@@ -27,12 +27,14 @@
  */
 package at.urbiflock.ui.guanotes;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.Label;
 import java.awt.Panel;
 import java.awt.TextArea;
@@ -41,6 +43,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
 import javax.swing.BoxLayout;
+
+import sun.tools.tree.SuperExpression;
 
 /**
  * A superclass used to factor out the behavior common
@@ -51,6 +55,8 @@ import javax.swing.BoxLayout;
 public abstract class GuanoteView extends Frame {
 	
 	protected final TextField from_ = new TextField();
+	protected final Label fromLbl = new Label("From:");
+
 	protected final TextField to_ = new TextField();
 	protected final TextArea message_ = new TextArea();
 	protected final Panel contentPanel_ = new Panel();
@@ -58,13 +64,16 @@ public abstract class GuanoteView extends Frame {
 
 	public GuanoteView(Guanote g, String title) {
 		super(title);
-		
+				
 		try {
 			from_.setText(g.getSenderName());
 			String[] receivers = g.getReceiverList();
 			StringBuffer allReceivers = new StringBuffer("");
-			for (int i = 0; i < receivers.length; i++) {
-				allReceivers = allReceivers.append(receivers[i]);
+			if (receivers.length >= 1) {
+				allReceivers = allReceivers.append(receivers[0]);
+				for (int i = 1; i < receivers.length; i++) {
+					allReceivers = allReceivers.append(","+receivers[i]);
+				}
 			}
 			to_.setText(allReceivers.toString());
 			message_.setText(g.message());
@@ -72,12 +81,14 @@ public abstract class GuanoteView extends Frame {
 			e.printStackTrace();
 		}
 		
-		from_.setBackground(Color.YELLOW.darker());
-		to_.setBackground(Color.YELLOW.darker());
-		setBackground(Color.YELLOW.brighter().brighter());
+		//from_.setBackground(Color.YELLOW.darker());
+		//to_.setBackground(Color.YELLOW.darker());
 		
-		message_.setBackground(Color.YELLOW);
-		message_.setFont(Font.decode("ARIAL-BOLD-14"));
+		//setBackground(Color.YELLOW.brighter().brighter());
+		
+		
+		message_.setBackground( new Color(205,198,97) );
+		message_.setFont(Font.decode("Marker Felt-18"));
 		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
@@ -86,17 +97,18 @@ public abstract class GuanoteView extends Frame {
         GridBagLayout gridbag = new GridBagLayout();
         GridBagConstraints c = new GridBagConstraints();
         headers_.setLayout(gridbag);
-
+        c.insets = new Insets(4,4,4,4);
         c.fill = GridBagConstraints.BOTH;
         
         // FROM LABEL
         c.weightx = 0;
-		Label fromLbl = new Label("From: ");
         gridbag.setConstraints(fromLbl, c);
         headers_.add(fromLbl);
+        fromLbl.setAlignment((int) fromLbl.RIGHT_ALIGNMENT);
 		
+        
         // FROM TEXTFIELD
-        c.weightx = 1.0;
+        c.weightx = 1;
         gridbag.setConstraints(from_, c);
         headers_.add(from_);
                 
@@ -108,9 +120,10 @@ public abstract class GuanoteView extends Frame {
 		Label toLbl = new Label("To: ");
         gridbag.setConstraints(toLbl, c);
         headers_.add(toLbl);
+        toLbl.setAlignment((int) fromLbl.RIGHT_ALIGNMENT);
         
         // TO TEXTFIELD
-        c.weightx = 1.0;
+        c.weightx = 1;
         c.gridwidth = GridBagConstraints.REMAINDER;
         gridbag.setConstraints(to_, c);
         headers_.add(to_);
@@ -125,6 +138,7 @@ public abstract class GuanoteView extends Frame {
 				dispose();
 			}
 		});
+				
 	}
 	
 }
