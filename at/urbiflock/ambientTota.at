@@ -116,7 +116,7 @@ def makeTupleSpace(){
 				if: (sendTuple(tuple, self, ts)) then: { ts<-receiveTuples([tuple]) };
 			};
 			//notify yourself in case you are in the receiver.
-			if: (sendTuple(tuple, self, self)) then: { receiveTuple(tuple, self) };
+		//	if: (sendTuple(tuple, self, self)) then: { receiveTuple(tuple, self) };
 		 };
 		  //return a publication object to be able to cancel the injection.
 		  object:{
