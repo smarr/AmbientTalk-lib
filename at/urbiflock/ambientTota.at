@@ -57,6 +57,14 @@ def makeTupleSpace(){
 	  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
 	};
 	//method belonging to the tuple propagation protocol
+	def receiveTuple(tuple, ts){
+		// tota propagation protocol (receiver side)
+    tuple.doAction(ts);
+    tuple := tuple.changeTupleContent(ts);
+    //check if you have to insert it into your local tuple space
+    if: tuple.decideStore(ts) then: { ts.add(tuple) };
+	};
+	
 	def sendTuple(tuple, ts, toTs){
 		// toThink: this method could be called twice via inject and discovery when the ts discover.
 		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
@@ -79,6 +87,7 @@ def makeTupleSpace(){
 		// usual operations to manage a local ts.
 		// add a tuple to the local ts
 	  def add(tuple){
+		system.println("AmbientTota:add " + tuple.getTupleId + " in ts " + self.owner.getUsername );
 	    localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };
@@ -99,11 +108,16 @@ def makeTupleSpace(){
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
 		def inject: tuple {
-		  ambientTS.add(tuple);
+			if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
+			// adding the tuple to the ambient for next sync.
+			ambientTS.add(tuple);
 			//notify all seen ts of the addition of a new tuple.
 			seenTS.each: { |ts| 
 				if: (sendTuple(tuple, self, ts)) then: { ts<-receiveTuples([tuple]) };
 			};
+			//notify yourself in case you are in the receiver.
+			if: (sendTuple(tuple, self, self)) then: { receiveTuple(tuple, self) };
+		 };
 		  //return a publication object to be able to cancel the injection.
 		  object:{
 		    def cancel() { ambientTS.removeAll: {|t| t == tuple} };
@@ -148,12 +162,8 @@ def makeTupleSpace(){
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
-		      // tota propagation protocol (receiver side)
-		      tuple.doAction(self);
-			    tuple := tuple.changeTupleContent(self);
-			    //check if you have to insert it into your local tuple space
-			    if: tuple.decideStore(self) then: { add(tuple) };
-			    //todo: optimization to inject all tuples at once.
+			    // tota propagation protocol (receiver side)
+		      receiveTuple(tuple, self);
 			    self.inject: tuple;
 		    };
 		  };
