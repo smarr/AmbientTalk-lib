@@ -27,9 +27,7 @@
  */
 package at.urbiflock.ui.guanotes;
 
-import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
@@ -43,8 +41,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
 import javax.swing.BoxLayout;
-
-import sun.tools.tree.SuperExpression;
 
 /**
  * A superclass used to factor out the behavior common

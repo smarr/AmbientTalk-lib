@@ -63,6 +63,14 @@ public class GuanoteList extends Frame implements GuanoteListener {
 	
 	public GuanoteList(final GuanotesApp app) {
 		super("Guanotes Inbox");
+		
+		try {
+			this.setTitle(app.owner().getProfile().username() + ":: Guanotes Inbox");
+		} catch (Exception e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
 		guanotes_ = app;
 		
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));

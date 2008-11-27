@@ -27,11 +27,7 @@
  */
 package at.urbiflock.ui.guanotes;
 
-import edu.vub.at.objects.natives.NATText;
-import edu.vub.at.parser.NATParser;
-
 import java.awt.Button;
-import java.awt.GridBagConstraints;
 import java.awt.MenuItem;
 import java.awt.Panel;
 import java.awt.PopupMenu;
