@@ -388,6 +388,30 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(42, newMirage.m());
 	};
 	
+	// test whether serve() is only invoked once per 'remote' async send
+	def testAsyncServeOncePerRemoteAsyncMessage() {
+		def a := actor: {
+			def count := 0;
+			def m() { };
+			def getCount() { count };
+			def actor := reflectOnActor();
+			actor.becomeMirroredBy: (extend: actor with: {
+				def serve(@args) {
+					count := count + 1;
+					super^serve(@args);
+				}
+			});
+		};
+
+		import /.at.lang.futures;
+
+		a<-m();
+		when: a<-getCount()@FutureMessage becomes: { |cnt|
+			// cnt = 2, 1 for init(), 1 for m()
+			self.assertEquals(2, cnt);
+		};
+	};
+	
 };
 
 self

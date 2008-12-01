@@ -32,9 +32,6 @@
  *
  * An ambient reference is a time, synchronisation and space-decoupled reference.
  * It extends far references with anonymous and group communication.
- *
- * An ambient reference is a time, synchronisation and space-decoupled reference.
- * It extends far references with anonymous and group communication.
  *  
  * An ambient reference does not refer to one specific object, but rather
  * to a set of objects, known as its reach. The reach can be described
