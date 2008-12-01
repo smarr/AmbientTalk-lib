@@ -403,13 +403,21 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 			});
 		};
 
-		import /.at.lang.futures;
-
 		a<-m();
 		when: a<-getCount()@FutureMessage becomes: { |cnt|
 			// cnt = 2, 1 for init(), 1 for m()
 			self.assertEquals(2, cnt);
 		};
+	};
+	
+	def testAsyncExplicitScheduling() {
+		def [fut,res] := makeFuture(seconds(5));
+		def a := <-m(1);
+		def rcvr := object: {
+			def m(i) { res.resolve(`ok) }
+		};
+		reflectOnActor().schedule(rcvr, a);
+	  fut
 	};
 	
 };
