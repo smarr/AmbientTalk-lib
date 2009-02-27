@@ -57,11 +57,11 @@ import at.urbiflock.ui.Profile;
  */
 public class IR8U extends Frame {
 	
-	private Button newGuanote_ = new Button("Rate Me!");
-	private Button deleteGuanote_ = new Button("Delete");
+	private Button newRating_ = new Button("Rate Me!");
+	private Button deleteRating_ = new Button("Delete");
 	
-	private List guanoteList_ = new List();
-	private Vector guanoteListModel_ = new Vector();
+	private List ratingList_ = new List();
+	private Vector ratingListModel_ = new Vector();
 	
 	private final IR8UApp ir8u_;
 	
@@ -71,7 +71,6 @@ public class IR8U extends Frame {
 		try {
 			this.setTitle(app.owner().getProfile().username() + ":: IR8U Log");
 		} catch (Exception e1) {
-			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
 		
@@ -80,27 +79,27 @@ public class IR8U extends Frame {
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
 		ScrollPane listPane = new ScrollPane();
-		listPane.add(guanoteList_);
+		listPane.add(ratingList_);
 		
 		add(listPane);
 		
 		Panel buttonPanel = new Panel();
 		buttonPanel.setLayout(new BoxLayout(buttonPanel, BoxLayout.X_AXIS));
-		buttonPanel.add(newGuanote_);
-		buttonPanel.add(deleteGuanote_);
+		buttonPanel.add(newRating_);
+		buttonPanel.add(deleteRating_);
 		
 		add(buttonPanel);
 		
-		guanoteList_.setFont(Font.decode("Marker Felt-18"));
+		ratingList_.setFont(Font.decode("Marker Felt-18"));
 
-		guanoteList_.setBackground(new Color(50,240,88));
+		ratingList_.setBackground(new Color(50,240,88));
 		
-		guanoteList_.addMouseListener(new MouseAdapter() {
+		ratingList_.addMouseListener(new MouseAdapter() {
 			public void mouseClicked(MouseEvent me) {
 				if (me.getClickCount() > 1) {
-					int idx = guanoteList_.getSelectedIndex();
+					int idx = ratingList_.getSelectedIndex();
 					if (idx != -1) {
-						Object[] tuple = (Object[]) guanoteListModel_.get(idx);
+						Object[] tuple = (Object[]) ratingListModel_.get(idx);
 						if (tuple == null) return;
 						Flockr toRate = (Flockr) tuple[0];
 						String subject = (String) tuple[1];
@@ -115,7 +114,7 @@ public class IR8U extends Frame {
 			}
 		});
 		
-		newGuanote_.addActionListener(new ActionListener() {
+		newRating_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 				String subject = JOptionPane.showInputDialog("On what subject would you like to be rated?");
 				if (subject != null) {
@@ -127,9 +126,9 @@ public class IR8U extends Frame {
 				}
 			}
 		});
-		deleteGuanote_.addActionListener(new ActionListener() {
+		deleteRating_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
-				int[] toDelete = guanoteList_.getSelectedIndexes();
+				int[] toDelete = ratingList_.getSelectedIndexes();
 				if (toDelete.length > 0) {
 					deleteGuanotes(toDelete);					
 				}
@@ -162,13 +161,13 @@ public class IR8U extends Frame {
 	}
 	
 	public void askToRate(Flockr toRate, Profile p, String subject) throws Exception {
-		guanoteList_.add(p.username() + " wants you to rate him/her on " + subject);
-		guanoteListModel_.add(new Object[] { toRate, subject });
+		ratingList_.add(p.username() + " wants you to rate him/her on " + subject);
+		ratingListModel_.add(new Object[] { toRate, subject });
 	}
 	
 	public void updateRating(String ratingFlockrName, String subject, int rating) {
-		guanoteList_.add(ratingFlockrName + " gave you a " + rating + " on " + subject);
-		guanoteListModel_.add(null);
+		ratingList_.add(ratingFlockrName + " gave you a " + rating + " on " + subject);
+		ratingListModel_.add(null);
 	}
 	
 	protected void newGuanote() {
@@ -178,13 +177,13 @@ public class IR8U extends Frame {
 	
 	protected void deleteGuanotes(int[] toDeleteIndices) {
 		for (int i = 0; i < toDeleteIndices.length; i++) {
-			guanoteList_.remove(toDeleteIndices[i]);
-			guanoteListModel_.remove(toDeleteIndices[i]);
+			ratingList_.remove(toDeleteIndices[i]);
+			ratingListModel_.remove(toDeleteIndices[i]);
 		}
 	}
 	
 	private String shorten(String s) {
-		int max = guanoteList_.getWidth();
+		int max = ratingList_.getWidth();
 		if (s.length() > max) {
 			return s.substring(0, max) + "...";
 		} else {

@@ -80,7 +80,10 @@ def makeIR8U(aFlockr) {
 		};
 		def stop(){
 			super^stop();
-			if: (subscription != nil) then: {subscription.cancel()};
+			if: (subscription != nil) then: {
+				connectedRaters := Vector.new();
+				subscription.cancel()
+			};
 		};			
   }; // end-localInterface
 
