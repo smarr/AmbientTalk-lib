@@ -40,6 +40,5 @@ public interface IR8UApp extends Application {
 	public void askRatingFor(String subject) throws Exception;
 	
 	public void rateFlockr(Flockr flockr, String subject, int rating) throws Exception;
-
 	
 }

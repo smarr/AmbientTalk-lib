@@ -35,7 +35,7 @@ def makeIR8U(aFlockr) {
 	def subscription;
 	def ui;
 	
-	def connectedRaters := Vector.new();
+	def connectedRaters;
 	
 	// a map storing ratings -> ([flockrWhoRated, rate])*
 	def ratingSubjects := HashMap.new();
@@ -63,7 +63,7 @@ def makeIR8U(aFlockr) {
 			super^start();
 			//setup the gui
 			ui := jlobby.at.urbiflock.ui.ir8u.IR8U.new(self);
-			
+			connectedRaters := Vector.new();
 			//exporting this application
 		  self.export(IR8U);
 		
@@ -81,8 +81,9 @@ def makeIR8U(aFlockr) {
 		def stop(){
 			super^stop();
 			if: (subscription != nil) then: {
-				connectedRaters := Vector.new();
-				subscription.cancel()
+				subscription.cancel();
+				subscription := nil;
+				connectedRaters := nil;
 			};
 		};			
   }; // end-localInterface
