@@ -32,25 +32,33 @@ def makeRete(getId) { object: {
 	def POSITIVE := true;
 	def NEGATIVE := false; 
 
-def makeToken(sign, profile) { 
+/* A token is what is propagated in the rete network.
+The sign of the token indicates that it is being added to the network or removed. */
+def makeToken(sign, data) { 
 	object: {	
 		def getSign() {
 			sign;
 		};
 		def getFlockr() {
-			profile;
+			data;
 		};	
 	};
 };
 
+/* Makefilter expects a lambda and converts it into a filter.
+Filters are represented by object which understand the pass method.
+This method should return a boolean. */
 def makeFilter(predicate) {
 	object: {
-		def pass(RemoteInterface) {
-			predicate(RemoteInterface);
+		def pass(token) {
+			predicate(token);
 		};
 	};
 };
 
+/* The memory is used to store tokens in the various rete nodes.
+It is an assosiative memory and uses a keyFunction which is applied to the values which are put into the memory
+This is purely done for performance. */
 def makeMemory(keyFunction) {
 	object: {
 	  def tokens := HashMap.new();
@@ -69,6 +77,12 @@ def makeMemory(keyFunction) {
   };
 };
 
+/* A filter node takes a filer and applies the filter to all the objects passed through it.
+As the filter nodes are the access point form the rete network they expect normal data objects which are transformed into tokens
+This is done by making a token from the object before passing it to the next node.
+The pass method will be changed when this filter node is connected to another node,
+for example an  or_join_node or an  and_join_node.
+  */
 def makeFilterNode(filter) {
 	object: {
 		def pass := {|Token| nil};
@@ -92,6 +106,10 @@ def makeFilterNode(filter) {
 	};
 };
 
+/*
+A changefilter node works exactly like a filter node but will not do unessary propagations on changes.
+For example if the filter is specified for sex and somebody changes his haircolor the update will not be propagated.
+*/
 def makeChangeNode(filter) {
 	extend: makeFilterNode(filter) with: {
 		def memory := makeMemory({|RemoteInterface| getId(RemoteInterface)});
@@ -112,6 +130,8 @@ def makeChangeNode(filter) {
 	};
 };
 
+
+/* An or join node connects two nodes together and passes tokens if they are either passed from the left or the right. */
 def makeOrJoinNode(fleft, fright){
   extend: makeFilterNode(makeFilter({|v| true})) with: {
 	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
@@ -149,14 +169,15 @@ def makeOrJoinNode(fleft, fright){
 		  };
 	  };
 	
-		fleft.pass := {|Token| self.leftPass(Token)};
-		fright.pass := {|Token| self.rightPass(Token)};	
+	fleft.pass := {|Token| self.leftPass(Token)};
+	fright.pass := {|Token| self.rightPass(Token)};	
 	
   };
 };
 
 
-
+/* An and join node connects two nodes together and passes tokens if they are both passed from the left and the right.
+It uses a memory to cache which tokens are already passed. */
 def makeAndJoinNode(fleft, fright){
   extend: makeFilterNode(makeFilter({|v| true})) with: {
 	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
