@@ -25,6 +25,21 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+/**
+ * This file contains the implementation of a Flockr. A Flockr object represents
+ * a user in UrbiFlock. Applications that interact with users do so via this
+ * kind of objects. A Flockr object may represent the local user, or (if it is
+ * a far reference), it may represent a remote user.
+ *
+ * A flockr encapsulates a buddylist, which is a list of the profiles
+ * of the user's buddies. A flockr also has a list of flocks, which are
+ * (dynamic) groups of (proximate) Flockrs (other users), and a list of
+ * 'installed' applications.
+ *
+ * This file exports two operations:
+ *  - makeFlockr(profile : Profile) -> returns a Flockr object
+ *  - uidOf(flockr : farref<Flockr>) -> returns the uid of a remote flockr
+ */
 def Vector := /.at.collections.vector.Vector;
 import /.at.lang.futures;
 
@@ -103,17 +118,36 @@ def makeFlockr(profile) {
 		def registerFlocksListener(l) { flocksListeners.add(l) };
 		def removeFlocksListener(l) { flocksListeners.remove(l) };
 		
+		/**
+		 * addApplication(app : Application) -> nil
+		 *  register an application in the list of applications of this Flockr
+		 */
 		def addApplication(app) { applications.add(app) };
 		
+		/**
+		 * getFlockrWithUid(uid : int) -> Flockr | nil
+		 *  return the Flockr object for the flockr with the given uid,
+		 *  or nil of the uid was not found
+		 */
 		def getFlockrWithUid(uid) {
 			uidFlockrMap.get(uid);
 		};
+		
+		/**
+		 * updateFlockrWithUid(flockr: farref<Flockr>, uid : int) -> nil
+		 *  update the flockr with the given uid
+		 */
 		def updateFlockrWithUid(flockr, uid) {
 			uidFlockrMap.put(uid, flockr);
 		};
 		def getProfile() { myProfile };
 		def getMatchingProfile() { matchingProfile };
 		def getUsername(){ username };
+		
+		/**
+		 * Notifies all connected flockrs that this flockr's profile
+		 * has changed.
+		 */
 		def updateProfile() {
 			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(remoteInterface, myProfile);
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
@@ -122,21 +156,46 @@ def makeFlockr(profile) {
 			};
 		};
 		
+		/**
+		 * Adds a buddy's profile to this Flockr's buddy list
+		 */
 		def addBuddy(profile) { 
 			buddyList.addProfile(profile);
 			notifyListeners: buddyListListeners with: <-notifyBuddyAdded(profile);
 		};
+		
+		/**
+		 * Removes a buddy's profile from this Flockr's buddy list
+		 */
 		def removeBuddy(profile) { 
 			buddyList.removeProfile(profile.username);
 			notifyListeners: buddyListListeners with: <-notifyBuddyRemoved(profile); 
 		};
+		
+		/**
+		 * Ask whether or not a Flockr with a given uid is in this Flockr's buddy list
+		 */
 		def isBuddy(uid) {
 			buddyList.contains(uid);
 		};
+		
+		/**
+		 * Returns the profile of this Flockr's buddy with the given uid, or nil
+		 * if no such buddy exists
+		 */
 		def getBuddy(uid) {
 			buddyList.getProfile(uid);
 		};
+		
+		/**
+		 * Returns this Flockr's flocks (as a table)
+		 */
 		def getFlocks() { flocks.asTable };
+		
+		/**
+		 * Returns a Flock object whose name matches the given name,
+		 * or nil if no flock with that name exists.
+		 */
 		def getFlock(name) { 
 			def flockIndex := flocks.find: { |flock| name == flock.getName};
 			if: (nil != flockIndex) then: {
@@ -201,6 +260,10 @@ def makeFlockr(profile) {
 	    nil;
 		};
 		
+		/*
+		 * The flockr's remote interface. These are the only methods that can be
+		 * invoked by other flockrs on this Flockr.
+		 */
 		def remoteInterface := object: {
 			def getProfile() { profile };
 			def profileChanged(flockr, newProfile) {
