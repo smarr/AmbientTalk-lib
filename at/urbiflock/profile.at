@@ -37,7 +37,13 @@ def XInvalidFieldType := lobby.at.exceptions.createException(InvalidFieldType);
 
 def ProximityModule := /.at.urbiflock.proximity;
 
-
+/**
+ * Each field of a profile has an associated field type.
+ * The abstract field type can be seen as the abstract parent type
+ * of all field types that contains all common behavior.
+ * Specific behavior should be implemented and/or overridden by the
+ * child type.
+ */
 def AbstractFieldTypeObject := isolate: {
 	deftype ChildObjectResponsibility <: lobby.at.types.Exception;
 	def XChildObjectResponsibility := lobby.at.exceptions.createException(ChildObjectResponsibility);
@@ -65,7 +71,7 @@ def AbstractFieldTypeObject := isolate: {
 };
 
 def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
-	def fieldSize := 20;
+	def fieldSize := 20;		// Used for the size of the input field in the GUI.
 	def isString() { true };
 	def isPossibleValue(aValue) { is: aValue taggedAs: /.at.types.Text };
 	def name() { "Text" };
@@ -89,7 +95,7 @@ def EnumerationFieldTypeObject := extend: AbstractFieldTypeObject with: {
 };
 
 def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
-	def fieldSize := 10;
+	def fieldSize := 10;			// Used for the size of the input field in the GUI.
 	def lowerBound := nil;
 	def higherBound := nil;
 	def isInteger() { true };
@@ -150,6 +156,16 @@ def DateTypeFieldObject := extend: AbstractFieldTypeObject with: {
 	};
 };
 
+/** 
+ * Each profile is extended from a special parent object that
+ * contains all mandatory fields for a profile. All fields
+ * are actually represented as slots in the object. This way, the MOP
+ * can be used to add/remove/lookup profile fields.
+ * This parent object also contains all info w.r.t. field types and
+ * field mappings.
+ * The real profile child object delegates the field type checking
+ * to this parent object.
+ */
 def makeProfileMandatoryFields() {
 	def theProfile := isolate: {
 		
@@ -231,6 +247,7 @@ def makeProfileMandatoryFields() {
 		};
 	};
 	
+	// Add mandatory field-type mappings.
 	theProfile.addFieldTypeMapping(`username, StringFieldTypeObject.new());
 	theProfile.addFieldTypeMapping(`firstname, StringFieldTypeObject.new());
 	theProfile.addFieldTypeMapping(`lastname, StringFieldTypeObject.new());
@@ -240,22 +257,32 @@ def makeProfileMandatoryFields() {
 	theProfile;
 };
 
-// the profile is a property list, but it's implemented as an isolate object
+/** 
+ * The profile is a property list, but it's implemented as an isolate object.
+ * It extends the mandatory fields isolate object to be able to delegate all 
+ * common behavior to it. The non-mandatory fields are stored as slots in the 
+ * profile object.
+ */ 
 def makeProfile() {
 	def theProfile := extend: makeProfileMandatoryFields() with: {
 		
+		// A field is mandatory of it's a slot in the parent mandatory fields object.
 		def isMandatoryField(propName) {
 			(reflect: super).respondsTo(propName);
 		};
 		
+		// Extract all profile fields and put them in a hashmap.
 		def propertyHashMap() {
 			def theMap := jlobby.java.util.HashMap.new();
+			// Extract mandatory fields from the parent object.
 			((reflect: super).listFields()).each: { |field|
 				theMap.put(field.name(), field.readField());
 			};
+			// Extract custom profile fields.
 			((reflect: self).listFields()).each: { |field|
 				theMap.put(field.name(), field.readField());
 			};
+			// Don't consider these slots, they are not profile properties.
 			theMap.remove(`super);
 			theMap.remove(`fieldTypeMap);
 			theMap.remove(`matchingFields);
@@ -266,6 +293,11 @@ def makeProfile() {
 			propertyHashMap().keySet();
 		};
 		
+		/** 
+		 * Add a field to the profile. If the slot with name propName
+		 * already exists, there is already such a profile property.
+		 * If this is the case, raise a XDuplicateField exception.
+		 */
 		def addField(propName, propVal, propType) {
 			if: (reflect: self).respondsTo(propName) then: {
 				raise: XDuplicateField.new("Profile already has property: " + propName);
@@ -275,6 +307,10 @@ def makeProfile() {
 			}
 		};
 		
+		/** 
+		 * Remove a field from the profile. If the property with name propName
+		 * is a mandatory field, raise a XMandatoryFieldRemoval exception.
+		 */
 		def removeField(propName) {
 			if: isMandatoryField(propName) then: {
 				raise: XMandatoryFieldRemoval.new("Cannot remove mandatory property from profile: " + propName);
@@ -285,17 +321,30 @@ def makeProfile() {
 			}
 		};
 		
+		/**
+		 * Change the value of an existing field in the profile.
+		 */
 		def setField(propName, propVal) {
+			// First check if it is a custom field (e.g. it's a slot in the profile object).
+			// If it is, write a new value in this slot of the profile object.
 			if: (nil != ((reflect: self).listFields().find: { |f| f.name() == propName })) then: {
 				((reflect: self).grabField(propName)).writeField(propVal);
+			// It it's not, write the new value in the slot of the mandatory fields
+			// parent object.
 			} else: {
 				((reflect: super).grabField(propName)).writeField(propVal);
 			}
 		};
 		
+		/**
+		 * Checks whether a property with name field has the value value.
+		 */
 		def fieldMatches(field, value) {
+			// First check if it is a custom field (e.g. it's a slot in the profile object).
+			// If it is, lookup the field in the profile object.
 			if: (nil != ((reflect: self).listFields().find: { |f| f.name() == field })) then: {
 				((reflect: self).grabField(field)).readField() == value;
+			// It it's not, lookup the field in the mandatory fields parent object.
 			} else: {
 				((reflect: super).grabField(field)).readField() == value;
 			}
@@ -304,22 +353,6 @@ def makeProfile() {
 	};
 	
 	theProfile;
-};
-
-def addProperty(profile, propName, propVal) {
-	if: (reflect: profile).respondsTo(propName) then: {
-		raise: XDuplicateField.new("Profile already has property: " + propName);
-	} else: {
-		(reflect: profile).defineField(propName, propVal);
-	}
-};
-
-def removeProperty(profile, propName) {
-	if: profile.isMandatoryField(propName) then: {
-		raise: XMandatoryFieldRemoval.new("Cannot remove mandatory property from profile: " + propName);
-	} else: {
-		(reflect: profile).removeSlot(propName);
-	}
 };
 
 
