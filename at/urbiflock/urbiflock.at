@@ -57,6 +57,8 @@ uidField.addActionListener(object: {
 		// create the Guanotes Application
 		def guanotesApp := makeGuanotes(flockr);
 
+		/.at.urbiflock.ir8u.makeIR8U(flockr);
+
 		// launch the framework GUI
 		flockr.openApplicationLauncher();
 		

@@ -1,0 +1,135 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2008
+ * Authors: PROG Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+def FutureModule := /.at.lang.futures;
+
+import /.at.collections.vector;
+
+def HashMap := jlobby.java.util.HashMap;
+deftype IR8U;
+
+def makeIR8U(aFlockr) {
+	def subscription;
+	def ui;
+	
+	def connectedRaters := Vector.new();
+	
+	// a map storing ratings -> ([flockrWhoRated, rate])*
+	def ratingSubjects := HashMap.new();
+		
+  // local interface of guanotes
+  def localInterface := extend: /.at.urbiflock.application.makeApplication("IR8U", aFlockr) with:{
+	
+	  // called by UI when you want someone to vote on you
+	  def askRatingFor(subject) {
+		  if: !(ratingSubjects.containsKey(subject)) then: {
+			  ratingSubjects.put(subject, []);
+			  // ask people nearby to rate me!
+			  connectedRaters.each: { |ir8uapp|
+				  ir8uapp<-rateMe(remoteInterface, aFlockr.getProfile(), subject);
+				}
+		  }
+	  };
+	
+	  // called by UI when you vote for someone
+	  def rateFlockr(ir8uApp, subject, rating) {
+			ir8uApp<-rate(aFlockr, aFlockr.getProfile().username, subject, rating);	
+	  };
+				
+		def start() {
+			super^start();
+			//setup the gui
+			ui := jlobby.at.urbiflock.ui.ir8u.IR8U.new(self);
+			
+			//exporting this application
+		  self.export(IR8U);
+		
+		  //discovery other applications
+		  subscription := self.registerApplicationListener(IR8U, object:{
+			  def notifyApplicationJoined(flockr, profile, ir8uApp){
+				  connectedRaters.add(ir8uApp);
+			  };
+			  def notifyApplicationLeft(flockr, profile, ir8uApp){
+					connectedRaters.remove(ir8uApp);
+			  };
+		  });
+			
+		};
+		def stop(){
+			super^stop();
+			if: (subscription != nil) then: {subscription.cancel()};
+		};			
+  }; // end-localInterface
+
+	// remote interface of IR8U
+	def remoteInterface := extend: localInterface.remoteApplicationInterface with: {	
+	
+		def getFlockrId(){
+			aFlockr.getUsername;
+		};
+		
+		// called when someone votes for you
+		// rate(ratingFlockr : farref<Flockr>, subject : Text, rating: int 0-4)
+	  def rate(ratingFlockr, ratingFlockrName, subject, rating) {
+		  def prevRatings := ratingSubjects.get(subject);
+		  if: (prevRatings != nil) then: {
+			  if: (nil == prevRatings.find: { |tuple| tuple[1] == ratingFlockr }) then: {
+					ratingSubjects.put(subject, prevRatings + [[ratingFlockr, rating]]);
+					ui.updateRating(ratingFlockrName, subject, rating);
+			  }
+		  }
+	  };
+	
+	  // called when someone wants you to vote for him/her
+	  def rateMe(ir8uApp, profileToRate, subject) {
+		  ui.askToRate(ir8uApp, profileToRate, subject);
+	  };
+	
+	};
+	// add application to a flockr.
+	aFlockr.addApplication(localInterface);
+	// assigning the remote interface.
+	localInterface.remoteApplicationInterface := remoteInterface;
+	//return value
+	localInterface;
+}; // end-makeIR8U
+
+// the module object of this file
+def IR8UModule := object: {
+	// public stuff goes here
+	  def makeIR8U := &makeIR8U;
+		
+		def IR8UTest := extend: /.at.unit.test.UnitTest.new("IR8UTest", false) with: {
+			
+			def setUp() {
+			};
+			
+			def tearDown() {
+			};
+					
+		}; // IR8UTest
+
+} // IR8UModule
