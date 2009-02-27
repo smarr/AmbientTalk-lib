@@ -87,7 +87,7 @@ def makeTupleSpace(){
 		// usual operations to manage a local ts.
 		// add a tuple to the local ts
 	  def add(tuple){
-		system.println("AmbientTota:add " + tuple.getTupleId + " in ts " + self.owner.getUsername );
+		//system.println("AmbientTota:add " + tuple.getTupleId + " in ts " + self.owner.getUsername );
 	    localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };

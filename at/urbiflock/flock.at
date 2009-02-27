@@ -25,47 +25,72 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 def Vector := /.at.collections.vector.Vector;
+
+//helper function to make a flockr list as a vector which comparator is based on flockr's usernanems.
 def makeFlockrList(){
 	Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
 };
 
+//Assumption: theName of a flock is unique.
 def makeFlock(theName, theProximity, owner) {
 	
-	def flockrList := makeFlockrList;
-	def name := theName;
-	def proximity := theProximity;
-	def theOwningFlockr := owner;
+	def flockrList := makeFlockrList; //list of flockr profiles belonging to the flock
+	def name := theName; // flock's name
+	def proximity := theProximity; // proximity function ruling a flock.
 	def listeners := Vector.new();
-	def defaultFlock := false;
+	def defaultFlock := false;  // indicates if this is a predefined flock that cannot be removed from flockr
 
+  // a flock registers itself with the proximity function is got defined to get 
+  // notified when a profile should be added or removed from the result list
   def proximityListener := object: {
+	  // invoked when the given profile matches the proximity function.
 	  def addFlockr(profile) {
 		  if: !(flockrList.contains(profile)) then: {
 			  flockrList.add(profile);
 			  listeners.each: { |listener| listener<-notifyFlockrAdded(profile) };
 		  };
 	  };
+	  // invoked when the given profile does not match the proximity function anymore.
 	  def removeFlockr(profile) {
 		  flockrList.remove(profile);
 		  listeners.each: { |listener| listener<-notifyFlockrRemoved(profile) }; 
 	  };
 	};
 	
+	// public interface of flock.
 	def theFlock := object: {
+		/* register a listener with a flock that gets notified when a 
+		flockr should be added to /removed from a flock
+		 listener should understand:
+		  def notifyFlockrAdded(profile);
+		    invoked whenever a new flockr belongs to a flock.
+	    def notifyFlockrAdded(profile);
+	      invoked whenever a new flockr does not belong to a flock anymore.
+	  */
 		def addListener(aListener) {
 			listeners.add(aListener);
 			object: { def cancel() { listeners.remove(aListener) } };
 		};
+		
+		//getters and setters
 		def getName() { name };
+		def getOwner(){ owner };
+		// returns a list of flockr's usernames belonging to that flock or
+		// nil if the flock is empty.
 		def getFlockrList() {
 		    flockrList.asTable.map:{|profile| profile.username};
 		};
-		def getProfile(uid) {
-			def idx := flockrList.find: { |p| p.username == uid };
+		// returns the profile of a flockr in the flock or 
+		// nil if the flockr id is not found in the flock.
+		def getProfile(flockrId) {
+			def idx := flockrList.find: { |p| p.username == flockrId };
 			if: (nil != idx) then: {
 				flockrList.at(idx);				
 			}
 		};
+		// sets a new proximity in the flock
+		// note that flockr belonging to that flock before changing the proximity 
+		// are already tested against the new proximity.
 		def setProximity(newProximity) {
 			def oldFlockList := flockrList;
 			def flatlist := oldFlockList.asTable.map:{|profile| profile.username};
@@ -74,21 +99,15 @@ def makeFlock(theName, theProximity, owner) {
 			subscription.cancel();
 			proximity := newProximity;
 			subscription := proximity.register(proximityListener);
+			//feeding the proximity function with flockr profiles belonging to the flock before the change, 
+			// to test if they still belong to the flock.
 			oldFlockList.each: { |profile| 
-				system.println("feeding network with profile " + profile.username);
 				// passing nil as far reference. 
 				// Save because the rete engine doesn't use flockr but profiles.
 				proximity<-notifyProfileChanged(nil, profile);
 			};
 		};
-		
-		def notifyProfileChanged(flockr, newProfile) {
-			def indexOfProfileToReplace := flockrList.indexOf(newProfile);
-			if: (nil != indexOfProfileToReplace) then: {
-				flockrList.atPut(indexOfProfileToReplace, newProfile);
-			};
-		};
-		
+		//sets the flock as default one.
 		def makeDefaultFlock() {
 			defaultFlock := true;
 		};
@@ -100,18 +119,72 @@ def makeFlock(theName, theProximity, owner) {
 	};
 		
 	def subscription := proximity.register(proximityListener);
-	theOwningFlockr.registerProfileChangedListener(theFlock);
+	
+	owner.registerProfileChangedListener( object: {
+		def notifyProfileChanged(flockr, newProfile) {
+			def indexOfProfileToReplace := flockrList.indexOf(newProfile);
+			if: (nil != indexOfProfileToReplace) then: {
+				flockrList.atPut(indexOfProfileToReplace, newProfile);
+			};
+		};	
+	});
 	
 	theFlock;
 };
 
 // the module object of this file
 object: {
+	
+	//public interface
 	def makeFlock := &makeFlock;
 	
 	def FlockTest := extend: /.at.unit.test.UnitTest.new("FlockTest") with: {
-	 
+		def waitTime := 3;
+		import /.at.support.timer;
+		import /.at.lang.futures exclude seconds, minutes, millisec;
+		enableFutures(false);
+
+		def actorF2;
+		def flockr1;
+		def profile2;
 		
+		def setUp(){
+			def profile1 := /.at.urbiflock.profile.makeProfile();
+			profile1.username := "flockr1";
+			profile1.sex := "MALE";
+		  flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+			profile2 := /.at.urbiflock.profile.makeProfile();
+			profile2.username := "flockr2";
+			
+			actorF2 := actor: {
+				def active := true; 
+				def profile2 := /.at.urbiflock.profile.makeProfile();
+				profile2.username := "flockr2";
+				profile2.sex := "MALE"; 
+			  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
+			  def goOffline() { if: (active) then: {flockr2.goOffline(); active := false}; `ok };
+			  // adding this method for testAsyncFriendsFlock
+			  def stop() { active := false };
+		  }
+		};
+		
+		def tearDown() {
+			// clean up the flockrs created for each test
+			flockr1.goOffline();
+			actorF2<-goOffline()@FutureMessage;
+		};
+		
+		
+		def testAsyncMaleFlock(){
+			def maleProximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
+			flockr1.addFlock(makeFlock("MaleFlock", maleProximity, flockr1));
+			flockr1.addBuddy(profile2);
+			def maleFlock := flockr1.getFlock("MaleFlock");
+			when: seconds(waitTime) elapsedWithFuture: {
+			  self.assertEquals(1, maleFlock.getFlockrList.length);	
+			};		
+		};
+		// more tests in proximities.at.
 	};
 	
 };

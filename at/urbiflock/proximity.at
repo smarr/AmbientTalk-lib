@@ -31,18 +31,10 @@ def Rete := /.at.urbiflock.rete.makeRete({|profile| profile.username});
 
 // a proximity is an object wrapping a rete node 
 // + the behaviour for storing and notifying observers of changes in the rete.
-// In Urbiflock, flocks get registered to proximities. 
 def makeProximity(reteNode) {
-	//public interface of proximity
 	object: {
 		def listeners := Vector.new();
 	
-		def register(listener) { 
-			listeners.add(listener);
-			object: {
-				def cancel() {listeners.remove(listener)};
-			} 
-		};	
 		def getReteNode(){ reteNode };
 		
 		def notifyFromNode(Token) {
@@ -56,13 +48,33 @@ def makeProximity(reteNode) {
 		def connect() {
 			reteNode.pass := {|Token| self.notifyFromNode(Token) };
 		};	
+		
+		//public interface
+		
+		/*register a listener with a proximity that gets notified when a flockr matches or doesn't matches the
+		proximity fucntion, i.e notifies the addition/removal of a flockr in the output set.
+		 listener should understand:
+		  def addFlockr(profile);
+		    invoked whenever a new flockr matches the proximity function.
+	    def removeFlockr(profile);
+	      invoked whenever a new flockr does not match the proximity function anymore.
+	  */
+		def register(listener) { 
+			listeners.add(listener);
+			object: {
+				def cancel() {listeners.remove(listener)};
+			} 
+		};
+		
 		connect();
 	};
 };
 
-//default proximities offered by the framework
+// default proximities offered by the framework
 // encodes the friendship relationships based on the buddy list
 def makeIsFriendProximity(flockr) {
+	// isFriendProximity registers itself as a buddy list listener to be 
+	// notified when a buddy gets added or removed.
 	def isFriendProximity := extend: makeProximity(Rete.makeFilterNode(Rete.makeFilter({|RI| true}))) with: {
 		//  invoked whenever a buddy was manually added to this flockr's buddy list
 		def notifyBuddyAdded(profile) {
@@ -77,10 +89,11 @@ def makeIsFriendProximity(flockr) {
 	isFriendProximity;
 };
 
-// encodes physical proximity function
+// encodes physical proximity function based on the AT service discovery (currently)
 def makeIsNearbyProximity(flockr) {
+	// isNearbyProximity registers itself as a service discovery listener to be 
+	// notified when a buddy gets connects or disconnects the network.
 	def isNearbyProximity := extend: makeProximity(Rete.makeFilterNode(Rete.makeFilter({|RI| true}))) with: {
-		
 		//  invoked whenever a buddy comes nearby
 		def notifyJoined(profile) {
 			super^getReteNode().insert(profile);
@@ -94,9 +107,11 @@ def makeIsNearbyProximity(flockr) {
 	isNearbyProximity;
 };
 
-//encodes a proximity fucntion that test an attribute of a flockr profile. 
+// encodes a proximity function that test an attribute of a flockr profile. 
 def makeDoesProfileMatchProximity(flockr, block) {
+	  // profileChangedProximity registers itsels as listener to track changes on the profile.
 		def profileChangedProximity := extend: makeProximity(Rete.makeChangeNode( Rete.makeFilter( block ) )) with: {
+			//invoked whenever the profile of the flockr changes.
 			def notifyProfileChanged(farref, profile) {
 				super^getReteNode().changeEvent(profile);
 			};		
@@ -117,7 +132,23 @@ def makeOrProximity(leftP, rightP) {
 
 // the module object of this file
 def ProximityModule := object: {
-	// public stuff goes here
+	// public interface
+	
+	/* Proximities are filter objects which determine whether a user is proximate or not.
+	   There are several predefined proximities functions:
+	   -isFriend (encodes the friendship relationships based on the buddy list)
+	   -doesProfileMatch (test an attribute of a flockr profile)
+	   -isNearby (encodes physical proximity relationship)
+	   Other proximities can be constructed as combination of existing proximities with andProximity and orProximity.
+	   
+	   Proximities issues addFlockr/removeFlockr events which can be caught by registering a listener as follows:
+	   proximity.register( object: {
+		  def addFlockr(profile) {  ... };
+		  def removeFlockr(profile) {  ... };
+		 }); 
+	   In Urbiflock, flocks get registered to proximities. See flock.at for more info.
+	*/
+	
 	def makeIsFriendProximity := &makeIsFriendProximity;
 	def makeDoesProfileMatchProximity := &makeDoesProfileMatchProximity;
 	def makeIsNearbyProximity := &makeIsNearbyProximity;	
@@ -185,7 +216,6 @@ def ProximityModule := object: {
 			actorF2<-stop();
 			flockr1.addBuddy(profile2); 
 			def friendFlock := flockr1.getFlock("FriendsFlock");
-			
 			when: seconds(waitTime) elapsedWithFuture: {
 			  self.assertEquals(1, friendFlock.getFlockrList.length);	
 			};			
