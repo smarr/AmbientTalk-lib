@@ -35,6 +35,14 @@ def filterMirror := mirror: {
 	//An input queue
 	def filteredMessages := NormalVector.new();
 	def filteredSyncMessages := NormalVector.new();
+	
+  def init(base, default := {|message| false}){
+	  super^init(base);
+	  filter := default;
+	  after := {|argument| nil};
+	  filteredMessages := NormalVector.new();
+	  filteredSyncMessages := NormalVector.new();
+  };
 
 	def receive(message) {
 		def NewMessage := extend: message with: { |filteredMessages,filter|
@@ -42,7 +50,7 @@ def filterMirror := mirror: {
 			if: !filter(self) then: {
 				super^process(receiver);
 			}	else: {
-				filteredMessages.add(self);
+        filteredMessages.add(self);
 			};
 		};
 		};

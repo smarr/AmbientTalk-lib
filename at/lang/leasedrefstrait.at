@@ -50,6 +50,10 @@ def LeasedRefTraitModule := object: {
 	// it doesn't subtype LeasedRef to be able to easily trigger takenOffline only in server side leases.
 	deftype ClientLeasedRef; 
 	
+	//create ExpiredLease used to notify use of a lease after expiration. 
+	deftype ExpiredLease <: /.at.types.Exception;
+	def XExpiredLease := /.at.exceptions.createException(ExpiredLease);
+	
 	// Trait for common behaviour amongst client and server leases
   def TLeasedRef := object: {
 		
@@ -104,7 +108,7 @@ def LeasedRefTraitModule := object: {
 		    } catch: /.at.types.IllegalOperation using: { |e|
 				  // Lease used only locally! Catching this exception means that 
 				  //the lease was never serialized and thus, it was never put online.  
-			    system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);
+			 //   system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);
 		  	};
 		  };
 		};
@@ -132,7 +136,7 @@ def LeasedRefTraitModule := object: {
 				self.timerSubscription := TimerModule.when: interval elapsed: { self.expire };
 			} else: {
 				if: (self.isExpired) then: {
-				  raise: /.at.exceptions.XIllegalOperation.new("cannot renew an expired leased reference on: " +self.base);
+				  raise: XExpiredLease.new("cannot renew an expired leased reference on: " +self.base);
 			  };
 			}
 		};
@@ -183,7 +187,7 @@ def LeasedRefTraitModule := object: {
 				} else:{
 					// this should never happen: 
 					// leases are tagged either LeasedRef or ClientLeaseRef
-					raise: /.at.exceptions.XIllegalOperation.new("trying to pass an unrecognized lease: " +self.base);
+					raise: XExpiredLease.new("trying to pass an unrecognized lease: " +self.base);
 				};	
 			};
 
@@ -193,7 +197,7 @@ def LeasedRefTraitModule := object: {
 			  // If I am here, state == EXPIRED because pass() activates the lease (if it was not active before)
 			  // Passing an expired lease, raises an exception. 
 				// TODO: think what the lease should be at the receiver side. Maybe an expired copy?
-				raise: /.at.exceptions.XIllegalOperation.new("cannot pass an expired leased reference on: " +self.base); 
+				raise: XExpiredLease.new("cannot pass an expired leased reference on: " +self.base); 
 			};
 	  };
 	

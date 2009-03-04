@@ -68,58 +68,67 @@ def NormalVector := /.at.collections.vector.Vector;
 deftype Guarded;
 deftype GuardType;
 
-
-/* Makes an extension of the GuardType
- * @param block, the predicate that guards the method.
- * @return the extended type.
- */
-def Guard: block {
-	extend: GuardType with: { |block|
-		/* This method is called to possibly change the annotated method.
-		 * This method is used to change the code block so that it is extend with the formal paramters of the method it annotates.
-		 * For example for foo(bar) @Guard: {!bar==10} the guard will be transformed to "{|bar| !bar==10}"
-		 * @param Method : The message we are annotating, we use this to get the formal parameters.
-		 * @return Method : The unchanged method as no changes are made to it. 
-		 */
-		def annotateMethod(Method) {
-			def newBlockStatements := `{ |#@(Method.parameters)| #@(block.method.bodyExpression.statements) };
-			block := eval: newBlockStatements in: block.context.lexicalScope;
-			Method;
-		};
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag, GuardType ];
-};
-
 /* Makes a new guarded mirror, it extends the filterMirror and installs a filer which will check the guards
  * assosiated with the message one by one and will take the logical and of their results. 
  * @param base : The base level object we install the mirror on.
  * @return mirror : The newly created mirror
  */ 
 def makeGuardedMirror(base) { 
-		extend: filterMirror.new(base) with: {
-				
+
+	extend: filterMirror.new(base) with: {
+			
+			
 		super^setFilter({ |message|
 			def annotations := self.grabSlot(message.selector).annotations;
-			(annotations.filter: {|ann| ann.isSubtypeOf(GuardType) }).inject: true into: { |result, ann|
-				  result.and: { !ann.block(@message.arguments) }
-			}
+			//(annotations.filter: {|ann| ann.isSubtypeOf(GuardType) }).inject: true into: { |result, ann|
+			def guardAnnotations := annotations.filter: {|ann| ann.isSubtypeOf(GuardType) };
+			if: (guardAnnotations.length >0) then:{
+				guardAnnotations.inject: true into: { |result, ann|
+			    result.and: { !ann.block(@message.arguments) }
+			  };
+			} else: { 
+				// message not annotated. Treat it by default as @Guard:{true}.
+				 false 
+			};
 		});
 		
 		super^setAfter({ |message| self.flush(); });
 	};
 };
 
-/* Makes a code block into an object with a guardedMirror and the right tags installed.
- * @param block : The code block we want to transform into an object 
- * 								where we can use guarded methods in
- * @return object : The newly created object with the guarededMirror
- */
-def guardedObject: block {
-	object: block taggedAs: [Guarded] mirroredBy: { |base| makeGuardedMirror(base) };
-};
+// this object is returned when this file is loaded, hence
+// it is the public interface to code defined in this file
+def GuardsModule := object: {
 
+	/* Makes an extension of the GuardType
+	 * @param block, the predicate that guards the method.
+	 * @return the extended type.
+	 */
+	def Guard: block {
+		extend: GuardType with: { |block|
+			/* This method is called to possibly change the annotated method.
+			 * This method is used to change the code block so that it is extend with the formal paramters of the method it annotates.
+			 * For example for foo(bar) @Guard: {!bar==10} the guard will be transformed to "{|bar| !bar==10}"
+			 * @param Method : The message we are annotating, we use this to get the formal parameters.
+			 * @return Method : The unchanged method as no changes are made to it. 
+			 */
+			def annotateMethod(Method) {
+				def newBlockStatements := `{ |#@(Method.parameters)| #@(block.method.bodyExpression.statements) };
+				block := eval: newBlockStatements in: block.context.lexicalScope;
+				Method;
+			};
+		} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag, GuardType ];
+	};
+	/* Makes a code block into an object with a guardedMirror and the right tags installed.
+	 * @param block : The code block we want to transform into an object 
+	 * 								where we can use guarded methods in
+	 * @return object : The newly created object with the guarededMirror
+	 */
+  def guardedObject: block {
+	  object: block taggedAs: [Guarded] mirroredBy: { |base| makeGuardedMirror(base) };
+  };
 
-def TraitsTest() {
-	extend: /.at.unit.test.UnitTest.new("GuardsTest") with: {
+  def GuardsTest() { extend: /.at.unit.test.UnitTest.new("GuardsTest") with: {
 		import /.at.lang.futures;
 		enableFutures(true);
 
@@ -145,43 +154,42 @@ def TraitsTest() {
 				self.assertEquals("1", print: num);
 			};
 		};
-		
-		
+	
 		def testAsyncPop3() {
 			when: stack<-pop() becomes: { |num|
 				self.assertEquals("3", print: num);
 			};
 		};
-		
-		
+			
 		def testAsyncPop4() {
-			when: stack<-pop() becomes: { |num|
-				self.fail("testAsyncPop4: Unexpected resloved future");
+			when: stack<-pop()@Due(seconds(5)) becomes: { |num|
+				self.fail("testAsyncPop4: Unexpected resolved future");
+			}	catch: TimeoutException using: { |e| 
+				 // expected
 			};
 		};
 	
 		def testAsyncPush1() { 
 			when: stack<-push(1)  becomes: { |result| 
-
 			}
 		};
 		
 		def testAsyncPush2() { 
 			when: stack<-push(2)  becomes: { |result| 
-			
 			}
 		};
 		
 		def testAsyncPush3() { 
 			when: stack<-push(3)  becomes: { |result| 
-			
 			}
 		};
 		
 		def testAsyncPush4() { 
-			when: stack<-push(4)  becomes: { |result|
-				self.fail("testAsyncPop4: Unexpected resloved future");
-			}
+			when: stack<-push(4)@Due(seconds(5))  becomes: { |result|
+				self.fail("testAsyncPop4: Unexpected resolved future");
+			} catch: TimeoutException using: { |e| 
+			   // expected
+			};
 		};
-	}
+	}};
 };

@@ -61,7 +61,7 @@ def createServerLeaseMirror(principal, timeout := DEFAULT_LEASETIME) {
 		if: !(isExpired) then: {
 			delegate <+ msg
 		} else: {
-			raise: /.at.exceptions.XIllegalOperation.new("Sending a message to an expired lease " + self.toString);
+			raise: XExpiredLease.new("Sending a message to an expired lease " + self.toString);
 		};
 	};
 	
@@ -179,7 +179,7 @@ def createClientLeaseMirror(remoteLease, timeout := DEFAULT_LEASETIME) {
 			if: !(isExpired) then: { 
         delegate<-intercept(msg);
 			} else: {
-				raise: /.at.exceptions.XIllegalOperation.new("Sending a message to an expired lease " + self.toString);
+				raise: XExpiredLease.new("Sending a message to an expired lease " + self.toString);
 			};
 		};
 		
@@ -283,12 +283,10 @@ def makeSLWithSingleUse(obj, timeout, selectors){
 //Public interface of leased object references
 def LeasingModule := object: {
 	
-	def LeasedRef := LeasedRef;
 	//Can I make it not public to everyone??
 	//def makeClientLease := &makeClientLease;
   //def makeClientLeaseWithSingleUse := &makeClientLeaseWithSingleUse;
 	//def makeClientLeaseWithRenewal := &makeClientLeaseWithSingleUse;
-	
 	def makeClientLease(remoteLease, tagsOfPrincipal, timeout){
 		object: {} taggedAs: getClientTags(tagsOfPrincipal) mirroredBy: createClientLeaseMirror(remoteLease, timeout);
 	};
@@ -363,6 +361,11 @@ def LeasingModule := object: {
 	def leaseTimeLeft: leasedRef {
 		(reflect: leasedRef).getTimeLeft;
 	};
+	
+	//type tag of exceptions raised by the leasing module.
+	def ExpiredLease := ExpiredLease;
+	//type tag that identifies leased References.
+	def LeasedRef := LeasedRef;
 		
 	// type that identifies this language module
 	deftype LeasingModule;
@@ -442,7 +445,7 @@ def LeasingModule := object: {
 		      lease<-foo();
 					//next line should never be executed because lease is a single call lease
 					self.fail("Unexpected not expired lease " + lease);
-		    } catch: /.at.types.IllegalOperation using: { |e|
+		    } catch: ExpiredLease using: { |e|
 					res.resolve(`ok);
 				};
 				fut;
@@ -462,7 +465,7 @@ def LeasingModule := object: {
 			    try: { 
 			      lease<-foo();
 						unitest<-assertEquals(1, (reflect: lease).state);
-					} catch: /.at.types.Exception using: { |e|
+					} catch: /.at.lang.leasedrefs.ExpiredLease using: { |e|
 						unitest<-fail("Unexpected expired lease " + lease + "with exception " +e);
 					};
 			  };
@@ -476,7 +479,7 @@ def LeasingModule := object: {
 			  // Forcing the lease timer to start ticking 
 				(reflect: lease).activateTimer;
 				// pass lease to another actor
-		    def a := actor:{ |res, unitest|
+		    def a := actor: { |res, unitest|
 			    def barLease;
 			    def bar(lease){barLease := lease};
 			    def bareto(lease){ 
@@ -490,57 +493,54 @@ def LeasingModule := object: {
 			  /.at.support.timer.when: seconds(2) elapsed: {
 				  try: { 
 				    a<-bareto(lease);				
-				  } catch: /.at.types.Exception using: { |e|
+				  } catch: /.at.lang.leasedrefs.ExpiredLease using: { |e|
 						self.fail("Unexpected expired lease " + lease + "with exception " +e);
 					};
 			  };
 			  fut;
 			};
 			
-			/*
-					 def testAsyncRemoteDuePipeline() { 
-								def o := object: {
-								  def tonto(r) { 
-									 system.println("tonto "+r)};
+			def testAsyncPass2Leases(){
+				def lease := singleCallLease: seconds(10) for: obj;
+				def unitest := self;
+				
+				def makeActor(lease, unitest) { 
+					 // lease crossing actor border, so getting parameter passed.
+					actor: { |lease, unitest|
+						import /.at.lang.futures;
+					  enableFutures(false);
+				    def f(){
+					    def [fut, res] := makeFuture();
+					    when: lease<-foo()@FutureMessage becomes: {|val|
+						    unitest<-assertEquals(5, val);
+						    when: unitest<-assertTrue((reflect: lease).isExpired)@FutureMessage becomes: {|val|
+							    res.resolve(`ok);
 							  };
-
-							  def a := actor: { |o|
-								  def LeasingModule := /.at.lang.leasedrefs;
-								  import /.at.lang.futures;
-								  enableFutures(false);
-
-								  def foo() { 5 };
-							    def bar( v ) { 
-								   //v is CL pointing to SL for future object
-								    def [fut,res] := makeFuture();
-								     o<-tonto(v)@Due(LeasingModule.minutes(1));
-									 system.println("tags of v " + (tagsOf: v));
-								     when: v becomes: {|v| 
-									     system.println("value of bar " + v); 
-									     res.resolve(6); 
-									  };
-									 fut; 
-								  };
-							  };
-								def fut0 := &foo<-apply([])@Due(LeasingModule.minutes(1));
-								def fut := a<-bar(fut0)@Due(LeasingModule.minutes(1));
-					      self.assertTrue(is: fut taggedAs: Future);
-					      self.assertNotNil(fut);
-				*/	/*
-							  def fut := &foo<-apply([])@Due(LeasingModule.minutes(1));
-								def fut2 := a<-bar(fut)@Due(LeasingModule.minutes(1)); 
-								system.println("tags of v " + (tagsOf: fut));
-								when: fut becomes: { |val|
-									system.println("fut " +val);
-									system.println("fut2 " +fut2);
-								};
-									when: fut2 becomes: { |val|
-										system.println("fut " +fut);
-										system.println("fut2 " +val);
-									};
-					  */
-				//		};
-			
+						  }	catch: { |e| res.ruin(e) };
+							fut;
+				    };
+				    def g(){
+					    // lease shouldn't be expired
+					    // each time a lease gets parameter passed should result in a different SL-CL pair.
+					    when: unitest<-assertFalse((reflect: lease).isExpired)@FutureMessage becomes: {|ack|
+					      //expire now the lease
+					      f;
+					    };
+				    };
+				  };
+				};
+				def a := makeActor(lease, unitest);
+				def b := makeActor(lease, unitest);
+				when: a<-f()@FutureMessage becomes:{|ack|
+				  when: b<-g()@FutureMessage becomes:{ |ack|
+					  `ok;
+					}	catch: /.at.lang.leasedrefs.ExpiredLease using: { |e|
+						unitest.fail("Unexpected expired lease " + lease + "with exception " +e);
+					};
+				}	catch: /.at.lang.leasedrefs.ExpiredLease using: { |e|
+					unitest.fail("Unexpected expired lease " + lease + "with exception " +e);
+				};
+			};
 			
   	}; // end extend:UnitTestwith:
 	}; // end LeasedRefsTest

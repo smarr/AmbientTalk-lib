@@ -314,12 +314,15 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 
 				  // note that we need to qualify the full path to the Exception type:
 				  // the Exception variable defined above is out of scope since this message is an isolate!
+				  } catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e|
+				    // attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
+				    // ignore the exception since the TimeoutException would have been already raised at sender side. 
 				  } catch: /.at.types.Exception using: { |e|
 					  future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
 
 					  // re-raise the caught exception
 					  raise: e;
-			    };
+			    }
 		    }
 	    } taggedAs: [ type ];
 	
@@ -332,7 +335,7 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 	    // other values for their asynchronous message sends, even if the message
 	    // is tagged as a future message
 	    if: (res == nil) then: {
-		    if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
+		    if: (is: future taggedAs: /.at.lang.leasedrefs.LeasedRef) then: {
 					// normally OK because executed at sender-side (so future will still be a near ref here)
 					(reflect: future).getPrincipal();
 			  } else: {
@@ -360,7 +363,7 @@ def futurize(msg, future, type := FutureMessage) {
 	    // other values for their asynchronous message sends, even if the message
 	    // is tagged as a future message
 	    if: (res == nil) then: {
-			  if: (is: future taggedAs: /.at.lang.leasedrefstrait.LeasedRef) then: {
+			  if: (is: future taggedAs: /.at.lang.leasedrefs.LeasedRef) then: {
 					// normally OK because executed at sender-side (so future will still be a near ref here)
 					(reflect: future).getPrincipal();
 			  } else: {
@@ -385,7 +388,10 @@ def futurize(msg, future, type := FutureMessage) {
 
 			// note that we need to qualify the full path to the Exception type:
 			// the Exception variable defined above is out of scope since this message is an isolate!
-			} catch: /.at.types.Exception using: { |e|
+			} catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e|
+		    // attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
+		    // ignore the exception since the TimeoutException would have been already raised at sender side. 
+		  } catch: /.at.types.Exception using: { |e|
 				future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
 
 				// re-raise the caught exception
