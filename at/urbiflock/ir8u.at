@@ -31,43 +31,70 @@ import /.at.collections.vector;
 def HashMap := jlobby.java.util.HashMap;
 deftype IR8U;
 
+/**
+ * IR8U (pronounce: I-rate-you) is a small rating application
+ * for UrbiFlock. A flockr can announce that he/she is interested
+ * in being rated for a certain subject. Other flockrs are notified
+ * of this event, and can give a simple rating (0 to 5 stars).
+ *
+ * Calling this constructor function creates a new IR8U application
+ * owned by the given flockr. The created app is automatically
+ * registered with the Urbiflock framework. Note that this constructor
+ * initializes the app, but will not start it until its 'start' method
+ * has been invoked.
+ */
 def makeIR8U(aFlockr) {
-	def subscription;
-	def ui;
+	def subscription; // stores our discovery subscription with the UF framework
+	def ui; // a reference to the GUI of this application
 	
-	def connectedRaters;
+	def connectedRaters; // a table of references to remote interfaces of IR8U applications
 	
-	// a map storing ratings -> ([flockrWhoRated, rate])*
+	// a map storing Subject : String -> [ [flockrWhoRated : FarRef<Flockr>, rate : int]* ]
 	def ratingSubjects := HashMap.new();
 		
-  // local interface of guanotes
-  def localInterface := extend: /.at.urbiflock.application.makeApplication("IR8U", aFlockr) with:{
+  // the local interface of this application: methods of this interface
+  // can only be invoked by local client objects, such as the GUI
+  // note that this interface extends the standard Application interface
+  def localInterface := extend: /.at.urbiflock.application.makeApplication("IR8U", aFlockr) with: {
 	
-	  // called by UI when you want someone to vote on you
+	  // this method is called by the GUI when you want someone to vote on you
 	  def askRatingFor(subject) {
+		  // we don't announce the same subject twice
 		  if: !(ratingSubjects.containsKey(subject)) then: {
 			  ratingSubjects.put(subject, []);
-			  // ask people nearby to rate me!
+			  // ask all nearby flockrs to rate me
 			  connectedRaters.each: { |ir8uapp|
 				  ir8uapp<-rateMe(remoteInterface, aFlockr.getProfile(), subject);
 				}
 		  }
 	  };
 	
-	  // called by UI when you vote for someone
+	  // this method is called by the UI when you vote for someone
+	  // in response, the application will contact the remote app to transmit the rating
 	  def rateFlockr(ir8uApp, subject, rating) {
 			ir8uApp<-rate(aFlockr, aFlockr.getProfile().username, subject, rating);	
 	  };
-				
-		def start() {
-			super^start();
-			//setup the gui
-			ui := jlobby.at.urbiflock.ui.ir8u.IR8U.new(self);
-			connectedRaters := Vector.new();
-			//exporting this application
-		  self.export(IR8U);
 		
-		  //discovery other applications
+		// the start method is invoked when the user actually wants to start
+		// the application. For IR8U, we start service discovery to listen
+		// for other, nearby users that are running IR8U
+		def start() {
+			// always perform the 'default behaviour'
+			super^start();
+			
+			// set up the gui (note that we pass a reference to this
+			// application object to the GUI, such that the GUI can
+			// call back on the application on relevant events)
+			ui := jlobby.at.urbiflock.ui.ir8u.IR8U.new(self);
+						
+			// this call exports the application object such that it
+			// can be found by other nearby IR8U applications
+			self.export(IR8U);
+			
+			// allocate a vector to store discovered nearby apps
+			connectedRaters := Vector.new();
+		
+		  // start service discovery to discover nearby IR8U applications
 		  subscription := self.registerApplicationListener(IR8U, object:{
 			  def notifyApplicationJoined(flockr, profile, ir8uApp){
 				  connectedRaters.add(ir8uApp);
@@ -76,10 +103,14 @@ def makeIR8U(aFlockr) {
 					connectedRaters.remove(ir8uApp);
 			  };
 		  });
-			
 		};
+		
+		// this method is called when the user closes down the GUI
+		// of this app, signalling that the app should stop
 		def stop(){
+			// always perform the 'default behaviour'
 			super^stop();
+			// cancel our discovery subscription with the UF framework
 			if: (subscription != nil) then: {
 				subscription.cancel();
 				subscription := nil;
@@ -88,19 +119,18 @@ def makeIR8U(aFlockr) {
 		};			
   }; // end-localInterface
 
-	// remote interface of IR8U
+	// remote interface of IR8U: these methods can be invoked
+	// by remote IR8U applications
 	def remoteInterface := extend: localInterface.remoteApplicationInterface with: {	
 	
-		def getFlockrId(){
-			aFlockr.getUsername;
-		};
-		
-		// called when someone votes for you
+		// called when someone votes for this flockr
 		// rate(ratingFlockr : farref<Flockr>, subject : Text, rating: int 0-4)
 	  def rate(ratingFlockr, ratingFlockrName, subject, rating) {
 		  def prevRatings := ratingSubjects.get(subject);
 		  if: (prevRatings != nil) then: {
+			  // the subject was found
 			  if: (nil == prevRatings.find: { |tuple| tuple[1] == ratingFlockr }) then: {
+				  // and ratingFlockr has not given a rating on this subject before
 					ratingSubjects.put(subject, prevRatings + [[ratingFlockr, rating]]);
 					ui.updateRating(ratingFlockrName, subject, rating);
 			  }
@@ -109,15 +139,19 @@ def makeIR8U(aFlockr) {
 	
 	  // called when someone wants you to vote for him/her
 	  def rateMe(ir8uApp, profileToRate, subject) {
+		  // simply display a notification in the GUI
 		  ui.askToRate(ir8uApp, profileToRate, subject);
 	  };
-	
 	};
+	
 	// add application to a flockr.
 	aFlockr.addApplication(localInterface);
-	// assigning the remote interface.
+	// we assign the remote interface of this app to a predefined variable
+	// in the Application parent object
 	localInterface.remoteApplicationInterface := remoteInterface;
-	//return value
+	
+	// return the local interface as the value of the constructor function,
+	// such that local clients can use it
 	localInterface;
 }; // end-makeIR8U
 
