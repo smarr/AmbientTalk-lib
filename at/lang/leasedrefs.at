@@ -415,7 +415,7 @@ def LeasingModule := object: {
 			  def foo() { 5 }; 
       };
      
-      def tesAsynctLocalLeaseCreation() {
+      def testAsyncLocalLeaseCreation() {
 	      def [fut, res] := makeFuture();
 
 				//Creation of a lease
@@ -426,6 +426,8 @@ def LeasingModule := object: {
 				self.assertEquals((leaseTimeLeft: lease).intValue, seconds(5).intValue);
 	    	//Creation of a renewOnCallLease
 				def rlease := renewOnCallLease: seconds(5) for: obj;
+				// Forcing the lease timer to start ticking 
+				(reflect: rlease).activateTimer;
 				when: rlease expired: { 
 	        self.assertTrue((reflect: rlease).isExpired);
 					res.resolve(`ok);
@@ -433,7 +435,7 @@ def LeasingModule := object: {
 	      fut;
     	};
 
-      def testAsynLocalExpiringLease(){
+      def testAsyncLocalExpiringLease(){
 	      def [fut, res] := makeFuture();
 				//Creation of a singleCallLease
 	    	def lease := singleCallLease: seconds(5) for: obj;
@@ -540,8 +542,8 @@ def LeasingModule := object: {
 				}	catch: /.at.lang.leasedrefs.ExpiredLease using: { |e|
 					unitest.fail("Unexpected expired lease " + lease + "with exception " +e);
 				};
-			};
-			
+			};	
+  			
   	}; // end extend:UnitTestwith:
 	}; // end LeasedRefsTest
 }; // end LeasingModule

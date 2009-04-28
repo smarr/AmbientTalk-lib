@@ -47,8 +47,7 @@ def LeasedRefTraitModule := object: {
 	def DEFAULT_LEASETIME := TimerModule.seconds(15); // default lease time
 
 	deftype LeasedRef;
-	// it doesn't subtype LeasedRef to be able to easily trigger takenOffline only in server side leases.
-	deftype ClientLeasedRef; 
+	deftype ClientLeasedRef <: LeasedRef; 
 	
 	//create ExpiredLease used to notify use of a lease after expiration. 
 	deftype ExpiredLease <: /.at.types.Exception;
@@ -102,29 +101,33 @@ def LeasedRefTraitModule := object: {
 			//A lease won't be asked more than once to be taken offline.
 			//Only take offline the lease object at the server side. 
 			//Note that client leases are never online (currently, they cannot be passed). 
-			if: ( (self.state == ACTIVE).and: {is: self.base taggedAs: LeasedRef }) then: {
+			if: ( (self.state == ACTIVE).and: {!(is: self.base taggedAs: ClientLeasedRef) }) then: {
 			  try: { 
 		      takeOffline: self;
 		    } catch: /.at.types.IllegalOperation using: { |e|
 				  // Lease used only locally! Catching this exception means that 
 				  //the lease was never serialized and thus, it was never put online.  
-			 //   system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);
+			    //system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);
 		  	};
 		  };
+		  self.state := EXPIRED;
 		};
 
 		def expire(){
-			self.takeLeasedObjectOffline;
-			self.state := EXPIRED;
 			self.notify: self.observerCatalog.expiration withArgs: [];
+			self.takeLeasedObjectOffline;
+			// clean the far reference from CL to SL object when expires gets triggered at CL.
+			if: (is: self.base taggedAs: ClientLeasedRef) then:{
+				retract: self.delegate;
+			};
 		};
 
 		def revoke() {
-			//Revoking a lease is analogous to a natural expiration of the lease 
-			//except that expiration observers are not triggered.
+			//Revoking a lease is analogous to a natural expiration of the lease but:
+			//-expiration observers are not triggered.
+			//-far reference from CL to SL gets not cleaned (TODO: conceptual repercusions?)
 			if: (self.state == ACTIVE) then: {
 			  self.takeLeasedObjectOffline;
-			  self.state := EXPIRED;
 			  self.timerSubscription.cancel;
 			};
 		};

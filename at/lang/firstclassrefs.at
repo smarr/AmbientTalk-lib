@@ -118,7 +118,7 @@ def FirstClassRefModule := object: {
 		def typeTags() {
 			/.at.support.util.makeSetUnion( ((self.super).typeTags()), [/.at.types.FarReference]);
 		};
-		
+
 		// disallow meta-level operations on far references
 	
 	  def clone() {
@@ -140,6 +140,12 @@ def FirstClassRefModule := object: {
 	  def addMethod(mth) {
 		  raise: XIllegalOperation.new("Cannot add method "+mth.name+" in " + self.toString);
 	  };
+	
+	  //implement interface of far references
+		def retractUnsentMessages(){
+			// similar to local far references, return an empty table
+			[];
+		};
 		
   }; // end TEventualRef
 
@@ -181,7 +187,7 @@ def FirstClassRefModule := object: {
   };
 
   def reference: closure { reference: closure taggedAs: [] };
-
+	
   // auxiliary function that can be used to succinctly express interception of
   // async messages sent to an object. Example: logging:
   // def r := eventualref: { |rcv,msg| log(msg); rcv <+ msg } to: obj
@@ -190,7 +196,7 @@ def FirstClassRefModule := object: {
 	  object: { } mirroredBy: (mirror: {
 		  import TEventualRef exclude pass;
 		  def intercept(msg) { closure(object, msg) };
-	    def toString() { "farref proxy to " + object };
+	    def toString() { "farref proxy to " + object };		
 		  // def transportStrategy; // not needed: proxy is pass-by-far-reference
 	  })
   };

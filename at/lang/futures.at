@@ -252,14 +252,14 @@ def FutureMirror := mirror: {
 	 };
 };
 
-def makeFuture(timeout := nil) {
+def makeFuture(timeout := nil, receiver := nil) {
 	// futures are empty objects mirrored by a future mirror
 	// note that the future mirror is implicitly instantiated for each new future!
 	def future := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
-  constructResolverFor(future, timeout);
+  constructResolverFor(future, timeout, receiver);
 };
 
-def constructResolverFor(future, timeout := nil) {
+def constructResolverFor(future, timeout := nil, receiver := nil) {
 	def resolver := isolate: { |future|
 		def resolve(val) { future<-resolveWithValue(val)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
 		def ruin(exc) { future<-ruinWithException(exc)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
@@ -268,20 +268,33 @@ def constructResolverFor(future, timeout := nil) {
 	// has the future been annotated with a timeout?
 	if: (nil != timeout) then: {
 		// if so, wrap the future into a single-call lease
-		[ constructLeaseFor(future, timeout), resolver ];
+		[ constructLeaseFor(future, timeout, receiver), resolver ];
 	} else: {
 		// by default futures are not leased.
 		[ future, resolver ];
 	};
 };
-
-def constructLeaseFor(future, timeout) {
+// receiver kept as optional parameter for explicit uses of futurize in combination with timeout futures.
+def constructLeaseFor(future, timeout, receiver := nil) {
   def futureLease := LeasingModule.singleCallLease: timeout revokedOn: [`resolveWithValue, `ruinWithException] for: future;
   // We force the lease timer to start ticking since by default it  
   // is activated when the leased object becomes remotely referenced.
 	(reflect: futureLease).activateTimer();
 	LeasingModule.when: futureLease expired: {
-	 (reflect: future).becomeResolved();
+	 // if receiver is a far reference, retract expired message(s) from its outbox.
+	 if: ((nil != receiver).and: { is: receiver taggedAs: /.at.types.FarReference}) then:{
+	  def outbox := retract: receiver;
+	  // note that future doesn't know to which message got attached. 
+	  // not only is the particular msg expiring with this future retracted, but 'all' expired ones.
+	  outbox.each: { |msg| 
+		 if: !((is: msg taggedAs: DueType).and:{(reflect: msg.future).isExpired()}) then: {
+			 receiver <+ msg;
+		 };
+		};
+	 };
+	//ruin the future after the cleaning so that
+	//when catch: block is triggered, the far ref is already cleaned.
+	(reflect: future).becomeResolved();
 	};
 	futureLease
 };
@@ -293,11 +306,11 @@ def constructLeaseFor(future, timeout) {
 def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |type,futureMaker|
-
+		
     // return value of the message send is the associated future
 		// which can be leased or not depending on the futureMaker
-    def sendTo(@args) {
-	    def [future, resolver] := futureMaker();
+    def sendTo(receiver, sender) {
+	    def [future, resolver] := futureMaker(receiver);
       // extend the original message (this object's parent)
 	    def msgWithFuture := extend: super with: { |future|
 		    // the process method is invoked when an async message arrives
@@ -305,29 +318,29 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 					try: {
 						// delegate to parent to actually invoke the method
 						def result := super^process(behaviour);
-
 						// if everything goes right, resolve the attached future
 						// replace the placeholder symbol with the actual result
 						future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
-
 						result;
 
 				  // note that we need to qualify the full path to the Exception type:
 				  // the Exception variable defined above is out of scope since this message is an isolate!
-				  } catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e|
-				    // attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
-				    // ignore the exception since the TimeoutException would have been already raised at sender side. 
-				  } catch: /.at.types.Exception using: { |e|
-					  future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
-
+				  } catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e0|
+						// attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
+						// ignore the exception since the TimeoutException would have been already raised at sender side. 
+					} catch: /.at.types.Exception using: { |e|
+						try: { 
+					    future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+						} catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e1|
+							// attempt to send a ruinWithException message via an expired single-call lease (attached to the future).
+							// ignore the exception since the TimeoutException would have been already raised at sender side. 
+						};	
 					  // re-raise the caught exception
 					  raise: e;
-			    }
-		    }
-	    } taggedAs: [ type ];
-	
-	    def res := msgWithFuture.sendTo(@args);
-	
+			    };
+		    };
+	    } taggedAs: [ type ]; // tagging the message which gets actually send with the type tags.
+      def res := msgWithFuture.sendTo(receiver, sender);
 	    // def res := super^sendTo(@args);
 	
 	    // only override return value if it is the default nil value
@@ -353,7 +366,7 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 def futurize(msg, future, type := FutureMessage) {
 	// extend default message with FutureMessage behaviour
 	extend: msg with: { |future|
-
+   
     // return value of the message send is the associated future
     def sendTo(@args) {
 	    def res := super^sendTo(@args);
@@ -379,21 +392,25 @@ def futurize(msg, future, type := FutureMessage) {
 			try: {
 				// delegate to parent to actually invoke the method
 				def result := super^process(behaviour);
-
+				
 				// if everything goes right, resolve the attached future
 				// replace the placeholder symbol with the actual result
 				future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
-
+				
 				result;
 
 			// note that we need to qualify the full path to the Exception type:
 			// the Exception variable defined above is out of scope since this message is an isolate!
-			} catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e|
-		    // attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
-		    // ignore the exception since the TimeoutException would have been already raised at sender side. 
-		  } catch: /.at.types.Exception using: { |e|
-				future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
-
+			}  catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e0|
+				// attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
+				// ignore the exception since the TimeoutException would have been already raised at sender side. 
+			} catch: /.at.types.Exception using: { |e|
+				try:{
+					future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+				} catch: /.at.lang.leasedrefs.ExpiredLease using: { |e1|
+					// attempt to send a ruinWithException message via an expired single-call lease (attached to the future).
+					// ignore the exception since the TimeoutException would have been already raised at sender side. 
+				};
 				// re-raise the caught exception
 				raise: e;
 			};
@@ -410,7 +427,7 @@ deftype FutureMessageT <: /.at.types.AsyncMessage;
 def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizePerSendC,FutureMessageT|
   def annotateMessage(msg) {
 		// by default, make a future without timeout
-		def futureMaker := script: { makeFutureC() } carrying: [ `makeFutureC ];
+		def futureMaker := script: { |receiver| makeFutureC() } carrying: [ `makeFutureC ];
 		futurizePerSendC(msg, futureMaker, FutureMessageT);
   };
 };
@@ -429,7 +446,7 @@ def Due(timeout) {
 	extend: DueType with: { |timeout,makeFutureC,futurizePerSendC,DueType|
 	  def annotateMessage(msg) {
 			// integration of futures with leasing
-			def futureMaker := script: { makeFutureC(timeout) } carrying: `[ makeFutureC, timeout ];
+			def futureMaker := script: { |receiver| makeFutureC(timeout, receiver) } carrying: `[ makeFutureC, timeout ];
 			futurizePerSendC(msg, futureMaker, DueType);
 	  };
 	}// taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
@@ -778,10 +795,12 @@ def FuturesModule := object: {
 	
 		def testAsyncDueLocalRuining() {
 			//TEST 2.1: ruining a future (for a intra actor asynchrnous message) with a TimeoutException
+			//eventual reference which do not send test() messages
       def ref := eventualref: { |rcv,msg|
 	      if: !(msg.selector	== `(test)) then: {
 				  rcv <+ msg;
 			  };
+			  nil; //return value of receive is nil.
 	    } to: (actor: {
 				def test() { 42 };
 			});
@@ -789,10 +808,10 @@ def FuturesModule := object: {
 			when: future becomes: { |v|
 			 	self.fail("Unexpected resolved future. Value = " + v);
 			} catch: TimeoutException using:  { |e|
-				nil
+				nil;
 	    };
 	  };
-
+		
 	  def testAsyncDueRemoteRuining() {
 			//TEST 2.2: ruining a future (for a inter actor asynchrnous message) with a TimeoutException
 			def a := actor: {
@@ -853,6 +872,56 @@ def FuturesModule := object: {
 			};
 			fut;
     };
+	  def testAsyncDueExpiresInSenderOutbox(){
+		  //reference that accumulates msg, but never sends them.
+	    def ref := reference: { 
+		    def messages := [];
+				def intercept(msg) { 
+					messages := messages + [msg]; 
+					nil; //return value of receive is nil.
+				};
+		    def toString() { "custom far reference"};
+		    def retractUnsentMessages(){ messages };
+	    }; 
+	    // Due annotated message is not transmitted
+	    // and expires in the ref outbox.
+			def future := ref<-test()@Due(seconds(4));
+			when: future becomes: { |v|
+			 	self.fail("Unexpected resolved future. Value = " + v);
+			} catch: TimeoutException using:  { |e|
+				//check that one expired message was indeed in the outbox
+				self.assertEquals( 1, (retract: ref).length);
+	    };
+	  };
+		
+	  def testAsyncDueExpiresInReceiverOutbox(){
+		  def [fut, res] := makeFuture();
+			def test := self;
+	    def ref := object: { 
+		    def test() {42};
+			}	mirroredBy: ( mirror:{
+				  // delayed reception of messages to make sure
+				  // the Due annotated msg expires
+					def receive(msg) {
+						TimerModule.when: seconds(5) elapsed: {super^receive(msg);};
+						nil;
+					};
+			});
+	    actor:{ |ref, res, test|
+		    import /.at.lang.futures;
+		    enableFutures(false);
+				//Due annotated message is transmitted 
+				//but expires at the receiver side
+			  def future := ref<-test()@Due(seconds(4));
+			  when: future becomes: { |v|
+				  res<-ruin(v);
+			 	  test<-fail("Unexpected resolved future. Value = " + v);
+			  } catch: TimeoutException using:  { |e|
+				  res<-resolve(`ok);
+	      };
+	    };
+	    fut;
+	  };
 
    }; // end extend: Test with:
   }; // end FuturesTest
