@@ -1,0 +1,262 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/* The MobiTunes music player is a peer-to-peer application meant to be
+ * deployed on mobile ad hoc networks. Each music player has a local
+ * music library filled with Song objects. When a music player discovers
+ * another player in its environment (its 'ambient'), both music players
+ * engage in a library exchange session, where they exchange the (index of)
+ * their music library. This way, a music player can e.g. notify its owner
+ * whenever someone is found in the environment with a similar taste in music.
+ *
+ * For more detailed information, cfr. the paper 'Object-oriented Coordination
+ * in Mobile Ad Hoc Networks', in Proceedings of the 9th internation conference
+ * on coordination models and languages (COORDINATION '07), 2007.
+ *
+ * @author tvcutsem
+ */
+
+import /.at.lang.futures; // for when:becomes:
+enableFutures(false);
+import /.at.lang.leasedrefs exclude minutes, seconds, millisec; // for leasing primitives
+def TimerM := /.at.support.timer;
+
+// the library consists of simple song objects
+def Song := isolate: {
+	def artist := nil;
+	def title := nil;
+	def timesPlayed := 0;
+	def init(artist, title) {
+		self.artist := artist;
+		self.title := title;
+		self.timesPlayed := 0;
+	};
+	
+	def new(@initargs) {
+		// force all instances of Song to have the 'static' Java type at.demo.mumama.Song
+		/.at.support.symbiosis.cast: super^new(@initargs) into: jlobby.at.demo.mumama.Song;
+	};
+	
+	// override equality of songs to be based on their artist and title
+	// rather than on their object identity
+	def ==(other) {
+		system.println("comparing ("+self.asString()+" to ("+other.asString()+")");
+		(artist == other.artist).and: {title == other.title};
+	};
+	
+	// necessary because Songs are stored in TreeSets
+	def compareTo(otherSong) {
+		(self.artist + self.title) <=> (otherSong.artist + otherSong.title);
+	};
+	
+	def play() {
+		timesPlayed := timesPlayed + 1;
+	};
+	def asString() {
+		artist + " - " + title;
+	};
+};
+
+// we represent song libraries as Sets
+// important! we need to use a treeset, since a HashSet requires
+// us to override hashCode, which we cannot for AmbientTalk objects
+// This also requires Song objects to be Comparable
+def Set := jlobby.java.util.TreeSet;
+
+// when users share 25% of their songs, we signal a match
+def THRESHOLD := 25;
+
+// music players are exported using this service type
+deftype MuMaMa;
+
+// advertisement objects used to advertise MuMaMa players
+def MuMaMaAdvertisement := isolate: {
+	def username;
+	def ref;
+	def init(un, r) {
+		username := un;
+		ref := r;
+	};
+	def ==(adv) { self.ref == adv.ref };
+	def advertise() { export: self as: MuMaMa };
+};
+
+// this prototype is the result of loading the MuMaMa file
+def MuMaMaPrototype := object: {
+  def myLib; // the local user's songs library
+  def userName := jlobby.java.lang.System.getProperty("user.name");
+  def myAdvertisement;
+  def notifyOnMatch := { |user, percentage| nil };
+  
+  def gui;
+
+  def init(lib, userName, notifier := notifyOnMatch) {
+	  self.userName := userName;
+	  myLib := lib;
+	  notifyOnMatch := notifier;
+	  gui := jlobby.at.demo.mumama.MuMaMa.new(userName, self);
+	  gui.setUserLibrary(myLib);
+	  gui.setVisible(true);
+
+    myAdvertisement := MuMaMaAdvertisement.new(userName, self.createRemoteInterface());
+    myAdvertisement.advertise();
+
+    whenever: MuMaMa discovered: { |peerAdvertisement|	
+	     notification("discovered new music player: " + peerAdvertisement.username);
+	     gui.peerDiscovered(peerAdvertisement);
+	     when: peerAdvertisement.ref disconnected: {
+		     gui.peerLost(peerAdvertisement);
+	     }
+	  }
+  };
+
+	def notification(@texts) {
+		system.println("[mobiTunes "+userName+"] ", @texts);
+	};
+	
+	// callbacks for UI:
+	
+	def connect() { network.online };
+	def disconnect() { network.offline };
+	def startTransmission(peer) {
+		def peerLib := Set.new(); // to store the peer's music library
+		
+		// ask peer for the creation of a new session object
+     when: (peer.ref)<-openSession(myAdvertisement)@Due(seconds(20)) becomes: {  |session|
+	     def fetchSongs() {
+		     when: session<-downloadSong()@Due(leaseTimeLeft: session) becomes: { |song|
+			     if: (nil != song) then: {
+				     notification("received song " + song.artist + " - " + song.title);
+				     gui.addPeerSong(song);
+			       peerLib.add(song);
+		         TimerM.when: seconds(1) elapsed: {
+		           fetchSongs(); // recursive call to fetch the rest of the songs				
+		         }
+			     } else: {
+			       // all songs sent, end the transfer by comparing libraries
+					   notification("finished fetching library from " + peer.username + " sharing " + peerLib.size() + " songs");
+					   peerLib.retainAll(myLib); // peerLib := intersection(peerLib, myLib)
+						 def matchRatio := (peerLib.size() * 100 / (myLib.size()+0.01)).round();
+						 gui.transferComplete(matchRatio);
+			     };
+			     // it is better to return nil than to return a future that will resolve the future
+			     // of the previous recursive call to fetchSongs()
+			     nil;
+         } catch: { |exception| notification("stopping exchange: " + exception) }; 
+	     };
+	
+			 // Notifies when a session with another remote music player expires.
+			 when: session expired: {
+				 notification("session with " + peer.username + " timed out.");
+				 peerLib := nil;
+				 gui.peerExpired(peer);
+			 };
+	 
+	     notification("starting to fetch songs");
+	     fetchSongs();
+	
+		 } catch: TimeoutException using: { |e| 
+				notification("unable to open a session");
+				gui.peerDropped(peer);
+		 };
+		
+	   // failure handling
+     whenever: peer.ref disconnected: {
+	     notification("music player disconnected: ", peer);
+			  gui.peerDisconnected(peer);
+	   };
+	   whenever: peer.ref reconnected: {
+		   notification("music player reconnected: ", peer);
+		   gui.peerReconnected(peer);
+	   };
+	};
+
+  // create an the interface object that will be exported
+  def createRemoteInterface() {
+	// this object remains exported forever
+		object: {
+			// returns a session object encapsulating the state of the music library exchange process
+			def openSession(remotePeer) {
+				notification("opening new session for " + remotePeer.username);
+		    def iterator := myLib.iterator(); // to iterate over own music library
+
+				 /* 
+	         * The session is exported using a lease for 10 minutes that is renewed
+	         * each time it receives a message. The lease is explicitly
+	         * revoked when a client terminates the exchange by calling the endExchange.
+	         */
+				def session := renewOnCallLease: minutes(1) for: ( object: {
+					// invoked by remote peer to request one single song
+		      def downloadSong() {
+			       if: (iterator.hasNext()) then: {
+			         def song := iterator.next();
+				       notification("sending song: " + song.artist + " - " + song.title + " to " + remotePeer.username);
+			         song; // return song to sender of this method
+			       } else: {
+				       revoke: session; // takes the session offline
+				       nil; // all songs sent, end the transfer by returning nil
+			       };
+		      };
+			  });
+			
+				// Notifies when a session with another remote music player expires.
+				// Note this is a when:expired: listener registered on a server lease.
+				when: session expired: {
+				  notification("session with " + remotePeer.username + " timed out.");
+				  iterator := nil;
+				  gui.peerExpired(remotePeer);
+				};
+				
+				// return session object (which will be lease-referenced) to client
+			  session;
+		  };
+
+	  };
+  };
+	
+};
+
+def lib := Set.new();
+def s1 := Song.new("artist1", "title1");
+lib.add(s1);
+lib.add(Song.new("artist1", "title2"));
+lib.add(Song.new("artist2", "title1"));
+lib.add(Song.new("artist2", "title2"));
+def app := MuMaMaPrototype.new(lib,"test");
+
+/*def peerLib := Set.new();
+peerLib.add(s1);
+peerLib.add(Song.new("artist1", "title2"));
+peerLib.add(Song.new("artist2", "title1"));
+
+system.println("lib.size() = " + lib.size());
+system.println("peerLib.size() = " + peerLib.size());
+peerLib.retainAll(lib); // peerLib := intersection(peerLib, myLib)
+
+system.println("intersection.size() = " + peerLib.size());
+
+def matchRatio := (peerLib.size() * 100 / (lib.size()+0.01)).round();*/
