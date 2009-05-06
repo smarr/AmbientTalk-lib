@@ -1,0 +1,214 @@
+def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with: {
+	
+  import /.at.support.timer;
+  import /.at.lang.futures exclude seconds, millisec, minutes;
+	enableFutures(false);
+	
+  // tests for disconnect: construct
+  def testAsyncDisconnectAnObj(){
+	  def [fut,res] := makeFuture();
+	  def unit := self;
+	  def o := object:{ 
+		  def disconnect(){ 
+			  def sub := disconnect: self; 
+			  when: seconds(2) elapsed: {sub.reconnect()};
+			  5; //return value for future
+		  };
+	  };
+	  def a := actor: { |o, res, unit|
+		  import /.at.lang.futures;
+		  enableFutures(false);
+      when: o<-disconnect()@FutureMessage becomes:{ |val|
+			  unit<-assertEquals(5,val);
+		  };
+	    when: o disconnected:{ unit<-assertTrue((is: o taggedAs: /.at.types.FarReference)); };
+		  when: o reconnected:{ res<-resolve(`ok)};
+	  };
+	  fut;
+  };
+  // disconnects a far reference
+  def testAsyncDisconnectAFarRef(){
+	  def [fut,res] := makeFuture();
+	  def o := object:{};
+	  def a := actor: { |o, res|
+		  def sub;
+		  def disconnect() { sub := disconnect: o; 5};
+		  def reconnect() {	sub.reconnect() };
+	    when: o disconnected:{ reconnect() };
+		  when: o reconnected:{ res<-resolve(`ok)};
+	  };
+	  when: a<-disconnect()@FutureMessage becomes:{ |val|
+		  self.assertEquals(5,val);
+	  };
+	  fut;
+  };
+  // disconnects an object and use a 'disconnected' far reference
+  // checks that the (local) far ref accumulates messages 
+	// retracts messages from it while disconnected.
+  def testAsyncDisconnectAndUseDisconnectedObj(){
+	  def [fut,res] := makeFuture();
+	  def unit := self;
+	  def o := object:{ 
+		  def disconnect(){ 
+			  def sub := disconnect: self; 
+			  5; //return value for future
+		  };
+		  def test() {};
+	  };
+	  def a := actor: { |o, res, unit|
+		  import /.at.lang.futures;
+		  enableFutures(false);
+      when: o<-disconnect()@FutureMessage becomes:{ |val|
+			  unit<-assertEquals(5,val);
+		  };
+	    when: o disconnected:{ 
+		    unit<-assertTrue((is: o taggedAs: /.at.types.FarReference)); 
+		    o<-test();
+		    def outbox := retract: o;
+		    when: unit<-assertEquals(1, outbox.length)@FutureMessage becomes: { |ok|
+		      res<-resolve(`ok);
+	      };
+		  };
+	  };
+	  fut;
+  };
+  // disconnects a far reference and use a 'disconnected' far reference
+  // checks that the (local) far ref accumulates messages 
+	// retracts messages from it while disconnected and also when (re)connected.
+  def testAsyncDisconnectAndUseDisconnectedFarRef(){
+	  def [fut,res] := makeFuture();
+	  def unit := self;
+	  def o := object:{ def test(){} };
+	  def a := actor: { |o, res, unit|
+			import /.at.lang.futures;
+			enableFutures(false);
+		  def sub;
+		  def disconnect() { sub := disconnect: o; 5};
+		  def reconnect() {	sub.reconnect() };
+	    when: o disconnected: {
+		    o<-test(); 
+		    when: unit<-assertEquals(1, (retract: o).length)@FutureMessage becomes: { |ok|
+		      reconnect();
+		    }
+		  };
+		  when: o reconnected:{ 
+			  o<-test();
+				//when the reference gets reconnected,
+				//retract returns an empty table.
+		    when: unit<-assertEquals(0, (retract: o).length)@FutureMessage becomes: { |ok|
+		      res<-resolve(`ok);
+	      };
+			};
+	  };
+	  when: a<-disconnect()@FutureMessage becomes:{ |val|
+		  self.assertEquals(5,val);
+	  };
+	  fut;
+  };
+	// disconnects a far reference and parameter passes to a new 
+	// actor created after the 'Disconnected' event has been broadcasted.
+	def testAsyncImplicitExportOfDisconnectedRef(){
+		def [fut,res] := makeFuture();
+		def unit := self;
+		def o := object:{ def test(){} };
+		def a := actor:{ |unit, res, o|
+			import /.at.lang.futures;
+			enableFutures(false);
+			def sub;
+			def makeActor(sender, ref) { 
+				actor: { |sender, ref|
+				  ref<-test();
+				  // the local far reference 'ref' is disconnected, 
+				  // retract should return one message
+					sender<-reconnect((retract: ref).length);
+					when: ref reconnected: {
+						ref<-test();
+						//when the reference gets reconnected,
+						//retract returns an empty table.
+						sender<-endTest((retract: ref).length);
+					};
+			  };
+			};
+		  def disconnect() { 
+			  sub := disconnect: o; 
+			  //pass the reference to another actor created after
+			  // the disconnect is broadcasted 
+			  when: o disconnected:{
+			    makeActor(self, o);
+			  };
+			  5;
+			};
+			def reconnect(outboxLength){
+				unit<-assertEquals(1, outboxLength);
+				sub.reconnect();
+			};
+			def endTest(outboxLength){
+				when: unit<-assertEquals(0, outboxLength)@FutureMessage becomes: { |ok|
+		      res<-resolve(`ok);
+	      };
+			};
+		};
+		when: a<-disconnect()@FutureMessage becomes:{ |val|
+		  self.assertEquals(5,val);
+	  };
+		fut;
+	};
+	// disconnects a far reference and create a new actor 
+	// which searches for the exported type as the 'disconnected object 
+	// after the 'disconnected' event has been broadcasted.
+	def testAsyncExplicitExportOfDisconnectedRef(){
+		def [fut,res] := makeFuture();
+	  def unit := self;
+	  deftype testAsyncExplicitExportOfDisconnectedRef;
+	  def o := object:{ 
+		  def sub;
+		  def a;
+		  def disconnect(){
+				sub := disconnect: self; 
+				//create the actor after disconnecting the object, 
+				// so that whenever:discovered: only gets triggered 
+				// when the object is reconnected.
+			  a := makeActor(); 
+			  when: seconds(2) elapsed: { 
+				  //while disconnected, the actor won't discover the object.
+				 	when: a<-counters()@FutureMessage becomes:{ |val|
+					  unit.assertEquals(0, val[1]);
+					  unit.assertEquals(0, val[2]);
+					  sub.reconnect();
+				  };
+				}; 
+		  };
+		  //this method should be only called once!
+		  def discovered() {
+			   disconnect: self; 
+			   when: seconds(2) elapsed: { 
+				  when: a<-counters()@FutureMessage becomes:{ |val|
+					system.println("val " + val);
+					  unit.assertEquals(1, val[1]);
+					  unit.assertEquals(2, val[2]);
+					  res.resolve(`ok);
+				  };
+				 }; 
+		  };
+	  };
+	  def makeActor(){ 
+		  actor: { 
+			  deftype testAsyncExplicitExportOfDisconnectedRef;
+			  def countDiscoveries := 0;
+			  def countDisconnects := 0;
+			  def counters(){ [countDiscoveries, countDisconnects] };
+			  whenever: testAsyncExplicitExportOfDisconnectedRef discovered:{ |ref|
+				  countDiscoveries := countDiscoveries + 1;
+				  ref<-discovered();
+				  when: ref disconnected:{
+					  countDisconnects := countDisconnects +1;
+				  };
+			  };
+		  };
+		};
+	  export: o as: testAsyncExplicitExportOfDisconnectedRef;
+	  o.disconnect();
+	  fut;
+	};
+
+};
