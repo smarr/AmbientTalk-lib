@@ -209,12 +209,12 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 		  def discovered() {
 			   disconnect: self; 
 			   when: seconds(2) elapsed: { 
-				  when: a<-counters()@FutureMessage becomes:{ |val|
-					system.println("val " + val);
-					  unit.assertEquals(1, val[1]);
-					  unit.assertEquals(2, val[2]);
-					  res.resolve(`ok);
-				  };
+				  res.resolve(
+					  when: a<-counters()@FutureMessage becomes:{ |val|
+					    system.println("val " + val);
+					    unit.assertEquals(1, val[1]);
+					    unit.assertEquals(2, val[2]);
+				    });
 				 }; 
 		  };
 	  };
@@ -239,3 +239,5 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 	};
 
 };
+
+self;

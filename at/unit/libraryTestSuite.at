@@ -46,6 +46,7 @@ def LibraryTestSuiteModule := object: {
     /.at.support.timer.TimerTest(),
     /.at.support.util.UtilTest(),
     /.at.unit.bugfixes.BugFixTest(),
+    /.at.unit.disconnectTest.DisconnectTest(),
     /.at.tutorial.tutorialTestSuite ]);
 
   def testATDistribution() {
