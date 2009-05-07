@@ -180,9 +180,12 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 	  };
 		fut;
 	};
-	// disconnects a far reference and create a new actor 
-	// which searches for the exported type as the 'disconnected object 
+	// 1. object exported explicitely
+	// 2. disconnect: object
+	// 3. make actor which searches type of the disconnected object 
 	// after the 'disconnected' event has been broadcasted.
+	// 4. reconnect: object ->countDiscoveries = 1
+	// 5. disconnect: object -> countDisconnects = 1
 	def testAsyncExplicitExportOfDisconnectedRef(){
 		def [fut,res] := makeFuture();
 	  def unit := self;
@@ -199,8 +202,8 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  when: seconds(2) elapsed: { 
 				  //while disconnected, the actor won't discover the object.
 				 	when: a<-counters()@FutureMessage becomes:{ |val|
-					  unit.assertEquals(0, val[1]);
-					  unit.assertEquals(0, val[2]);
+					  unit.assertEquals(0, val[1], "error 11-1 "+ val[1]);
+					  unit.assertEquals(0, val[2], "error 11-2 "+ val[2]);
 					  sub.reconnect();
 				  };
 				}; 
@@ -208,13 +211,12 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 		  //this method should be only called once!
 		  def discovered() {
 			   disconnect: self; 
-			   when: seconds(2) elapsed: { 
-				  res.resolve(
-					  when: a<-counters()@FutureMessage becomes:{ |val|
-					    system.println("val " + val);
-					    unit.assertEquals(1, val[1]);
-					    unit.assertEquals(2, val[2]);
-				    });
+			   //disconnect events take some time to communicate!!
+			   when: seconds(5) elapsed: { 
+				  res.resolve( when: a<-counters()@FutureMessage becomes:{ |val|
+					  unit.assertEquals(1, val[1], "error 12-1 " + val[1]);
+					  unit.assertEquals(1, val[2], "error 12-2 " + val[2]);
+				  });
 				 }; 
 		  };
 	  };
@@ -224,7 +226,7 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  def countDiscoveries := 0;
 			  def countDisconnects := 0;
 			  def counters(){ [countDiscoveries, countDisconnects] };
-			  whenever: testAsyncExplicitExportOfDisconnectedRef discovered:{ |ref|
+			  def sub := whenever: testAsyncExplicitExportOfDisconnectedRef discovered:{ |ref|
 				  countDiscoveries := countDiscoveries + 1;
 				  ref<-discovered();
 				  when: ref disconnected:{
@@ -233,11 +235,66 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  };
 		  };
 		};
-	  export: o as: testAsyncExplicitExportOfDisconnectedRef;
+		export: o as: testAsyncExplicitExportOfDisconnectedRef;
 	  o.disconnect();
 	  fut;
+	}; 
+	
+	// 1. object exported explicitely
+	// 2. make actor which searches type of the object -> countDiscoveries = 1
+	// 3. disconnect: object -> countDisconnects = 1 
+	// 4. reconnect: object ->countDiscoveries = 2
+  def testAsyncExplicitExportOfDisconnectedRef2(){
+		def [fut,res] := makeFuture();
+	  def unit := self;
+	  deftype testAsyncExplicitExportOfDisconnectedRef2;
+	  def o := object:{ 
+		  def sub;
+		  def disconnect(){
+				sub := disconnect: self; 
+				//create the actor after disconnecting the object, 
+				// so that whenever:discovered: only gets triggered 
+				// when the object is reconnected.
+				//disconnect events take some time to communicate!!
+			  when: seconds(4) elapsed: { 
+				  //while disconnected, the actor won't discover the object.
+				 	when: a<-counters()@FutureMessage becomes:{ |val|
+					  unit.assertEquals(1, val[1], "error 21-1 "+ val[1]);
+					  unit.assertEquals(1, val[2], "error 22-1 "+ val[2]);
+					  sub.reconnect();
+				  };
+				}; 
+		  };
+		  def discovered(val) {
+				unit.assertEquals(2, val[1], "error 22-1 "+ val[1]);
+				unit.assertEquals(1, val[2], "error 22-2 "+ val[2]);
+				res.resolve(`ok); 
+		  };
+	  };
+	  def makeActor(){ 
+		  actor: { 
+			  deftype testAsyncExplicitExportOfDisconnectedRef2;
+			  def countDiscoveries := 0;
+			  def countDisconnects := 0;
+			  def counters(){ [countDiscoveries, countDisconnects] };
+			  def sub := whenever: testAsyncExplicitExportOfDisconnectedRef2 discovered:{ |ref|
+				  countDiscoveries := countDiscoveries + 1;
+				  if: (countDiscoveries == 1) then: { ref<-disconnect()} 
+				  else: {
+					  // the else: branch will be only ejecuted once because the object 
+					  //is never disconnected/reconnected after the discovered() message
+					  ref<-discovered(counters()); 
+					};
+				  when: ref disconnected:{
+					  countDisconnects := countDisconnects +1;
+				  };
+			  };
+		  };
+		};
+	  export: o as: testAsyncExplicitExportOfDisconnectedRef2;
+	  def a := makeActor(); 
+	  fut;
 	};
-
+	
 };
-
 self;
