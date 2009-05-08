@@ -212,7 +212,7 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 		  def discovered() {
 			   disconnect: self; 
 			   //disconnect events take some time to communicate!!
-			   when: seconds(5) elapsed: { 
+			   when: seconds(10) elapsed: { 
 				  res.resolve( when: a<-counters()@FutureMessage becomes:{ |val|
 					  unit.assertEquals(1, val[1], "error 12-1 " + val[1]);
 					  unit.assertEquals(1, val[2], "error 12-2 " + val[2]);
