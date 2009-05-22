@@ -41,10 +41,11 @@
 import /.at.lang.futures;
 enableFutures(false);
 
+def MESSAGE_TIMEOUT := seconds(30);
 //def IMGUI := jlobby.at.demo.IMGUI;
 //def IMGUI := /.at.demo.IMConsole;
 
-def createIM( IMGUI := /.at.demo.IMConsole) {
+def createIM( IMGUI := /.at.demo.IMConsole, timeout := MESSAGE_TIMEOUT) {
 
   def username := jlobby.java.lang.System.getProperty("user.name");
   def buddyList := jlobby.java.util.HashMap.new();
@@ -67,7 +68,7 @@ def createIM( IMGUI := /.at.demo.IMConsole) {
 			  listener.display("Unknown buddy: " + to);
 		  } else: {
 		    def msg := TextMessage.new(username, string);
-			  when: buddy<-receive(msg)@Due(seconds(10)) becomes: { |ack|
+			  when: buddy<-receive(msg)@Due(timeout) becomes: { |ack|
 			     listener.display( msg.content + " sent to: " + to);
 			  } catch: TimeoutException using: { |e|
 				 	listener.display("message: " + msg.content + " timed out.");
@@ -139,6 +140,22 @@ def InstantMessengerTest() {
 	 fut;  
   };
  }; 
+};
+
+/**
+ * The instant messenger can be started in GUI mode from the command
+ * line, optionally passing a timeout for messages (in seconds)
+ * Usage:
+ *  iat InstantMessenger.at -- -gui 50
+ */
+let: { |args := system.getArgv()|
+  if: ((args.length > 0).and: { args[1]=="-gui" }) then: {
+	  if: (args.length > 1) then: {
+		  createIM(jlobby.at.demo.IMGUI, seconds(args[2].parseNumeric));
+	  } else: {
+		  createIM(jlobby.at.demo.IMGUI);		
+	  }
+  };
 };
 
 self
