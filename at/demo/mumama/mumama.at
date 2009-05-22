@@ -240,13 +240,31 @@ def MuMaMaPrototype := object: {
 	
 };
 
-def lib := Set.new();
-def s1 := Song.new("artist1", "title1");
-lib.add(s1);
-lib.add(Song.new("artist1", "title2"));
-lib.add(Song.new("artist2", "title1"));
-lib.add(Song.new("artist2", "title2"));
-def app := MuMaMaPrototype.new(lib,"test");
+def test() {
+
+	def lib := Set.new();
+	lib.add(Song.new("Metallica", "One"));
+	lib.add(Song.new("Hooverphonic", "Club Montepulciano"));
+	lib.add(Song.new("Electric Six", "Danger"));
+	lib.add(Song.new("Vivaldi", "Spring"));
+	lib.add(Song.new("Admiral Freebee", "Noorderlaan"));
+	lib.add(Song.new("1200 Micrograms", "Rock into the Future"));
+	lib.add(Song.new("Kate Bush", "Wuthering Heights"));
+	def app := MuMaMaPrototype.new(lib,"Tom");
+
+	def otherpeer := actor: {
+		def start() {
+			import /.at.demo.mumama.mumama;
+			def lib := Set.new();
+			lib.add(Song.new("1200 Micrograms", "Rock into the Future"));
+			lib.add(Song.new("Pendulum", "Fasten Your Seatbelt"));
+			lib.add(Song.new("Kate Bush", "Wuthering Heights"));
+			def app := MuMaMaPrototype.new(lib,"Wolf");	
+		}
+	};
+	otherpeer<-start();
+	
+};
 
 /*def peerLib := Set.new();
 peerLib.add(s1);
@@ -260,3 +278,5 @@ peerLib.retainAll(lib); // peerLib := intersection(peerLib, myLib)
 system.println("intersection.size() = " + peerLib.size());
 
 def matchRatio := (peerLib.size() * 100 / (lib.size()+0.01)).round();*/
+
+self;
