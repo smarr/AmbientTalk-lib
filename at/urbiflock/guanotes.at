@@ -32,23 +32,10 @@ deftype Guanotes;
 
 def makeGuanotes(aFlockr) {
 	def subscription;	
-	//hashmap remoteGuanoteTs - flockrId
-	def connectedFlockrs := HashMap.new();
   // local interface of guanotes
   def localInterface := extend: /.at.urbiflock.application.makeApplication("Guanotes", aFlockr) with:{
 		import AmbientTotaModule.makeTupleSpace(aFlockr.getUsername);
-		// gets the flockr id we are about to send guannotes
-		/*def getReceiverFlockrId() {
-			def flockrId;
-			if: (self.getCurrentReceiverTs() == self) then: { flockrId := aFlockr.getUsername } 
-			else: { flockrId := connectedFlockrs.get(self.getCurrentReceiverTs()) };
-			system.println("Guanotes:getReceiverFlockrId " + flockrId + "of currentReceiver " + self.getCurrentReceiverTs());
-			flockrId;
-		};*/
-		// gets the connected flockrs via guanotes.
-		def getConnectedFlockrs(){
-			connectedFlockrs.values.toArray();
-		};
+
 	  //helper function to flatten a flock.
 	  //maybe move to flock.at?
  	  def currentFlock(flockName){
@@ -79,14 +66,12 @@ def makeGuanotes(aFlockr) {
 		    def receiver := to;  // an object which contains flock
 		    def message := msg;
 	      	// currently inheriting the default, i.e. a tuple that hops forever.
-		    def decideStore(guanotesReceiverTS){ true };//receiver.shouldReceive(self,guanotesReceiverTS.owner.getUsername) };
-            def decidePropagation(descriptor) { 
-	        	def lol := receiver.shouldReceive( descriptor );	
-	        	//system.println("Guanotes: owner " +guanotesSenderTS.owner.getUsername() + " guanote " +self.getTupleId + " propagating " + lol + " from " + sender + " to " + receiver.getReceiverList + " msg " + msg +  " currentReceiver " + guanotesSenderTS.getReceiverFlockrId());
-	        	lol;
-	      	};
-	      	def getReceiverList(){ receiver.getReceiverList()}; 
-	      	def getSenderName(){sender};
+		    def decideStore(guanotesReceiverTS){ true };
+        def inScope(descriptor) { 
+	        receiver.shouldReceive( descriptor );	
+	      };
+	      def getReceiverList(){ receiver.getReceiverList()}; 
+	      def getSenderName(){sender};
 	    };
     };
     //temporal function for Gui purposes
@@ -141,12 +126,11 @@ def makeGuanotes(aFlockr) {
 		  //discovery other guanotes
 		  subscription := self.registerApplicationListener( Guanotes, object:{
 			  def notifyApplicationJoined(flockr, profile, remoteGuanotesTs){
-				  connectedFlockrs.put(remoteGuanotesTs ,profile.username);
-				  localInterface.notifyTSDiscovered(remoteGuanotesTs);
+				  localInterface.notifyTSDiscovered(remoteGuanotesTs, profile.username);
 			  };
 			  def notifyApplicationLeft(flockr, profile, remoteGuanotesTs){
+				  //To think, remove from seenTS??
 					system.println("Guanotes: " + localInterface.owner.getUsername +  " detected disconnection of " + profile.username);
-				  connectedFlockrs.remove(remoteGuanotesTs);
 			  };
 		  });
 		};
