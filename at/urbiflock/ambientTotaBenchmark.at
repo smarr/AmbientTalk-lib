@@ -1,0 +1,56 @@
+
+def makeTeamMember(ringSize,id) {
+	actor: { |ringSize, id|
+		
+		def AmbientTota := /.at.urbiflock.ambientTota;
+		def descriptor := isolate: {|id|};
+		def myTS := AmbientTota.newTupleSpace(descriptor);
+		def count := 0;
+
+		myTS.when: {|tuple| true } matches: { |tuple|
+			count := count+1;
+			system.println("Receiving :: " + tuple.number +tuple.getCoodinate());
+			system.println("I already gotten ::: :: " + count + " >> " + id );
+		};
+		
+		def coodinateTuple(number,coordinate) {
+			AmbientTota.extendTuple: AmbientTota.makeTuple(number+id) with: { |number,ringSize,coordinate,id|
+				def count := 1;
+				def decidePropagation(descriptor) {
+					true;
+					//if: (ringSize == count) then: { false } else: { descriptor.id = count *100}; 
+				};
+				def changeTupleContent(ts) {
+					self.changed := true; 
+					count := count+1; 
+					self;
+				}; 
+				def getCoodinate() { coordinate };
+			    def decideDie(ts){ 
+					ringSize == count;
+				};
+			};
+		};
+		
+		def sendCoordinates(number) {
+			while: { number > 0 } do: {
+				number := number - 1;
+				myTS.inject: coodinateTuple(number," from " + id);			
+			};
+		};
+			
+	};
+};
+
+def amount := 1;
+def ringSize := 10;
+
+def Alice := makeTeamMember(ringSize,0);
+Alice<-sendCoordinates(amount);
+def count := 1;
+while: { count < ringSize } do: {
+	makeTeamMember(ringSize,count * 100);
+	count := count +1;
+};
+
+

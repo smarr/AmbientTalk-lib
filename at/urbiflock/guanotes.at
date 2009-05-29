@@ -36,15 +36,15 @@ def makeGuanotes(aFlockr) {
 	def connectedFlockrs := HashMap.new();
   // local interface of guanotes
   def localInterface := extend: /.at.urbiflock.application.makeApplication("Guanotes", aFlockr) with:{
-		import AmbientTotaModule.makeTupleSpace();
+		import AmbientTotaModule.makeTupleSpace(aFlockr.getUsername);
 		// gets the flockr id we are about to send guannotes
-		def getReceiverFlockrId() {
+		/*def getReceiverFlockrId() {
 			def flockrId;
 			if: (self.getCurrentReceiverTs() == self) then: { flockrId := aFlockr.getUsername } 
 			else: { flockrId := connectedFlockrs.get(self.getCurrentReceiverTs()) };
 			system.println("Guanotes:getReceiverFlockrId " + flockrId + "of currentReceiver " + self.getCurrentReceiverTs());
 			flockrId;
-		};
+		};*/
 		// gets the connected flockrs via guanotes.
 		def getConnectedFlockrs(){
 			connectedFlockrs.values.toArray();
@@ -78,15 +78,15 @@ def makeGuanotes(aFlockr) {
 		    def sender := from;  // fill in by at interface with gui
 		    def receiver := to;  // an object which contains flock
 		    def message := msg;
-	      // currently inheriting the default, i.e. a tuple that hops forever.
+	      	// currently inheriting the default, i.e. a tuple that hops forever.
 		    def decideStore(guanotesReceiverTS){ true };//receiver.shouldReceive(self,guanotesReceiverTS.owner.getUsername) };
-        def decidePropagation(guanotesSenderTS) { 
-	        def lol := receiver.shouldReceive( guanotesSenderTS );	
-	        system.println("Guanotes: owner " +guanotesSenderTS.owner.getUsername() + " guanote " +self.getTupleId + " propagating " + lol + " from " + sender + " to " + receiver.getReceiverList + " msg " + msg +  " currentReceiver " + guanotesSenderTS.getReceiverFlockrId());
-	        lol;
-	      };
-	      def getReceiverList(){ receiver.getReceiverList()}; 
-	      def getSenderName(){sender};
+            def decidePropagation(descriptor) { 
+	        	def lol := receiver.shouldReceive( descriptor );	
+	        	//system.println("Guanotes: owner " +guanotesSenderTS.owner.getUsername() + " guanote " +self.getTupleId + " propagating " + lol + " from " + sender + " to " + receiver.getReceiverList + " msg " + msg +  " currentReceiver " + guanotesSenderTS.getReceiverFlockrId());
+	        	lol;
+	      	};
+	      	def getReceiverList(){ receiver.getReceiverList()}; 
+	      	def getSenderName(){sender};
 	    };
     };
     //temporal function for Gui purposes
@@ -104,10 +104,10 @@ def makeGuanotes(aFlockr) {
     	def receiver := isolate: { |flockrIds|
 				def flockrNames := [];
 				def flocks := [];
-				def shouldReceive(guanotesTS) {
-					if: !(flockrNames.contains(guanotesTS.getReceiverFlockrId)) then: {
+				def shouldReceive(receiverFlockrId) {
+					if: !(flockrNames.contains(receiverFlockrId)) then: {
 						flocks.inject: false into: { |result, flock|
-							  result.or: { guanotesTS.currentFlock(flock).contains(guanotesTS.getReceiverFlockrId) }
+							  result.or: { guanotesTS.currentFlock(flock).contains(receiverFlockrId) }
 						}
 					}else: { 
 						true;
@@ -128,14 +128,15 @@ def makeGuanotes(aFlockr) {
 		def listenForGuanotesToOwner(listener) {
 			//Think about this ! the true determines which guanotes have to be displayed.
 			self.when: { |guanote| true } received: { |guanote|
-			 listener<-guanoteReceived(guanote);
+				listener<-guanoteReceived(guanote);
 			};
-		};	
+		};
+			
 		// methods for application interface
 		// makes guanotes to goOnline. 
 		// Behaviour not written in the start method for unit testing purposes.
 		def goOnline(){
-			//exporting guanotes as application
+		  //exporting guanotes as application
 		  self.export(Guanotes);
 		  //discovery other guanotes
 		  subscription := self.registerApplicationListener( Guanotes, object:{
@@ -164,7 +165,12 @@ def makeGuanotes(aFlockr) {
 	def remoteInterface := extend: localInterface.remoteApplicationInterface with: {	
 		def getFlockrId(){
 			aFlockr.getUsername;
-		};	
+		};
+		
+		def getDescriptor() {
+			localInterface.getDescriptor();
+		};
+			
 		// method required since remoteInterface doesn't encapsulate guanotesTS anymore.
 		def receiveTuples(tuples)	{
 			system.println("Guanotes: owner " + self.getFlockrId() + " receiving tuples " + tuples);

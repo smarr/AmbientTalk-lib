@@ -26,6 +26,8 @@
  */
 
 def Vector := /.at.collections.vector.Vector;
+import /.at.lang.futures;
+enableFutures(false);
 
 def rand() { 
   // we should provide something more random, e.g. IP addres + PID + now()
@@ -34,7 +36,7 @@ def rand() {
  /.at.support.util.randomNumberBetween(0, 555555); 
 };
 		
-def makeTupleSpace(){	
+def makeTupleSpace(descriptor){	
 	
 	//private methods and data fields
 	def localTS := Vector.new(); //contains local tuples
@@ -58,22 +60,24 @@ def makeTupleSpace(){
 	};
 	//method belonging to the tuple propagation protocol
 	def receiveTuple(tuple, ts){
-		// tota propagation protocol (receiver side)
-    tuple.doAction(ts);
-    tuple := tuple.changeTupleContent(ts);
-    //check if you have to insert it into your local tuple space
-    if: tuple.decideStore(ts) then: { ts.add(tuple) };
+		if: tuple.decideExecute(descriptor) then: {
+			// tota propagation protocol (receiver side)
+    		tuple.doAction(ts);
+    		tuple := tuple.changeTupleContent(ts);
+    		//check if you have to insert it into your local tuple space
+		};
+    	if: tuple.decideStore(ts) then: { ts.add(tuple) };
 	};
 	
-	def sendTuple(tuple, ts, toTs){
+	def sendTuple(tuple, ts, toTs, descriptor){
 		// toThink: this method could be called twice via inject and discovery when the ts discover.
 		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
 		currentReceiverTs := toTs;
-		if: tuple.decidePropagation(ts) then:{
+		if: tuple.decidePropagation(descriptor) then:{
 		  true;
 		} else: {
 			if: tuple.decideDie(ts) then: {
-	      system.println("AmbientTota: dying young " +  tuple);
+	      		//system.println("AmbientTota: dying young " +  tuple);
 				localTS.removeAll:{|t| t == tuple};
 				ambientTS.removeAll: {|t| t == tuple};
  		  };
@@ -99,7 +103,7 @@ def makeTupleSpace(){
 	    localTS.removeAll: template;
 		  toDelete.asTable;
 		}; 
-		// returns a table with the tuples matching the template in the ts.
+		// returns a table with the tuples matching the template in the ts. 
 		def read(template) { (localTS.filter: template).asTable};
 			
 		// operations to manage the ambient ts.
@@ -111,11 +115,14 @@ def makeTupleSpace(){
 			if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
 			// adding the tuple to the ambient for next sync.
 			ambientTS.add(tuple);
-			//notify all seen ts of the addition of a new tuple.
-			seenTS.each: { |ts| 
-				if: (sendTuple(tuple, self, ts)) then: { ts<-receiveTuples([tuple]) };
+			 if: tuple.changed then: { 
+				tuple.changed := false;
+				//notify all seen ts of the addition of a new tuple.
+				seenTS.each: { |ts| 
+					if: (sendTuple(tuple, self, ts[1], ts[2])) then: { ts[1]<-receiveTuples([tuple]) };
+				};
+				//notify yourself in case you are in the receiver.
 			};
-			//notify yourself in case you are in the receiver.
 		//	if: (sendTuple(tuple, self, self)) then: { receiveTuple(tuple, self) };
 		 };
 		  //return a publication object to be able to cancel the injection.
@@ -145,33 +152,45 @@ def makeTupleSpace(){
 		// starts the propagation protocol (sender side)
 		def notifyTSDiscovered(ts){ // tsDescriptor
 	  	// add ts to seenTS vector so that it can be
-			// notified if I add a new tuple to the ambient.
-			if: !(seenTS.contains(ts)) then:{
-		    seenTS.add(ts);
-		  };
-      //def toSend := sendTuples(self);
+		// notified if I add a new tuple to the ambient.
+	
+      		//def toSend := sendTuples(self);
 			def toSend := Vector.new();
-			ambientTS.each: { |tuple| if: (sendTuple(tuple, self, ts)) then: { toSend.add(tuple)}};
-      if: (toSend.length > 0) then: {
-	       ts<-receiveTuples(toSend.asTable);
+			when: ( ts<-getDescriptor()@FutureMessage ) becomes: { |descriptor|
+				if: !(seenTS.contains(ts, {|e1,e2| e1 == e2[1]})) then:{
+				   	seenTS.add([ts,descriptor]);
+				};
+				ambientTS.each: { |tuple| if: (sendTuple(tuple, self, ts, descriptor)) then: {	toSend.add(tuple) }};
+      			if: (toSend.length > 0) then: {
+	       			ts<-receiveTuples(toSend.asTable);
+				};
 			};
-    };
-		
+    	};
+		 
 		// iterates over all ambient tuples of the other ts 
 		// and triggers the propagation protocol (receiver side)
+		
+		def count := 0;
+		
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
+			count := count +1;
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
-			    // tota propagation protocol (receiver side)
+			  // tota propagation protocol (receiver side)
 		      receiveTuple(tuple, self);
-			    self.inject: tuple;
+			 self.inject: tuple;
 		    };
 		  };
-	  };
+		  system.println("Processed :::: " +count);
+	  	};
 	
-		def getCurrentReceiverTs() {
+	def getCurrentReceiverTs() {
 			currentReceiverTs;
-		}; 
+	}; 
+	
+	def getDescriptor() {
+		descriptor;
+	};
 		
 	}; // end-of-public interface
   publicInterface; 
@@ -182,14 +201,23 @@ def makeTuple(tupleId := nil){
 	if: (tupleId == nil) then: {tupleId := rand()};
 	
 	isolate: { |tupleId|
-
+		def rand() { 
+		  // we should provide something more random, e.g. IP addres + PID + now()
+		//	def aRandomNumber := /.at.support.symbiosis.long((print: self).length);
+		//  /.at.support.util.randomNumberBetween(0, (/.at.support.timer.now() + aRandomNumber).intValue); 
+		 /.at.support.util.randomNumberBetween(0, 555555); 
+		};
+		def changed := false;
 		def getTupleId() { tupleId };
 		// TOTA API
 		// default tuple behaviour = always percolate, 
 		// and store itself in every hop.
-    
-		// called in every tuple at pass() 
-		def decidePropagation(ts){ true };
+		
+		// called in every tuple at pass() on the sending side !
+		def decidePropagation(descriptor){ true };
+		// called in every tuple at just before doAction on the receiver side !
+		def decideExecute(descriptor) { true };
+		
 		// specifies operations on the local TS
 		def doAction(ts){};
 		// create a new tuple resulting from operations on the tuple itself
@@ -207,11 +235,23 @@ def extendTuple(tuple, closure) {
 	extend: tuple with: closure taggedAs: [/.at.types.Isolate];
 };
 
+deftype TupleSpace;
+
+def newTupleSpace(descriptor) {
+	def ts := makeTupleSpace(descriptor);
+	export: ts as: TupleSpace;
+	whenever: TupleSpace discovered: { |remoteTs|
+		ts.notifyTSDiscovered(remoteTs);
+	};
+	ts;
+};
+
 // the module object of this file
 def AmbientTotaModule := object: {
 	// public stuff goes here
 	def makeTupleSpace := &makeTupleSpace;
 	def makeTuple := &makeTuple;
+	def newTupleSpace := &newTupleSpace;
 	
 	def extendTuple: tuple  with: closure {
 		extendTuple(tuple, closure);
@@ -225,9 +265,9 @@ def AmbientTotaModule := object: {
 		// todo : add network online in the setup of tests.
 		
 		def testAsyncDiscoveryTuple() {
-			
+			def descriptor := isolate: { def team := "blue"; };
 			def [fut,res] := makeFuture();
-			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
 			def s := export: myTS as: TupleSpace;
 				
 			myTS.when: { |tuple| tuple.getTupleId == 123 } matches: { |tuple|
@@ -237,9 +277,10 @@ def AmbientTotaModule := object: {
 			};
 	
 			def a := actor: { |TupleSpace|
-				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace();
-		    def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
-			  def sT := aTS.inject: aTuple;
+				def descriptor := isolate: { def team := "blue"; };	
+				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+		    	def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
+			  	def sT := aTS.inject: aTuple;
 				def s := whenever: TupleSpace discovered: { |ts|
 					aTS.notifyTSDiscovered(ts);
 				};
@@ -254,9 +295,11 @@ def AmbientTotaModule := object: {
 		};
 		
 		
+		
 		def testAsyncOneHopTuple() {
+			def descriptor := isolate: { def team := "blue"; };
 			def [fut,res] := makeFuture();
-			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
 			def s := export: myTS as: TupleSpace;
 				
 			myTS.when: {|tuple| tuple.getTupleId == 123 } matches: { |tuple|
@@ -266,7 +309,9 @@ def AmbientTotaModule := object: {
 			};
 	
 			def a := actor: { |TupleSpace|
-				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace();
+			def descriptor := isolate: { def team := "blue"; };
+				
+			def aTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
 		    def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
 				def oneHopTuple := /.at.urbiflock.ambientTota.extendTuple: aTuple with: {
 					 def dying := false;
@@ -275,7 +320,7 @@ def AmbientTotaModule := object: {
 					 def decideDie(ts){ dying };
 				};
 				
-		    def sT := aTS.inject: oneHopTuple;
+		    	def sT := aTS.inject: oneHopTuple;
 				def s := whenever: TupleSpace discovered: { |ts|
 					aTS.notifyTSDiscovered(ts);
 				};
@@ -289,7 +334,47 @@ def AmbientTotaModule := object: {
 			fut;
 		};
 		
-		
+			def testAsyncSendTeamsTuple() {
+				def descriptor := isolate: { def team := "blue"; };
+				def [fut,res] := makeFuture();
+				def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+				def s := export: myTS as: TupleSpace;
+
+				myTS.when: {|tuple| true } matches: { |tuple|
+					//self.assertEquals(123, tuple.getTupleId);	
+					s.cancel();
+					a<-resolve(res);
+				};
+				
+				def a := actor: { |TupleSpace|
+					
+					def descriptor := isolate: { def team := "red"; };
+					def aTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+					def s := whenever: TupleSpace discovered: { |ts|
+						aTS.notifyTSDiscovered(ts);
+					};
+			    
+					 def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
+					
+					def blueTuple() {
+						/.at.urbiflock.ambientTota.extendTuple: aTuple with: {
+							def decidePropagation(descriptor) { descriptor.team == "blue" };
+						};
+					};
+					
+			    	def sT := aTS.inject: blueTuple();
+			
+					def resolve(res) {
+						s.cancel();
+						sT.cancel();
+						res<-resolve(`ok);
+					};
+					
+			  	};		
+				fut;
+			};
+
+			
 	};
 };
 AmbientTotaModule;
