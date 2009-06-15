@@ -1,0 +1,86 @@
+import /.at.lang.futures;
+enableFutures(true);
+
+deftype NoCondition <: lobby.at.types.Exception;
+def XNoCondition := lobby.at.exceptions.createException(NoCondition);
+
+
+// stop
+def stop(typetag) {
+	when: typetag discovered: { |service|
+		when: service<-start() becomes: { |reply|
+			reply;
+		};
+	};
+};
+
+// sequence
+def sequence(serviceTypeTable) {
+	def result := makeFuture()[1];
+	def execute(idx) {
+		when: serviceTypeTable[idx] discovered: { |service|
+			when: service<-start() becomes: { |reply|
+				if: (idx == (serviceTypeTable.length() - 1)) then: {
+					(reflect: result)<-resolveWithValue(serviceTypeTable[serviceTypeTable.length()]);
+				} else: {
+					execute(idx + 1);
+				};
+			};
+		};
+	};
+	execute(1);
+	result;
+};
+
+// parallel split
+def parallelSplit: serviceTypeTag into: serviceTypeTable {
+	def result := makeFuture()[1];
+	when: serviceTypeTag discovered: { |service|
+		when: service<-start() becomes: { |reply|
+			(reflect: result)<-resolveWithValue(serviceTypeTable);
+		};
+	};
+	result;
+};
+
+// synchronization
+// + structured synchronization merge
+def synchronize: serviceTypeTable before: serviceTypeBefore {
+	def result := makeFuture()[1];
+	def execute(idx) {
+		when: serviceTypeTable[idx] discovered: { |service|
+			when: service<-start() becomes: { |reply|
+				if: (idx == serviceTypeTable.length()) then: {
+					(reflect: result)<-resolveWithValue(serviceTypeBefore);
+				} else: {
+					execute(idx + 1);
+				};
+			};
+		};
+	};
+	execute(1);
+	result;
+};
+
+
+// Tests
+
+/*network.online();
+
+deftype Service1;
+deftype Service2;
+deftype Service3;
+
+when: sequence([ Service1, Service2, Service3 ]) becomes: { |end|
+	 stop(end);
+};
+
+when: (parallelSplit: Service1 into: [ Service2, Service3 ]) becomes: { |services|
+	 when: (synchronize: services before: Service1) becomes: { |service|
+		stop(service);
+	 };
+};*/
+
+
+
+
