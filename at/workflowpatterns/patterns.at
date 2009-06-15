@@ -63,6 +63,23 @@ def synchronize: serviceTypeTable before: serviceTypeBefore {
 };
 
 
+// exclusive choice
+def exclusiveChoice: serviceTypeTag conditionActions: conditionActionRules {
+	def result := makeFuture()[1];
+	when: serviceTypeTag discovered: { |service|
+		when: service<-start() becomes: { |reply|
+			def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
+			if: (conditionActions.isEmpty()) then: {
+				raise: XNoCondition.new("No matching condition found");
+			} else: {
+				(reflect: result)<-resolveWithValue(conditionActions[1][2]);
+			};
+		};
+	};
+	result;
+};
+
+
 // Tests
 
 /*network.online();
@@ -79,7 +96,14 @@ when: (parallelSplit: Service1 into: [ Service2, Service3 ]) becomes: { |service
 	 when: (synchronize: services before: Service1) becomes: { |service|
 		stop(service);
 	 };
-};*/
+};
+
+when: (exclusiveChoice: Service1 conditionActions: [ 
+	[ { |reply| reply }, Service2 ],
+	[ { |reply| !reply }, Service3 ]])
+	becomes: { |service|
+		stop(service);
+	};*/
 
 
 
