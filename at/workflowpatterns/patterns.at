@@ -80,31 +80,228 @@ def exclusiveChoice: serviceTypeTag conditionActions: conditionActionRules {
 };
 
 
+// simple merge
+// + multi merge
+def simpleMerge: serviceTypeTable into: serviceType {
+    def [multiFuture, resolver] := makeMultiFuture(serviceTypeTable.length());
+    def execute(idx) {
+        when: serviceTypeTable[idx] discovered: { |service|
+            when: service<-start() becomes: { |reply|
+                (reflect: multiFuture)<-resolveWithValue(serviceType);
+            };
+        };
+        if: (idx < serviceTypeTable.length()) then: {
+            execute(idx + 1);
+        };
+    };
+    execute(1);
+    multiFuture;
+};
+
+
+// multichoice
+def multichoice: serviceTypeTag conditionActions: conditionActionRules {
+	def result := makeFuture()[1];
+	when: serviceTypeTag discovered: { |service|
+		when: service<-start() becomes: { |reply|
+			def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
+			if: (conditionActions.isEmpty()) then: {
+				raise: XNoCondition.new("No matching condition found");
+			} else: {
+					(reflect: result)<-resolveWithValue(conditionActions.map: { |rule| rule[2] });
+			};
+		};
+	};
+	result;
+};
+
+
+// structured discriminator
+def structuredDiscriminator: serviceTypeTable into: serviceType {
+	  def future := makeFuture()[1];
+	  def flag := true;
+	  def execute(idx) {
+	      when: serviceTypeTable[idx] discovered: { |service|
+	          when: service<-start() becomes: { |reply|
+				 if: flag then: {
+					 flag := false;
+	                 (reflect: future).resolveWithValue(serviceType);
+				 };
+	           };
+	      };
+	      if: (idx < serviceTypeTable.length()) then: {
+	          execute(idx + 1);
+	      };
+	};
+	execute(1);
+	future;
+};
+
+
+// structured partial join
+def structuredPartialJoin: number outOf: serviceTypeTable into: serviceType {
+	  def future := makeFuture()[1];
+	  def nr := 0;
+	    def execute(idx) {
+	        when: serviceTypeTable[idx] discovered: { |service|
+	            when: service<-start() becomes: { |reply|
+					if: (nr <= number) then: {
+						 nr := nr + 1;
+	                     (reflect: future).resolveWithValue(serviceType);
+					};
+	            };
+	        };
+	        if: (idx < serviceTypeTable.length()) then: {
+	            execute(idx + 1);
+	        };
+	    };
+	execute(1);
+	future;
+};
+
+
+// thread merge
+// + multiple instances with a priori design-time knowledge
+// + multiple instances with a priori run-time knowledge
+def threadMerge: serviceTypeTag times: number into: serviceType {
+	def future := makeFuture()[1];
+    def execute(idx) {
+        when: serviceTypeTag discovered: { |service|
+            when: service<-start() becomes: { |reply|
+               if: (idx < number) then: {
+					execute(idx + 1);
+				} else: {
+					(reflect: future).resolveWithValue(serviceType);
+				};
+			};
+		};	
+    };
+    execute(1);
+	future;
+};
+
+
+// thread split
+def threadSplit: serviceTypeTag to: number of: serviceType {
+	def future := makeFuture()[1];
+	when: serviceTypeTag discovered: { |service|
+		when: service<-start() becomes: { |reply|
+			def serviceTypeTags[number] { serviceType; };
+			(reflect: future).resolveWithValue(serviceTypeTags);
+		};
+	};
+	future;
+};
+
+
+// multiple instances without synchronization
+// the number of task instances (i.e. numinst) is known as design time and is a fixed value
+def multipleInstancesWithoutSynchronization: serviceTypeTag nrOfInstancesCreated: number into: serviceType {
+	def future := makeFuture()[1];
+	(reflect: future).resolveWithValue(serviceType);
+	def execute(idx) {
+		when: serviceTypeTag discovered: { |service|
+			service<-start();
+			if: (idx < number) then: {
+				execute(idx + 1);
+			};
+		};
+	};
+	if: (number > 0) then: {
+		execute(1);
+	}; 
+	future;
+};
+
+
+
+
 // Tests
 
-/*network.online();
+//network.online();
 
-deftype Service1;
-deftype Service2;
-deftype Service3;
+//deftype Service1;
+//deftype Service2;
+//deftype Service3;
+//deftype Service4;
+//deftype Service5;
+//deftype Service6;
+//deftype Service7;
+//deftype Service8;
 
+/*
 when: sequence([ Service1, Service2, Service3 ]) becomes: { |end|
 	 stop(end);
 };
+*/
 
-when: (parallelSplit: Service1 into: [ Service2, Service3 ]) becomes: { |services|
-	 when: (synchronize: services before: Service1) becomes: { |service|
+/*
+when: (parallelSplit: Service1 into: [ Service5, Service6 ]) becomes: { |services|
+	services.each: { |service| stop(service); };
+};
+*/
+
+/*
+when: (parallelSplit: Service1 into: [ Service5, Service6 ]) becomes: { |services|
+	when: (synchronize: services before: Service4) becomes: { |service|
 		stop(service);
 	 };
 };
+*/
 
-when: (exclusiveChoice: Service1 conditionActions: [ 
-	[ { |reply| reply }, Service2 ],
-	[ { |reply| !reply }, Service3 ]])
+/*
+when: (exclusiveChoice: Service7 conditionActions: [ 
+	[ { |reply| reply }, Service5 ],
+	[ { |reply| !reply }, Service6 ]])
 	becomes: { |service|
 		stop(service);
-	};*/
+	};
+*/
 
+/*
+whenEach: (simpleMerge: [Service5, Service6] into: Service4) becomes: { |service|
+	stop(service);
+};
+*/
+
+/*
+when: (multichoice: Service7 conditionActions: [ 
+	[ { |reply| reply }, Service5 ], 
+	[ { |reply| !reply }, Service6 ] ]) 
+	becomes: { |services|
+	services.each: { |service| stop(service); };
+};
+*/
+
+/*	
+when: (structuredDiscriminator: [Service4, Service5, Service1] into: Service6) becomes: { |service|
+	stop(service);
+};
+*/
+
+/*
+when: (structuredPartialJoin: 1 outOf: [Service4, Service6, Service8] into: Service5) becomes: { |service|
+	stop(service);
+};
+*/
+
+/*
+when: (threadMerge: Service5 times: 3 into: Service4) becomes: { |service|
+	stop(service);
+};
+*/
+
+/*
+when: (threadSplit: Service5 to: 3 of: Service6) becomes: { |services|
+		services.each: { |service| stop(service); };
+};
+*/
+
+/*
+when: (multipleInstancesWithoutSynchronization: Service5 nrOfInstancesCreated: 3 into: Service6) becomes: { |service|
+	stop(service);
+};
+*/
 
 
 
