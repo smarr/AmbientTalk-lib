@@ -214,6 +214,50 @@ def multipleInstancesWithoutSynchronization: serviceTypeTag nrOfInstancesCreated
 };
 
 
+// static partial join for multiple instances
+def staticPartialJoinForMultipleInstances: serviceTypeTag number: n outOf: m into: serviceType {
+	def [multiFuture, resolver] := makeMultiFuture(n);
+    def execute(idx) {
+        when: serviceTypeTag discovered: { |service|
+            when: service<-start() becomes: { |reply|
+					(reflect: multiFuture)<-resolveWithValue(serviceType);
+				} catch: { |e|
+					resolver.ruin(e);
+				};
+            };
+        if: (idx < m) then: {
+            execute(idx + 1);
+        };
+    };
+    execute(1);
+    multiFuture;	
+};
+
+
+// interleaved routing
+def interleavedRouting: serviceTypeTable into: serviceType {
+	def future := makeFuture()[1];
+	def invokedServices := [];
+	def execute(idx) {
+		if: ( idx <= serviceTypeTable.length() ) then: {
+			def randomNumber := /.at.support.util.randomNumberBetween(1, serviceTypeTable.length() + 1); 
+			if: ( invokedServices.contains(randomNumber) ) then: {
+				execute(idx);
+			} else: {
+				invokedServices := invokedServices + [randomNumber];
+				when: serviceTypeTable[randomNumber] discovered: { |service|
+					when: service<-start() becomes: { |reply|
+					     execute(idx + 1);
+					};
+				};
+			};
+	     } else: {
+		    (reflect: future).resolveWithValue(serviceType);
+		};
+	};
+	execute(1);
+	future;
+};
 
 
 // Tests
@@ -303,5 +347,15 @@ when: (multipleInstancesWithoutSynchronization: Service5 nrOfInstancesCreated: 3
 };
 */
 
+/*
+whenAll: (staticPartialJoinForMultipleInstances: Service5 number: 2 outOf: 3 into: Service6) resolved: { |services| 
+	stop(services[1]); 
+};
+*/
 
+/*
+when: (interleavedRouting: [Service5, Service6, Service8] into: Service4) becomes: { |service|
+	stop(service);
+};
+*/
 
