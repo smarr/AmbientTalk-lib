@@ -28,6 +28,7 @@
 package at.urbiflock.ui.guanotes;
 
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.GridBagConstraints;
@@ -60,7 +61,6 @@ public abstract class GuanoteView extends Frame {
 
 	public GuanoteView(Guanote g, String title) {
 		super(title);
-				
 		try {
 			from_.setText(g.getSenderName());
 			String[] receivers = g.getReceiverList();
@@ -85,7 +85,7 @@ public abstract class GuanoteView extends Frame {
 		
 		message_.setBackground( new Color(205,198,97) );
 		message_.setFont(Font.decode("Marker Felt-18"));
-		
+		message_.setMinimumSize(new Dimension(1,1));
 		setLayout(new BoxLayout(this, BoxLayout.Y_AXIS));
 		
 		contentPanel_.setLayout(new BoxLayout(contentPanel_, BoxLayout.Y_AXIS));

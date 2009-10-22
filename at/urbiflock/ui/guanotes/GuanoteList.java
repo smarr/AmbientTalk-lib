@@ -30,6 +30,7 @@ package at.urbiflock.ui.guanotes;
 
 import java.awt.Button;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Frame;
 import java.awt.List;
@@ -63,7 +64,6 @@ public class GuanoteList extends Frame implements GuanoteListener {
 	
 	public GuanoteList(final GuanotesApp app) {
 		super("Guanotes Inbox");
-		
 		try {
 			this.setTitle(app.owner().getProfile().username() + ":: Guanotes Inbox");
 		} catch (Exception e1) {
@@ -77,7 +77,7 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		
 		ScrollPane listPane = new ScrollPane();
 		listPane.add(guanoteList_);
-		
+		listPane.setMinimumSize(new Dimension(1,1));
 		add(listPane);
 		
 		Panel buttonPanel = new Panel();
@@ -139,8 +139,8 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		
 		pack();
 		this.setSize(400, 200);
-
 		this.setVisible(true);
+		
 	}
 	
 	public void guanoteReceived(Guanote g) throws Exception {

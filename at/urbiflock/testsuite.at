@@ -36,5 +36,6 @@
    /.at.urbiflock.application.ApplicationTest(),
    /.at.urbiflock.rete.ReteTest(),
    /.at.urbiflock.proximity.ProximityTest(),
-   /.at.urbiflock.ambientTota.AmbientTotaTest()
+   /.at.urbiflock.ambientTota.AmbientTotaTest(),
+   /.at.urbiflock.guanotes.GuanotesTest()
  ]);
