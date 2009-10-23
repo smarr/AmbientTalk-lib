@@ -1,361 +1,667 @@
 import /.at.lang.futures;
-enableFutures(true);
-
-deftype NoCondition <: lobby.at.types.Exception;
-def XNoCondition := lobby.at.exceptions.createException(NoCondition);
-
-
-// stop
-def stop(typetag) {
-	when: typetag discovered: { |service|
-		when: service<-start() becomes: { |reply|
-			reply;
-		};
-	};
-};
-
-// sequence
-def sequence(serviceTypeTable) {
-	def result := makeFuture()[1];
-	def execute(idx) {
-		when: serviceTypeTable[idx] discovered: { |service|
-			when: service<-start() becomes: { |reply|
-				if: (idx == (serviceTypeTable.length() - 1)) then: {
-					(reflect: result)<-resolveWithValue(serviceTypeTable[serviceTypeTable.length()]);
-				} else: {
-					execute(idx + 1);
-				};
-			};
-		};
-	};
-	execute(1);
-	result;
-};
-
-// parallel split
-def parallelSplit: serviceTypeTag into: serviceTypeTable {
-	def result := makeFuture()[1];
-	when: serviceTypeTag discovered: { |service|
-		when: service<-start() becomes: { |reply|
-			(reflect: result)<-resolveWithValue(serviceTypeTable);
-		};
-	};
-	result;
-};
-
-// synchronization
-// + structured synchronization merge
-def synchronize: serviceTypeTable before: serviceTypeBefore {
-	def result := makeFuture()[1];
-	def execute(idx) {
-		when: serviceTypeTable[idx] discovered: { |service|
-			when: service<-start() becomes: { |reply|
-				if: (idx == serviceTypeTable.length()) then: {
-					(reflect: result)<-resolveWithValue(serviceTypeBefore);
-				} else: {
-					execute(idx + 1);
-				};
-			};
-		};
-	};
-	execute(1);
-	result;
-};
+import /.at.lang.multifutures;
+enableFutures(false);
+network.online();
 
 
-// exclusive choice
-def exclusiveChoice: serviceTypeTag conditionActions: conditionActionRules {
-	def result := makeFuture()[1];
-	when: serviceTypeTag discovered: { |service|
-		when: service<-start() becomes: { |reply|
-			def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
-			if: (conditionActions.isEmpty()) then: {
-				raise: XNoCondition.new("No matching condition found");
-			} else: {
-				(reflect: result)<-resolveWithValue(conditionActions[1][2]);
-			};
-		};
-	};
-	result;
-};
+ 
+deftype Pattern;
+deftype Service;
+deftype Table;
+		
 
+def Stop := object: {
+	def component;
 
-// simple merge
-// + multi merge
-def simpleMerge: serviceTypeTable into: serviceType {
-    def [multiFuture, resolver] := makeMultiFuture(serviceTypeTable.length());
-    def execute(idx) {
-        when: serviceTypeTable[idx] discovered: { |service|
-            when: service<-start() becomes: { |reply|
-                (reflect: multiFuture)<-resolveWithValue(serviceType);
+    def init(cmp) {
+    	component := cmp;
+    };
+	
+  def start() {
+	execute(component);
+  };
+	
+ def execute(cmp) {
+	if: (is: cmp taggedAs: Service) then: {
+     	when: cmp.getTag() discovered: { |service|
+            when: service<-start()@FutureMessage becomes: { |reply|
+                reply;
             };
         };
-        if: (idx < serviceTypeTable.length()) then: {
-            execute(idx + 1);
-        };
-    };
-    execute(1);
-    multiFuture;
-};
-
-
-// multichoice
-def multichoice: serviceTypeTag conditionActions: conditionActionRules {
-	def result := makeFuture()[1];
-	when: serviceTypeTag discovered: { |service|
-		when: service<-start() becomes: { |reply|
-			def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
-			if: (conditionActions.isEmpty()) then: {
-				raise: XNoCondition.new("No matching condition found");
-			} else: {
-					(reflect: result)<-resolveWithValue(conditionActions.map: { |rule| rule[2] });
-			};
-		};
-	};
-	result;
-};
-
-
-// structured discriminator
-def structuredDiscriminator: serviceTypeTable into: serviceType {
-	  def future := makeFuture()[1];
-	  def flag := true;
-	  def execute(idx) {
-	      when: serviceTypeTable[idx] discovered: { |service|
-	          when: service<-start() becomes: { |reply|
-				 if: flag then: {
-					 flag := false;
-	                 (reflect: future).resolveWithValue(serviceType);
-				 };
-	           };
-	      };
-	      if: (idx < serviceTypeTable.length()) then: {
-	          execute(idx + 1);
-	      };
-	};
-	execute(1);
-	future;
-};
-
-
-// structured partial join
-def structuredPartialJoin: number outOf: serviceTypeTable into: serviceType {
-	  def future := makeFuture()[1];
-	  def nr := 0;
-	    def execute(idx) {
-	        when: serviceTypeTable[idx] discovered: { |service|
-	            when: service<-start() becomes: { |reply|
-					if: (nr <= number) then: {
-						 nr := nr + 1;
-	                     (reflect: future).resolveWithValue(serviceType);
-					};
-	            };
-	        };
-	        if: (idx < serviceTypeTable.length()) then: {
-	            execute(idx + 1);
-	        };
-	    };
-	execute(1);
-	future;
-};
-
-
-// thread merge
-// + multiple instances with a priori design-time knowledge
-// + multiple instances with a priori run-time knowledge
-def threadMerge: serviceTypeTag times: number into: serviceType {
-	def future := makeFuture()[1];
-    def execute(idx) {
-        when: serviceTypeTag discovered: { |service|
-            when: service<-start() becomes: { |reply|
-               if: (idx < number) then: {
-					execute(idx + 1);
-				} else: {
-					(reflect: future).resolveWithValue(serviceType);
-				};
-			};
-		};	
-    };
-    execute(1);
-	future;
-};
-
-
-// thread split
-def threadSplit: serviceTypeTag to: number of: serviceType {
-	def future := makeFuture()[1];
-	when: serviceTypeTag discovered: { |service|
-		when: service<-start() becomes: { |reply|
-			def serviceTypeTags[number] { serviceType; };
-			(reflect: future).resolveWithValue(serviceTypeTags);
-		};
-	};
-	future;
-};
-
-
-// multiple instances without synchronization
-// the number of task instances (i.e. numinst) is known as design time and is a fixed value
-def multipleInstancesWithoutSynchronization: serviceTypeTag nrOfInstancesCreated: number into: serviceType {
-	def future := makeFuture()[1];
-	(reflect: future).resolveWithValue(serviceType);
-	def execute(idx) {
-		when: serviceTypeTag discovered: { |service|
-			service<-start();
-			if: (idx < number) then: {
-				execute(idx + 1);
-			};
-		};
-	};
-	if: (number > 0) then: {
-		execute(1);
-	}; 
-	future;
-};
-
-
-// static partial join for multiple instances
-def staticPartialJoinForMultipleInstances: serviceTypeTag number: n outOf: m into: serviceType {
-	def [multiFuture, resolver] := makeMultiFuture(n);
-    def execute(idx) {
-        when: serviceTypeTag discovered: { |service|
-            when: service<-start() becomes: { |reply|
-					(reflect: multiFuture)<-resolveWithValue(serviceType);
-				} catch: { |e|
-					resolver.ruin(e);
-				};
-            };
-        if: (idx < m) then: {
-            execute(idx + 1);
-        };
-    };
-    execute(1);
-    multiFuture;	
-};
-
-
-// interleaved routing
-def interleavedRouting: serviceTypeTable into: serviceType {
-	def future := makeFuture()[1];
-	def invokedServices := [];
-	def execute(idx) {
-		if: ( idx <= serviceTypeTable.length() ) then: {
-			def randomNumber := /.at.support.util.randomNumberBetween(1, serviceTypeTable.length() + 1); 
-			if: ( invokedServices.contains(randomNumber) ) then: {
-				execute(idx);
-			} else: {
-				invokedServices := invokedServices + [randomNumber];
-				when: serviceTypeTable[randomNumber] discovered: { |service|
-					when: service<-start() becomes: { |reply|
-					     execute(idx + 1);
+    } else: { // component is a pattern 
+		whenEach: cmp.start() becomes: { |resultcmp|
+			// resultcmp is the last component (service, pattern or table) that still must be executed
+			if: (is: resultcmp taggedAs: Table) then: {
+				// table can contain both services and patterns
+				resultcmp.each: { |cmp| execute(cmp); };
+			} else: { 
+				if: (is: resultcmp taggedAs: Pattern) then: {
+					execute(resultcmp);
+				} else: { // resultcmp is a service
+					when: resultcmp.getTag() discovered: { |service|
+						when: service<-start()@FutureMessage becomes: { |end|
+							end;
+						};
 					};
 				};
 			};
-	     } else: {
-		    (reflect: future).resolveWithValue(serviceType);
-		};
-	};
-	execute(1);
-	future;
-};
-
-
-// Tests
-
-//network.online();
-
-//deftype Service1;
-//deftype Service2;
-//deftype Service3;
-//deftype Service4;
-//deftype Service5;
-//deftype Service6;
-//deftype Service7;
-//deftype Service8;
-
-/*
-when: sequence([ Service1, Service2, Service3 ]) becomes: { |end|
-	 stop(end);
-};
-*/
-
-/*
-when: (parallelSplit: Service1 into: [ Service5, Service6 ]) becomes: { |services|
-	services.each: { |service| stop(service); };
-};
-*/
-
-/*
-when: (parallelSplit: Service1 into: [ Service5, Service6 ]) becomes: { |services|
-	when: (synchronize: services before: Service4) becomes: { |service|
-		stop(service);
+        };
 	 };
-};
-*/
+  };
+} taggedAs: [Pattern];
 
-/*
-when: (exclusiveChoice: Service7 conditionActions: [ 
-	[ { |reply| reply }, Service5 ],
-	[ { |reply| !reply }, Service6 ]])
-	becomes: { |service|
-		stop(service);
+
+
+
+def Sequence := object: {
+    def componentTable;
+	def maximum := 1;
+    def [result, resolver]; 
+
+    def init(cmpTable) {
+    	componentTable := cmpTable;
+		foreach: { |component| 
+			if: (is: component taggedAs: Pattern) then: {
+				if: (component.max() > maximum) then: {
+					maximum := component.max();
+				};
+			};
+		} in: componentTable;
+    };
+
+    def max() {
+		maximum;
 	};
+
+    def start() {
+	    if:(result.isResolved()) then: {  //TODO
+		   result;
+		} else: {
+			if: (result.isFuture()) then: {  //TODO
+				when: result becomes: { |reply|
+					reply;
+				};
+			} else: {
+			 	[result, resolver] := makeMultiFuture(maximum); 
+				execute(1, componentTable[1], result);
+				result;
+			};
+		};
+	};
+		
+	def executeService(idx, component, result, service) {
+		when: service<-start()@Due(seconds(2)) becomes: { |reply|
+        	if: (idx == (componentTable.length()) - 1) then: {
+				// future is resolved with last component of the sequence
+				(reflect: result)<-resolveWithValue(componentTable[componentTable.length()])@FutureMessage;
+			} else: {
+               	execute(idx + 1, componentTable[idx + 1], result);
+            };
+		}
+		catch: TimeoutException using: { |e|
+			system.println("service offline");
+			execute(idx, component, result);
+		};
+	};
+		
+	def execute(idx, component, result) {
+		// component can be either service or pattern
+        if: (is: component taggedAs: Service) then: {
+			system.println(" component " + component.getTag());
+        	when: component.getTag() discovered: { |service|
+            	executeService(idx, component, result, service);
+            };
+       	} else: { // component is a pattern
+			whenEach: component.start() becomes: { |resultcmp|
+				// resultcmp can be either a service or pattern
+				execute(idx, resultcmp, result);
+			};
+        };
+	};
+} taggedAs: [Pattern];
+
+ 
+
+
+def ParallelSplit := object: {
+	def component;
+    def componentTable;
+	def maximum := 1;
+
+    def init(cmp, cmpTable) {
+		component := cmp;
+    	componentTable := cmpTable;
+		if: (is: component taggedAs: Pattern) then: {
+			maximum := component.max();
+		};
+    };
+
+	def max() {
+		maximum;
+	};
+  
+	def start() {
+		def [result, resolver] := makeMultiFuture(maximum); 
+		execute(component, result);
+		result;
+	};	
+		
+	def execute(component, result) {
+		// component can be either service or pattern
+		if: (is: component taggedAs: Service) then: {
+			when: component.getTag() discovered: { |service|
+				when: service<-start() becomes: { |reply|
+					(reflect: result)<-resolveWithValue(componentTable);
+				};
+			};
+		} else: { // component is a pattern
+			when: component.start() becomes: { |endcmp| 
+				execute(endcmp, result);
+			};
+		};
+	};
+} taggedAs: [Pattern];
+
+
+
+
+def Synchronize := object: {
+    def componentTable;
+	def component;
+	def maximum := 1;
+
+    def init(cmpTable, cmp) {
+		componentTable := cmpTable;
+    	component := cmp;
+		foreach: { |component| 
+			if: (is: component taggedAs: Pattern) then: {
+				if: (component.max() > maximum) then: {
+					maximum := component.max();
+				};
+			};
+		} in: componentTable;
+    };
+
+	def max() {
+		maximum;
+	};
+
+	def start() {
+		def [result, resolver] := makeMultiFuture(maximum); 
+		invokeServices(1, componentTable, result, []);
+		result;
+	};
+		
+	def invokeServices(idx, table, result, replies) {
+		if: (idx > table.length()) then: {
+			execute(1, replies[1], result, replies);
+		} else: {
+			def cmp := table[idx];
+			// cmp is a service or a pattern
+			if: (is: cmp taggedAs: Service) then: {
+				when: cmp.getTag() discovered: { |service|
+					replies := replies + [service<-start()]; 
+					invokeServices(idx + 1, table, result, replies); 
+				};
+			} else: { // cmp is a pattern
+				replies := replies + [cmp.start()]; 
+				invokeServices(idx + 1, table, result, replies);
+			};			
+		};
+	};
+	
+	def execute(idx, ref, result, replies) {
+		when: ref becomes: { |reply|
+			// reply can be either a pattern, service, table or normal reply
+			if: (is: reply taggedAs: Table) then: {
+				invokeServices(1, reply, result, []);
+				if: (idx == replies.length()) then: {
+					(reflect: result)<-resolveWithValue(component);
+				} else: {
+					execute(idx + 1, replies[idx + 1], result, replies);
+				};				
+			} else: { // reply is a pattern or service
+				if: (is: reply taggedAs: Pattern) then: {
+					when: reply.start() becomes: { |endcmp|
+						execute(idx, endcmp, result, replies); 
+						if: (idx == replies.length()) then: { //deze check moet gedaan worde voor ge execute oproept denk ik
+							(reflect: result)<-resolveWithValue(component);
+						} else: {
+							execute(idx + 1, replies[idx + 1], result, replies);   
+						};
+					};
+				} else: { // reply is either a service or a reply (of a service)
+					if: (is: reply taggedAs: Service) then: {
+						when: reply.getTag() discovered: { |service|
+							when: service<-start() becomes: { |reply|
+								if: (idx == replies.length()) then: {
+									(reflect: result)<-resolveWithValue(component);
+								} else: {
+									execute(idx + 1, replies[idx + 1], result, replies);
+								};
+							};
+						};
+					} else: { // reply is a reply (of a service)
+						if: (idx == replies.length()) then: {
+							(reflect: result)<-resolveWithValue(component);
+						} else: {
+							execute(idx + 1, replies[idx + 1], result, replies);
+						};
+					};
+				};
+			};
+		};
+	};
+} taggedAs: [Pattern];
+
+
+
+
+def ExclusiveChoice := object: {
+	def component;
+	def conditionActionRules;
+	def maximum := 1;
+
+    def init(cmp, car) {
+		component := cmp;
+    	conditionActionRules := car;
+		if: (is: component taggedAs: Pattern) then: {
+			maximum := component.max();
+		};
+    };
+  
+	def max() {
+		maximum;
+	};
+
+	def start() {
+		def [result, resolver] := makeMultiFuture(maximum); 
+		execute(component, result);
+		result;
+	};
+		
+	def execute(cmp, result) {
+		// cmp can be either a service or a pattern
+		if: (is: cmp taggedAs: Service) then: {
+           	when: cmp.getTag() discovered: { |service|
+               	when: service<-start() becomes: { |reply|
+					def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
+					if: (conditionActions.isEmpty()) then: {
+						raise: XNoCondition.new("No matching condition found");
+					} else: {
+						(reflect: result)<-resolveWithValue(conditionActions[1][2]);
+					};
+				};
+			};
+		} else: { // cmp is a pattern
+			when: component.start() becomes: { |endcmp|
+				// endcmp can be either a service or a pattern
+				execute(endcmp, result); 
+			};
+		}; 			
+	};
+} taggedAs: [Pattern];
+
+
+
+/*
+def SimpleMerge := object: {
+	def serviceTag;
+	def serviceTypeTable;
+	def maximum := 1;
+
+    def init(stt, st) {
+		serviceTag := st;
+    	serviceTypeTable := stt;
+		foreach: { |component| 
+			if: (is: component taggedAs: MultiPattern) then: {
+				maximum := maximum + component.max();
+			} else: {
+				maximum := maximum + 1;
+			};
+			} in: serviceTypeTable;
+    };
+
+	def max() {
+		maximum;
+	};
+  
+	def start() {
+		def [result, resolver] := makeMultiFuture(maximum);
+		def execute(idx) {
+			def component := serviceTypeTable[idx];
+			if: (is: component taggedAs: Service) then: {
+				when: component.getTag() discovered: { |service|
+					when: service<-start() becomes: { |reply|
+						(reflect: result)<-resolveWithValue(serviceTag);
+					};
+				};
+				if: (idx < serviceTypeTable.length()) then: {
+		            execute(idx + 1);
+		        };
+			} else: {
+				if: (is: component taggedAs: MultiPattern) then: {
+					whenEach: component.start() becomes: { |reply|
+						when: reply.getTag() discovered: { |service|
+							when: service<-start() becomes: { |end|
+								(reflect: result)<-resolveWithValue(serviceTag);
+							};
+						};
+					};
+					if: (idx < (serviceTypeTable.length())) then: {  
+						execute(idx + 1);
+					};
+				} else: {
+					when: serviceTag.start() becomes: { |serviceWrapper| 
+						when: serviceWrapper.getTag() discovered: { |end|
+							when: end<-start() becomes: { |reply|
+								(reflect: result)<-resolveWithValue(serviceTag);
+							};
+						};
+					};
+					if: (idx < serviceTypeTable.length()) then: {
+		        		execute(idx + 1);
+					};
+				};
+			};
+		};
+		execute(1);
+		result;
+	};
+} taggedAs: [Pattern];
+*/
+
+
+
+def MultiChoice := object: {
+	def serviceTag;
+	def conditionActionRules;
+
+    def init(st, car) {
+		serviceTag := st;
+    	conditionActionRules := car;
+    };
+  
+	def start() {
+		def result := makeFuture()[1];
+		if: (is: serviceTag taggedAs: Service) then: {
+           	when: serviceTag.getTag() discovered: { |service|
+				when: service<-start() becomes: { |reply|
+					def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
+					if: (conditionActions.isEmpty()) then: {
+						raise: XNoCondition.new("No matching condition found");
+					} else: {
+						(reflect: result)<-resolveWithValue(conditionActions.map: { |rule| rule[2] });
+					};
+				};
+			};
+		} else: {
+			when: serviceTag.start() becomes: { |serviceWrapper| 
+				when: serviceWrapper.getTag() discovered: { |end|
+					when: end<-start() becomes: { |reply|
+						def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
+						if: (conditionActions.isEmpty()) then: {
+							raise: XNoCondition.new("No matching condition found");
+						} else: {
+							(reflect: result)<-resolveWithValue(conditionActions.map: { |rule| rule[2] });
+						};
+					};
+				};
+			};
+		};
+		result;
+	};
+} taggedAs: [Pattern];
+
+
+
+
+def StructuredDiscriminator := object: {
+	def serviceTag;
+	def serviceTypeTable;
+
+    def init(stt, st) {
+		serviceTag := st;
+    	serviceTypeTable := stt;
+    };
+  
+	def start() {
+		def future := makeFuture()[1];
+		def flag := true;
+		def execute(idx) {
+			def component := serviceTypeTable[idx];
+			if: (is: component taggedAs: Service) then: {
+				when: component.getTag() discovered: { |service|
+					when: service<-start() becomes: { |reply|
+						if: flag then: {
+							flag := false;
+							(reflect: future).resolveWithValue(serviceTag);
+						}
+					};
+				};
+			} else: { 
+				when: component.start() becomes: { |serviceWrapper|
+					when: serviceWrapper.getTag() discovered: { |service|
+						when: service<-start() becomes: { |reply|
+							if: flag then: {
+								 flag := false;
+				                 (reflect: future).resolveWithValue(serviceTag);
+							 };
+						};
+					};
+				};
+			};
+		    if: (idx < serviceTypeTable.length()) then: {
+		        execute(idx + 1);
+		    };
+		};
+		execute(1);
+		future;
+	};
+} taggedAs: [Pattern];
+
+
+
+
+def StructuredPartialJoin := object: {
+	def serviceTag;
+	def number;
+	def serviceTypeTable;
+
+    def init(nbr, stt, st) {
+		serviceTag := st; 
+    	serviceTypeTable := stt;
+		number := nbr;
+    };
+  
+	def start() {
+		def future := makeFuture()[1];
+		def nr := 0;
+		def execute(idx) {
+			def component := serviceTypeTable[idx];
+			if: (is: component taggedAs: Service) then: {
+				when: component.getTag() discovered: { |service|
+					when: service<-start() becomes: { |reply|
+						if: (nr <= number) then: {
+							 nr := nr + 1;
+		                     (reflect: future).resolveWithValue(serviceTag);
+						};
+					};
+				};
+				if: (idx < serviceTypeTable.length()) then: {
+		            execute(idx + 1);
+		        };
+			} else: {
+				when: component.start() becomes: { |serviceWrapper|
+					when: serviceWrapper.getTag() discovered: { |service| 
+						when: service<-start() becomes: { |reply|
+							if: (nr <= number) then: {
+								 nr := nr + 1;
+			                     (reflect: future).resolveWithValue(serviceTag);
+							};
+						};
+					};
+				};
+				if: (idx < serviceTypeTable.length()) then: {
+		            execute(idx + 1);
+		        };
+			};
+		};
+		execute(1);
+		future;
+	};
+} taggedAs: [Pattern];
+
+
+
+
+
+def ServiceWrapper := object: {
+    def serviceTag;
+      
+    def init(tag) {
+    	serviceTag := tag;
+    };
+
+    def getTag() {
+    	serviceTag;
+   	};
+} taggedAs: [Service];
+
+
+
+
+deftype Service1;
+deftype Service2;
+deftype Service3;
+deftype Service4;
+deftype Service5;
+deftype Service6;
+deftype Service7;
+deftype Service8;
+deftype Service9;
+deftype Service10;
+deftype Service11;
+
+
+def s1 := ServiceWrapper.new(Service1);
+def s2 := ServiceWrapper.new(Service2);
+def s3 := ServiceWrapper.new(Service3);
+def s4 := ServiceWrapper.new(Service4);
+def s5 := ServiceWrapper.new(Service5);
+def s6 := ServiceWrapper.new(Service6);
+def s7 := ServiceWrapper.new(Service7);
+def s8 := ServiceWrapper.new(Service8);
+def s9 := ServiceWrapper.new(Service9);
+def s10 := ServiceWrapper.new(Service10);
+def s11 := ServiceWrapper.new(Service11);
+
+
+def seq0 := Sequence.new([ s2, s2, s2 ]);
+def seq1 := Sequence.new([ s3, seq0, s3]);
+def seq2 := Sequence.new([ s2, s3, s3, seq0]);
+def seq3 := Sequence.new([ s2, s3, s11, s10, s4 ]);
+
+
+/*
+def stop := Stop.new(seq0);
+stop.start();
 */
 
 /*
-whenEach: (simpleMerge: [Service5, Service6] into: Service4) becomes: { |service|
-	stop(service);
-};
+def stop := Stop.new(seq1);
+stop.start();
 */
 
 /*
-when: (multichoice: Service7 conditionActions: [ 
-	[ { |reply| reply }, Service5 ], 
-	[ { |reply| !reply }, Service6 ] ]) 
-	becomes: { |services|
-	services.each: { |service| stop(service); };
-};
+def stop := Stop.new(seq2);
+stop.start();
 */
 
-/*	
-when: (structuredDiscriminator: [Service4, Service5, Service1] into: Service6) becomes: { |service|
-	stop(service);
-};
+
+def stop := Stop.new(seq3);
+stop.start();
+
+
+
+def par1 := ParallelSplit.new(seq3, [s5, s6]);
+def par2 := ParallelSplit.new(seq3, [seq0, s5]);
+
+/*
+def stop := Stop.new(par1);
+stop.start();
 */
 
 /*
-when: (structuredPartialJoin: 1 outOf: [Service4, Service6, Service8] into: Service5) becomes: { |service|
-	stop(service);
-};
+def stop := Stop.new(par2);
+stop.start();
+*/
+
+def sync1 := Synchronize.new([s4, s2, s2, s3], s6);
+def sync2 := Synchronize.new([par1], s10);
+
+/*
+def stop := Stop.new(sync1);
+stop.start();
 */
 
 /*
-when: (threadMerge: Service5 times: 3 into: Service4) becomes: { |service|
-	stop(service);
-};
+def stop := Stop.new(sync2);
+stop.start();
+*/
+
+def seq4 := Sequence.new([s2, s3, s7]);
+def exc1 := ExclusiveChoice.new(seq4, [ [ { |reply| reply }, s5 ], [ { |reply| !reply }, s6 ]]);
+
+/*
+def stop := Stop.new(exc1);
+stop.start();
+*/
+/*
+def sm1 := SimpleMerge.new([s2, s3], s4);
+def seq5 := Sequence.new([sm1, s9, s10]);
+def sm2 := SimpleMerge.new([sm1, s9], s10);
+*/
+/*
+def stop := Stop.new(sm1);
+stop.start();
 */
 
 /*
-when: (threadSplit: Service5 to: 3 of: Service6) becomes: { |services|
-		services.each: { |service| stop(service); };
-};
+def stop := Stop.new(seq5);
+stop.start();
 */
 
 /*
-when: (multipleInstancesWithoutSynchronization: Service5 nrOfInstancesCreated: 3 into: Service6) becomes: { |service|
-	stop(service);
-};
+def stop := Stop.new(sm2);
+stop.start();
+*/
+
+def mc1 := MultiChoice.new(s7, [ [ { |reply| reply }, s5 ], [ { |reply| !reply }, s6 ], [ { |reply| reply }, s4 ] ]);
+def mc2 := MultiChoice.new(s7, [ [ { |reply| reply }, seq1 ], [ { |reply| !reply }, s6 ], [ { |reply| reply }, s4 ] ]);
+
+/*
+def stop := Stop.new(mc1);
+stop.start();
 */
 
 /*
-whenAll: (staticPartialJoinForMultipleInstances: Service5 number: 2 outOf: 3 into: Service6) resolved: { |services| 
-	stop(services[1]); 
-};
+def stop := Stop.new(mc2);
+stop.start();
 */
 
+def sd1 := StructuredDiscriminator.new([s3, s4, s5], s2);
+
 /*
-when: (interleavedRouting: [Service5, Service6, Service8] into: Service4) becomes: { |service|
-	stop(service);
-};
+def stop := Stop.new(sd1);
+stop.start();
 */
+
+def spj1 := StructuredPartialJoin.new(2, [s2, s6, s4], s3);
+
+/*
+def stop := Stop.new(spj1);
+stop.start();
+*/
+
 
