@@ -92,7 +92,8 @@ def FirstClassRefModule := object: {
 			if: ((reflect: self).respondsTo(msg.selector)) then: {
 				self <+ msg; // process meta-message myself
 			} else: {
-				self.delegate<-receive(msg)@MetaMessage; // forward meta-message if not understood
+				self.delegate <+ msg;// forward meta-message if not understood
+			  //self.delegate<-receive(msg)@MetaMessage; 
 			}
 		};
 		

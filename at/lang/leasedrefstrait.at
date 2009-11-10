@@ -53,7 +53,10 @@ def LeasedRefTraitModule := object: {
 	deftype ExpiredLease <: /.at.types.Exception;
 	def XExpiredLease := /.at.exceptions.createException(ExpiredLease);
 	
-	// Trait for common behaviour amongst client and server leases
+	/* Trait for common behaviour amongst client and server leases
+	 * This trait requires:
+	 * leaseTransportStrategy // a closure describing how to parameter-pass the leases.
+	 */
   def TLeasedRef := object: {
 		
 		def timeInterval;
@@ -64,7 +67,8 @@ def LeasedRefTraitModule := object: {
 
 		// a leased reference is a special kind of far reference, hence
 		// mix in the far reference meta-level behaviour into this mirror
-		import FirstClassRefModule.TEventualRef exclude metaIntercept, newInstance; 
+		import FirstClassRefModule.TEventualRef exclude metaIntercept, newInstance;
+		
 		/* 
 		 * ATTENTION: the implementation of TEventualRef's required interface 
 		 * is defered to the concrete leased references except for:
@@ -116,10 +120,6 @@ def LeasedRefTraitModule := object: {
 		def expire(){
 			self.notify: self.observerCatalog.expiration withArgs: [];
 			self.takeLeasedObjectOffline;
-			// clean the far reference from CL to SL object when expires gets triggered at CL.
-			if: (is: self.base taggedAs: ClientLeasedRef) then:{
-				retract: self.delegate;
-			};
 		};
 
 		def revoke() {

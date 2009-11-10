@@ -73,6 +73,7 @@ def createServerLeaseMirror(principal, timeout := DEFAULT_LEASETIME) {
 		};
 	};
 
+	//TLeasedRef required interface
   def leaseTransportStrategy(remoteLease, tagsOfPrincipal, timeout) {
 	  { |remoteLease, tagsOfPrincipal, timeout|
 		  /.at.lang.leasedrefs.makeClientLease(remoteLease, tagsOfPrincipal, timeout);
@@ -130,7 +131,7 @@ def createSLWithSingleUseMirror(principal, timeout := DEFAULT_LEASETIME, forSele
 		}; 
 		res;
 	};
-	
+		
   def leaseTransportStrategy(remoteLease, tagsOfPrincipal, timeout) {
 	  { |remoteLease, tagsOfPrincipal, timeout, forSelectors|
      /.at.lang.leasedrefs.makeClientLeaseWithSingleUse(remoteLease, tagsOfPrincipal, timeout, forSelectors);
@@ -154,31 +155,25 @@ def createSLWithSingleUseMirror(principal, timeout := DEFAULT_LEASETIME, forSele
 def createClientLeaseMirror(remoteLease, timeout := DEFAULT_LEASETIME) { 
 	object: {	// we create a lease mirror by means of object: rather than mirror: to be able to tag our mirror with [LeaseMirror].
 						
-		import TLeasedRef alias init := initLease;
+		import TLeasedRef alias init := initLease exclude expire, retractUnsentMessages;
+    def unsentMessages := [];
 
 		def init(base) {
 			super^init(base);
 			self^initLease(remoteLease, timeout);
 			self.activateTimer();
+			self.unsentMessages := [];
 		};
 
     // implement TEventualRef's required interface
-
-		// Client leases are pass-by-copy
-		// TODO They now share the server lease, it should
-		// be cloned to keep the 1 to 1 relationship
-		def leaseTransportStrategy(remoteLease, tagsOfPrincipal, timeout) {
-		  { |remoteLease, tagsOfPrincipal, timeout|
-			  /.at.lang.leasedrefs.makeClientLease(remoteLease, tagsOfPrincipal, timeout);
-		  }
-	  };
 	
 		//all mesages received are forwarded to server lease. 
 		//the base object of a leased ref is an empty object => it does not understand any async msg.
 		def intercept(msg) {
 			if: !(isExpired) then: { 
-        delegate<-intercept(msg);
+        self.delegate<-intercept(msg)@/.at.lang.futures.OneWayMessage; //added in case futures are enabled by default.
 			} else: {
+				unsentMessages := unsentMessages + [msg];
 				raise: XExpiredLease.new("Sending a message to an expired lease " + self.toString);
 			};
 		};
@@ -194,6 +189,42 @@ def createClientLeaseMirror(remoteLease, timeout := DEFAULT_LEASETIME) {
 		// other MOP overriden methods
 		def newInstance(initargs){
 			makeClientLease(remoteLease, getClientTags(tagsOf: self.base), timeout);
+		};
+		
+		//TLeasedRef required interface
+		
+		// Client leases are pass-by-copy
+		// TODO They now share the server lease, it should
+		// be cloned to keep the 1 to 1 relationship
+		def leaseTransportStrategy(remoteLease, tagsOfPrincipal, timeout) {
+		  { |remoteLease, tagsOfPrincipal, timeout|
+			  /.at.lang.leasedrefs.makeClientLease(remoteLease, tagsOfPrincipal, timeout);
+		  }
+	  };
+	  
+	  // overriding defaut expire so that clean leases
+		// clean the messages of the far reference from CL to SL but 
+		// they keep them in case the user issues a retract: operation.
+		def expire(){
+			self.notify: self.observerCatalog.expiration withArgs: [];
+			self.takeLeasedObjectOffline;
+      // clean the far reference from CL to SL object when expires gets triggered at CL.
+		  def messages := (retract: self.delegate);
+		  messages.each: { |msg|
+			  //note that msg were sent in a intercept message,
+			  //i.e. self.delegate<-intercept(originalMessage) 
+			  def originalMsg := msg.arguments;
+			  unsentMessages := unsentMessages + [originalMsg[1]];
+	    };
+		};
+		
+		/* Overriding default TEventualRef behaviour so that leased references can be retracted as far references
+		*  Note that the retract operation has to be issued at the client side of the lease: 
+		*  retracting the server side of a lease will return an empty table
+		*  as the reference between server lease and the principal behaves as a local far reference
+		*/
+		def retractUnsentMessages(){
+		  unsentMessages;
 		};
 
   } childOf: defaultMirror extends: true taggedAs: [LeaseMirror] mirroredBy: defaultMirror; 
@@ -459,14 +490,16 @@ def LeasingModule := object: {
 				def lease := renewOnCallLease: seconds(10) for: ( object: {
 				  def foo() { 
 						 unitest.assertFalse((reflect: lease).isExpired);
-					   res.resolve(`ok);
 					}; 
 	      });
 				self.assertEquals(0, (reflect: lease).state);
-		    actor:{ |lease, unitest| 
+		    actor:{ |lease, unitest, res| 
+					import /.at.lang.futures;
+				  enableFutures(false);
 			    try: { 
 			      lease<-foo();
-						unitest<-assertEquals(1, (reflect: lease).state);
+						def u := unitest<-assertEquals(1, (reflect: lease).state)@FutureMessage;
+						res<-resolve(u);
 					} catch: /.at.lang.leasedrefs.ExpiredLease using: { |e|
 						unitest<-fail("Unexpected expired lease " + lease + "with exception " +e);
 					};
@@ -482,12 +515,14 @@ def LeasingModule := object: {
 				(reflect: lease).activateTimer;
 				// pass lease to another actor
 		    def a := actor: { |res, unitest|
+					import /.at.lang.futures;
+				  enableFutures(false);
 			    def barLease;
 			    def bar(lease){barLease := lease};
 			    def bareto(lease){ 
 				    /.at.lang.leasedrefs.when: barLease expired: {
-					      unitest<-assertFalse((reflect: lease).isExpired);
-								res<-resolve(`ok);	
+					      def u := unitest<-assertFalse((reflect: lease).isExpired)@FutureMessage;
+								res<-resolve(u);	
 					  }; 
 	        };
 			  };
@@ -515,9 +550,8 @@ def LeasingModule := object: {
 					    def [fut, res] := makeFuture();
 					    when: lease<-foo()@FutureMessage becomes: {|val|
 						    unitest<-assertEquals(5, val);
-						    when: unitest<-assertTrue((reflect: lease).isExpired)@FutureMessage becomes: {|val|
-							    res.resolve(`ok);
-							  };
+						    def u := unitest<-assertTrue((reflect: lease).isExpired)@FutureMessage;
+							  res.resolve(u);
 						  }	catch: { |e| res.ruin(e) };
 							fut;
 				    };
@@ -543,7 +577,59 @@ def LeasingModule := object: {
 					unitest.fail("Unexpected expired lease " + lease + "with exception " +e);
 				};
 			};	
-  			
+			//checks that the retract: operation on leases works properly
+      def testAsyncExpireClientLease(){ 
+			  def [fut, res] := makeFuture();  
+				def a := actor: {
+				  import /.at.lang.leasedrefs;
+					def lease := renewOnCallLease: seconds(5) for: ( 
+						object: { def foo() { 5 } }
+				  ); 
+				  def getLease(){ lease };
+				  def disconnect(){
+					  disconnect: (reflect: lease);
+					  5;
+				  };
+				};
+			  when: a<-getLease()@FutureMessage becomes: { |clientLease|
+				  when: a<-disconnect()@FutureMessage becomes: { |val|
+				    self.assertEquals(5, val);
+				    clientLease<-foo();  
+			    };
+				  when: clientLease expired: {
+						 def unsentMsg := (retract: clientLease);
+				     self.assertEquals( 1, unsentMsg.length);
+						 self.assertEquals( `foo, unsentMsg[1].selector);
+						 self.assertTrue((reflect: clientLease).isExpired);
+						 res.resolve(`ok); 
+				  };
+		    };
+			  fut;
+      };
+			//checks that even if futures are enabled by default, 
+			//messages sent via leases at meta level don't get futurized.
+			def testAsyncFutureInteraction(){
+				def [fut, res] := makeFuture(); 
+				def unitest := self;
+				def a := actor: {
+					import /.at.lang.leasedrefs;
+					def getObject() {
+						renewOnCallLease: seconds(10) for: object: { def foo(x) {x}};
+					};
+				};
+				actor:{ |a, unitest, res|
+				  import /.at.lang.futures;
+				  enableFutures(true); 
+					when: a<-getObject() becomes: { |clease|
+						when: clease<-foo(10) becomes: { |val|
+							def u := unitest<-assertEquals(10, val);
+							res<-resolve(u);
+						};
+					};
+				};
+				fut; 
+      };
+			
   	}; // end extend:UnitTestwith:
 	}; // end LeasedRefsTest
 }; // end LeasingModule
