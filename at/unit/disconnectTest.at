@@ -180,7 +180,7 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 	  };
 		fut;
 	};
-	// 1. object exported explicitely
+	// 1. object exported explicitly
 	// 2. disconnect: object
 	// 3. make actor which searches type of the disconnected object 
 	// after the 'disconnected' event has been broadcasted.
@@ -202,8 +202,8 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  when: seconds(2) elapsed: { 
 				  //while disconnected, the actor won't discover the object.
 				 	when: a<-counters()@FutureMessage becomes:{ |val|
-					  unit.assertEquals(0, val[1], "error 11-1 "+ val[1]);
-					  unit.assertEquals(0, val[2], "error 11-2 "+ val[2]);
+					  unit.assertEquals(0, val[1], "countDiscoveries should be zero while disconnected, but is "+val[1]);
+					  unit.assertEquals(0, val[2], "countDisconnects should be zero while disconnected, but is "+val[2]);
 					  sub.reconnect();
 				  };
 				}; 
@@ -212,10 +212,10 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 		  def discovered() {
 			   disconnect: self; 
 			   //disconnect events take some time to communicate!!
-			   when: seconds(10) elapsed: { 
+			   when: seconds(8) elapsed: { 
 				  res.resolve( when: a<-counters()@FutureMessage becomes:{ |val|
-					  unit.assertEquals(1, val[1], "error 12-1 " + val[1]);
-					  unit.assertEquals(1, val[2], "error 12-2 " + val[2]);
+					  unit.assertEquals(1, val[1], "countDiscoveries should be 1 after reconnect&disconnect, but is " + val[1]);
+					  unit.assertEquals(1, val[2], "countDisconnects should be 1 after reconnect&disconnect, but is " + val[2]);
 				  });
 				 }; 
 		  };
@@ -226,11 +226,16 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  def countDiscoveries := 0;
 			  def countDisconnects := 0;
 			  def counters(){ [countDiscoveries, countDisconnects] };
+			  def discoveredRefs := [];
 			  def sub := whenever: testAsyncExplicitExportOfDisconnectedRef discovered:{ |ref|
 				  countDiscoveries := countDiscoveries + 1;
 				  ref<-discovered();
-				  when: ref disconnected:{
-					  countDisconnects := countDisconnects +1;
+				  // we need to store the ref somewhere until the whenever:disconnected:
+				  // listener has fired, otherwise the ref may be GCd before the listener
+				  // triggers!
+				  discoveredRefs := discoveredRefs + [ref];
+				  whenever: ref disconnected: {
+					  countDisconnects := countDisconnects + 1;
 				  };
 			  };
 		  };
@@ -277,7 +282,12 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  def countDiscoveries := 0;
 			  def countDisconnects := 0;
 			  def counters(){ [countDiscoveries, countDisconnects] };
+			  def discoveredRefs := [];
 			  def sub := whenever: testAsyncExplicitExportOfDisconnectedRef2 discovered:{ |ref|
+				  // we need to store the ref somewhere until the whenever:disconnected:
+				  // listener has fired, otherwise the ref may be GCd before the listener
+				  // triggers!
+				  discoveredRefs := discoveredRefs + [ref];
 				  countDiscoveries := countDiscoveries + 1;
 				  if: (countDiscoveries == 1) then: { ref<-disconnect()} 
 				  else: {
@@ -285,7 +295,7 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 					  //is never disconnected/reconnected after the discovered() message
 					  ref<-discovered(counters()); 
 					};
-				  when: ref disconnected:{
+				  whenever: ref disconnected:{
 					  countDisconnects := countDisconnects +1;
 				  };
 			  };

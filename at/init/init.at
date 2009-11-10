@@ -215,25 +215,27 @@ def extendIsolate: obj with: clo taggedAs: tags {
 def when: remoteRef disconnected: code {
 	def active := true;
 	def sub := whenever: remoteRef disconnected: {
-		if: active then: code;
-	};
-	object: {
+		if: active then: { subscription.cancel(); code() };
+	};	
+	def subscription := object: {
 		def cancel() {
 			active := false;
 			sub.cancel();
 		}
-	}
+	};
+	subscription;
 };
 
 def when: remoteRef reconnected: code {
 	def active := true;
 	def sub := whenever: remoteRef reconnected: {
-		if: active then: code;
+		if: active then: { subscription.cancel(); code() };
 	};
-	object: {
+	def subscription := object: {
 		def cancel() {
 			active := false;
 			sub.cancel();
 		}
-	}
+	};
+	subscription;
 };

@@ -169,7 +169,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		testF;
 	};
 	
-	/* test whether futures work on unannotated messages when enabling them by default */
+	// test whether futures work on unannotated messages when enabling them by default
 	def testAsyncDefaultFutures() {
 		def [f,r] := /.at.lang.futures.makeFuture();
 		def a := actor: { |r|
@@ -184,9 +184,8 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		f
 	};
 	
-	/* test whether a single message can be sent multiple times and that
-	 * each message send carries its own, independently resolvable future.
-	 */
+	// test whether a single message can be sent multiple times and that
+	// each message send carries its own, independently resolvable future.
 	def testAsyncFuturePerSend() {
 		def msg := <-m()@FutureMessage;
 		def rcvr := object: {
@@ -202,9 +201,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		group: [sync1, sync2]
 	};
 	
-	/**
-	 * Tests the new slot-based reflective interface defined on mirrors.
-	 */
+	// Tests the new slot-based reflective interface defined on mirrors.
 	def testSlotbasedReflection() {
 		def o := object: {
 			def x := 5;
@@ -251,9 +248,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(8, o.foo);
 	};
 	
-	/**
-	 * Tests the new slot-based reflective interface on mirrors of mirages.
-	 */
+	// Tests the new slot-based reflective interface on mirrors of mirages.
 	def testSlotbasedReflectionOnMirages() {
 		def o := object: {
 			def x := 5;
@@ -308,9 +303,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(8, o.foo);
 	};
 	
-	/**
-	 * Tests whether one can add and remove slots to an object dynamically.
-	 */
+	// Tests whether one can add and remove slots to an object dynamically.
 	def testSlotRemoval() {
 		def o := object: { def x := 1; def m() { x } };
 
@@ -444,6 +437,53 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 			def m(i) { res.resolve(`ok) }
 		};
 		reflectOnActor().schedule(rcvr, a);
+	  fut
+	};
+	
+	def testAsyncHandlerTriggerConcurrencyBug() {
+		def [fut,res] := makeFuture(seconds(6));
+		deftype testAsyncHandlerTriggerConcurrencyBug;
+		
+		def actor := reflectOnActor();
+		actor.becomeMirroredBy: (extend: actor with: {});
+		
+		def ref; // we need to keep a reference to the remote ref until its
+		         // when:disconnected: listener triggered, otherwise the ref
+		         // may simply be garbage collected and its when:disconnected:
+		         // listener will never be triggered!
+		         // alternatively, we could have stored a ref to the subscription
+		         // of the when:disconnected: listener
+		when: testAsyncHandlerTriggerConcurrencyBug discovered: { |r|
+			system.println("[TEST] discovered: " + r);
+			ref := r;
+			when: r disconnected: {
+				system.println("[TEST] disconnected: " + r);
+				
+				// if this when:disconnected: listener successfully triggers,
+				// the test is successful
+				res.resolve(`ok);
+			}
+		};
+		
+		def makeServerActor() {
+			actor: { |testAsyncHandlerTriggerConcurrencyBug|
+				import /.at.support.timer;
+
+				def go() {
+					def o := object: { };
+					export: o as: testAsyncHandlerTriggerConcurrencyBug;
+					system.println("[TEST] exported: " + o);
+					
+					when: seconds(3) elapsed: {						
+						disconnect: o; // to trigger a disconnect
+						system.println("[TEST] o taken offline");
+					}
+				}
+			}	
+		};
+		
+		makeServerActor()<-go();
+		
 	  fut
 	};
 	
