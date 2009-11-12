@@ -224,7 +224,9 @@ def createClientLeaseMirror(remoteLease, timeout := DEFAULT_LEASETIME) {
 		*  as the reference between server lease and the principal behaves as a local far reference
 		*/
 		def retractUnsentMessages(){
-		  unsentMessages;
+		  def msgs := unsentMessages;
+		  unsentMessages := [];
+		  msgs;
 		};
 
   } childOf: defaultMirror extends: true taggedAs: [LeaseMirror] mirroredBy: defaultMirror; 
@@ -600,7 +602,8 @@ def LeasingModule := object: {
 						 def unsentMsg := (retract: clientLease);
 				     self.assertEquals( 1, unsentMsg.length);
 						 self.assertEquals( `foo, unsentMsg[1].selector);
-						 self.assertTrue((reflect: clientLease).isExpired);
+						 unsentMsg := (retract: clientLease);
+						 self.assertEquals( 0, unsentMsg.length);
 						 res.resolve(`ok); 
 				  };
 		    };
@@ -628,7 +631,7 @@ def LeasingModule := object: {
 					};
 				};
 				fut; 
-      };
+      }; 
 			
   	}; // end extend:UnitTestwith:
 	}; // end LeasedRefsTest
