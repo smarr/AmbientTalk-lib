@@ -56,4 +56,22 @@ def createFieldSlot(nam, initval) {
 	[ createClosureMethod(scope, accMethod), createClosureMethod(scope, mutMethod) ]
 };
 
+// an AmbientTalk implementation of the class 'NATClosureMethod', the difference
+// being that objects returned by this method are isolates and will work fine
+// as long as the passed 'scope' and 'method' objects are isolates themselves
+def createIsolateClosureMethod(scope, meth) {
+	extend: meth with: { |scope, meth|
+		def apply(args, ctx) {
+			def hostObject := ctx.lexicalScope;
+			def hostParent := hostObject.super;
+
+			def externalFrame := jlobby.edu.vub.at.objects.natives.NATCallframe.new(scope);
+			// super = the parent of the object to which this method was added
+			(reflect: externalFrame).defineField(`super, hostParent);
+
+			meth.applyInScope(args, ctx.withLexicalEnvironment(externalFrame));
+		}
+	} taggedAs: [/.at.types.Isolate];
+};
+
 self;
