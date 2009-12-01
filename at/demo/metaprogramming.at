@@ -45,9 +45,6 @@ def pow(x, n) {
 	}
 };
 
-// let's see whether it works
-system.println("pow(5,2) = " + pow(2,5)); // prints 32
-
 // this power function takes an abstract syntax tree representing
 // a variable identifier var, and a number n, and returns
 // an expression that, when evaluated, yields var^n
@@ -62,9 +59,6 @@ def expandPow(var, n) {
 	}
 };
 
-// this prints the expression 'y * y * y * 1'
-system.println("expandPow(`y,3) = " + expandPow(`y,3));
-
 def powMaker(n) {
 	def ast := expandPow(`x, n);
 	// the built-in function 'eval:in:' takes an expression and an object and
@@ -73,14 +67,26 @@ def powMaker(n) {
 	eval: `({|x| #ast}) in: self;
 };
 
-// pow5 is now bound to a function { |x| x*x*x*x*x*1 }
-def pow5 := powMaker(5);
+def MetaprogrammingTest() {
+	extend: /.at.unit.test.UnitTest.new("metaprogramming demo test") with: {		
+		def testMetaprogramming() {
+			self.assertEquals(32, pow(2,5)); // prints 32
 
-// applying pow5 yields 32, as expected
-system.println("pow5(2) = " + pow5(2));
+      // compare printed representations as == on ASTs is currently ill-defined
+      self.assertEquals((reflect: `(y*(y*(y*1)))).print(),
+                        (reflect: expandPow(`y,3)).print());
 
-// note that the expanded version is faster, as expected:
-system.println("pow(2,5) takes " + (time: { pow(2,5) }) +"ms");
-system.println("pow5(2) takes " + (time: { pow5(2) }) +"ms");
+			// pow5 is now bound to a function { |x| x*x*x*x*x*1 }
+			def pow5 := powMaker(5);
 
-self;
+			// applying pow5 yields 32, as expected
+			self.assertEquals(32, pow5(2));
+
+			// note that the expanded version is faster, as expected:
+			// I'm commenting out this unit test because there is no strict
+			// guarantee that pow5 will be faster than pow, although in practice it often will be
+			// it's just that I don't want the unit tests to randomly fail due to some performance hick-up
+			// self.assertGreaterThan((time: { pow(2,5) }), (time: { pow5(2) }));
+	  };
+  };
+};
