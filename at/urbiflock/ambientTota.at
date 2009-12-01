@@ -42,7 +42,7 @@ def makeTupleSpace(descriptor){
 	def localTS := Vector.new(); //contains local tuples
 	def ambientTS := Vector.new(); // contains ambient tuples
 	def localTSListeners := Vector.new();
-	def seenTS := Vector.new(); // contains far references to seen TS.
+	def seenTS := Vector.new(); // contains [far references, descriptor] to seen TS.
 	  
 	// methods to manage the registration of when:matches.
 	def registerListener(l) {
@@ -63,14 +63,14 @@ def makeTupleSpace(descriptor){
 		// add ts to seenTS vector so that it can be
 	  // notified if I add a new tuple to the ambient.
 		def toSend := Vector.new();
-	  if: !(seenTS.contains(ts, {|e1,e2| e1[1] == e2[1]})) then:{
+   //in the contains function e1 is bound to ts, e2 is [ts, descriptor]
+	  if: !(seenTS.contains(ts, {|e1,e2| e1 == e2[1]})) then:{
 	   	seenTS.add([ts,descriptor]);
 	  };
 	  ambientTS.each: { |tuple| if: (sendTuple(tuple, self, descriptor)) then: {	toSend.add(tuple) }};
 		if: (toSend.length > 0) then: {
    		ts<-receiveTuples(toSend.asTable);
 	  };
-	  system.println(">>>>>>AmbientTota::exchangeTuples:: " + toSend.length);
   };
 
 	//method belonging to the tuple propagation protocol
@@ -85,7 +85,6 @@ def makeTupleSpace(descriptor){
   };
 	
 	def sendTuple(tuple, ts, descriptor){
-		system.println(">>>AmbientTota::sendTuple " + tuple + " desc " + descriptor);
 		// totam propagation protocol (sender side)
 		// toThink: this method could be called twice via inject and discovery when the ts discover.
 		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
@@ -127,7 +126,6 @@ def makeTupleSpace(descriptor){
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
 		def inject: tuple {
-			system.println(">>>>>>Inject:: " + tuple);
 			if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
 			// adding the tuple to the ambient for next sync.
 			ambientTS.add(tuple);
@@ -138,6 +136,7 @@ def makeTupleSpace(descriptor){
 			//notify yourself in case you are in the receiver.
 		  //if: (sendTuple(tuple, self, self)) then: { receiveTuple(tuple, self) };
 		 };
+		
 		  //return a publication object to be able to cancel the injection.
 		  object:{
 		    def cancel() { ambientTS.removeAll: {|t| t == tuple} };
@@ -174,20 +173,16 @@ def makeTupleSpace(descriptor){
 		// remote interface 
 		
 		// iterates over all ambient tuples of the other ts 
-		// and triggers the propagation protocol (receiver side)		
-		def count := 0;		
+		// and triggers the propagation protocol (receiver side)			
 		def receiveTuples(tuples){
 		  tuples.each: { |tuple|
-					system.println(">>>>>>ReceiveTuples:: " + tuple);
-			count := count +1;
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
 			  // tota propagation protocol (receiver side)
 		      receiveTuple(tuple, self);
-			 self.inject: tuple;
+			   self.inject: tuple;
 		    };
 		  };
-		  system.println("Processed :::: " +count);
-	  	};
+  	};
 	
 	  def getDescriptor() {
 		  descriptor;
