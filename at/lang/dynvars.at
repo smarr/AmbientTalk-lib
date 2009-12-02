@@ -30,7 +30,7 @@
  * Dynamic variables 'simulate' dynamically scoped variables and are often used
  * to parameterize large parts of code. For example, the 'current output stream'.
  * A dynamic variable has the advantage over a simple global variable that
- * it can only be assigned a value for the extent of a block of code.
+ * it can be assigned a value only for the extent of a block of code.
  *
  * Usage:
  * - defining a dynamic variable:
@@ -42,6 +42,9 @@
  *   <tt>name.is: newval in: { code }</tt>
  *  When the code terminates (normally or via an exception), the dynamic variable is
  *  automatically reset to its previous value.
+ *
+ * If the 'code' block returns a future, the dynamic variable will only be
+ * reset to its former value when that future becomes resolved.
  *
  * Note: for clarity, it is advised that you prefix your dynamic variables
  * with a 'd', e.g. '?dTimeoutPeriod'. This makes it easier to remember to access

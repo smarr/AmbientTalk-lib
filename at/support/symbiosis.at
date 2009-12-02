@@ -72,5 +72,8 @@
 	def Long.<(other) {
   		PrimitiveJavaConversion.opltxLongs(self, other)
 	};
+	def Long.inc() {
+		  PrimitiveJavaConversion.addLongs(self, PrimitiveJavaConversion.intToLong(1));
+	};
 
 }
