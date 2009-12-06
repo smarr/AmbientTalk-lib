@@ -79,7 +79,7 @@ deftype TracerModule;
 // identifies a message with a custom tracing function
 deftype Trace;
 
-// Usage: <-msg(args)@TraceAs(object: {
+// Usage: <-msg(args)@TraceAs(isolate: {
 //	def traceReceived(rcvr, msg, log) { ... };
 //  def traceSent(rcvr, msg, log) { ... };
 // })
@@ -257,7 +257,11 @@ def TraceModule(actorName, outputPath := nil) {
 					  ann.controller.traceSent(rcvr, msg, log);
 				  } else: {
 						def id := generateId(actorName, msg);
-						def msg.traceId := id; // adds a traceId slot to the message
+						if: (reflect: msg).respondsTo(`traceId) then: {
+							msg.traceId := id; // this message was sent&traced before, update the traceId value
+						} else: {
+							def msg.traceId := id; // adds a traceId slot to the message
+						};
 						log.sent(id);
 					}
 				};
