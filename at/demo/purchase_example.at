@@ -44,27 +44,30 @@ def buyerP := actor: {
 	def T := /.at.support.tracer("buyer", home).traceOn();
 	
 	def makeAsyncAnd(numExpected, callback) {
-		def allTrue := false;
-		object: {
-		  def run(answer) {
-			  if: (callback != nil) then: {
-				  if: answer then: {
-					  numExpected := numExpected - 1;
-					  if: (numExpected <= 0) then: {
-						  T.comment("happened: all true");
-						  callback<-run(true);
-						  callback := nil;
+		if: (numExpected < 1) then: {
+			callback<-run(true)
+		} else: {
+			object: {
+			  def run(answer) {
+				  if: (callback != nil) then: {
+					  if: answer then: {
+						  numExpected := numExpected - 1;
+						  if: (numExpected <= 0) then: {
+							  T.comment("happened: all true");
+							  callback<-run(true);
+							  callback := nil;
+						  } else: {
+							  T.comment("leadsto: all true");
+						  }
 					  } else: {
-						  T.comment("leadsto: all true");
+	              T.comment("found a false");
+	              callback<-run(false);
+	              callback := nil;
 					  }
-				  } else: {
-              T.comment("found a false");
-              callback<-run(false);
-              callback := nil;
 				  }
 			  }
-		  }
-	  }
+		  }	
+		}
 	};
 	
 	def go(inventory, creditBureau, shipper) {
