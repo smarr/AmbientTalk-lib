@@ -45,7 +45,8 @@ def buyerP := actor: {
 	
 	def makeAsyncAnd(numExpected, callback) {
 		if: (numExpected < 1) then: {
-			callback<-run(true)
+			callback<-run(true);
+			object: { def run(answer) { } };
 		} else: {
 			object: {
 			  def run(answer) {
