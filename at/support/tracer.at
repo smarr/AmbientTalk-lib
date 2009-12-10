@@ -223,7 +223,9 @@ def TraceModule(actorName, outputPath := nil) {
 			def traceName() { actorName };
 			def traceModule() { traceModule };
 
-			def serve() {		
+			def serve() {
+				traceLog.flip(); // increments the turn counter and resets the anchor counter
+				
 				def log := ?dTracelog;
 				if: !(log == sink) then: {
 		        def inbox := self.listIncomingLetters();
@@ -242,9 +244,7 @@ def TraceModule(actorName, outputPath := nil) {
 						  };
 						};
 				};	
-				def val := super^serve();
-				traceLog.flip(); // increments the turn counter and resets the anchor counter
-				val;
+				super^serve();
 			};
 
 			// this method is invoked for each outgoing async message send
