@@ -113,4 +113,4 @@ def shipperP := actor: {
 	};
 };
 
-buyerP<-go(productP, accountP, shipperP);
+buyerP<-go(productP, accountP, shipperP)@[/.at.lang.futures.FutureMessage];
