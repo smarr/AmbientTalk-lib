@@ -1,0 +1,220 @@
+deftype SyncIsolate;
+def HashMap := jlobby.java.util.HashMap;
+
+
+def makeSyncIsolateMirror() {
+	mirror: { 
+		def notifiers := [];
+	
+		def pass() {
+			copyIsolateWithMirror(self.base, makeFrozenIsolateMirror());
+		};
+	
+		def addChangeListener(notifier) {
+			// Register change listener to the isolate
+			notifiers := notifiers + [ notifier ];
+		};
+	
+		def removeChangeListener(notifier) {
+			notifiers := notifiers.filter: { |el|
+				el != notifier;
+			};
+		};
+		
+		def defineField(name, value) {
+			def theBase := self.base;
+			def makeNotifyingField(nam, val) {
+			   object: {
+			     def new(newHost) { self }; // singleton pattern
+			     def name := nam;
+			     def readField() { val };
+			     def writeField(newVal) { 
+					val := newVal; 
+					notifiers.each: { |notifier| notifier.notifyChanged(theBase) };
+					val;
+				};
+				 def accessor() { readField };
+				 def mutator() { writeField }
+			   } taggedAs: [ /.at.types.Field ];
+			 };
+			 self.addField(makeNotifyingField(name, value));
+			nil;
+		};
+	};
+};
+
+
+def makeFrozenIsolateMirror() {
+	mirror: {
+		def addSlot(slot) { 
+			raise: IllegalOperation.new("Cannot add slots to a sealed object."); 
+		};
+		def removeSlot(selector){
+			raise: IllegalOperation.new("Cannot remove slots from a sealed object."); 
+		};
+		def invoke(delegate, invocation) {
+			if: isAssignment(invocation.selector) then: {
+				raise: IllegalOperation.new("Cannot change slots of a sealed object."); 
+			} else: {
+				super^invoke(delegate, invocation);
+			};
+		};
+	};
+};
+
+def copyIsolateWithMirror(iso, mirror) {
+	def result := isolate: {} mirroredBy: mirror;
+	def fields := (reflect: iso).listFields();
+	fields.each: { |field| 
+	   if: !(field.name ==`super) then: {
+	   	(reflect: result).defineField(field.name, field.readField); 
+	   };
+	};
+	def methods := (reflect: iso).listMethods();
+	methods.each: { |method|
+		(reflect: result).addMethod(method);
+	};
+	result;
+};
+
+
+
+// Receiver
+
+def typesAndObservers := HashMap.new();
+def subscribersAndNotifiers := HashMap.new();
+
+whenever: SyncIsolate discovered: { |syncIso|
+	def handlers := typesAndObservers.get(syncIso.getType());
+	if: (nil != handlers) then: {
+		handlers.each: { |subscriber|
+			subscriber.notifyDiscovered(syncIso.getIsolate());
+			syncIso.getNotifier()<-addSubscriber(subscriber);
+			subscribersAndNotifiers.put(subscriber, syncIso.getNotifier());
+		};
+	};
+	when: syncIso.getNotifier() disconnected: {
+		def handlers := typesAndObservers.get(syncIso.getType());
+		handlers.each: { |subscriber|
+			subscriber.notifyDisconnected(syncIso.getIsolate());
+		};
+	};
+	when: syncIso.getNotifier() reconnected: {
+		def handlers := typesAndObservers.get(syncIso.getType());
+		handlers.each: { |subscriber|
+			subscriber.notifyReconnected(syncIso.getIsolate());
+		};
+	};
+};
+
+
+def SyncIsolateModule := object: {
+	def SyncIsolate := SyncIsolate;
+	
+	def syncIsolate: isoCode {
+		object: isoCode taggedAs: [ /.at.types.Isolate ] mirroredBy: makeSyncIsolateMirror();
+	};
+
+	def publish: iso as: type {
+		def notifier := object: {
+			def subscribers := [];
+
+			def cancel(subscriber) {
+				subscribers := subscribers.filter: { |el|
+					el != subscriber;
+				};
+				nil;
+			};
+
+			def notifyChanged(newIso) {
+				subscribers.each: { |sub| sub<-notifyChanged(newIso) };
+			};
+
+			def addSubscriber(subscriber) {
+				subscribers := subscribers + [ subscriber ];
+				nil;
+			};
+		};
+		def wrappedIsolate := isolate: { |iso, notifier, type| 
+			def getIsolate() { iso };
+			def getNotifier() { notifier };
+			def getType() { type }
+		};
+		(reflect: iso).addChangeListener(notifier);
+		def subs := export: wrappedIsolate as: SyncIsolate;
+		object: {
+			def cancel() {
+				subs.cancel();
+				notifier.subscribers := [];
+				(reflect: iso).removeChangeListener(notifier);
+			};
+		};
+	};
+	
+	
+	def subscribe: subscriber to: type {
+		def oldSubscribers := typesAndObservers.get(type);
+		if: (nil == oldSubscribers) then: {
+			typesAndObservers.put(type, [ subscriber ]);
+		} else: {
+			typesAndObservers.put(type, oldSubscribers + [ subscriber ]);
+		};
+		object: {
+			def cancel() {
+				def subscribers := typesAndObservers.get(type).filter: { |el|
+					el != subscriber
+				};
+				typesAndObservers.put(type, subscribers);
+				subscribersAndNotifiers.remove(subscriber);
+				subscribersAndNotifiers.get(subscriber)<-cancel(subscriber)@/.at.lang.futures.FutureMessage;
+			}; 
+		};
+	};
+	
+	// Tests
+	def SyncIsolateTest() {
+	    extend: /.at.unit.test.UnitTest.new("synchronized isolates test") with: {
+			
+			def testSyncIsolate() {
+				def changed := false;
+				def syncIso := syncIsolate: {
+					def foo := 1;
+				};
+				def theTestModule := self;
+				def listener := object: {
+					def notifyChanged(newIso) {
+						changed := true;
+						theTestModule.assertEquals(5, newIso.foo);
+					};
+				};
+				(reflect: syncIso).addChangeListener(listener);	
+				syncIso.foo := 5;
+				self.assertTrue(changed);
+				self.assertEquals(5, syncIso.foo);	
+			};
+			
+			def testSyncIsolate2() {
+				def changed := false;
+				def syncIso := syncIsolate: {
+					def foo := 1;
+					def bar() {
+						foo := 5;
+					};
+				};
+				def theTestModule := self;
+				def listener := object: {
+					def notifyChanged(newIso) {
+						changed := true;
+						theTestModule.assertEquals(5, newIso.foo);
+					};
+				};
+				(reflect: syncIso).addChangeListener(listener);	
+				syncIso.bar();
+				self.assertTrue(changed);
+				self.assertEquals(5, syncIso.foo);	
+			};
+		
+		};
+	};
+};
+
