@@ -151,7 +151,11 @@ def SyncIsolateModule := object: {
 		};
 	};
 	
-	
+	// Subscriber should understand:
+	// - notifyDiscovered(obj)
+	// - notifyDisconnected(obj)
+	// - notifyReconnected(obj)
+	// - notifyChanged(obj)
 	def subscribe: subscriber to: type {
 		def oldSubscribers := typesAndObservers.get(type);
 		if: (nil == oldSubscribers) then: {
