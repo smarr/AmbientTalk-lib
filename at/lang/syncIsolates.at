@@ -108,14 +108,18 @@ whenever: SyncIsolate discovered: { |syncIso|
 	};
 	when: syncIso.getNotifier() disconnected: {
 		def handlers := typesAndObservers.get(syncIso.getType());
-		handlers.each: { |subscriber|
-			subscriber.notifyDisconnected(syncIso.getIsolate());
+		if: (nil != handlers) then: {
+			handlers.each: { |subscriber|
+				subscriber.notifyDisconnected(syncIso.getIsolate());
+			};
 		};
 	};
 	when: syncIso.getNotifier() reconnected: {
 		def handlers := typesAndObservers.get(syncIso.getType());
-		handlers.each: { |subscriber|
-			subscriber.notifyReconnected(syncIso.getIsolate());
+		if: (nil != handlers) then: {
+			handlers.each: { |subscriber|
+				subscriber.notifyReconnected(syncIso.getIsolate());
+			};
 		};
 	};
 };
@@ -134,7 +138,7 @@ def SyncIsolateModule := object: {
 
 			def cancel(subscriber) {
 				subscribers := subscribers.filter: { |el|
-					el != subscriber;
+					!(el == subscriber);
 				};
 				nil;
 			};
@@ -156,6 +160,9 @@ def SyncIsolateModule := object: {
 		(reflect: iso).addChangeListener(notifier);
 		def subs := export: wrappedIsolate as: SyncIsolate;
 		object: {
+			def disconnectNotifier() {
+				disconnect: notifier;
+			};
 			def cancel() {
 				subs.cancel();
 				notifier.subscribers := [];
@@ -179,11 +186,12 @@ def SyncIsolateModule := object: {
 		object: {
 			def cancel() {
 				def subscribers := typesAndObservers.get(type).filter: { |el|
-					el != subscriber
+					!(subscriber == el)
 				};
 				typesAndObservers.put(type, subscribers);
+				def notifier := subscribersAndNotifiers.get(subscriber);
 				subscribersAndNotifiers.remove(subscriber);
-				subscribersAndNotifiers.get(subscriber)<-cancel(subscriber)@/.at.lang.futures.FutureMessage;
+				notifier<-cancel(subscriber)@/.at.lang.futures.FutureMessage;
 			}; 
 		};
 	};
@@ -239,14 +247,43 @@ def SyncIsolateModule := object: {
 				deftype testType1;
 				deftype testType2;
 				
+				def canceller1 := nil;
+				def canceller2 := nil;
+				def canceller3 := nil;
+				
 				def publishIso1() {
-					publish: iso1 as: testType1;
+					canceller1 := publish: iso1 as: testType1;
 				};
 				def publishIso2() {
-					publish: iso2 as: testType1;
+					canceller2 := publish: iso2 as: testType1;
 				};
 				def publishIso3() {
-					publish: iso3 as: testType2;
+					canceller3 := publish: iso3 as: testType2;
+				};
+				
+				def cancelIso1Publication() {
+					canceller1.cancel();
+				};
+				def cancelIso2Publication() {
+					canceller2.cancel();
+				};
+				def cancelIso3Publication() {
+					canceller3.cancel();
+				};
+				
+				def disconnection1 := nil;
+				def disconnection2 := nil;
+				def disconnection3 := nil;
+				
+				def disconnect() {
+					disconnection1 := canceller1.disconnectNotifier();
+					disconnection2 := canceller2.disconnectNotifier();
+					disconnection3 := canceller3.disconnectNotifier();
+				};
+				def reconnect() {
+					disconnection1.reconnect();
+					disconnection2.reconnect();
+					disconnection3.reconnect();
 				};
 			  };
 			};
@@ -301,7 +338,7 @@ def SyncIsolateModule := object: {
 						notifyDiscovered := iso;
 					};
 					def notifyDisconnected(iso) {
-						notifyDiscovered := iso;
+						notifyDisconnected := iso;
 					};
 					def notifyReconnected(iso) {
 						notifyReconnected := iso;
@@ -313,7 +350,7 @@ def SyncIsolateModule := object: {
 				
 				deftype testType1;
 				deftype testType2;
-				subscribe: subscriber to: testType1;
+				def canceller := subscribe: subscriber to: testType1;
 				
 				def timer := /.at.support.timer;
 				
@@ -340,6 +377,69 @@ def SyncIsolateModule := object: {
 									publishingActor<-changeIso3();
 									timer.when: timer.seconds(5) elapsedWithFuture: {
 										self.assertEquals(notifyChanged.field, "changed iso2"); // not notified
+										
+										publishingActor<-invokeChangeIso1();
+										timer.when: timer.seconds(5) elapsedWithFuture: {
+											self.assertEquals(notifyChanged.field, "invoked iso1");
+											
+											publishingActor<-invokeChangeIso2();
+											timer.when: timer.seconds(5) elapsedWithFuture: {
+												self.assertEquals(notifyChanged.field, "invoked iso2");
+												
+												publishingActor<-invokeChangeIso3();
+												timer.when: timer.seconds(5) elapsedWithFuture: {
+													self.assertEquals(notifyChanged.field, "invoked iso2"); // not notified
+													
+													self.assertTrue(nil == notifyDisconnected);
+													publishingActor<-disconnect();
+													timer.when: timer.seconds(5) elapsedWithFuture: {
+														self.assertTrue((notifyDisconnected.field == "iso1").or: { notifyDisconnected.field == "iso2" }, "Did not detect disconnection!");
+														
+														/*publishingActor<-changeIso1();
+														timer.when: timer.seconds(5) elapsedWithFuture: {
+															self.assertEquals(notifyChanged.field, "invoked iso1"); // not notified, actor offline*/
+															
+															self.assertTrue(nil == notifyReconnected);
+															publishingActor<-reconnect();
+															timer.when: timer.seconds(5) elapsedWithFuture: {
+																self.assertTrue((notifyReconnected.field == "iso1").or: { notifyReconnected.field == "iso2" }, "Did not detect reconnection!");				
+																												
+																publishingActor<-changeIso1();
+																timer.when: timer.seconds(5) elapsedWithFuture: {
+																	self.assertEquals(notifyChanged.field, "changed iso1");
+
+																	publishingActor<-changeIso2();
+																	timer.when: timer.seconds(5) elapsedWithFuture: {
+																		self.assertEquals(notifyChanged.field, "changed iso2");
+																		
+																		publishingActor<-changeIso3();
+																		timer.when: timer.seconds(5) elapsedWithFuture: {
+																			self.assertEquals(notifyChanged.field, "changed iso2"); // not notified
+																			
+																			publishingActor<-cancelIso1Publication();
+																			timer.when: timer.seconds(5) elapsedWithFuture: {
+																				publishingActor<-changeIso1();
+																				timer.when: timer.seconds(5) elapsedWithFuture: {
+																					self.assertEquals(notifyChanged.field, "changed iso2"); // not notified, cancelled publication
+																					
+																					canceller.cancel();
+																					timer.when: timer.seconds(5) elapsedWithFuture: {
+																						publishingActor<-invokeChangeIso2();
+																						timer.when: timer.seconds(5) elapsedWithFuture: {
+																							self.assertEquals(notifyChanged.field, "changed iso2");	// not notified, cancelled subscription
+																						//};
+																					};
+																				};
+																			};
+																		};
+																	};
+																};
+															};
+														};
+													};
+												};
+											};
+										};
 									};
 								};
 							};
