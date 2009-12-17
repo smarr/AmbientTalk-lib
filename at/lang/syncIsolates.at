@@ -44,26 +44,39 @@ def makeSyncIsolateMirror() {
 };
 
 
-def makeFrozenIsolateMirror() {
-	mirror: {
+def makeFrozenIsolateMirror() {	
+	extend: defaultMirror with: {
+		deftype IllegalOperation;
+		def XIllegalOperation := lobby.at.exceptions.createException(IllegalOperation);
+		
 		def addSlot(slot) { 
-			raise: IllegalOperation.new("Cannot add slots to a sealed object."); 
+			raise: XIllegalOperation.new("Cannot add slots to a sealed object."); 
 		};
 		def removeSlot(selector){
-			raise: IllegalOperation.new("Cannot remove slots from a sealed object."); 
+			raise: XIllegalOperation.new("Cannot remove slots from a sealed object."); 
 		};
-		def invoke(delegate, invocation) {
-			if: isAssignment(invocation.selector) then: {
-				raise: IllegalOperation.new("Cannot change slots of a sealed object."); 
-			} else: {
-				super^invoke(delegate, invocation);
-			};
+		def defineField(name, value) {
+			def theBase := self.base;
+			def makeFrozenField(nam, val) {
+			   object: {
+			     def new(newHost) { self }; // singleton pattern
+			     def name := nam;
+			     def readField() { val };
+			     def writeField(newVal) { 
+					raise: XIllegalOperation.new("Cannot change slots of a sealed object.");
+				 };
+				 def accessor() { readField };
+				 def mutator() { writeField }
+			   } taggedAs: [ /.at.types.Field, /.at.types.Isolate ];
+			 };
+			 self.addField(makeFrozenField(name, value));
+			nil;
 		};
-	};
+	} taggedAs: [ /.at.types.Isolate ];
 };
 
 def copyIsolateWithMirror(iso, mirror) {
-	def result := isolate: {} mirroredBy: mirror;
+	def result := object: {} taggedAs: [ /.at.types.Isolate ] mirroredBy: mirror;
 	def fields := (reflect: iso).listFields();
 	fields.each: { |field| 
 	   if: !(field.name ==`super) then: {
@@ -177,8 +190,67 @@ def SyncIsolateModule := object: {
 	
 	// Tests
 	def SyncIsolateTest() {
-	    extend: /.at.unit.test.UnitTest.new("synchronized isolates test") with: {
-			
+	    extend: /.at.unit.test.UnitTest.new("synchronized isolates test", false) with: {
+		
+			def publishingActor;
+
+			def setUp() {
+			  publishingActor := actor: {
+				import /.at.lang.syncIsolates;
+				def iso1 := syncIsolate: { 
+					def field := 1;
+					def setField(x) {
+						field := x;
+					}; 
+				};
+				def iso2 := syncIsolate: { 
+					def field := 1;
+					def setField(x) {
+						field := x;
+					};
+				};
+				def iso3 := syncIsolate: { 
+					def field := 1;
+					def setField(x) {
+						field := x;
+					};
+				 };
+				
+				def changeIso1() {
+					iso1.field := 2;
+				};
+				def changeIso2() {
+					iso2.field := 2;
+				};
+				def changeIso3() {
+					iso3.field := 2;
+				};
+				
+				def invokeChangeIso1() {
+					iso1.setField(3);
+				};
+				def invokeChangeIso2() {
+					iso2.setField(3);
+				};
+				def invokeChangeIso3() {
+					iso3.setField(3);
+				};
+				
+				deftype testType1;
+				deftype testType2;
+				
+				def publishIso1() {
+					publish: iso1 as: testType1;
+				};
+				def publishIso2() {
+					publish: iso2 as: testType1;
+				};
+				def publishIso3() {
+					publish: iso3 as: testType2;
+				};
+			  };
+			};
+
 			def testSyncIsolate() {
 				def changed := false;
 				def syncIso := syncIsolate: {
@@ -216,6 +288,39 @@ def SyncIsolateModule := object: {
 				syncIso.bar();
 				self.assertTrue(changed);
 				self.assertEquals(5, syncIso.foo);	
+			};
+			
+			def testAsyncNotifications() {
+				def notifyDiscovered := nil;
+				def notifyDisconnected := nil;
+				def notifyReconnected := nil;
+				def notifyChanged := nil;
+				
+				def subscriber := object: {
+					def notifyDiscovered(iso) {
+						notifyDiscovered := iso;
+					};
+					def notifyDisconnected(iso) {
+						notifyDiscovered := iso;
+					};
+					def notifyReconnected(iso) {
+						notifyReconnected := iso;
+					};
+					def notifyChanged(iso) {
+						notifyChanged := iso;
+					};
+				};
+				
+				deftype testType1;
+				deftype testType2;
+				subscribe: subscriber to: testType1;
+				
+				def timer := /.at.support.timer;
+				
+				publishingActor<-publishIso1();
+				timer.when: timer.seconds(5) elapsedWithFuture: {
+					self.assertEquals(notifyDiscovered.field, 1);
+				};
 			};
 		
 		};
