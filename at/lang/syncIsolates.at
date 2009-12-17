@@ -198,42 +198,42 @@ def SyncIsolateModule := object: {
 			  publishingActor := actor: {
 				import /.at.lang.syncIsolates;
 				def iso1 := syncIsolate: { 
-					def field := 1;
+					def field := "iso1";
 					def setField(x) {
 						field := x;
 					}; 
 				};
 				def iso2 := syncIsolate: { 
-					def field := 1;
+					def field := "iso2";
 					def setField(x) {
 						field := x;
 					};
 				};
 				def iso3 := syncIsolate: { 
-					def field := 1;
+					def field := "iso3";
 					def setField(x) {
 						field := x;
 					};
 				 };
 				
 				def changeIso1() {
-					iso1.field := 2;
+					iso1.field := "changed iso1";
 				};
 				def changeIso2() {
-					iso2.field := 2;
+					iso2.field := "changed iso2";
 				};
 				def changeIso3() {
-					iso3.field := 2;
+					iso3.field := "changed iso3";
 				};
 				
 				def invokeChangeIso1() {
-					iso1.setField(3);
+					iso1.setField("invoked iso1");
 				};
 				def invokeChangeIso2() {
-					iso2.setField(3);
+					iso2.setField("invoked iso2");
 				};
 				def invokeChangeIso3() {
-					iso3.setField(3);
+					iso3.setField("invoked iso3");
 				};
 				
 				deftype testType1;
@@ -319,7 +319,32 @@ def SyncIsolateModule := object: {
 				
 				publishingActor<-publishIso1();
 				timer.when: timer.seconds(5) elapsedWithFuture: {
-					self.assertEquals(notifyDiscovered.field, 1);
+					self.assertEquals(notifyDiscovered.field, "iso1");
+					
+					publishingActor<-publishIso2();
+					timer.when: timer.seconds(5) elapsedWithFuture: {
+						self.assertEquals(notifyDiscovered.field, "iso2");
+						
+						publishingActor<-publishIso3();
+						timer.when: timer.seconds(5) elapsedWithFuture: {
+							self.assertEquals(notifyDiscovered.field, "iso2"); // not discovered, different type tag
+							
+							publishingActor<-changeIso1();
+							timer.when: timer.seconds(5) elapsedWithFuture: {
+								self.assertEquals(notifyChanged.field, "changed iso1");
+								
+								publishingActor<-changeIso2();
+								timer.when: timer.seconds(5) elapsedWithFuture: {
+									self.assertEquals(notifyChanged.field, "changed iso2");
+									
+									publishingActor<-changeIso3();
+									timer.when: timer.seconds(5) elapsedWithFuture: {
+										self.assertEquals(notifyChanged.field, "changed iso2"); // not notified
+									};
+								};
+							};
+						};
+					};
 				};
 			};
 		
