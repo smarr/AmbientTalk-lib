@@ -1,0 +1,170 @@
+def CrimeFactory := jlobby.edu.vub.crime.CrimeFactory;
+def ExpressionFactory := jlobby.edu.vub.crime.grammar.ExpressionFactory;
+def GenericFact := jlobby.edu.vub.crime.grammar.GenericFact;
+def ExpressionList := jlobby.edu.vub.crime.grammar.ExpressionList;
+def Event := jlobby.edu.vub.crime.grammar.Event;
+def AmbientTalkAction := jlobby.edu.vub.crime.AmbientTalkAction;
+def IndexingVisitor := jlobby.edu.vub.crime.parser.IndexingVisitor;
+def engine := CrimeFactory.createEngine();
+
+def isJavaObject(o) {
+	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
+};
+
+def makeTuple(@fields) {
+	isolate: {
+	def length(){ fields.length };
+	def getField(n) { fields[n] };
+	def match(t1) {
+		if: (t1.length == self.length) then: {
+			def it := 1;
+			def result := true;
+			fields.each: {|e2| 
+				def e1 := t1.getField(it); 
+				result := result.and: { e1 = e2 };
+				it := it +1; 
+			};
+			result;
+		} else: {
+			false;
+		};
+	};
+	
+	def each: l  {
+		fields.each: l;
+	};
+	};
+};
+
+def newEvent(act,deact) {
+	Event.new(
+	AmbientTalkAction.new(
+		isolate: {
+			def getClass() { jlobby.edu.vub.crime.Action };
+			def activated(arguments){ act(arguments); };
+			def deactivate(arguments){ deact(arguments); }; 
+	}));
+};
+
+def convertTupleToCrimeFact(tuple) {
+	def newFact := GenericFact.new( "private" , tuple.getField(1) );
+	def theIndexer :=  IndexingVisitor.new(newFact);
+	
+	def index := 1;
+	tuple.each: { |f|
+		if: isJavaObject(f) then: {
+			//its a variable so we don't need to make it into an argument anymore
+			theIndexer.nextAttribute(f);
+		} else: {
+			//its a constant and will be converted anyway by the coercer :)
+			def attr := ExpressionFactory.attribute(f);
+			theIndexer.nextAttribute(attr);
+		};
+	};
+	newFact;
+};
+
+def insertTuple(tuple) {
+	engine.assert(convertTupleToCrimeFact(tuple));
+};
+
+def retractTuple(tuple) {
+	engine.retract(convertTupleToCrimeFact(tuple));
+};
+
+def packRule(table,act,deact) {
+	isolate: { |table,act,deact|
+		def getTable() {table};
+		def getAct() {act};
+		def getDeact() {deact};
+	};
+};
+
+def makeRule(table,act,deact) {
+	def prerequisite := ExpressionList.whichAcceptsFacts();
+	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
+	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e)); };
+	def event := newEvent(act, deact);
+	def vars := prerequisite.variables;
+	def it := vars.iterator;
+	while: { it.hasNext } do: {
+		event.addAttribute(it.next);
+	};
+	consequence.add(event);
+	ExpressionFactory.rule(consequence, prerequisite);
+};
+
+def CrimeModule := object: {
+	def crimeEngine := engine;
+	def makeTuple := &makeTuple;
+	def insertTuple := &insertTuple;
+	def retractTuple := &retractTuple;
+	
+	def var: symbol {
+		ExpressionFactory.variable(symbol.text);	
+	};
+	
+	def when: table activated: act {
+		when: table activated: act deactivated: {|args| nil};
+	};
+	
+	
+	def when: table activated: act deactivated: deact {
+		def rule :=  makeRule(table,act,deact);
+		engine.deploy(rule);
+		isolate: { 
+			def cancel() {
+				engine.undeploy(rule);
+			};
+		};
+	};
+	
+	def CrimeTest := extend: /.at.unit.test.UnitTest.new("Crime", false) with: {
+		import /.at.lang.futures;
+		enableFutures(false);
+			
+		def testAsyncActivacte() {
+			def t1 := makeTuple("GPS", var: `x, 3);
+			def t2 := makeTuple("GPS", 3, var: `x);				
+			def [fut,res] := makeFuture();
+			
+			when: [t1, t2] activated: {|args|
+				def x := args.get(0).toString;	
+				res.resolve(x);
+			} deactivated: { |args|
+				
+			};
+			def shouldTrigger := makeTuple("GPS", 3, 3);
+			insertTuple(shouldTrigger);
+			retractTuple(shouldTrigger);
+			when: fut becomes: { |value|
+				self.assertEquals("3", value);	
+			};
+		};
+		
+		def testAsyncSendRule() {
+			def [fut,res] := makeFuture();
+			def t1 := makeTuple("GPS", var: `x, 3);
+			def t2 := makeTuple("GPS", 3, var: `x);
+			
+			def a := actor: {
+				def doOperation(rule,res) {
+					import /.at.crime.CrimeConnection;
+					
+					when: rule.getTable() activated: {|args|  
+						rule.getAct()(args,"cool on actor a activated"); 
+					};
+					
+					def shouldTrigger := makeTuple("GPS", 3, 3);
+					insertTuple(shouldTrigger);
+					res.resolve(nil);
+				};
+			};
+
+			def packedRule := packRule([t1, t2], script: { |args,ma| system.println("<a:: >"+ma); }, script:{ |args,md| system.println("<d:: >"+md);});
+			
+			a<-doOperation(packedRule,res);	
+			fut;
+		};
+	};
+};
