@@ -6,12 +6,13 @@ def Event := jlobby.edu.vub.crime.grammar.Event;
 def AmbientTalkAction := jlobby.edu.vub.crime.AmbientTalkAction;
 def IndexingVisitor := jlobby.edu.vub.crime.parser.IndexingVisitor;
 def engine := CrimeFactory.createEngine();
+import /.at.exceptions;
 
 def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
 };
 
-def makeTuple(@fields) {
+def makeTemplate(@fields) {
 	isolate: {
 	def length(){ fields.length };
 	def getField(n) { fields[n] };
@@ -36,13 +37,47 @@ def makeTuple(@fields) {
 	};
 };
 
-def newEvent(act,deact) {
+def makeTuple(@fields) {
+	fields.each: { |e|
+		if: isJavaObject(e) then: {
+			error("Attempt to create a tuple with a variable !"); 
+		};
+	};
+	makeTemplate(@fields);
+};
+
+def newEvent(act,deact,vars) {
+	
+	def mapArguments(args) {
+		def argmap := jlobby.java.util.HashMap.new();		
+		def it := vars.iterator;
+		def i := 0;
+		while: { it.hasNext } do: {
+			def var := it.next;
+			argmap.put(var.toString(), args.get(i));
+			i := i +1;
+		};
+		
+		object: {
+			def get(literal) {
+				//UGLY UGLY UGLY 
+				//Reason I can't seem to convert a string to literal so I have to do it the otherway around
+				//+ The getName of a variable puts a ?
+				argmap.get("?"+literal.text());
+			};
+		};
+	};
+	
 	Event.new(
 	AmbientTalkAction.new(
 		isolate: {
 			def getClass() { jlobby.edu.vub.crime.Action };
-			def activated(arguments){ act(arguments); };
-			def deactivate(arguments){ deact(arguments); }; 
+			def activated(args){ 		
+				act(mapArguments(args)); 
+			};
+			def deactivate(arguments){ 
+				deact(arguments); 
+			}; 
 	}));
 };
 
@@ -84,9 +119,9 @@ def makeRule(table,act,deact) {
 	def prerequisite := ExpressionList.whichAcceptsFacts();
 	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
 	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e)); };
-	def event := newEvent(act, deact);
 	def vars := prerequisite.variables;
 	def it := vars.iterator;
+	def event := newEvent(act, deact,vars);
 	while: { it.hasNext } do: {
 		event.addAttribute(it.next);
 	};
@@ -97,6 +132,7 @@ def makeRule(table,act,deact) {
 def CrimeModule := object: {
 	def crimeEngine := engine;
 	def makeTuple := &makeTuple;
+	def makeTemplate := &makeTemplate;
 	def insertTuple := &insertTuple;
 	def retractTuple := &retractTuple;
 	
@@ -124,12 +160,12 @@ def CrimeModule := object: {
 		enableFutures(false);
 			
 		def testAsyncActivacte() {
-			def t1 := makeTuple("GPS", var: `x, 3);
-			def t2 := makeTuple("GPS", 3, var: `x);				
+			def t1 := makeTemplate("GPS", var: `x, 3);
+			def t2 := makeTemplate("GPS", 3, var: `x);				
 			def [fut,res] := makeFuture();
 			
 			when: [t1, t2] activated: {|args|
-				def x := args.get(0).toString;	
+				def x := args.get(`x).toString;	
 				res.resolve(x);
 			} deactivated: { |args|
 				
@@ -144,8 +180,8 @@ def CrimeModule := object: {
 		
 		def testAsyncSendRule() {
 			def [fut,res] := makeFuture();
-			def t1 := makeTuple("GPS", var: `x, 3);
-			def t2 := makeTuple("GPS", 3, var: `x);
+			def t1 := makeTemplate("GPS", var: `x, 3);
+			def t2 := makeTemplate("GPS", 3, var: `x);
 			
 			def a := actor: {
 				def doOperation(rule,res) {
