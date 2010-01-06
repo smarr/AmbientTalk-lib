@@ -3,411 +3,442 @@ import /.at.lang.multifutures;
 enableFutures(false);
 network.online();
 
-
- 
 deftype Pattern;
 deftype Service;
 deftype Table;
-		
+deftype SyncPattern <: Pattern;
+deftype MultiPattern <: Pattern;
+deftype Act;
 
-def Stop := object: {
-	def component;
 
-    def init(cmp) {
-    	component := cmp;
-    };
+
+def Environment := object: {
+	def dict := [];
 	
-  def start() {
-	execute(component);
-  };
+	def insert(name, value) {
+		def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+		if: idx == nil then: {
+			dict := dict + [[name, value]];
+		} else: {
+			dict[idx] := [name, value];
+		};
+	};
 	
- def execute(cmp) {
-	if: (is: cmp taggedAs: Service) then: {
-     	when: cmp.getTag() discovered: { |service|
-            when: service<-start()@FutureMessage becomes: { |reply|
-                reply;
-            };
-        };
-    } else: { // component is a pattern 
-		whenEach: cmp.start() becomes: { |resultcmp|
-			// resultcmp is the last component (service, pattern or table) that still must be executed
-			if: (is: resultcmp taggedAs: Table) then: {
-				// table can contain both services and patterns
-				resultcmp.each: { |cmp| execute(cmp); };
-			} else: { 
-				if: (is: resultcmp taggedAs: Pattern) then: {
-					execute(resultcmp);
-				} else: { // resultcmp is a service
-					when: resultcmp.getTag() discovered: { |service|
-						when: service<-start()@FutureMessage becomes: { |end|
-							end;
-						};
-					};
+	def delete(name) {
+		def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+		if: idx != nil then: {
+			dict[idx] := [];
+		};
+	};
+	
+	def find(name) {
+		def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+		if: idx == nil then: {
+			false;
+		} else: {
+			dict[idx];
+		};
+	};
+	
+	def bind(arguments) {
+		arguments.map: { |arg| if: arg.freeVariables() != [] then: { find(arg)[2]; } else: { arg; }; };
+	};
+	
+	def isEmpty() {
+		dict.isEmpty();
+	};
+	
+	/* TODO: several merging strategies
+	{ |pair| if: nEnv.find(pair[1]) == false then: { 
+				nEnv.insert(pair[1], pair[2]); 
+			} else: { nEnv.insert(pair[1], [ pair[2], nEnv.find(pair[1])[2] ]); };
+	};
+	*/
+	def merge(envs) {
+		envs.each: { |e| e.dict.each: { |pair| insert(pair[1], pair[2]); }; };
+	};
+	
+	def print() {
+		system.println(dict);
+	};
+};
+
+
+
+def WorkflowPattern := object: {
+	
+	def createAsyncMsg(selector, args) {
+		def msg := "<-" + selector.text()+"(";
+		def sep := "";
+		args.each: { |arg| msg := msg + sep + arg; sep := "," };
+		msg := msg + ")@FutureMessage";
+		msg;
+	};
+	
+	def createTimeoutMsg(selector, args, timeout) {
+		def msg := "<-" + selector.text()+"(";
+		def sep := "";
+		args.each: { |arg| msg := msg + sep + arg; sep := "," };
+		msg := msg + ")@Due(seconds(" + timeout + "))";
+		msg;
+	};
+	
+	def executeActivity(activity, env) {
+		def serviceWrapper := activity.getService();
+		def selector := activity.getSelector();
+		def args := activity.getArguments();
+		def output := activity.getOutput();
+		def msg := createAsyncMsg(selector, env.bind(args));
+		def aMsg := eval: (read: msg) in: self;
+		when: serviceWrapper.getTag() discovered: { |service|
+			when: service<+aMsg becomes: { |reply| 
+				// TODO: check if length of reply is the same as output
+				def index := 1;
+				while: { index <= reply.length() } do: {
+					env.insert(output[index], reply[index]);
+					index := index+1;
 				};
+				reply;
 			};
-        };
-	 };
-  };
-} taggedAs: [Pattern];
-
+		};
+	};
+	
+	def executeActivityAndContinue(idx, activity, env) {
+		def serviceWrapper := activity.getService();
+		def selector := activity.getSelector();
+		def args := activity.getArguments();
+		def output := activity.getOutput();
+		def msg := createAsyncMsg(selector, env.bind(args));
+		def aMsg := eval: (read: msg) in: self;
+		when: serviceWrapper.getTag() discovered: { |service|
+			when: service<+aMsg becomes: { |reply| 
+				// TODO: check if length of reply is the same as output
+				def index := 1;
+				while: { index <= reply.length() } do: {
+					env.insert(output[index], reply[index]);
+					index := index+1;
+				};
+				self.execute(idx+1, env);
+			};
+		};
+	};
+};
 
 
 
 def Sequence := object: {
     def componentTable;
-	def maximum := 1;
-    def [result, resolver]; 
+    def result;
+	def resolver;
+	def multi := 1;
+	def started := 0;
 
-    def init(cmpTable) {
+	def init(cmpTable) {
     	componentTable := cmpTable;
-		foreach: { |component| 
-			if: (is: component taggedAs: Pattern) then: {
-				if: (component.max() > maximum) then: {
-					maximum := component.max();
+        [result, resolver] := makeMultiFuture(multi);    
+	};
+	
+	def start(env) {
+		// make sure the component is ony started once
+		if: !(started == multi) then: {
+			started := started + 1;
+			execute(1, env);
+		};
+		result;
+	};
+	
+	def addFuture(nbr) {
+		multi := multi + 1;
+		[result, resolver] := makeMultiFuture(multi);
+	};
+		
+	def execute(idx, env) {	
+		if: (idx < componentTable.length()) then: {
+			def component := componentTable[idx];
+			if: (is: component taggedAs: Act) then: {
+				WorkflowPattern^executeActivityAndContinue(idx, component, env);
+       		} else: { // component is a pattern
+				when: component.start(env) becomes: { |reply|
+					execute(idx+1, env);
 				};
 			};
-		} in: componentTable;
-    };
-
-    def max() {
-		maximum;
-	};
-
-    def start() {
-	    if:(result.isResolved()) then: {  //TODO
-		   result;
 		} else: {
-			if: (result.isFuture()) then: {  //TODO
-				when: result becomes: { |reply|
-					reply;
+			def component := componentTable[idx];
+			if: (is: component taggedAs: Act) then: {
+				resolver.resolve(WorkflowPattern^executeActivity(component, env));
+       		} else: { // component is a pattern
+				when: component.start(env) becomes: { |reply|
+					resolver.resolve(reply);
 				};
-			} else: {
-			 	[result, resolver] := makeMultiFuture(maximum); 
-				execute(1, componentTable[1], result);
-				result;
 			};
 		};
-	};
-		
-	def executeService(idx, component, result, service) {
-		when: service<-start()@Due(seconds(2)) becomes: { |reply|
-        	if: (idx == (componentTable.length()) - 1) then: {
-				// future is resolved with last component of the sequence
-				(reflect: result)<-resolveWithValue(componentTable[componentTable.length()])@FutureMessage;
-			} else: {
-               	execute(idx + 1, componentTable[idx + 1], result);
-            };
-		}
-		catch: TimeoutException using: { |e|
-			system.println("service offline");
-			execute(idx, component, result);
-		};
-	};
-		
-	def execute(idx, component, result) {
-		// component can be either service or pattern
-        if: (is: component taggedAs: Service) then: {
-			system.println(" component " + component.getTag());
-        	when: component.getTag() discovered: { |service|
-            	executeService(idx, component, result, service);
-            };
-       	} else: { // component is a pattern
-			whenEach: component.start() becomes: { |resultcmp|
-				// resultcmp can be either a service or pattern
-				execute(idx, resultcmp, result);
-			};
-        };
 	};
 } taggedAs: [Pattern];
 
- 
 
 
 def ParallelSplit := object: {
-	def component;
+	def started := false;
     def componentTable;
-	def maximum := 1;
+	def futureTable;
+	def result;
+	def resolver;
+	
+    def init(bTable) {
+		def i := 0;
+		// convert the "pairs" [service, synchronize] in the component table to sequences
+		def b[bTable.length()] { i := i+1; if: (is: bTable[i] taggedAs: Table) then: { Sequence.new(bTable[i]) } else: { bTable[i] }};
+    	componentTable := b;
 
-    def init(cmp, cmpTable) {
-		component := cmp;
-    	componentTable := cmpTable;
-		if: (is: component taggedAs: Pattern) then: {
-			maximum := component.max();
-		};
+		// make a table to hold all the unresolved futures of the different branches
+		def f[bTable.length()] { makeFuture(); };
+		futureTable := f;
+		[result, resolver] := makeFuture();
+		result;
     };
-
-	def max() {
-		maximum;
-	};
   
-	def start() {
-		def [result, resolver] := makeMultiFuture(maximum); 
-		execute(component, result);
+	def start(env) {
+		// only start the component once
+		if: !started then: {
+			started := true;
+			execute(1, env);
+			//when all components have been started, the parallelSplit is said to be "done"
+			//and the result Future is resolved as usual (with the future table as value ...)
+			def i := 0;
+			def f[futureTable.length()] { i := i+1; futureTable[i][1]; };
+			resolver.resolve(f);
+		};
 		result;
 	};	
 		
-	def execute(component, result) {
-		// component can be either service or pattern
-		if: (is: component taggedAs: Service) then: {
-			when: component.getTag() discovered: { |service|
-				when: service<-start() becomes: { |reply|
-					(reflect: result)<-resolveWithValue(componentTable);
+	def execute(idx, env) {
+		def clonedEnv := clone: env;
+		if: (idx <= componentTable.length()) then: {
+			def component := componentTable[idx];	 
+			// component is either an activity or a pattern    	
+			if: (is: component taggedAs: Act) then: {
+				futureTable[idx][2].resolve(WorkflowPattern^executeActivity(component, clonedEnv));
+       		} else: { // component is a pattern
+				when: component.start(clonedEnv) becomes: { |reply|
+					futureTable[idx][2].resolve(reply);
 				};
-			};
-		} else: { // component is a pattern
-			when: component.start() becomes: { |endcmp| 
-				execute(endcmp, result);
-			};
+        	};
+			execute(idx+1, env);
 		};
 	};
-} taggedAs: [Pattern];
+} taggedAs: [Pattern]; 
 
+
+
+def Connection := object: {
+	def result;
+    def resolver;
+    def sync := false;
+   	def syncF;
+    def syncResolver;
+    def started := false;
+    def component;
+	def multi := false;
+ 
+    def init(cmp) {
+        component := cmp;
+        // make a future for the result of the component
+        [result, resolver] := makeFuture();
+        if: (is: cmp taggedAs: SyncPattern) then: {
+        	sync := true;
+            [syncF, syncResolver] := makeFuture();
+            cmp.addSync(syncF);
+        };
+		if: (is: cmp taggedAs: MultiPattern) then: {
+			cmp.addFuture(1);
+		};
+    };
+ 
+    def start(env) {
+   		// only start the component once
+       	if: !started then: {
+         	started := true;
+        	execute(env);
+       	};
+     	result;
+	};
+ 
+ 	def execute(env) {
+     	if: (is: component taggedAs: Pattern) then: {
+       		// if we have a connection to a SyncPattern, notify it
+         	if: sync then: {
+            	syncResolver.resolve(env);
+      		};
+        	// start the component and resolve with its reply as usual
+         	when: component.start(env) becomes: { |reply|
+				resolver.resolve(reply);
+           	};                       
+     	} else: {
+       		system.println("error: Connection made to non-pattern component.");
+     	};
+   	};     
+} taggedAs: [Pattern];
 
 
 
 def Synchronize := object: {
-    def componentTable;
-	def component;
-	def maximum := 1;
+    def syncTable := [];
+    def nextComponent;
+	def result := nil;
+	def resolver;
+	def started := false;
+	def nEnv := Environment.new();
 
-    def init(cmpTable, cmp) {
-		componentTable := cmpTable;
-    	component := cmp;
-		foreach: { |component| 
-			if: (is: component taggedAs: Pattern) then: {
-				if: (component.max() > maximum) then: {
-					maximum := component.max();
-				};
-			};
-		} in: componentTable;
+    def init(cmp) {
+    	nextComponent := cmp;
+		[result, resolver] := makeFuture(); 
     };
 
-	def max() {
-		maximum;
+	def addSync(future) {
+		syncTable := syncTable + [future];
 	};
 
-	def start() {
-		def [result, resolver] := makeMultiFuture(maximum); 
-		invokeServices(1, componentTable, result, []);
+	def start(env) {
+		// only start the component once
+		if: !started then: {
+			started := true;
+			execute(1);
+		};
 		result;
 	};
-		
-	def invokeServices(idx, table, result, replies) {
-		if: (idx > table.length()) then: {
-			execute(1, replies[1], result, replies);
-		} else: {
-			def cmp := table[idx];
-			// cmp is a service or a pattern
-			if: (is: cmp taggedAs: Service) then: {
-				when: cmp.getTag() discovered: { |service|
-					replies := replies + [service<-start()]; 
-					invokeServices(idx + 1, table, result, replies); 
-				};
-			} else: { // cmp is a pattern
-				replies := replies + [cmp.start()]; 
-				invokeServices(idx + 1, table, result, replies);
-			};			
-		};
-	};
 	
-	def execute(idx, ref, result, replies) {
-		when: ref becomes: { |reply|
-			// reply can be either a pattern, service, table or normal reply
-			if: (is: reply taggedAs: Table) then: {
-				invokeServices(1, reply, result, []);
-				if: (idx == replies.length()) then: {
-					(reflect: result)<-resolveWithValue(component);
-				} else: {
-					execute(idx + 1, replies[idx + 1], result, replies);
-				};				
-			} else: { // reply is a pattern or service
-				if: (is: reply taggedAs: Pattern) then: {
-					when: reply.start() becomes: { |endcmp|
-						execute(idx, endcmp, result, replies); 
-						if: (idx == replies.length()) then: { //deze check moet gedaan worde voor ge execute oproept denk ik
-							(reflect: result)<-resolveWithValue(component);
-						} else: {
-							execute(idx + 1, replies[idx + 1], result, replies);   
-						};
-					};
-				} else: { // reply is either a service or a reply (of a service)
-					if: (is: reply taggedAs: Service) then: {
-						when: reply.getTag() discovered: { |service|
-							when: service<-start() becomes: { |reply|
-								if: (idx == replies.length()) then: {
-									(reflect: result)<-resolveWithValue(component);
-								} else: {
-									execute(idx + 1, replies[idx + 1], result, replies);
-								};
-							};
-						};
-					} else: { // reply is a reply (of a service)
-						if: (idx == replies.length()) then: {
-							(reflect: result)<-resolveWithValue(component);
-						} else: {
-							execute(idx + 1, replies[idx + 1], result, replies);
-						};
-					};
-				};
-			};
-		};
-	};
-} taggedAs: [Pattern];
-
+	def execute(idx) {
+     	// execute will wait untill all synchronized components finish
+        if: (idx > syncTable.length()) then: {
+         	if: (is: nextComponent taggedAs: Act) then: {
+             	resolver.resolve(WorkflowPattern^executeActivity(nextComponent, nEnv));
+  			} else: { // component is a pattern
+          		when: nextComponent.start(nEnv) becomes: { |reply|
+               		resolver.resolve(reply);
+             	};
+            };
+  		} else: {
+          	when: syncTable[idx] becomes: { |env|
+				nEnv.merge([env]);
+              	execute(idx+1);    
+        	};
+   		};
+    };
+} taggedAs: [SyncPattern];
 
 
 
 def ExclusiveChoice := object: {
-	def component;
-	def conditionActionRules;
-	def maximum := 1;
-
-    def init(cmp, car) {
-		component := cmp;
-    	conditionActionRules := car;
-		if: (is: component taggedAs: Pattern) then: {
-			maximum := component.max();
-		};
+        def test;
+		def consequence;
+		def alternative;
+        def result;
+        def resolver;
+        def started := false;
+ 
+    def init(block, then, else) {
+        test := block;
+		consequence := then;
+		alternative := else;
+        [result, resolver] := makeFuture();
+        // if a component in the actionrules is a SyncPattern,
+        // add the exclusiveChoice to its syncTable 
+       // TODO: only for the one branch ?!?
+        /*conditionActionRules.each: { |rule| 
+			if: (is: rule[2] taggedAs: SyncPattern) then: {
+        		rule[2].addSync(result);
+        	};
+        };*/
     };
-  
-	def max() {
-		maximum;
+ 
+  	def start(env) {
+     	if: !started then: {
+       		started := true;
+        	execute(env);
+    	};
+      	result;
 	};
-
-	def start() {
-		def [result, resolver] := makeMultiFuture(maximum); 
-		execute(component, result);
-		result;
-	};
-		
-	def execute(cmp, result) {
-		// cmp can be either a service or a pattern
-		if: (is: cmp taggedAs: Service) then: {
-           	when: cmp.getTag() discovered: { |service|
-               	when: service<-start() becomes: { |reply|
-					def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
-					if: (conditionActions.isEmpty()) then: {
-						raise: XNoCondition.new("No matching condition found");
-					} else: {
-						(reflect: result)<-resolveWithValue(conditionActions[1][2]);
-					};
+ 
+  	def execute(env) {
+		def method := test.method();
+		def bindings := env.bind(method.parameters()); 
+		if: (test.apply(bindings)) then: {
+			if: (is: consequence taggedAs: Act) then: {
+				resolver.resolve(WorkflowPattern^executeActivity(consequence, env));
+       		} else: { // component is a pattern
+				when: consequence.start(env) becomes: { |reply|
+					resolver.resolve(reply);
 				};
 			};
-		} else: { // cmp is a pattern
-			when: component.start() becomes: { |endcmp|
-				// endcmp can be either a service or a pattern
-				execute(endcmp, result); 
+		} else: { // alternative branch
+			if: (is: alternative taggedAs: Act) then: {
+				resolver.resolve(WorkflowPattern^executeActivity(alternative, env));
+	       	} else: { // component is a pattern
+				when: alternative.start(env) becomes: { |reply|
+					resolver.resolve(reply);
+				};
 			};
-		}; 			
-	};
+		};
+		//TODO: meer dan 2 branches                    
+  	};
 } taggedAs: [Pattern];
 
 
 
-/*
 def SimpleMerge := object: {
-	def serviceTag;
-	def serviceTypeTable;
-	def maximum := 1;
+	def branches := 0;
+    def component;
+	def result := nil;
+	def resolver;
 
-    def init(stt, st) {
-		serviceTag := st;
-    	serviceTypeTable := stt;
-		foreach: { |component| 
-			if: (is: component taggedAs: MultiPattern) then: {
-				maximum := maximum + component.max();
-			} else: {
-				maximum := maximum + 1;
-			};
-			} in: serviceTypeTable;
-    };
-
-	def max() {
-		maximum;
+    def init(cmp) {
+    	component := cmp;
+        [result, resolver] := makeMultiFuture(branches);    
 	};
-  
-	def start() {
-		def [result, resolver] := makeMultiFuture(maximum);
-		def execute(idx) {
-			def component := serviceTypeTable[idx];
-			if: (is: component taggedAs: Service) then: {
-				when: component.getTag() discovered: { |service|
-					when: service<-start() becomes: { |reply|
-						(reflect: result)<-resolveWithValue(serviceTag);
-					};
-				};
-				if: (idx < serviceTypeTable.length()) then: {
-		            execute(idx + 1);
-		        };
-			} else: {
-				if: (is: component taggedAs: MultiPattern) then: {
-					whenEach: component.start() becomes: { |reply|
-						when: reply.getTag() discovered: { |service|
-							when: service<-start() becomes: { |end|
-								(reflect: result)<-resolveWithValue(serviceTag);
-							};
-						};
-					};
-					if: (idx < (serviceTypeTable.length())) then: {  
-						execute(idx + 1);
-					};
-				} else: {
-					when: serviceTag.start() becomes: { |serviceWrapper| 
-						when: serviceWrapper.getTag() discovered: { |end|
-							when: end<-start() becomes: { |reply|
-								(reflect: result)<-resolveWithValue(serviceTag);
-							};
-						};
-					};
-					if: (idx < serviceTypeTable.length()) then: {
-		        		execute(idx + 1);
-					};
-				};
-			};
+
+	def addFuture(nbr) {
+		branches := branches + 1;
+		[result, resolver] := makeMultiFuture(branches);
+		if: (is: component taggedAs: Pattern) then: {
+			component.addFuture(branches);
 		};
-		execute(1);
+	};
+
+	def start(env) {
+		execute(env);
 		result;
 	};
-} taggedAs: [Pattern];
-*/
-
-
-
-def MultiChoice := object: {
-	def serviceTag;
-	def conditionActionRules;
-
-    def init(st, car) {
-		serviceTag := st;
-    	conditionActionRules := car;
+	
+	def execute(env) {
+     	if: (is: component taggedAs: Act) then: {
+			resolver.resolve(WorkflowPattern^executeActivity(component, env));
+  		} else: { // component is a pattern
+       		when: component.start(env) becomes: { |reply|
+				resolver.resolve(reply);
+           	};
+       	};
     };
-  
-	def start() {
-		def result := makeFuture()[1];
-		if: (is: serviceTag taggedAs: Service) then: {
-           	when: serviceTag.getTag() discovered: { |service|
-				when: service<-start() becomes: { |reply|
-					def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
-					if: (conditionActions.isEmpty()) then: {
-						raise: XNoCondition.new("No matching condition found");
-					} else: {
-						(reflect: result)<-resolveWithValue(conditionActions.map: { |rule| rule[2] });
-					};
-				};
-			};
-		} else: {
-			when: serviceTag.start() becomes: { |serviceWrapper| 
-				when: serviceWrapper.getTag() discovered: { |end|
-					when: end<-start() becomes: { |reply|
-						def conditionActions := conditionActionRules.filter: { |rule| rule[1](reply) };
-						if: (conditionActions.isEmpty()) then: {
-							raise: XNoCondition.new("No matching condition found");
-						} else: {
-							(reflect: result)<-resolveWithValue(conditionActions.map: { |rule| rule[2] });
-						};
-					};
-				};
-			};
+} taggedAs: [MultiPattern];
+
+
+
+
+def Local := object: {
+	def block;
+	def result;
+	def resolver;
+	def started := false;
+	
+	def init(blk) {
+		block := blk;
+		[result, resolver] := makeFuture();
+	};
+	
+	def start(env) {
+		// make sure the component is ony started once
+		if: !started then: {
+			started := true;
+			resolver.resolve(block(env));
 		};
 		result;
 	};
@@ -415,253 +446,205 @@ def MultiChoice := object: {
 
 
 
-
-def StructuredDiscriminator := object: {
-	def serviceTag;
-	def serviceTypeTable;
-
-    def init(stt, st) {
-		serviceTag := st;
-    	serviceTypeTable := stt;
-    };
-  
-	def start() {
-		def future := makeFuture()[1];
-		def flag := true;
-		def execute(idx) {
-			def component := serviceTypeTable[idx];
-			if: (is: component taggedAs: Service) then: {
-				when: component.getTag() discovered: { |service|
-					when: service<-start() becomes: { |reply|
-						if: flag then: {
-							flag := false;
-							(reflect: future).resolveWithValue(serviceTag);
-						}
+// TODO: what if compensation terminates (sub)workflow?
+def Failure := object: {
+	def component;
+	def timeout;
+	def compensatingCmp;
+	def result := nil;
+	def resolver;
+	def started := false;
+	
+	def init(c, timeoutAndCmps) {
+		[result, resolver] := makeFuture();
+		component := c;
+		timeout := timeoutAndCmps[1];
+		compensatingCmp := timeoutAndCmps[2];
+	};
+	
+	def start(env) {
+		if: !started then: {
+			started := true;
+			execute(env, component);
+		};
+		result;
+	};
+	
+	def execute(env, cmp) {
+		if: (is: cmp taggedAs: Act) then: {
+			def msg := WorkflowPattern^createTimeoutMsg(cmp.getSelector(), env.bind(cmp.getArguments()), timeout);
+			def aMsg := eval: (read: msg) in: self;
+			when: cmp.getService().getTag() discovered: { |service|
+				system.println("Discovered service");
+				when: service<+aMsg becomes: { |reply| 
+					system.println("Received reply :: " + reply);
+					// TODO: check if length of reply is the same as output
+					def index := 1;
+					while: { index <= reply.length() } do: {
+						env.insert(cmp.getOutput()[index], reply[index]);
+						index := index+1;
 					};
-				};
-			} else: { 
-				when: component.start() becomes: { |serviceWrapper|
-					when: serviceWrapper.getTag() discovered: { |service|
-						when: service<-start() becomes: { |reply|
-							if: flag then: {
-								 flag := false;
-				                 (reflect: future).resolveWithValue(serviceTag);
-							 };
-						};
-					};
+					resolver.resolve(reply);
+				} catch: TimeoutException using: { |e|
+					system.println("service timeout");
+					execute(env, compensatingCmp);
 				};
 			};
-		    if: (idx < serviceTypeTable.length()) then: {
-		        execute(idx + 1);
-		    };
+		} else: { // component is a pattern  
+			// TODO @Due
+			when: cmp.start(env)@FutureMessage becomes: { |reply|
+           		resolver.resolve(reply);
+			} catch: TimeoutException using: { |e|
+				system.println("timeout in workflow pattern");
+				execute(env, compensatingCmp);
+			};
 		};
-		execute(1);
-		future;
 	};
 } taggedAs: [Pattern];
 
 
 
-
-def StructuredPartialJoin := object: {
-	def serviceTag;
-	def number;
-	def serviceTypeTable;
-
-    def init(nbr, stt, st) {
-		serviceTag := st; 
-    	serviceTypeTable := stt;
-		number := nbr;
-    };
-  
-	def start() {
-		def future := makeFuture()[1];
-		def nr := 0;
-		def execute(idx) {
-			def component := serviceTypeTable[idx];
-			if: (is: component taggedAs: Service) then: {
-				when: component.getTag() discovered: { |service|
-					when: service<-start() becomes: { |reply|
-						if: (nr <= number) then: {
-							 nr := nr + 1;
-		                     (reflect: future).resolveWithValue(serviceTag);
-						};
-					};
-				};
-				if: (idx < serviceTypeTable.length()) then: {
-		            execute(idx + 1);
-		        };
-			} else: {
-				when: component.start() becomes: { |serviceWrapper|
-					when: serviceWrapper.getTag() discovered: { |service| 
-						when: service<-start() becomes: { |reply|
-							if: (nr <= number) then: {
-								 nr := nr + 1;
-			                     (reflect: future).resolveWithValue(serviceTag);
-							};
-						};
-					};
-				};
-				if: (idx < serviceTypeTable.length()) then: {
-		            execute(idx + 1);
-		        };
-			};
-		};
-		execute(1);
-		future;
+def Activity := object: {
+	def serviceWrapper;
+	def selector;
+	def arguments;
+	def output;
+	
+	def init(sw, sel, args, outputVars) {  
+		serviceWrapper := sw;
+		selector := sel;
+		arguments := args;
+		output := outputVars;
 	};
-} taggedAs: [Pattern];
+	
+	def getService() {
+		serviceWrapper;
+	};
+	
+	def getSelector() {
+		selector;
+	};
+	
+	def getArguments() {
+		arguments;
+	};
+	
+	def getOutput() {
+		output;
+	};
+} taggedAs: [Act];
 
 
 
+def createUnderstandingMirror(baseObject) {
+ 	extend: defaultMirror.new(baseObject) with: {
+   		def doesNotUnderstand(selector) {
+  			{ |@args| 
+				Activity.new(baseObject, selector, args.select(1, args.length()), args[args.length()]) }  
+   		};
+  	};
+};
 
 
-def ServiceWrapper := object: {
-    def serviceTag;
-      
-    def init(tag) {
-    	serviceTag := tag;
-    };
-
-    def getTag() {
-    	serviceTag;
-   	};
-} taggedAs: [Service];
-
-
-
-
-deftype Service1;
-deftype Service2;
-deftype Service3;
-deftype Service4;
-deftype Service5;
-deftype Service6;
-deftype Service7;
-deftype Service8;
-deftype Service9;
-deftype Service10;
-deftype Service11;
-
-
-def s1 := ServiceWrapper.new(Service1);
-def s2 := ServiceWrapper.new(Service2);
-def s3 := ServiceWrapper.new(Service3);
-def s4 := ServiceWrapper.new(Service4);
-def s5 := ServiceWrapper.new(Service5);
-def s6 := ServiceWrapper.new(Service6);
-def s7 := ServiceWrapper.new(Service7);
-def s8 := ServiceWrapper.new(Service8);
-def s9 := ServiceWrapper.new(Service9);
-def s10 := ServiceWrapper.new(Service10);
-def s11 := ServiceWrapper.new(Service11);
-
-
-def seq0 := Sequence.new([ s2, s2, s2 ]);
-def seq1 := Sequence.new([ s3, seq0, s3]);
-def seq2 := Sequence.new([ s2, s3, s3, seq0]);
-def seq3 := Sequence.new([ s2, s3, s11, s10, s4 ]);
-
-
-/*
-def stop := Stop.new(seq0);
-stop.start();
-*/
-
-/*
-def stop := Stop.new(seq1);
-stop.start();
-*/
-
-/*
-def stop := Stop.new(seq2);
-stop.start();
-*/
-
-
-def stop := Stop.new(seq3);
-stop.start();
+def makeServiceWrapper(tag) {
+	object: {
+	
+		def getTag() {
+			tag;
+		};
+	} mirroredBy: {|emptyBase| createUnderstandingMirror(emptyBase)}
+};
 
 
 
-def par1 := ParallelSplit.new(seq3, [s5, s6]);
-def par2 := ParallelSplit.new(seq3, [seq0, s5]);
+deftype outputT;
 
-/*
-def stop := Stop.new(par1);
-stop.start();
-*/
+def output := extend: outputT with: {
+	def annotateMessage(method) {
+    	system.println("output");
+    	method;
+	};
+};
 
-/*
-def stop := Stop.new(par2);
-stop.start();
-*/
 
-def sync1 := Synchronize.new([s4, s2, s2, s3], s6);
-def sync2 := Synchronize.new([par1], s10);
+
+deftype LocationService;
+deftype WeatherService;
+deftype GUIService;
+deftype EndService;
+deftype AService;
+deftype BService;
+deftype CService;
+deftype DService;
+deftype EService;
+deftype FService;
+deftype GService;
+deftype HService;
+deftype IService;
+
+def locationServiceWrapper := makeServiceWrapper(LocationService);
+def weatherServiceWrapper := makeServiceWrapper(WeatherService);
+def guiServiceWrapper := makeServiceWrapper(GUIService);
+def endServiceWrapper := makeServiceWrapper(EndService);
+def asw := makeServiceWrapper(AService);
+def bsw := makeServiceWrapper(BService);
+def csw := makeServiceWrapper(CService);
+def dsw := makeServiceWrapper(DService);
+def esw := makeServiceWrapper(EService);
+def fsw := makeServiceWrapper(FService);
+def gsw := makeServiceWrapper(GService);
+def hsw := makeServiceWrapper(HService);
+def isw := makeServiceWrapper(IService);
+
+
+// TODO: Sequence.new(locationService.getLocation(gps)@output(location))
+//def seq := Sequence.new([ locationServiceWrapper.getLocation(2, [`location]), weatherServiceWrapper.getWeather(`location, 3, [`loc, `weather]) ]);
+
+//def env := Environment.new();
+//env.insert(`gps, 100);
+//seq.start(env);
 
 /*
-def stop := Stop.new(sync1);
-stop.start();
+def clonedEnv := clone: env;
+clonedEnv.insert(`a, 2);
+def cEnv := clone: env;
+cEnv.insert(`a, 99);
+cEnv.insert(`b, 3);
+clonedEnv.insert(`z, 99);
+def nEnv := env.merge([clonedEnv, cEnv]);
+nEnv.find(`z);
+nEnv.find(`a);
 */
 
-/*
-def stop := Stop.new(sync2);
-stop.start();
-*/
+// env.find(`b)[2] + " " + env.find(`c)[2] + " " + env.find(`d)[2] + " " + env.find(`e)[2] + " " + 
+def report(env) { system.println("values : " + env.find(`c)[2] + " " + env.find(`g)[2]); };
+def sync := Synchronize.new( Sequence.new([ gsw.g(`f, [`g]), Local.new({|env| env.print()}) ]) );
+def parSplit := ParallelSplit.new([ [bsw.b(`b, [`b, `c]), csw.c(`c, [`c]), Connection.new(sync)],
+                                    [dsw.d(`b, [`b, `d]), esw.e(`d, [`e]), fsw.f(`e, [`f]), Connection.new(sync)] ]);
+def seq := Sequence.new([ asw.a([`b]), parSplit ]);
 
-def seq4 := Sequence.new([s2, s3, s7]);
-def exc1 := ExclusiveChoice.new(seq4, [ [ { |reply| reply }, s5 ], [ { |reply| !reply }, s6 ]]);
 
-/*
-def stop := Stop.new(exc1);
-stop.start();
-*/
-/*
-def sm1 := SimpleMerge.new([s2, s3], s4);
-def seq5 := Sequence.new([sm1, s9, s10]);
-def sm2 := SimpleMerge.new([sm1, s9], s10);
-*/
-/*
-def stop := Stop.new(sm1);
-stop.start();
-*/
+def env := Environment.new();
+env.insert(`gps, 100);
+//seq.start(env);
 
-/*
-def stop := Stop.new(seq5);
-stop.start();
-*/
 
-/*
-def stop := Stop.new(sm2);
-stop.start();
-*/
+def failedSeq := Sequence.new([ asw.a([`b]), 
+                                bsw.b(`b, [`b, `c]), 
+                                Failure.new( hsw.h([]), [ 20, hsw.h([]) ] ), 
+                                csw.c(`c, [`c]), 
+                                Local.new({|env| env.print()}) ]);
+//failedSeq.start(env);
 
-def mc1 := MultiChoice.new(s7, [ [ { |reply| reply }, s5 ], [ { |reply| !reply }, s6 ], [ { |reply| reply }, s4 ] ]);
-def mc2 := MultiChoice.new(s7, [ [ { |reply| reply }, seq1 ], [ { |reply| !reply }, s6 ], [ { |reply| reply }, s4 ] ]);
 
-/*
-def stop := Stop.new(mc1);
-stop.start();
-*/
+def exc := ExclusiveChoice.new( {|i| i < 1}, asw.a([`b]), csw.c(`gps, [`z]) );
+def excSeq := Sequence.new([ isw.i([`i]), exc, Local.new({|env| env.print()}) ]);
+//excSeq.start(env);
 
-/*
-def stop := Stop.new(mc2);
-stop.start();
-*/
 
-def sd1 := StructuredDiscriminator.new([s3, s4, s5], s2);
-
-/*
-def stop := Stop.new(sd1);
-stop.start();
-*/
-
-def spj1 := StructuredPartialJoin.new(2, [s2, s6, s4], s3);
-
-/*
-def stop := Stop.new(spj1);
-stop.start();
-*/
-
+def smerge := SimpleMerge.new( Sequence.new([ isw.i([`i]), gsw.g(`i, [`g]), Local.new({|env| env.print()}) ]) );
+def parSplit2 := ParallelSplit.new([ [bsw.b(`a, [`b, `c]), Connection.new(smerge)],
+                                     [dsw.d(`a, [`d, `e]), Connection.new(smerge)] ]);
+def smSeq := Sequence.new([ asw.a([`a]), parSplit2 ]);
+smSeq.start(env);
 
