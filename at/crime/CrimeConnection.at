@@ -5,11 +5,85 @@ def ExpressionList := jlobby.edu.vub.crime.grammar.ExpressionList;
 def Event := jlobby.edu.vub.crime.grammar.Event;
 def AmbientTalkAction := jlobby.edu.vub.crime.AmbientTalkAction;
 def IndexingVisitor := jlobby.edu.vub.crime.parser.IndexingVisitor;
-def engine := CrimeFactory.createEngine();
 import /.at.exceptions;
 
 def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
+};
+
+def newEvent(act,deact,vars) {
+
+	def mapArguments(args) {
+		def argmap := jlobby.java.util.HashMap.new();		
+		def it := vars.iterator;
+		def i := 0;
+		while: { it.hasNext } do: {
+			def var := it.next;
+			argmap.put(var.toString(), args.get(i));
+			i := i +1;
+		};
+
+		object: {
+			def get(literal) {
+				//UGLY UGLY UGLY 
+				//Reason I can't seem to convert a string to literal so I have to do it the otherway around
+				//+ The getName of a variable puts a ?
+				argmap.get("?"+literal.text());
+			};
+		};
+	};
+
+	Event.new(
+	AmbientTalkAction.new(
+		isolate: {
+			def getClass() { jlobby.edu.vub.crime.Action };
+			def activated(args){ 		
+				act(mapArguments(args)); 
+			};
+			def deactivate(arguments){ 
+				deact(arguments); 
+			}; 
+	}));
+};
+
+def convertTupleToCrimeFact(tuple) {
+	def newFact := GenericFact.new( "private" , tuple.getField(1) );
+	def theIndexer :=  IndexingVisitor.new(newFact);
+
+	def index := 1;
+	tuple.each: { |f|
+		if: isJavaObject(f) then: {
+			//its a variable so we don't need to make it into an argument anymore
+			theIndexer.nextAttribute(f);
+		} else: {
+			//its a constant and will be converted anyway by the coercer :)
+			def attr := ExpressionFactory.attribute(f);
+			theIndexer.nextAttribute(attr);
+		};
+	};
+	newFact;
+};
+
+def packRule(table,act,deact) {
+	isolate: { |table,act,deact|
+		def getTable() {table};
+		def getAct() {act};
+		def getDeact() {deact};
+	};
+};
+
+def makeRule(table,act,deact) {
+	def prerequisite := ExpressionList.whichAcceptsFacts();
+	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
+	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e)); };
+	def vars := prerequisite.variables;
+	def it := vars.iterator;
+	def event := newEvent(act, deact,vars);
+	while: { it.hasNext } do: {
+		event.addAttribute(it.next);
+	};
+	consequence.add(event);
+	ExpressionFactory.rule(consequence, prerequisite);
 };
 
 def makeTemplate(@fields) {
@@ -46,133 +120,65 @@ def makeTuple(@fields) {
 	makeTemplate(@fields);
 };
 
-def newEvent(act,deact,vars) {
+def makeCrimeEngine() { 
 	
-	def mapArguments(args) {
-		def argmap := jlobby.java.util.HashMap.new();		
-		def it := vars.iterator;
-		def i := 0;
-		while: { it.hasNext } do: {
-			def var := it.next;
-			argmap.put(var.toString(), args.get(i));
-			i := i +1;
-		};
-		
-		object: {
-			def get(literal) {
-				//UGLY UGLY UGLY 
-				//Reason I can't seem to convert a string to literal so I have to do it the otherway around
-				//+ The getName of a variable puts a ?
-				argmap.get("?"+literal.text());
-			};
-		};
-	};
+	//create new engine;
+	def engine := CrimeFactory.createEngine();
 	
-	Event.new(
-	AmbientTalkAction.new(
-		isolate: {
-			def getClass() { jlobby.edu.vub.crime.Action };
-			def activated(args){ 		
-				act(mapArguments(args)); 
-			};
-			def deactivate(arguments){ 
-				deact(arguments); 
-			}; 
-	}));
-};
+	//public interface of a crime engine.
+	object: {
+    def insertTuple(tuple) {
+	    engine.assert(convertTupleToCrimeFact(tuple));
+    };
 
-def convertTupleToCrimeFact(tuple) {
-	def newFact := GenericFact.new( "private" , tuple.getField(1) );
-	def theIndexer :=  IndexingVisitor.new(newFact);
-	
-	def index := 1;
-	tuple.each: { |f|
-		if: isJavaObject(f) then: {
-			//its a variable so we don't need to make it into an argument anymore
-			theIndexer.nextAttribute(f);
-		} else: {
-			//its a constant and will be converted anyway by the coercer :)
-			def attr := ExpressionFactory.attribute(f);
-			theIndexer.nextAttribute(attr);
-		};
-	};
-	newFact;
-};
+    def retractTuple(tuple) {
+	    engine.retract(convertTupleToCrimeFact(tuple));
+    };
 
-def insertTuple(tuple) {
-	engine.assert(convertTupleToCrimeFact(tuple));
-};
+    def when: table activated: act {
+	    when: table activated: act deactivated: {|args| nil};
+    };
 
-def retractTuple(tuple) {
-	engine.retract(convertTupleToCrimeFact(tuple));
-};
-
-def packRule(table,act,deact) {
-	isolate: { |table,act,deact|
-		def getTable() {table};
-		def getAct() {act};
-		def getDeact() {deact};
-	};
-};
-
-def makeRule(table,act,deact) {
-	def prerequisite := ExpressionList.whichAcceptsFacts();
-	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
-	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e)); };
-	def vars := prerequisite.variables;
-	def it := vars.iterator;
-	def event := newEvent(act, deact,vars);
-	while: { it.hasNext } do: {
-		event.addAttribute(it.next);
-	};
-	consequence.add(event);
-	ExpressionFactory.rule(consequence, prerequisite);
+    def when: table activated: act deactivated: deact {
+	    def rule :=  makeRule(table,act,deact);
+	    engine.deploy(rule);
+	    isolate: { 
+		    def cancel() {
+			    engine.undeploy(rule);
+		    };
+	    };
+    };
+  };
 };
 
 def CrimeModule := object: {
-	def crimeEngine := engine;
+	
+	def makeCrimeEngine := &makeCrimeEngine;
 	def makeTuple := &makeTuple;
 	def makeTemplate := &makeTemplate;
-	def insertTuple := &insertTuple;
-	def retractTuple := &retractTuple;
-	
 	def var: symbol {
 		ExpressionFactory.variable(symbol.text);	
 	};
-	
-	def when: table activated: act {
-		when: table activated: act deactivated: {|args| nil};
-	};
-	
-	
-	def when: table activated: act deactivated: deact {
-		def rule :=  makeRule(table,act,deact);
-		engine.deploy(rule);
-		isolate: { 
-			def cancel() {
-				engine.undeploy(rule);
-			};
-		};
-	};
-	
+		
 	def CrimeTest := extend: /.at.unit.test.UnitTest.new("Crime", false) with: {
 		import /.at.lang.futures;
 		enableFutures(false);
-			
+		def myCrime := makeCrimeEngine();
+		
 		def testAsyncActivacte() {
 			def t1 := makeTemplate("GPS", var: `x, 3);
 			def t2 := makeTemplate("GPS", 3, var: `x);				
 			def [fut,res] := makeFuture();
 			
-			when: [t1, t2] activated: {|args|
+			myCrime.when: [t1, t2] activated: {|args|
 				def x := args.get(`x).toString;	
 				res.resolve(x);
 			} deactivated: { |args|
 				
 			};
 			def shouldTrigger := makeTuple("GPS", 3, 3);
-			insertTuple(shouldTrigger);
-			retractTuple(shouldTrigger);
+			myCrime.insertTuple(shouldTrigger);
+			myCrime.retractTuple(shouldTrigger);
 			when: fut becomes: { |value|
 				self.assertEquals("3", value);	
 			};
@@ -184,21 +190,21 @@ def CrimeModule := object: {
 			def t2 := makeTemplate("GPS", 3, var: `x);
 			
 			def a := actor: {
-				def doOperation(rule,res) {
-					import /.at.crime.CrimeConnection;
-					
-					when: rule.getTable() activated: {|args|  
+				import /.at.crime.CrimeConnection;
+				def myCrime := makeCrimeEngine();
+				
+				def doOperation(rule,res) {				
+					myCrime.when: rule.getTable() activated: {|args|  
 						rule.getAct()(args,"cool on actor a activated"); 
 					};
 					
 					def shouldTrigger := makeTuple("GPS", 3, 3);
-					insertTuple(shouldTrigger);
+					myCrime.insertTuple(shouldTrigger);
 					res.resolve(nil);
 				};
 			};
 
 			def packedRule := packRule([t1, t2], script: { |args,ma| system.println("<a:: >"+ma); }, script:{ |args,md| system.println("<d:: >"+md);});
-			
 			a<-doOperation(packedRule,res);	
 			fut;
 		};

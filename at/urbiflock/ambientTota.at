@@ -40,20 +40,11 @@ def makeTupleSpace(descriptor){
 	
 	//private methods and data fields
 	def localTS := Vector.new(); //contains local tuples
-	def ambientTS := Vector.new(); // contains ambient tuples
-	def localTSListeners := Vector.new();
-	def seenTS := Vector.new(); // contains [far references, descriptor] to seen TS.
+	// contains tuples which needs to be transmitted to the ambient
+	def ambientTS := Vector.new(); 
+	def localTSListeners := Vector.new(); 
+	def seenTS := Vector.new(); // contains [far reference, descriptor] to the seen TS.
 	  
-	// methods to manage the registration of when:matches.
-	def registerListener(l) {
-	  localTSListeners.add(l); 
-	  object: { 
-		  def cancel() { removeListener(l)};
-		};
-	};
- 	def removeListener(l) {
-	  localTSListeners.remove(l); 
-	};
 	def notifyListeners(tuple){
 	  localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) };
 	};
@@ -80,7 +71,12 @@ def makeTupleSpace(descriptor){
     		tuple.doAction(ts);
     		tuple := tuple.changeTupleContent(ts);
     		//check if you have to insert it into your local tuple space
-				if: tuple.decideStore(ts) then: { ts.add(tuple) };
+        // and start again the propagation protocol.
+				if: tuple.decideStore(ts) then: { 
+					ts.add(tuple); 
+					//try to propagate to next device
+				  ts.inject: tuple;
+			  };
 		};
   };
 	
@@ -110,6 +106,7 @@ def makeTupleSpace(descriptor){
 	    localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };
+	  
 	  // delete from a ts all tuples matching the template
 	  // returns a table with the deleted tuples.
 	  def delete(template) {
@@ -119,7 +116,15 @@ def makeTupleSpace(descriptor){
 		}; 
 		// returns a table with the tuples matching the template in the ts. 
 		def read(template) { (localTS.filter: template).asTable};
-			
+		
+		//non-blocking operation which removes a tuple 
+	  //if multiple tuples match the tample,
+	  // the one returned is selected non-deterministic.
+	  def inp(template){
+		  def toReturn := read(template).at(1);
+		  localTS.remove(toReturn);
+		  toReturn;		 
+	  };
 		// operations to manage the ambient ts.
 						
 		//publishes a tuple into the ambient ( ~ inject in TOTA)
@@ -179,7 +184,7 @@ def makeTupleSpace(descriptor){
 		    if: !(ambientTS.contains( tuple, {|t, t1| t.getTupleId == t1.getTupleId})) then: {
 			  // tota propagation protocol (receiver side)
 		      receiveTuple(tuple, self);
-			   self.inject: tuple;
+			   //self.inject: tuple;
 		    };
 		  };
   	};
@@ -187,9 +192,20 @@ def makeTupleSpace(descriptor){
 	  def getDescriptor() {
 		  descriptor;
 	  };
+	
+		// methods to manage the registration of when:matches.
+		//needed for contextAwareTotam, ugly !
+		def registerListener(l) {
+		  localTSListeners.add(l); 
+		  object: { 
+			  def cancel() { removeListener(l)};
+			};
+		};
+	 	def removeListener(l) {
+		  localTSListeners.remove(l); 
+		};
 		
 	}; // end-of-public interface
-  publicInterface; 
 };
 
 def makeTuple(tupleId := nil){
@@ -235,6 +251,7 @@ def AmbientTotaModule := object: {
 	// public stuff goes here
 	def makeTupleSpace := &makeTupleSpace;
 	def makeTuple := &makeTuple;
+	deftype TotamTuple;
 	
 	def extendTuple: tuple  with: closure {
 		extendTuple(tuple, closure);
