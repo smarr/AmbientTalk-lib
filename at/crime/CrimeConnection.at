@@ -3,12 +3,27 @@ def ExpressionFactory := jlobby.edu.vub.crime.grammar.ExpressionFactory;
 def GenericFact := jlobby.edu.vub.crime.grammar.GenericFact;
 def ExpressionList := jlobby.edu.vub.crime.grammar.ExpressionList;
 def Event := jlobby.edu.vub.crime.grammar.Event;
+def AmbientTalkEvent := jlobby.edu.vub.crime.grammar.AmbientTalkEvent;
 def AmbientTalkAction := jlobby.edu.vub.crime.AmbientTalkAction;
 def IndexingVisitor := jlobby.edu.vub.crime.parser.IndexingVisitor;
 import /.at.exceptions;
 
 def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
+};
+
+def newAmbientTalkEvent(act,deact,vars) {
+	AmbientTalkEvent.new(
+	AmbientTalkAction.new(
+		isolate: {
+			def getClass() { jlobby.edu.vub.crime.Action };
+			def activated(args){ 		
+				act(args); 
+			};
+			def deactivate(args){ 
+				deact(args); 
+			}; 
+	}));
 };
 
 def newEvent(act,deact,vars) {
@@ -46,11 +61,11 @@ def newEvent(act,deact,vars) {
 	}));
 };
 
-def convertTupleToCrimeFact(tuple) {
+def convertTupleToCrimeFact(tuple, rule) {
 	def newFact := GenericFact.new( "private" , tuple.getField(1) );
 	def theIndexer :=  IndexingVisitor.new(newFact);
-
 	def index := 1;
+	newFact.setItsContextRule(rule);
 	tuple.each: { |f|
 		if: isJavaObject(f) then: {
 			//its a variable so we don't need to make it into an argument anymore
@@ -72,13 +87,13 @@ def packRule(table,act,deact) {
 	};
 };
 
-def makeRule(table,act,deact) {
+def makeRule(table,act,deact,eventMaker := &newEvent) {
 	def prerequisite := ExpressionList.whichAcceptsFacts();
 	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
-	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e)); };
+	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e,nil)); };
 	def vars := prerequisite.variables;
 	def it := vars.iterator;
-	def event := newEvent(act, deact,vars);
+	def event := eventMaker(act, deact,vars);
 	while: { it.hasNext } do: {
 		event.addAttribute(it.next);
 	};
@@ -127,17 +142,34 @@ def makeCrimeEngine() {
 	
 	//public interface of a crime engine.
 	object: {
-    def insertTuple(tuple) {
-	    engine.assert(convertTupleToCrimeFact(tuple));
+	
+    def insertTuple(tuple, rule := nil) {
+		def crimeFact := convertTupleToCrimeFact(tuple,rule);
+	    engine.assert(crimeFact);
+		isolate: { 
+		    def retract() {
+			    engine.retract(crimeFact);
+		    };
+	    };
     };
 
     def retractTuple(tuple) {
-	    engine.retract(convertTupleToCrimeFact(tuple));
+	    engine.retract(convertTupleToCrimeFact(tuple,nil));
     };
 
     def when: table activated: act {
 	    when: table activated: act deactivated: {|args| nil};
     };
+
+	def when: table activatedToken: act deactivatedToken: deact {
+		def rule :=  makeRule(table, act, deact, &newAmbientTalkEvent);
+	    engine.deploy(rule);
+	    isolate: { 
+		    def cancel() {
+			    engine.undeploy(rule);
+		    };
+	    };
+	};
 
     def when: table activated: act deactivated: deact {
 	    def rule :=  makeRule(table,act,deact);
@@ -164,6 +196,29 @@ def CrimeModule := object: {
 		import /.at.lang.futures;
 		enableFutures(false);
 		def myCrime := makeCrimeEngine();
+		
+		def testRetrieveRuleFromCrime() {
+			def tuple :=  makeTuple("testRetrieveRuleFromCrime", 3, 4);
+			def ruleData := [ makeTemplate("GPS", 30, 30)];
+			myCrime.insertTuple(tuple, ruleData);
+			def retrievedRule := myCrime.retractTuple(makeTemplate("testRetrieveRuleFromCrime", 3, 4));
+			system.println(retrievedRule.getItsContextRule);
+		};
+		
+		def testGetTokens() {
+			 myCrime.when: [makeTemplate("testGetTokens", var:`x, 4) ] activatedToken: { |token|
+				system.println("The token is ::: " + token.get(0));
+				system.println("This fact has the rule ::: " + token.get(0).getItsContextRule);
+				
+			} deactivatedToken: { |token|
+				system.println(token);
+			};
+			
+			def tuple :=  makeTuple("testGetTokens", 3, 4);
+			def ruleData := [ makeTemplate("ruleData", 30, 30)];
+			myCrime.insertTuple(tuple, ruleData);
+		};
+		
 		
 		def testAsyncRetracting(){
 			def [fut,res] := makeFuture(); 
