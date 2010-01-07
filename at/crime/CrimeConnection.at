@@ -183,12 +183,16 @@ def CrimeModule := object: {
 				ids := ids + [myCrime.insertTuple(makeTuple("GPS", x, x))];
 			};
 		//	system.println("ids " + ids);
-			myCrime.retractTuple(makeTemplate("GPS", 1,1));
+			//myCrime.retractTuple(makeTemplate("GPS", 1,1));
+			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
+			myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `x));
+			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
+			//myCrime.retractTuple(makeTemplate("GPS", 1, 2));
 			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
 			fut;
 		};
 		
-		def testAsyncActivacte() {
+	/*	def testAsyncActivacte() {
 			def t1 := makeTemplate("GPS", var: `x, 3);
 			def t2 := makeTemplate("GPS", 3, var: `x);				
 			def [fut,res] := makeFuture();
@@ -230,6 +234,6 @@ def CrimeModule := object: {
 			def packedRule := packRule([t1, t2], script: { |args,ma| system.println("<a:: >"+ma); }, script:{ |args,md| system.println("<d:: >"+md);});
 			a<-doOperation(packedRule,res);	
 			fut;
-		};
+		}; */
 	};
 };
