@@ -40,8 +40,8 @@ def newEvent(act,deact,vars) {
 			def activated(args){ 		
 				act(mapArguments(args)); 
 			};
-			def deactivate(arguments){ 
-				deact(arguments); 
+			def deactivate(args){ 
+				deact(mapArguments(args)); 
 			}; 
 	}));
 };
@@ -164,6 +164,29 @@ def CrimeModule := object: {
 		import /.at.lang.futures;
 		enableFutures(false);
 		def myCrime := makeCrimeEngine();
+		
+		def testAsyncRetracting(){
+			def [fut,res] := makeFuture(); 
+			def countInserts := 0; def countRetracts := 0;
+			myCrime.when: [makeTemplate("GPS", var: `x, var: `y)] activated: { |a|
+				countInserts := countInserts + 1;
+				self.assertLessThanOrEquals(countInserts,3);	
+			} deactivated: { |a| 
+				system.println("retracing " + a.get(`x).toString());
+				countRetracts := countRetracts + 1;
+				self.assertLessThanOrEquals(countRetracts,3);
+				//to change!
+				if: (1 == countRetracts) 	then: { res.resolve(`ok)};
+			};
+			def ids := [];
+			3.doTimes: { |x|
+				ids := ids + [myCrime.insertTuple(makeTuple("GPS", x, x))];
+			};
+		//	system.println("ids " + ids);
+			myCrime.retractTuple(makeTemplate("GPS", 1,1));
+			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
+			fut;
+		};
 		
 		def testAsyncActivacte() {
 			def t1 := makeTemplate("GPS", var: `x, 3);
