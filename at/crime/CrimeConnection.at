@@ -10,6 +10,17 @@ def Constraint := jlobby.edu.vub.crime.grammar.Constraint;
 def Operator := jlobby.edu.vub.crime.grammar.attributes.Operator;
 import /.at.exceptions;
 
+/*
+
+def newBlockStatementsAct := `{ | #@(varNames().map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(act.method.bodyExpression.statements) };
+act := eval: newBlockStatementsAct in: act.context.lexicalScope;
+
+def newBlockStatementsDeact := `{ | #@(varNames().map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(deact.method.bodyExpression.statements) };
+deact := eval: newBlockStatementsDeact in: deact.context.lexicalScope;
+
+*/
+
+
 def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
 };
@@ -226,23 +237,25 @@ def CrimeModule := object: {
 		* Tests the insertions of crime tuples which are extended with AmbientTalk rules.  
 		*/
 		def testRetrieveRuleFromCrime() {
+			
 			def tuple :=  makeTuple("testRetrieveRuleFromCrime", 3, 4);
-			def ruleData := [ makeTemplate("GPS", 30, 30)];
+			def ruleData := [ makeTemplate("GPS", 30, 30) ];
 			myCrime.insertTuple(tuple, ruleData);
-			def retrievedTuple := myCrime.retractTuple(makeTemplate("testRetrieveRuleFromCrime", 3, 4));
+			
+			def retrievedTuple := myCrime.retractTuple(makeTemplate("testRetrieveRuleFromCrime", var: `x, 4));
 			self.assertEquals(retrievedTuple.getItsContextRule, ruleData);
 		};
 		
 		/*
 		* Test the constraints construction
 		* when: Template activated: Closure withConstraints: TableOfConstraints.
-		* Constraints put extra requirments on varibales 
+		* Constraints put extra requirements on varibales 
 		*/
 		def testAsyncConstraint() {	
 			def [fut,res] := makeFuture(); 
 					
-			myCrime.when: [makeTemplate("testConstraint", var:`x, 4) ] activated: { |a|
-				self.assertEquals(a.get(`x).toString,"3");
+			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4) ] activated: { |map|
+				self.assertEquals(map.get(`x).toString,"3");
 				res.resolve("OK")
 			} withConstraints: [var: `x lessThen: 10];
 			
@@ -274,10 +287,9 @@ def CrimeModule := object: {
 				token.get(0);
 			};
 			
-			myCrime.when: [makeTemplate("testGetTokens", var:`x, 4) ] activatedToken: { |token|
+			myCrime.when: [ makeTemplate("testGetTokens", var:`x, 4) ] activatedToken: { |token|
 				system.println("The token is ::: " + tokenToAmbientTalk(token));
 				res.resolve("OK")
-				
 			} deactivatedToken: {|t|};
 			
 			def tuple :=  makeTuple("testGetTokens", 3, 4);
