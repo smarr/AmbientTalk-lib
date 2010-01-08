@@ -6,6 +6,7 @@ def Event := jlobby.edu.vub.crime.grammar.Event;
 def AmbientTalkEvent := jlobby.edu.vub.crime.grammar.AmbientTalkEvent;
 def AmbientTalkAction := jlobby.edu.vub.crime.AmbientTalkAction;
 def IndexingVisitor := jlobby.edu.vub.crime.parser.IndexingVisitor;
+def AmbientTalkVisitor := jlobby.edu.vub.crime.grammar.utils.AmbientTalkVisitor;
 def Constraint := jlobby.edu.vub.crime.grammar.Constraint;
 def Operator := jlobby.edu.vub.crime.grammar.attributes.Operator;
 import /.at.exceptions;
@@ -72,6 +73,26 @@ def newEvent(act,deact,vars) {
 				deact(mapArguments(args)); 
 			}; 
 	}));
+};
+
+def convertFactToAmbientTalk(fact) {
+	def visitor :=  AmbientTalkVisitor.new();
+	def attributes := fact.attributes;
+	def it := attributes.iterator;
+	def tab := [];
+	while: { it.hasNext } do: {
+		tab := tab + [visitor.visit(it.next)];
+	};
+	makeTuple(tab);
+};
+
+def convertTokenToAmbientTalk( token ){
+	def it := token.iterator;
+	def tab := [];
+	while: { it.hasNext } do: {
+		tab := tab + [convertFactToAmbientTalk(it.next)];
+	};	
+	tab;
 };
 
 def convertTupleToCrimeFact(tuple, rule) {
@@ -179,6 +200,10 @@ def makeCrimeEngine() {
 	    engine.retract(convertTupleToCrimeFact(tuple,nil));
     };
 
+	def readTuple(template) {
+		convertFactToAmbientTalk(engine.read(convertTupleToCrimeFact(template,nil)));
+	};
+
     def when: table activated: act {
 	    when: table activated: act deactivated: {|args| nil};
     };
@@ -223,11 +248,16 @@ def makeCrimeEngine() {
   };
 };
 
+
+
 def CrimeModule := object: {
 	
 	def makeCrimeEngine := &makeCrimeEngine;
 	def makeTuple := &makeTuple;
 	def makeTemplate := &makeTemplate;
+	def convertTokenToAmbientTalk := &convertTokenToAmbientTalk;
+	def convertFactToAmbientTalk := &convertFactToAmbientTalk;
+	
 	def var: symbol {
 		ExpressionFactory.variable(symbol.text);	
 	};
@@ -240,6 +270,17 @@ def CrimeModule := object: {
 		import /.at.lang.futures;
 		enableFutures(false);
 		def myCrime := makeCrimeEngine();
+		
+		
+		/*
+		* Tests the reading of crime tuples (does not remove the tuple).  TODO 
+		*/
+		def testReadFromCrime() {
+			def tuple :=  makeTuple("testReadFromCrime", 3, 4);
+			myCrime.insertTuple(tuple);
+			def retrievedTuple := myCrime.readTuple(makeTemplate("testReadFromCrime", var: `x, 4));
+			retrievedTuple := myCrime.readTuple(makeTemplate("testReadFromCrime", var: `x, 4));			
+		};
 		
 		/*
 		* Tests the insertions of crime tuples which are extended with AmbientTalk rules.  
@@ -294,7 +335,9 @@ def CrimeModule := object: {
 		*/
 		def testAsyncGetDeactivatedToken(){
 			def [fut,res] := makeFuture(); 
+						
 			myCrime.when: [ makeTemplate("testAsyncGetDeactivatedToken", var:`x, 4) ] activatedToken: { |token|
+				convertTokenToAmbientTalk(token);
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
 			} deactivatedToken: {|token|
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
