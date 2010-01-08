@@ -50,18 +50,20 @@ def makeTupleSpace() {
 	  };
 	
 		def add(tuple){
-			//insert local tuples only to crime			
-			if: (nil != tuple.getContent) then: {
-				def table := [];
-				tuple.getContent.each:{ |el| table := table + [el];}; 
-				system.println("TS " + self + "CRIME ENGINE "+ crimeEngine + " insertingTuple " +table);
-				crimeEngine.insertTuple(tuple.getContent);
-			};
-		  super^add(tuple);
+			crimeEngine.insertTuple(tuple.content);
 		};
-		def remove(tuple){
+		
+		/*
+		def read(template){
+			
+		};*/
+		
+		def delete(template){
+			crimeEngine.retractTuple(template.content);
+		};
+		/*def remove(tuple){
 			system.println("removing " + tuple);
-		};
+		};*/
 	  //listener helper object used by when/whenever matches.
 		def listener := object: {
 			def unsubscribe;
@@ -92,8 +94,12 @@ def makeTupleSpace() {
 		   Multiple tuples may match the template but only one when:matches is applied non-deterministically.
 		   The returned tuple as parameter in the closure argument is removed from the locatl TS.	
 		 */
-	  def when: template matches: closure {
-		  super^registerListener(listener.new(self,template));
+	  def when: templateTable matches: closure {
+		  //def table := templateTable.map: { |template| template.content};
+		  def registration := crimeEngine.when: [templateTable.content] activatedToken: { |token|
+				//registration.getVariables();
+			  system.println("XXXXXactivated " + token);
+			};
 		};
 		/* ~readp
 		   places a listener on to the local TS for the addition of tuples matching a template
@@ -108,22 +114,19 @@ def makeTupleSpace() {
 		//publishes a tuple into the ambient ( ~ inject in TOTA)
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
-		def inject: tuple inContext: table {
+		def inject: tuple inContext: templateTable {
+			def table := templateTable.map: { |template| template.content};
 			def totamTuple;
 			if: (is: tuple taggedAs: ContextAwareTotam) then:{
 			  totamTuple := tuple;
 			} else:{	
-				system.println("TS: " + self + " aqui1 amb tuple " + tuple);
 			  totamTuple := extend: tuple with: { |table|
 				   def doAction(ts) {
 						 def crime := ts.getCrimeEngine();
-					   system.println("adding activation rule at " + ts + " CRIME ENGINE " + crime);
 						 crime.when: table activated: { |args|
-						//TODO!! adding now a crime tuple!
-						 	  system.println("activating tuple " + self.getContent);
-							  ts.add(self);
+							  crime.insertTuple(self.content, table);
 						 } deactivated: { |args|
-						    ts.remove(self);	
+							crime.retractTuple(self.content);	
 						};
 					 };
 					 def decideStore(ts) {false};
@@ -137,13 +140,18 @@ def makeTupleSpace() {
 
 def contextAwareTuplesModule := object:{
 	
-	def makeTemplate(@fields) {crimeModule^makeTemplate(@fields)};
+	def makeTemplate(@fields) {
+		def template := crimeModule^makeTemplate(@fields);
+		totamModule.extendTuple: totamModule.makeTuple() with: {
+		  def content := template;
+	  };
+	};
 	def makeTuple(@fields) {
 		def tuple := crimeModule^makeTuple(@fields);
 		totamModule.extendTuple: totamModule.makeTuple() with: {
 		  def content := tuple;
 		  def hop := 0;
-		  def getContent() {content};
+		  //def getContent() {content};
 		  def inScope(ts) {hop < 1 };
 		  def changeTupleContent(ts) {
 			  hop := hop + 1;
@@ -162,11 +170,11 @@ def contextAwareTuplesModule := object:{
 		  def [fut,res] := makeFuture();
 		  def myTs := makeTupleSpace();
 		  myTs.goOnline;
-		/*	myTs.when: makeTemplate("inRoom", var: `name) matches: { |tuple|
-			   system.println("You are currently in " + tuple.get(`name));
+			myTs.when: makeTemplate("inRoom", var: `name) matches: { 
+			   system.println("You are currently in " + name);
 			   res.resolve(`ok);
 			  // remove(tuple);
-	    };*/ /*outOfContext: {|tuple|
+	    }; /*outOfContext: {|tuple|
 			  system.println("you moved out of " + tuple.get(`name));
 			};*/
 		  def theMeetingRoom := actor: {
@@ -187,8 +195,8 @@ def contextAwareTuplesModule := object:{
 					count := count + 1;
 					coordinates[1] := coordinates[1] + 10;
 					coordinates[2] := coordinates[2] + 10;
-				//	def table := myTs.delete(makeTemplate("GPS"));
-					//system.println("deleted " + table);
+				  def table := myTs.delete(makeTemplate("GPS", var: `x, var: `y));
+					system.println("deleted " + table);
 					myTs.add(makeTuple("GPS", coordinates[1], coordinates[2]));
 				};
 		  //};
