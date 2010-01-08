@@ -103,7 +103,13 @@ def packRule(table,act,deact) {
 def makeRule(table,act,deact,eventMaker := &newEvent) {
 	def prerequisite := ExpressionList.whichAcceptsFacts();
 	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
-	table.each: {|e| prerequisite.add(convertTupleToCrimeFact(e,nil)); };
+	table.each: {|e| 		
+		if: isJavaObject(e) then: { 
+			prerequisite.add(e);
+		} else: {
+			prerequisite.add(convertTupleToCrimeFact(e,nil)); 
+		};
+	};
 	def vars := prerequisite.variables;
 	def it := vars.iterator;
 	def event := eventMaker(act, deact,vars);
@@ -200,6 +206,10 @@ def makeCrimeEngine() {
 	    };
     };
 
+	def when: table activatedToken: act {
+    when: table activatedToken: act deactivatedToken: {|token|};		
+	};
+
 	def when: table activatedToken: act deactivatedToken: deact {
 		def rule :=  makeRule(table, act, deact, &newAmbientTalkEvent);
 	    engine.deploy(rule);
@@ -231,33 +241,28 @@ def CrimeModule := object: {
 		enableFutures(false);
 		def myCrime := makeCrimeEngine();
 		
-		// Tests Done
-		
 		/*
 		* Tests the insertions of crime tuples which are extended with AmbientTalk rules.  
 		*/
 		def testRetrieveRuleFromCrime() {
-			
 			def tuple :=  makeTuple("testRetrieveRuleFromCrime", 3, 4);
-			def ruleData := [ makeTemplate("GPS", 30, 30) ];
+			def ruleData := [ makeTemplate("testRetrieveRuleFromCrime", 30, 30) ];
 			myCrime.insertTuple(tuple, ruleData);
-			
 			def retrievedTuple := myCrime.retractTuple(makeTemplate("testRetrieveRuleFromCrime", var: `x, 4));
 			self.assertEquals(retrievedTuple.getItsContextRule, ruleData);
 		};
-		
-		/*
+	 /*
 		* Test the constraints construction
-		* when: Template activated: Closure withConstraints: TableOfConstraints.
-		* Constraints put extra requirements on varibales 
+		* when: [Template1,..,TemplateN] activated: Closure 
+		* where template can include constraints put extra requirements on varibales 
 		*/
 		def testAsyncConstraint() {	
 			def [fut,res] := makeFuture(); 
 					
-			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4) ] activated: { |map|
+			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4), var: `x lessThen: 10 ] activated: { |map|
 				self.assertEquals(map.get(`x).toString,"3");
 				res.resolve("OK")
-			} withConstraints: [var: `x lessThen: 10];
+			};
 			
 			def failTuple :=  makeTuple("testConstraint", 80, 4);
 			def activatedTuple :=  makeTuple("testConstraint", 3, 4);	
@@ -267,66 +272,62 @@ def CrimeModule := object: {
 			fut;
 		};
 		
-		//Tests TODO
-	
-		
 		/*
-		* Tests the special construct to retreive the token which triggered the rule.
+		* Tests the special construct to retrieve the token which triggered the rule.
 		* For example in  (defrule (some-action) => (t1 ?x ?y) (t2 ?x ?y)  ) 
 		* some-action could receive the following token [ (t1 5 6), (t2 5 6) ]
 		*/
 		def testAsyncGetActivatedToken() {
 			def [fut,res] := makeFuture(); 
-			
-			
-			def factToAmbientTalk(fact) {
-				
+			myCrime.when: [ makeTemplate("testAsyncGetActivatedToken", var:`x, 4) ] activatedToken: { |token|
+				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
+				res.resolve("OK");
 			};
-			
-			def tokenToAmbientTalk(token) {
-				token.get(0);
-			};
-			
-			myCrime.when: [ makeTemplate("testGetTokens", var:`x, 4) ] activatedToken: { |token|
-				system.println("The token is ::: " + tokenToAmbientTalk(token));
-				res.resolve("OK")
-			} deactivatedToken: {|t|};
-			
-			def tuple :=  makeTuple("testGetTokens", 3, 4);
-			myCrime.insertTuple(tuple);
-			fut;
-		};
-			
-		def testAsyncRetracting(){
-			def [fut,res] := makeFuture(); 
-			def countInserts := 0; def countRetracts := 0;
-			myCrime.when: [makeTemplate("GPS", var: `x, var: `y)] activated: { |a|
-				countInserts := countInserts + 1;
-				self.assertLessThanOrEquals(countInserts,3);	
-			} deactivated: { |a| 
-				system.println("retracing " + a.get(`x).toString());
-				countRetracts := countRetracts + 1;
-				self.assertLessThanOrEquals(countRetracts,3);
-				//to change!
-				if: (1 == countRetracts) 	then: { res.resolve(`ok)};
-			};
-			def ids := [];
-			3.doTimes: { |x|
-				ids := ids + [myCrime.insertTuple(makeTuple("GPS", x, x))];
-			};
-		    //system.println("ids " + ids);
-			//myCrime.retractTuple(makeTemplate("GPS", 1,1));
-			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
-			myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `x));
-			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
-			//myCrime.retractTuple(makeTemplate("GPS", 1, 2));
-			//myCrime.retractTuple(makeTemplate("GPS", var: `x, var: `y));
+			myCrime.insertTuple(makeTuple("testAsyncGetActivatedToken", 3, 4));
 			fut;
 		};
 		
-	/*	def testAsyncActivacte() {
-			def t1 := makeTemplate: ["GPS", var: `x, 3] with: [ var: `x lessThen: 5 ] ;
-			def t2 := makeTemplate("GPS", 3, var: `x);				
+		/*
+		* Tests the special construct to retrieve the token which triggered the rule.
+		* For example in  (defrule (some-action) => (t1 ?x ?y) (t2 ?x ?y)  ) 
+		* some-action could receive the following token [ (t1 5 6), (t2 5 6) ]
+		*/
+		def testAsyncGetDeactivatedToken(){
+			def [fut,res] := makeFuture(); 
+			myCrime.when: [ makeTemplate("testAsyncGetDeactivatedToken", var:`x, 4) ] activatedToken: { |token|
+				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
+			} deactivatedToken: {|token|
+				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
+				res.resolve("OK");
+			};
+			def tuple :=  makeTuple("testAsyncGetDeactivatedToken", 3, 4);
+			myCrime.insertTuple(tuple);
+			myCrime.retractTuple(tuple);
+			fut;		
+		};
+		
+		/*
+		 * Test that test the retraction of previously inserted tuples.
+		 */	
+		def testAsyncRetracting(){
+			def [fut,res] := makeFuture(); 
+			def countInserts := 0; def countRetracts := 0;
+			myCrime.when: [makeTemplate("testAsyncRetracting", var: `x, var: `y)] activated: { |a|
+				countInserts := countInserts + 1;
+				self.assertLessThanOrEquals(countInserts,3);	
+			} deactivated: { |a| 
+				countRetracts := countRetracts + 1;
+				self.assertLessThanOrEquals(countRetracts,3);
+				if: (3 == countRetracts) 	then: { res.resolve(`ok)};
+			};
+			3.doTimes: { |i| myCrime.insertTuple(makeTuple("testAsyncRetracting", i, i)) };
+			3.doTimes: { |i| myCrime.retractTuple(makeTemplate("testAsyncRetracting", var: `x, var: `x))};
+			fut;
+		};
+		
+		def testAsyncActivate() {
+			def t1 := makeTemplate("testAsyncActivate", var: `x, 3);
+			def t2 := makeTemplate("testAsyncActivate", 3, var: `x);				
 			def [fut,res] := makeFuture();
 			
 			myCrime.when: [t1, t2] activated: {|args|
@@ -335,18 +336,18 @@ def CrimeModule := object: {
 			} deactivated: { |args|
 				
 			};
-			def shouldTrigger := makeTuple("GPS", 3, 3);
+			def shouldTrigger := makeTuple("testAsyncActivate", 3, 3);
 			myCrime.insertTuple(shouldTrigger);
 			myCrime.retractTuple(shouldTrigger);
 			when: fut becomes: { |value|
 				self.assertEquals("3", value);	
 			};
 		};
-		
+		/*
 		def testAsyncSendRule() {
 			def [fut,res] := makeFuture();
-			def t1 := makeTemplate("GPS", var: `x, 3);
-			def t2 := makeTemplate("GPS", 3, var: `x);
+			def t1 := makeTemplate("testAsyncSendRule", var: `x, 3);
+			def t2 := makeTemplate("testAsyncSendRule", 3, var: `x);
 			
 			def a := actor: {
 				import /.at.crime.CrimeConnection;
@@ -354,10 +355,8 @@ def CrimeModule := object: {
 				
 				def doOperation(rule,res) {				
 					myCrime.when: rule.getTable() activated: {|args|  
-						rule.getAct()(args,"cool on actor a activated"); 
 					};
-					
-					def shouldTrigger := makeTuple("GPS", 3, 3);
+					def shouldTrigger := makeTuple("testAsyncSendRule", 3, 3);
 					myCrime.insertTuple(shouldTrigger);
 					res.resolve(nil);
 				};
