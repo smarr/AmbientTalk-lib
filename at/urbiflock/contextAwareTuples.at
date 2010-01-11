@@ -128,39 +128,64 @@ def makeTupleSpace() {
 			};
 	  };
 	
-	  /* ~inp
-		   places a listener on to the local TS for the addition of tuples matching a template
-		   it returns a publication object to be able to unsubscribe. 
-		   the publication is automatically unsubscribed after the matching of a tuple.
-		   Multiple tuples may match the template but only one when:matches is applied non-deterministically.
-		   The returned tuple as parameter in the closure argument is removed from the locatl TS.	
-	  */
-	  def when: templateTable matches: closure {
-		    def variableNames := varNames(templateTable.content);
+	 def removeListener(vectorFacts,listener) {
+				def it := vectorFacts.iterator;
+				while: { it.hasNext } do: {
+					def fact := it.next;
+					(fact.getItsContextRule()).remove(listener);
+				};
+	  };
+	
+		
+		// Not sure to remove the tuple.	
+		def when: templateTable matches: closure {
+			when: templateTable matches: closure outOfContext: {} registration: {|r| r.cancel();};
+		};
+		
+		def when: templateTable matches: closure outOfContext: closureOutOfContext  {
+			when: templateTable matches: closure outOfContext: closureOutOfContext registration: {|r| r.cancel();};
+		};
+		
+		def whenever: templateTable matches: closure {
+			when: templateTable matches: closure outOfContext: {} registration: {|r| };
+		};
+		
+		def whenever: templateTable matches: closure outOfContext: closureOutOfContext {
+			when: templateTable matches: closure outOfContext: closureOutOfContext registration: {|r| };
+		};
+		
+		def makeNewClosure(variableNames, closure) {
 			def newClosureStatements := `{ | #@(variableNames.map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(closure.method.bodyExpression.statements) };
-		  	closure := eval: newClosureStatements in: closure.context.lexicalScope;
+			eval: newClosureStatements in: closure.context.lexicalScope;
+		};
+		
+		def when: templateTable matches: closure outOfContext: closureOutOfContext registration: registrationClosure  {
+			def listener;
+		    def variableNames := varNames(templateTable.content);
+			closure :=  makeNewClosure(variableNames, closure); //`{ | #@(variableNames.map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(closure.method.bodyExpression.statements) };
+			closureOutOfContext :=  makeNewClosure(variableNames, closureOutOfContext);
+			
 		  	//def table := templateTable.map: { |template| template.content};
 		  	def registration := crimeEngine.when: [templateTable.content] activatedToken: { |vectorFacts,varMap|
 				//Cancel so it is only triggered once
-				registration.cancel();
+				registrationClosure(registration);
 				//Call the closure with the correct variables
 				closure(@mapToTableValues(varMap,variableNames));
 				//Remove the facts from crime
 				removeToken(vectorFacts);
 				//Install Deactivation
-				//installListeners(vectorFacts,{ system.println("<DEACTIVATED TUPLE KKkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk>");  });
-			  	system.println("XXXXXactivated " + vectorFacts);
+				listener := { closureOutOfContext(@mapToTableValues(varMap,variableNames)); };
+				installListeners(vectorFacts,listener);
+			};
+			
+			object: {
+				def cancel() {
+					registration.cancel();
+					removeListener(vectorFacts,listener);
+				};
 			};
 		};
-		/* ~readp
-		   places a listener on to the local TS for the addition of tuples matching a template
-		   it returns a publication object to be able to unsubscribe. 
-		   If multiple tuples may match the template, whenever:matches will get call multiple times.
-		   The returned tuple as parameter in the closure argument is removed from the locatl TS.	
-		 */
-		def whenever: template matches: closure{
-		  super^registerListener(listener.new(self,template,false));
-		};
+	
 		
 		//publishes a tuple into the ambient ( ~ inject in TOTA)
 		//note that this just exports a tuple to the ambient
@@ -178,6 +203,10 @@ def makeTupleSpace() {
 				
 				def clear() {
 					table := [];
+				};
+				
+				def remove(l) {
+					table := table.filter: { |e| e != l };
 				};
 				
 				def each: closure {
@@ -204,8 +233,7 @@ def makeTupleSpace() {
 			  } taggedAs: [/.at.types.Isolate, ContextAwareTotam]; 
 		  };
 			super^inject: totamTuple;	
-		}; //end-inject-inContext
-		
+		}; //end-inject-inContext	
 	};
 };
 
@@ -241,21 +269,22 @@ def contextAwareTuplesModule := object:{
 		  def [fut,res] := makeFuture();
 		  def myTs := makeTupleSpace();
 		  myTs.goOnline;
+		
+		
 		  myTs.when: makeTemplate("inRoom", var: `name) matches: { 
-			   system.println("You are currently in " + name);
-			   
-			   res.resolve(`ok);
-			  // remove(tuple);
-	    }; /*outOfContext: {|tuple|
-			  system.println("you moved out of " + tuple.get(`name));
-			};*/
+		    system.println("You are currently in " + name);
+	      } outOfContext: {|tuple|
+		  	system.println("you moved out of " + name);
+		    res.resolve(`ok);
+		  };
+		
 		  def theMeetingRoom := actor: {
 			  import /.at.urbiflock.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  system.println("meeting room is " + myTs);
 			  def makeMeetingRoomTuple() { makeTuple("inRoom", "MeetingRoom")};
-			  myTs.inject: makeMeetingRoomTuple() inContext: [ makeTemplate("GPS", 30, 30)];
+			  myTs.inject: makeMeetingRoomTuple() inContext: [ makeTemplate("GPS", 30, 30) ];
 			  //only activate this tuple if location is meeting room
 			  //[ makeTemplate("GPS", 50, 120), makeTemplate("Today", var: `day), makeTemplate("Weekday", var: `day) ]; //&& (35< x < 45) && (100 < y < 120) 
 		  };
