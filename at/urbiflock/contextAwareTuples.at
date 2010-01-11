@@ -87,18 +87,48 @@ def makeTupleSpace() {
 		    };
 	    };
 	  };
-		/* ~inp
+	
+	def removeFirst(string) {
+		def charArray := string.explode;
+		charArray.select(2, charArray.length+1).implode;
+	};
+	  
+	
+	  def varNames(template) {
+		def table := [];
+		template.each: { |attribute|
+			if: isJavaObject(attribute) then: {
+				//its a variable
+				def variableName := removeFirst(attribute.toString());
+				if: !(table.contains(variableName)) then: {
+					table := table + [variableName];
+				};
+			};
+		};
+		system.println("varNames: " + table);
+	 	table;
+	  };
+	
+	  def mapToTableValues(varMap,variableNames) {
+		variableNames.map: {|n| varMap.get( jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(n)) };
+	  };	
+	
+	  /* ~inp
 		   places a listener on to the local TS for the addition of tuples matching a template
 		   it returns a publication object to be able to unsubscribe. 
 		   the publication is automatically unsubscribed after the matching of a tuple.
 		   Multiple tuples may match the template but only one when:matches is applied non-deterministically.
 		   The returned tuple as parameter in the closure argument is removed from the locatl TS.	
-		 */
+	  */
 	  def when: templateTable matches: closure {
-		  //def table := templateTable.map: { |template| template.content};
-		  def registration := crimeEngine.when: [templateTable.content] activatedToken: { |token|
+		    def variableNames := varNames(templateTable.content);
+			def newClosureStatements := `{ | #@(variableNames.map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(closure.method.bodyExpression.statements) };
+		  	closure := eval: newClosureStatements in: closure.context.lexicalScope;
+		  	//def table := templateTable.map: { |template| template.content};
+		  	def registration := crimeEngine.when: [templateTable.content] activatedToken: { |token,varMap|
+				closure(@mapToTableValues(varMap,variableNames)); 
 				//registration.getVariables();
-			  system.println("XXXXXactivated " + token);
+			  	system.println("XXXXXactivated " + token);
 			};
 		};
 		/* ~readp
@@ -172,6 +202,7 @@ def contextAwareTuplesModule := object:{
 		  myTs.goOnline;
 			myTs.when: makeTemplate("inRoom", var: `name) matches: { 
 			   system.println("You are currently in " + name);
+			   
 			   res.resolve(`ok);
 			  // remove(tuple);
 	    }; /*outOfContext: {|tuple|
@@ -186,12 +217,11 @@ def contextAwareTuplesModule := object:{
 			  myTs.inject: makeMeetingRoomTuple() inContext: [ makeTemplate("GPS", 30, 30)];
 			  //only activate this tuple if location is meeting room
 			  //[ makeTemplate("GPS", 50, 120), makeTemplate("Today", var: `day), makeTemplate("Weekday", var: `day) ]; //&& (35< x < 45) && (100 < y < 120) 
-				
 		  };
   	  //Code of my gps module which simulates when: gps updated: { |coordinates| ...}
 			  def coordinates := [0,0];
 				def count := 0;
-				/.at.support.timer.every: seconds(5) until: { count >5 } do: { 
+				/.at.support.timer.every: seconds(1) until: { count >5 } do: { 
 					count := count + 1;
 					coordinates[1] := coordinates[1] + 10;
 					coordinates[2] := coordinates[2] + 10;
