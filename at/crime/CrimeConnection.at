@@ -26,51 +26,58 @@ def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
 };
 
+def mapArguments(args,vars) {
+	def argmap := jlobby.java.util.HashMap.new();		
+	def it := vars.iterator;
+	def i := 0;
+	while: { it.hasNext } do: {
+		def var := it.next;
+		argmap.put(var.toString(), args.get(i));
+		i := i +1;
+	};
+
+	object: {
+		def get(literal) {
+			//UGLY UGLY UGLY 
+			//Reason I can't seem to convert a string to literal so I have to do it the otherway around
+			//+ The getName of a variable puts a ?
+			jlobby.edu.vub.crime.grammar.utils.AmbientTalkVisitor.visit(argmap.get("?"+literal.text()));
+		};
+	};
+};
+
 def newAmbientTalkEvent(act,deact,vars) {
-	AmbientTalkEvent.new(
+	def event := AmbientTalkEvent.new(
 	AmbientTalkAction.new(
-		isolate: {
+		object: {
 			def getClass() { jlobby.edu.vub.crime.Action };
-			def activated(args){ 		
-				act(args); 
+			
+			def getVectorVariables(token) {
+				def fact := event.buildFact(token);	
+			 	fact.attributes();
 			};
-			def deactivate(args){ 
-				deact(args); 
+		
+			def activated(token){
+				//REALLY REALLY REALLY DIRTY 
+				act((token.get(0)).toVector(),mapArguments(getVectorVariables(token.get(0)),vars)); 
+			};
+			def deactivate(token){ 
+				//REALLY REALLY REALLY DIRTY 
+				deact((token.get(0)).toVector(),mapArguments(getVectorVariables(token.get(0)),vars)); 
 			}; 
 	}));
 };
 
 def newEvent(act,deact,vars) {
-
-	def mapArguments(args) {
-		def argmap := jlobby.java.util.HashMap.new();		
-		def it := vars.iterator;
-		def i := 0;
-		while: { it.hasNext } do: {
-			def var := it.next;
-			argmap.put(var.toString(), args.get(i));
-			i := i +1;
-		};
-
-		object: {
-			def get(literal) {
-				//UGLY UGLY UGLY 
-				//Reason I can't seem to convert a string to literal so I have to do it the otherway around
-				//+ The getName of a variable puts a ?
-				argmap.get("?"+literal.text());
-			};
-		};
-	};
-
 	Event.new(
 	AmbientTalkAction.new(
-		isolate: {
+		object: {
 			def getClass() { jlobby.edu.vub.crime.Action };
-			def activated(args){ 		
-				act(mapArguments(args)); 
+			def activated(vectorVariables){ 		
+				act(mapArguments(vectorVariables,vars)); 
 			};
-			def deactivate(args){ 
-				deact(mapArguments(args)); 
+			def deactivate(vectorVariables){ 
+				deact(mapArguments(vectorVariables,vars)); 
 			}; 
 	}));
 };
@@ -143,7 +150,6 @@ def makeRule(table,act,deact,eventMaker := &newEvent) {
 
 //def t1 := makeTemplate: ["GPS", var: `x, 3] with: [ var: `x lessThen: 5 ] ;
 
-
 def makeTemplate(@fields) {
 	isolate: {
 	def length(){ fields.length };
@@ -200,6 +206,10 @@ def makeCrimeEngine() {
 	    engine.retract(convertTupleToCrimeFact(tuple,nil));
     };
 
+	def retractCrimeFact(fact) {
+		engine.retract(fact);
+	};
+
 	def readTuple(template) {
 		convertFactToAmbientTalk(engine.read(convertTupleToCrimeFact(template,nil)));
 	};
@@ -224,7 +234,7 @@ def makeCrimeEngine() {
 	    def rule :=  makeRule(table,act, deact, event);
 		constraints.each:{|c| rule.getPrerequisite().add(c) };
 	    engine.deploy(rule);
-	    isolate: { 
+	    isolate: {
 		    def cancel() {
 			    engine.undeploy(rule);
 		    };
@@ -232,7 +242,7 @@ def makeCrimeEngine() {
     };
 
 	def when: table activatedToken: act {
-    when: table activatedToken: act deactivatedToken: {|token|};		
+    	when: table activatedToken: act deactivatedToken: {|token, varMap|};		
 	};
 
 	def when: table activatedToken: act deactivatedToken: deact {
@@ -257,6 +267,7 @@ def CrimeModule := object: {
 	def makeTemplate := &makeTemplate;
 	def convertTokenToAmbientTalk := &convertTokenToAmbientTalk;
 	def convertFactToAmbientTalk := &convertFactToAmbientTalk;
+	def isJavaObject := &isJavaObject; //TODO remove?!
 	
 	def var: symbol {
 		ExpressionFactory.variable(symbol.text);	
@@ -300,13 +311,13 @@ def CrimeModule := object: {
 		def testAsyncConstraint() {	
 			def [fut,res] := makeFuture(); 
 					
-			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4), var: `x lessThen: 10 ] activated: { |map|
-				self.assertEquals(map.get(`x).toString,"3");
+			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4), var: `x lessThen: 10 ] activated: { |varMap|
+				self.assertEquals(varMap.get(`x).toString,"3");
 				res.resolve("OK")
 			};
 			
 			def failTuple :=  makeTuple("testConstraint", 80, 4);
-			def activatedTuple :=  makeTuple("testConstraint", 3, 4);	
+			def activatedTuple :=  makeTuple("testConstraint", 3, 4);
 			
 			myCrime.insertTuple(failTuple);
 			myCrime.insertTuple(activatedTuple);
@@ -320,8 +331,9 @@ def CrimeModule := object: {
 		*/
 		def testAsyncGetActivatedToken() {
 			def [fut,res] := makeFuture(); 
-			myCrime.when: [ makeTemplate("testAsyncGetActivatedToken", var:`x, 4) ] activatedToken: { |token|
+			myCrime.when: [ makeTemplate("testAsyncGetActivatedToken", var:`x, 4) ] activatedToken: { |token, varMap|
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
+				self.assertEquals(varMap.get(`x).toString,"3");
 				res.resolve("OK");
 			};
 			myCrime.insertTuple(makeTuple("testAsyncGetActivatedToken", 3, 4));
@@ -336,11 +348,13 @@ def CrimeModule := object: {
 		def testAsyncGetDeactivatedToken(){
 			def [fut,res] := makeFuture(); 
 						
-			myCrime.when: [ makeTemplate("testAsyncGetDeactivatedToken", var:`x, 4) ] activatedToken: { |token|
+			myCrime.when: [ makeTemplate("testAsyncGetDeactivatedToken", var:`x, 4) ] activatedToken: { |token, varMap|
 				convertTokenToAmbientTalk(token);
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
-			} deactivatedToken: {|token|
+				self.assertEquals(varMap.get(`x).toString,"3");
+			} deactivatedToken: {|token, varMap|
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
+				self.assertEquals(varMap.get(`x).toString,"3");
 				res.resolve("OK");
 			};
 			def tuple :=  makeTuple("testAsyncGetDeactivatedToken", 3, 4);
