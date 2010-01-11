@@ -111,7 +111,22 @@ def makeTupleSpace() {
 	
 	  def mapToTableValues(varMap,variableNames) {
 		variableNames.map: {|n| varMap.get( jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(n)) };
-	  };	
+	  };
+	
+	  def removeToken( vectorFacts ) {
+		def it := vectorFacts.iterator;
+		while: { it.hasNext } do: {
+			crimeEngine.retractCrimeFact(it.next);
+		};
+	  };
+	
+	  def installListeners(vectorFacts, listener) {
+			def it := vectorFacts.iterator;
+			while: { it.hasNext } do: {
+				def fact := it.next;
+				(fact.getItsContextRule()).add(listener);
+			};
+	  };
 	
 	  /* ~inp
 		   places a listener on to the local TS for the addition of tuples matching a template
@@ -125,10 +140,16 @@ def makeTupleSpace() {
 			def newClosureStatements := `{ | #@(variableNames.map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(closure.method.bodyExpression.statements) };
 		  	closure := eval: newClosureStatements in: closure.context.lexicalScope;
 		  	//def table := templateTable.map: { |template| template.content};
-		  	def registration := crimeEngine.when: [templateTable.content] activatedToken: { |token,varMap|
-				closure(@mapToTableValues(varMap,variableNames)); 
-				//registration.getVariables();
-			  	system.println("XXXXXactivated " + token);
+		  	def registration := crimeEngine.when: [templateTable.content] activatedToken: { |vectorFacts,varMap|
+				//Cancel so it is only triggered once
+				registration.cancel();
+				//Call the closure with the correct variables
+				closure(@mapToTableValues(varMap,variableNames));
+				//Remove the facts from crime
+				removeToken(vectorFacts);
+				//Install Deactivation
+				//installListeners(vectorFacts,{ system.println("<DEACTIVATED TUPLE KKkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk>");  });
+			  	system.println("XXXXXactivated " + vectorFacts);
 			};
 		};
 		/* ~readp
@@ -146,16 +167,36 @@ def makeTupleSpace() {
 		//but it does not store in the local ts
 		def inject: tuple inContext: templateTable {
 			def table := templateTable.map: { |template| template.content};
+			
+			//REMOVE for out of context cancel.
+			def listeners := isolate: {
+				def table := [];
+				
+				def add(l) {
+					table := table + [l];
+				};
+				
+				def clear() {
+					table := [];
+				};
+				
+				def each: closure {
+					table.each: closure;
+				};
+			};
+			
 			def totamTuple;
 			if: (is: tuple taggedAs: ContextAwareTotam) then:{
 			  totamTuple := tuple;
 			} else:{	
-			  totamTuple := extend: tuple with: { |table|
+			  totamTuple := extend: tuple with: { |table,listeners|
 				   def doAction(ts) {
 						 def crime := ts.getCrimeEngine();
 						 crime.when: table activated: { |args|
-							  crime.insertTuple(self.content, table);
+							  crime.insertTuple(self.content, listeners);
 						 } deactivated: { |args|
+							listeners.each: { |l| l(); };
+							listeners.clear();
 							crime.retractTuple(self.content);	
 						};
 					 };
@@ -200,7 +241,7 @@ def contextAwareTuplesModule := object:{
 		  def [fut,res] := makeFuture();
 		  def myTs := makeTupleSpace();
 		  myTs.goOnline;
-			myTs.when: makeTemplate("inRoom", var: `name) matches: { 
+		  myTs.when: makeTemplate("inRoom", var: `name) matches: { 
 			   system.println("You are currently in " + name);
 			   
 			   res.resolve(`ok);
