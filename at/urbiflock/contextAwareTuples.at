@@ -101,6 +101,11 @@ def makeTupleSpace() {
 		def delete(template){
 			crimeEngine.retractTuple(template.content);
 		};
+		
+		def replace(oldTuple, newTuple){
+			delete(oldTuple);
+			add(newTuple);
+    };
 
 		//TODO: temporal hack because we get Crime tokens in when:activated.
 	  def removeToken( vectorFacts ) {
@@ -220,23 +225,18 @@ def contextAwareTuplesModule := object:{
 		enableFutures(false);
 		
 		def myTs;
-		def deletedTable;
 		def registration;
 		
 		def setUp(){
-			deletedTable := [];
 			myTs := makeTupleSpace();
 			myTs.goOnline;
 		  //gps tuples using other code which simulates when: gps updated: { |coordinates| ..}
 			def coordinates := [0,0];
-			def count := 1;
-			/.at.support.timer.every: seconds(1) until: { count >4 } do: { 
-					coordinates[1] := coordinates[1] + 10;
-					coordinates[2] := coordinates[2] + 10;
-				  deletedTable := deletedTable + [myTs.delete(makeTemplate("GPS", var: `x, var: `y))];
-			  	system.println("delete " +deletedTable);
-					myTs.add(makeTuple("GPS", coordinates[1], coordinates[2]));
-					count := count + 1;
+			def count := 0;
+			/.at.support.timer.every: seconds(1) until: { count := count + 1; count > 4 } do: {
+				def oldC := coordinates; 
+				coordinates := coordinates.map: {|i| i + 10};
+				myTs.replace(makeTuple("GPS", oldC[1], oldC[2]), makeTuple("GPS", coordinates[1], coordinates[2]));
 			};
 			//day tuples
 			myTs.add(makeTuple("Today", "Wednesday"));
@@ -260,11 +260,9 @@ def contextAwareTuplesModule := object:{
 		    self.assertEquals("MeetingRoom", name);
 	    } outOfContext: {|tuple|
 		  	self.assertEquals("MeetingRoom", name);
-				deletedTable := deletedTable.filter: { |e| nil != e};
-				self.assertEquals(3,deletedTable.length);
 		    when: theMeetingRoom<-goOffline()@FutureMessage becomes: { |ack| res.resolve(`ok)};
 		  };
-		 			
+		  		 			
 		  def theMeetingRoom := actor: {
 			  import /.at.urbiflock.contextAwareTuples;
 			  def myTs := makeTupleSpace();
@@ -272,15 +270,13 @@ def contextAwareTuplesModule := object:{
 			  def goOffline() {myTs.goOffline()};
 			  def makeMeetingRoomTuple() { makeTuple("inRoom", "MeetingRoom")};
 			  myTs.inject: makeMeetingRoomTuple() inContext: [ makeTemplate("GPS", 30, 30) ];
-			  //only activate this tuple if location is meeting room
-			 // myTs.inject: makeMeetingRoomTuple("MT") inContext: [ makeTemplate("GPS", 30, 30),  makeTemplate("Today", var: `day), makeTemplate("Weekday", var: `day) ];
 		  };
 		  fut;
 	  }; //end-testInject
 	
 		// test a inject of a meetingRoom, studentRoom tuples inserted by the rooms itself but only active 
 		// when participants are in correct location.
-	  def testAsyncInject2Rooms(){
+	/*  def testAsyncInject2Rooms(){
 		  def [fut,res] := makeFuture();
 	
 		  registration := myTs.whenever: makeTemplate("inRoom", var: `name) matches: { 
@@ -306,7 +302,7 @@ def contextAwareTuplesModule := object:{
 			  myTs.inject: makeRoomTuple("StudentRoom") inContext: [ makeTemplate("GPS", 30, 30),  makeTemplate("Today", var: `day), makeTemplate("Weekday", var: `day) ];
 		  };
 		  fut;
-	  }; //end-testInject
+	  }; //end-testInject */
 	
 	};//end-contextAwareTuplesTest
 }; //end-contextAwareTuplesModule

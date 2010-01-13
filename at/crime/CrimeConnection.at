@@ -193,13 +193,7 @@ def makeCrimeEngine() {
 	object: {
 	
     def insertTuple(tuple, rule := nil) {
-		def crimeFact := convertTupleToCrimeFact(tuple,rule);
-	    engine.assert(crimeFact);
-		isolate: { 
-		    def retract() {
-			    engine.retract(crimeFact);
-		    };
-	    };
+	    engine.assert(convertTupleToCrimeFact(tuple,rule));
     };
 
     def retractTuple(tuple) {
