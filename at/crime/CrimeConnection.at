@@ -258,7 +258,9 @@ def makeCrimeEngine() {
   };
 };
 
-
+def constraint(symbol, operator, value) {
+	Constraint.new(ExpressionFactory.variable(symbol.text), operator, ExpressionFactory.attribute(value));
+};
 
 def CrimeModule := object: {
 	
@@ -273,10 +275,30 @@ def CrimeModule := object: {
 		ExpressionFactory.variable(symbol.text);	
 	};
 	
-	def var: symbol lessThen: value {
-		Constraint.new(ExpressionFactory.variable(symbol.text), Operator.LTH, ExpressionFactory.attribute(value));
+	def var: symbol equalsTo: value {
+		constraint(symbol, Operator.EQL, value);
 	};
-		
+	
+	def var: symbol notEquals: value {
+		constraint(symbol, Operator.NEQ, value);
+	};
+	
+	def var: symbol lessThen: value {
+	 	constraint(symbol, Operator.LTH, value);
+	};
+	
+	def var: symbol greaterThen: value {
+	 	constraint(symbol, Operator.GTH, value);
+	};
+	
+	def var: symbol lessOrEqualTo: value {
+		constraint(symbol, Operator.LEQ, value);	 
+	};
+	
+	def var: symbol greaterOrEqualTo: value {
+		constraint(symbol, Operator.GEQ, value);	 
+	};	
+	
 	def CrimeTest := extend: /.at.unit.test.UnitTest.new("Crime", false) with: {
 		import /.at.lang.futures;
 		enableFutures(false);
@@ -304,7 +326,7 @@ def CrimeModule := object: {
 			self.assertEquals(retrievedTuple.getItsContextRule, ruleData);
 		};
 	 /*
-		* Test the constraints construction
+		* Test the constraint lessThen construction
 		* when: [Template1,..,TemplateN] activated: Closure 
 		* where template can include constraints put extra requirements on varibales 
 		*/
@@ -312,12 +334,33 @@ def CrimeModule := object: {
 			def [fut,res] := makeFuture(); 
 					
 			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4), var: `x lessThen: 10 ] activated: { |varMap|
-				self.assertEquals(varMap.get(`x).toString,"3");
+				self.assertEquals(varMap.get(`x),3);
 				res.resolve("OK")
 			};
 			
 			def failTuple :=  makeTuple("testConstraint", 80, 4);
 			def activatedTuple :=  makeTuple("testConstraint", 3, 4);
+			
+			myCrime.insertTuple(failTuple);
+			myCrime.insertTuple(activatedTuple);
+			fut;
+		};
+	   
+		/*
+		* Test the constraints greaterThen construction
+		* when: [Template1,..,TemplateN] activated: Closure 
+		* where template can include constraints put extra requirements on varibales 
+		*/
+		def testAsyncConstraintGreaterThen() {	
+			def [fut,res] := makeFuture(); 
+					
+			myCrime.when: [ makeTemplate("testConstraintGreaterThen", var:`x, 4), var: `x greaterThen: 10 ] activated: { |varMap|
+				self.assertEquals(varMap.get(`x),80);
+				res.resolve("OK")
+			};
+			
+			def activatedTuple :=  makeTuple("testConstraintGreaterThen", 80, 4);
+			def failTuple :=  makeTuple("testConstraintGreaterThen", 3, 4);
 			
 			myCrime.insertTuple(failTuple);
 			myCrime.insertTuple(activatedTuple);
@@ -333,7 +376,7 @@ def CrimeModule := object: {
 			def [fut,res] := makeFuture(); 
 			myCrime.when: [ makeTemplate("testAsyncGetActivatedToken", var:`x, 4) ] activatedToken: { |token, varMap|
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
-				self.assertEquals(varMap.get(`x).toString,"3");
+				self.assertEquals(varMap.get(`x),3);
 				res.resolve("OK");
 			};
 			myCrime.insertTuple(makeTuple("testAsyncGetActivatedToken", 3, 4));
@@ -351,10 +394,10 @@ def CrimeModule := object: {
 			myCrime.when: [ makeTemplate("testAsyncGetDeactivatedToken", var:`x, 4) ] activatedToken: { |token, varMap|
 				convertTokenToAmbientTalk(token);
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
-				self.assertEquals(varMap.get(`x).toString,"3");
+				self.assertEquals(varMap.get(`x),3);
 			} deactivatedToken: {|token, varMap|
 				self.assertEquals( 3, token.get(0).attributes().get(1).getValue());
-				self.assertEquals(varMap.get(`x).toString,"3");
+				self.assertEquals(varMap.get(`x),3);
 				res.resolve("OK");
 			};
 			def tuple :=  makeTuple("testAsyncGetDeactivatedToken", 3, 4);
@@ -388,7 +431,7 @@ def CrimeModule := object: {
 			def [fut,res] := makeFuture();
 			
 			myCrime.when: [t1, t2] activated: {|args|
-				def x := args.get(`x).toString;	
+				def x := args.get(`x);	
 				res.resolve(x);
 			} deactivated: { |args|
 				
@@ -397,7 +440,7 @@ def CrimeModule := object: {
 			myCrime.insertTuple(shouldTrigger);
 			myCrime.retractTuple(shouldTrigger);
 			when: fut becomes: { |value|
-				self.assertEquals("3", value);	
+				self.assertEquals(3, value);	
 			};
 		};
 		/*
