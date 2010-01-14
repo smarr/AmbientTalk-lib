@@ -168,7 +168,7 @@ def makeTemplate(@fields) {
 			false;
 		};
 	};
-	
+	def toString(){ fields };
 	def each: l  {
 		fields.each: l;
 	};

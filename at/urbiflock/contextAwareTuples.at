@@ -62,31 +62,38 @@ def mapToTableValues(varMap,variableNames) {
 def installListeners(vectorFacts, listener) {
   def it := vectorFacts.iterator;
 	while: { it.hasNext } do: {
-		def fact := it.next;
-		(fact.getItsContextRule()).add(listener);
+		def contextRule := it.next.getItsContextRule();
+	  if: (nil != contextRule ) then: {
+		  contextRule.add(listener);
+		};
 	};
 };
 
 def removeListener(vectorFacts,listener) {
   def it := vectorFacts.iterator;
   while: { it.hasNext } do: {
-  	def fact := it.next;
-		(fact.getItsContextRule()).remove(listener);
+  	def contextRule := it.next.getItsContextRule();
+	  if: (nil != contextRule ) then: {
+		  contextRule.remove(listener);
+	  };
 	};
 };
 
-def makeTupleSpace() {
-	extend: totamModule.makeTupleSpace("ContextAwareTotam") with:{
+def makeTupleSpace( descriptor := "dummyDescriptor") {
+	extend: totamModule.makeTupleSpace(descriptor) with:{
 	  def pub; def sub; // service discovery vars
+	  def activeDescriptors := false;
 	  //every ts has a crime engine for activation/deactivation tuples
 	  def crimeEngine := makeCrimeEngine();
 	  def getCrimeEngine() { crimeEngine };
-	
+	  def activateDescriptors() { activeDescriptors := true};
 	  def goOnline() {
 		  pub := export: self as: ContextAwareTotam;
 		  sub := whenever: ContextAwareTotam discovered: { |ts|
-				//filling in dummny descriptor to avoid a remote message to interchange descriptors
-				super^notifyTSDiscovered(ts, "ContextAwareTotam"); 
+				//if no descriptor was provided, fill in dummny descriptor to avoid a remote message to interchange descriptors
+				if: (activeDescriptors)  then: { 
+					super^notifyTSDiscovered(ts);
+				}	else: { super^notifyTSDiscovered(ts, descriptor)}; 
 		  };
 	  };
 	
@@ -177,7 +184,7 @@ def makeTupleSpace() {
 			if: (is: tuple taggedAs: ContextAwareTotam) then:{
 			  totamTuple := tuple;
 			} else:{	
-			  totamTuple := extend: tuple with: { |table,listeners|
+			  totamTuple := extend: tuple with: { |table,listeners,activeDescriptors, descriptor|
 				   def doAction(ts) {
 						 def crime := ts.getCrimeEngine();
 						 crime.when: table activated: { |args|
@@ -189,6 +196,12 @@ def makeTupleSpace() {
 						};
 					 };
 					 def decideStore(ts) {false};
+					 //TODO: dirty hack to have descriptors still.
+					 def inScope(desTarget) {
+						if: activeDescriptors then: {	
+							desTarget == descriptor
+						} else: {true};
+					};
 			  } taggedAs: [/.at.types.Isolate, ContextAwareTotam]; 
 		  };
 			super^inject: totamTuple;	

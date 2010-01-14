@@ -1,0 +1,160 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2010
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+/* Game inspired in the Target
+ * two teams: policemen and gangsters
+ * gangster escaped from prison and are committing crimes around the city.
+ * The gangsters know the location of places with high quantities of money (e.g. casinos, jewleries, banks, ..)  
+ * they need to collect objects around the city (i.e knifes, detonators, ..) to be able to commit crimes.
+ * At start of game policemen are in their HQ, and gangsters chose HQ and the game starts.
+ * Game ends when the policemen have killed all gangsters or gangsters earn 1 milion euro in crimes.
+ * Each team can see the positions of other team members, they can also send messages amongst team members.
+ * Every 6 minutes they can see the position of the opposite team members.
+ * Policemen and gangsters can shoot at ecah other. Each member gets 3 bullets at start game.
+ * If policemen doesn't have more bullets, he can reload them at th HQ.
+ * Gangster get 4 additional virtual items at the begining of the game for his defense:
+ * -mine: kills somebody who steps on it (even if it is a gangster)
+ * -gas bomb: kills people for X time X radius. After drop it, a gangster has 3 minutes to run before it becomes active.
+ * -radio jammer: disrupts satelit connectivity.  Policemen cannot see gangster positions for 5 minutes, and the position of the policemen won't be displayed either!. 
+ * -bullenproof vest: protects a gangster for 5 minutes against one single shot.
+ * If a policemen memeber gets killed, the whole team has to go back to the HQ to start again. 
+ * Gangsters can pick up the object to commit crimes when they are within 10 meters of the item.
+ * To commit a crime in a certain place, a number of objects is required. 
+ * When the gangster is nearby a crime place, he can commit the crime by pressing the button if he has the necessary objects. He loses the items but gets the reward.
+ * When a gangster commits a crime, the policemen will be told (they know location and money stolen). 
+ */
+def catModule := /.at.urbiflock.contextAwareTuples;
+import catModule;
+def gameGUI := jlobby.at.urbiflock.cat.LocalizerGUI;
+def randomNumberBetween := /.at.support.util.&randomNumberBetween;
+def RED := "gangster";
+def BLUE := "police";
+deftype EXPLOSIVES;
+deftype ROPE_LADDER;
+deftype LASER_JAMMER;
+deftype KNIFE;
+deftype SWISS_ARMY_KNIFE;
+deftype GLASS_BREAKER;
+deftype WIG;
+deftype MASK;
+deftype GUN;
+def virtualObjects := [EXPLOSIVES, ROPE_LADDER,LASER_JAMMER,KNIFE,SWISS_ARMY_KNIFE,GLASS_BREAKER,WIG,MASK,GUN];
+
+def typeToString(type){
+  type.typeName.text.toLowerCase.explode;
+};
+
+def makeGameServer() {
+//	import /.at.urbiflock.contextAwareTuples;
+	def ts := makeTupleSpace(RED);
+	ts.activateDescriptors();
+  ts.goOnline();	
+
+  def addInRangeConstraints(coordinates, sX, sY) {
+		  [var: sX lessOrEqualTo: (coordinates[1] + 10), 
+			var: sX greaterOrEqualTo: (coordinates[1] - 10),
+			var: sY lessOrEqualTo: (coordinates[2] + 10), 
+			var: sY greaterOrEqualTo: (coordinates[2] - 10)];
+	};
+
+	def addCrimeTarget(name, coordinates, value, @objects){
+		 // crimeTarget tuples should be only received by gangsters
+		 def template := [ makeTemplate("TeamInfo", var: `u, RED), 
+		  makeTemplate("PlayerInfo", var: `u, RED, var: `x, var: `y)];
+		 //+ inRange constraints, currently a rectangle.
+		 template := template + addInRangeConstraints(coordinates, `x, `y);
+		 // + which have the necessary virtual objects to commit this crime
+		 objects.each: { |item| template := template + [makeTemplate("VirtualObject", typeToString(item))]};
+		 def tuple := makeTuple("CrimeTarget", name, coordinates[1], coordinates[2], value);
+		system.println("SERVER: inject: " + tuple.content.toString() + " inContext " + tem.content.toString());
+		 ts.inject: tuple inContext: template;
+	};
+
+	def addVirtualObjects(name, coordinates){
+	  def template := [ makeTemplate("TeamInfo", var: `u, RED),
+	  makeTemplate("PlayerInfo", var: `u, RED, var: `x, var: `y)];
+	  template := template + addInRangeConstraints(coordinates, `x, `y);
+	  system.println("SERVER: inject: " + name + " inContext " + tem.content.toString());
+	  ts.inject: makeTuple("VirtualObject", name) inContext: template;	
+	};
+	
+  object:{
+   def initializeMap() {
+	   //add crime targets and virtual objects for gangsters.
+	   addCrimeTarget("Bank", [30, 50], 100000, EXPLOSIVES, ROPE_LADDER);
+	   addCrimeTarget("Bank", [10, 190], 200000,EXPLOSIVES, LASER_JAMMER);
+     addCrimeTarget("Jewlery", [100, 210], 300000, KNIFE, MASK);
+     addCrimeTarget("Casino", [90, 50], 500000, WIG, GUN);
+     addCrimeTarget("Jewlery", [180, 90], 800000, SWISS_ARMY_KNIFE, GLASS_BREAKER);
+	   10.doTimes: { |i| 
+	    addVirtualObjects(ts, typeToString(virtualObjects[randomNumberBetween(1, virtualObjects.length)]) ,[randomNumberBetween(0, 250), randomNumberBetween(0, 270)])
+	   };
+	 };
+	};	
+};
+
+
+def makePlayer(username, team) {
+  
+  def myTs := makeTupleSpace(team);
+  def teamPlayers := jlobby.java.util.HashMap.new();
+	def location := [0,0];
+	
+  def localFacade :=  object:{
+	  def updateLocation(newLocation){
+			location := newLocation;
+			//add your own position for your self in the ts.
+			myTs.add(makeTuple("PlayerInfo", username, team, location[1], location[2]));
+		  //broadcast your own position. positionTuple is visible to your team members or nearby enemies!
+		  def tem := makeTemplate("TeamInfo", var: `x, team);
+		  system.println("inject:inContext " + tem.content.toString());
+		  myTs.inject:  makeTuple("PlayerInfo", username, team, location[1], location[2]) inContext: [ tem ];
+		//,makeTuple("Location", newLocation[1], newLocation[2]));
+	  };
+	  def goOnline() {
+			myTs.goOnline;
+			myTs.add(makeTuple("TeamInfo", username, team));
+			//track location of users;
+			myTs.whenever: makeTemplate("PlayerInfo", var: `u, var: `t, var: `x, var: `y) matches: {
+				def loc := [x,y];
+				system.println("receiving player info " + u + " team " + t + " loc " + loc + " my username " + username);
+				//TODO: added because I could get triggered by my own tuples, but with the user interface I don't want that now.
+				// If we use real GPS, this test is not necesary!
+				if: !( u == username) then: {
+			  	listener.updatePlayerPointPosition(t, u, loc);
+			  } else: { system.println("i received myself")};
+			};
+	  };
+  };
+
+	def listener := gameGUI.new(localFacade, team, username);
+  localFacade;
+	
+};
+
+network.online;
+self;
+
