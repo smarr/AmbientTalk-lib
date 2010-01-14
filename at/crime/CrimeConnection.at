@@ -1,3 +1,31 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2010
+ * Authors: SOFT Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+
 def CrimeFactory := jlobby.edu.vub.crime.CrimeFactory;
 def ExpressionFactory := jlobby.edu.vub.crime.grammar.ExpressionFactory;
 def GenericFact := jlobby.edu.vub.crime.grammar.GenericFact;
@@ -9,18 +37,8 @@ def IndexingVisitor := jlobby.edu.vub.crime.parser.IndexingVisitor;
 def AmbientTalkVisitor := jlobby.edu.vub.crime.grammar.utils.AmbientTalkVisitor;
 def Constraint := jlobby.edu.vub.crime.grammar.Constraint;
 def Operator := jlobby.edu.vub.crime.grammar.attributes.Operator;
+def AmbientTalkConstraint := jlobby.edu.vub.crime.grammar.AmbientTalkConstraint;
 import /.at.exceptions;
-
-/*
-
-def newBlockStatementsAct := `{ | #@(varNames().map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(act.method.bodyExpression.statements) };
-act := eval: newBlockStatementsAct in: act.context.lexicalScope;
-
-def newBlockStatementsDeact := `{ | #@(varNames().map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(deact.method.bodyExpression.statements) };
-deact := eval: newBlockStatementsDeact in: deact.context.lexicalScope;
-
-*/
-
 
 def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
@@ -148,8 +166,6 @@ def makeRule(table,act,deact,eventMaker := &newEvent) {
 	ExpressionFactory.rule(consequence, prerequisite);
 };
 
-//def t1 := makeTemplate: ["GPS", var: `x, 3] with: [ var: `x lessThen: 5 ] ;
-
 def makeTemplate(@fields) {
 	isolate: {
 	def length(){ fields.length };
@@ -265,6 +281,10 @@ def CrimeModule := object: {
 	def convertFactToAmbientTalk := &convertFactToAmbientTalk;
 	def isJavaObject := &isJavaObject; //TODO remove?!
 	
+	def constraint: table with: block {
+		AmbientTalkConstraint.new(table, block);
+	};
+	
 	def var: symbol {
 		ExpressionFactory.variable(symbol.text);	
 	};
@@ -297,8 +317,7 @@ def CrimeModule := object: {
 		import /.at.lang.futures;
 		enableFutures(false);
 		def myCrime := makeCrimeEngine();
-		
-		
+				
 		/*
 		* Tests the reading of crime tuples (does not remove the tuple).  TODO 
 		*/
@@ -319,7 +338,27 @@ def CrimeModule := object: {
 			def retrievedTuple := myCrime.retractTuple(makeTemplate("testRetrieveRuleFromCrime", var: `x, 4));
 			self.assertEquals(retrievedTuple.getItsContextRule, ruleData);
 		};
-	 /*
+		
+	   /*
+		* Test the constraint AmbientTalk construction
+		*/
+		def testAsyncAmbientTalkConstraint() {	
+			def [fut,res] := makeFuture(); 
+			myCrime.when:  [makeTemplate("testAsyncAmbientTalkConstraint", var:`x, var: `y), constraint: [ var:`x, var:`y] with: script: {|x,y| x+y == 7 }]  activated: { |varMap|
+				self.assertEquals( varMap.get(`x)+varMap.get(`y), 7);
+				res.resolve("OK");
+			};
+
+			def failTuple :=  makeTuple("testAsyncAmbientTalkConstraint", 80, 4);
+			def activatedTuple :=  makeTuple("testAsyncAmbientTalkConstraint", 3, 4);
+
+			myCrime.insertTuple(failTuple);
+			myCrime.insertTuple(activatedTuple);
+			fut;
+		};
+		
+		
+	   /*
 		* Test the constraint lessThen construction
 		* when: [Template1,..,TemplateN] activated: Closure 
 		* where template can include constraints put extra requirements on varibales 
@@ -327,7 +366,7 @@ def CrimeModule := object: {
 		def testAsyncConstraint() {	
 			def [fut,res] := makeFuture(); 
 					
-			myCrime.when: [ makeTemplate("testConstraint", var:`x, 4), var: `x lessThen: 10 ] activated: { |varMap|
+			myCrime.when:  [makeTemplate("testConstraint", var:`x, 4), var: `x lessThen: 10 ]  activated: { |varMap|
 				self.assertEquals(varMap.get(`x),3);
 				res.resolve("OK")
 			};
