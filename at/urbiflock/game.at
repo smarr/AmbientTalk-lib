@@ -64,7 +64,7 @@ deftype GUN;
 def virtualObjects := [EXPLOSIVES, ROPE_LADDER,LASER_JAMMER,KNIFE,SWISS_ARMY_KNIFE,GLASS_BREAKER,WIG,MASK,GUN];
 
 def typeToString(type){
-  type.typeName.text.toLowerCase.explode;
+  type.typeName.text.toLowerCase;
 };
 
 def makeGameServer() {
@@ -89,7 +89,7 @@ def makeGameServer() {
 		 // + which have the necessary virtual objects to commit this crime
 		 objects.each: { |item| template := template + [makeTemplate("VirtualObject", typeToString(item))]};
 		 def tuple := makeTuple("CrimeTarget", name, coordinates[1], coordinates[2], value);
-		system.println("SERVER: inject: " + tuple.content.toString() + " inContext " + tem.content.toString());
+		system.println("SERVER: inject: " + tuple + " inContext " + template);
 		 ts.inject: tuple inContext: template;
 	};
 
@@ -97,7 +97,7 @@ def makeGameServer() {
 	  def template := [ makeTemplate("TeamInfo", var: `u, RED),
 	  makeTemplate("PlayerInfo", var: `u, RED, var: `x, var: `y)];
 	  template := template + addInRangeConstraints(coordinates, `x, `y);
-	  system.println("SERVER: inject: " + name + " inContext " + tem.content.toString());
+	  system.println("SERVER: inject: " + name + " inContext " + template);
 	  ts.inject: makeTuple("VirtualObject", name) inContext: template;	
 	};
 	
@@ -110,7 +110,7 @@ def makeGameServer() {
      addCrimeTarget("Casino", [90, 50], 500000, WIG, GUN);
      addCrimeTarget("Jewlery", [180, 90], 800000, SWISS_ARMY_KNIFE, GLASS_BREAKER);
 	   10.doTimes: { |i| 
-	    addVirtualObjects(ts, typeToString(virtualObjects[randomNumberBetween(1, virtualObjects.length)]) ,[randomNumberBetween(0, 250), randomNumberBetween(0, 270)])
+	    addVirtualObjects(typeToString(virtualObjects[randomNumberBetween(1, virtualObjects.length)]) ,[randomNumberBetween(0, 250), randomNumberBetween(0, 270)])
 	   };
 	 };
 	};	

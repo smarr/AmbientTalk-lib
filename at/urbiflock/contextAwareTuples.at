@@ -197,7 +197,13 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 		//but it does not store in the local ts
 		def inject: tuple inContext: templateTable {
 			def totamTuple;
-			def table := templateTable.map: { |template| template.content};
+			def table := templateTable.map: { |template| 
+				if: isJavaObject(template) then: { 
+					template;
+				} else: {	
+				  template.content;
+			  };
+			};
 					
 			if: (is: tuple taggedAs: ContextAwareTotam) then:{
 			  totamTuple := tuple;
@@ -272,6 +278,8 @@ def contextAwareTuplesModule := object:{
 	};
 	def makeTupleSpace := &makeTupleSpace;
 	def var: symbol { crimeModule^var: symbol};
+	def var: symbol lessOrEqualTo: value { crimeModule^var: symbol lessOrEqualTo: value};
+	def var: symbol greaterOrEqualTo: value {crimeModule^var: symbol greaterOrEqualTo: value };
 	
 	def contextAwareTuplesTest := extend: /.at.unit.test.UnitTest.new("contextAwareTuples", false) with: {
 		import /.at.lang.futures;
