@@ -106,12 +106,25 @@ def makeTupleSpace(descriptor){
 	    localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };
+	
+	  def AtomicRemove( ID ) {
+			system.println("Asked for an atomic remove" + ID);
+			if: (ambientTS.contains( ID, {|t, t1| t1.getTupleId == t})) then: {
+				system.println("The Tuple was not deleted yet !!!" + ID);
+				//remove the tuple for good :)
+				ambientTS.removeAll: {|t| t.getTupleId == ID};
+				true;
+			} else: {
+				system.println("The Tuple was already deleted !!!" + ID);
+				false;
+			};
+	  };
 	  
 	  // delete from a ts all tuples matching the template
 	  // returns a table with the deleted tuples.
 	  def delete(template) {
 		  def toDelete := read(template);
-	    localTS.removeAll: template;
+	      localTS.removeAll: template;
 		  toDelete.asTable;
 		}; 
 		// returns a table with the tuples matching the template in the ts. 

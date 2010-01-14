@@ -29,10 +29,14 @@ def crimeModule := /.at.crime.CrimeConnection;
 def totamModule := /.at.urbiflock.ambientTota;
 deftype ContextAwareTotam;
 import crimeModule;
+import /.at.lang.futures;
+enableFutures(false);
 
 //helper functions
 def makeNewClosure(variableNames, closure) {
-	def newClosureStatements := `{ | #@(variableNames.map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(closure.method.bodyExpression.statements) };
+	def newClosureStatements := `{ | #@(variableNames.map: {|e| 
+		jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | 
+		#@(closure.method.bodyExpression.statements) };
 	eval: newClosureStatements in: closure.context.lexicalScope;
 };
 
@@ -116,10 +120,20 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 
 		//TODO: temporal hack because we get Crime tokens in when:activated.
 	  def removeToken( vectorFacts ) {
-			def it := vectorFacts.iterator;
-			while: { it.hasNext } do: {
-				crimeEngine.retractCrimeFact(it.next);
-			};
+		if: (vectorFacts.size() == 1) then: {
+			def fact := vectorFacts.get(0);
+			crimeEngine.retractCrimeFact(fact);
+			//Try to remove the fact remotely to insure atomicity
+			if: ( fact.getItsContextRule() != nil ) then: {
+				fact.getItsContextRule().removeRemotely();
+			} else: {
+				def [fut,res] := makeFuture();
+				res.resolve(true);
+				fut;
+			}
+		} else: {
+			
+		};
 	  };
 	 		
 		// TODO: not sure whether we should remove the tuple.	
@@ -140,52 +154,78 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 		};
 		
 		def when: templateTable matches: closure outOfContext: closureOutOfContext registration: registrationClosure  {
-			def listener;
+		  def savedListener;
+		  def savedVectorFacts;
 		  def variableNames := varNames(templateTable.content);
-			closure :=  makeNewClosure(variableNames, closure); //`{ | #@(variableNames.map: {|e| jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(e);}) | #@(closure.method.bodyExpression.statements) };
-			closureOutOfContext :=  makeNewClosure(variableNames, closureOutOfContext);
+		  closure :=  makeNewClosure(variableNames, closure);
+		  closureOutOfContext :=  makeNewClosure(variableNames, closureOutOfContext);
 		  //def table := templateTable.map: { |template| template.content};
 		  def registration := crimeEngine.when: [templateTable.content] activatedToken: { |vectorFacts,varMap|
 			  //Cancel so it is only triggered once
+			  //and can not be triggered during the awaiting of the remove fact future
 			  registrationClosure(registration);
-			  //Call the closure with the correct variables
-			  closure(@mapToTableValues(varMap,variableNames));
 			  //Remove the facts from crime
-			  removeToken(vectorFacts);
-			  //Install Deactivation
-			  listener := { closureOutOfContext(@mapToTableValues(varMap,variableNames)); };
-			  installListeners(vectorFacts,listener);
+			  when: removeToken(vectorFacts) becomes: {|removed|
+				if: removed then: {
+					//Call the closure with the correct variables
+					closure(@mapToTableValues(varMap,variableNames));	
+			  		//Install Deactivation
+			  		def listener := { closureOutOfContext(@mapToTableValues(varMap,variableNames)); };
+			  		installListeners(vectorFacts,listener);
+			  		//save for cancalation;
+			  		savedVectorFacts := vectorFacts;
+			  		savedListener := listener;
+			  	} else: {
+					system.println("We had a match but the token was already removed by somebody else ... ");
+					system.println("Reinstalling the rule ... ");
+					when: templateTable matches: closure outOfContext: closureOutOfContext registration: registrationClosure;
+			  	};
+			};
 		  };	
-			object: {
+		  object: {
 				def cancel() {
 					registration.cancel();
-					removeListener(vectorFacts,listener);
+					if: ( savedListener != nil) then: { 
+						removeListener(savedVectorFacts,savedListener);
+					};
 				};
 			};
 		};
-	
-		
+						
 		//publishes a tuple into the ambient ( ~ inject in TOTA)
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts
 		def inject: tuple inContext: templateTable {
 			def totamTuple;
 			def table := templateTable.map: { |template| template.content};
-			
-			//add REMOVE for out of context cancel.
-			def listeners := isolate: {
-				def table := [];
-				def add(l) { table := table + [l]; };
-				def clear() {	table := [];};
-				def remove(l) { table := table.filter: { |e| e != l };};
-				def each: closure { table.each: closure;};
-			};
-			
+					
 			if: (is: tuple taggedAs: ContextAwareTotam) then:{
 			  totamTuple := tuple;
-			} else:{	
-			  totamTuple := extend: tuple with: { |table,listeners,activeDescriptors, descriptor|
+//<<<<<<< .mine
+			} else:{
+			  def remoteTupleSpace := self;	
+			  totamTuple := extend: tuple with: { |table,remoteTupleSpace, activeDescriptors, descriptor|
+					def tuple := self;
+				   	//add REMOVE for out of context cancel.
+					def listeners := isolate: { |tuple,remoteTupleSpace|
+							def table := [];		
+							def add(l) { table := table + [l]; };
+							def clear() {	table := [];};
+							def remove(l) { table := table.filter: { |e| e != l };};
+							def each: closure { table.each: closure;};
+							
+							def removeRemotely() {
+								// Contact remoteTupleSpace and ask to remove
+								remoteTupleSpace<-AtomicRemove(tuple.getTupleId())@/.at.lang.futures.FutureMessage;
+							};
+					};
+					
+//=======
+//			} else:{	
+//			  totamTuple := extend: tuple with: { |table,listeners,activeDescriptors, descriptor|
+//>>>>>>> .r1745
 				   def doAction(ts) {
+						 //
 						 def crime := ts.getCrimeEngine();
 						 crime.when: table activated: { |args|
 							  crime.insertTuple(self.content, listeners);
@@ -261,7 +301,7 @@ def contextAwareTuplesModule := object:{
 			myTs.goOffline;
 			myTs := nil;
 			//TODO this fails!
-			//registration.cancel();
+			registration.cancel();
 		};
 		
 		// test a simple inject of a meetingRoom tuple inserted by the room itself but only active 
@@ -287,19 +327,52 @@ def contextAwareTuplesModule := object:{
 		  fut;
 	  }; //end-testInject
 	
-		// test a inject of a meetingRoom, studentRoom tuples inserted by the rooms itself but only active 
-		// when participants are in correct location.
-	/*  def testAsyncInject2Rooms(){
+	
+	  // test a inject of a bomb tuple, as it is removed it should be activate only once !
+	  def testAsyncRemoveBombOnlyOnce(){
+		  def [fut,res] := makeFuture();
+			
+		  registration := myTs.when: makeTemplate("projectile", var: `name) matches: { 
+			system.println("Player 1: I stept on a " + name);
+			self.assertEquals("MineField", name);
+		    when: theRoomManager<-goOffline()@FutureMessage becomes: { |ack| res.resolve(`ok)};
+	      };
+	
+		  def player2 := actor: {
+			  import /.at.urbiflock.contextAwareTuples;
+			  def myTs := makeTupleSpace();
+			  myTs.goOnline;
+			  myTs.add(makeTuple("GPS", 30, 30));
+			  myTs.when: makeTemplate("projectile", "BOMB") matches: { 
+				system.println("Player 2: I stept on a BOMB");
+		      };
+		  };
+		 			
+		  def theRoomManager := actor: {
+			  import /.at.urbiflock.contextAwareTuples;
+			  def myTs := makeTupleSpace();
+			  myTs.goOnline;
+			  def goOffline() {myTs.goOffline()};
+			  myTs.inject: makeTuple("projectile", "BOMB") inContext: [ makeTemplate("GPS", 30, 30) ];
+			  myTs.inject: makeTuple("projectile", "MineField") inContext: [ makeTemplate("GPS", 30, 30) ];
+		  };
+		
+		  fut;
+	  }; //end-testRemoveBombOnlyOnce
+	  
+	
+	
+	  // test a inject of a meetingRoom, studentRoom tuples inserted by the rooms itself but only active 
+	  // when participants are in correct location.
+	  def testAsyncInject2Rooms(){
 		  def [fut,res] := makeFuture();
 	
-		  registration := myTs.whenever: makeTemplate("inRoom", var: `name) matches: { 
+		registration := myTs.when: makeTemplate("inRoom", var: `name) matches: { 
 		    //self.assertEquals("MeetingRoom", name);
-		system.println("in room " + name);
+			system.println("in room " + name);
 	    } outOfContext: {|tuple|
 			system.println("out of room " + name);
 		  	//self.assertEquals("MeetingRoom", name);
-				deletedTable := deletedTable.filter: { |e| nil != e};
-				self.assertEquals(3,deletedTable.length);
 		    when: theRoomManager<-goOffline()@FutureMessage becomes: { |ack| res.resolve(`ok)};
 		  };
 		 			
@@ -315,7 +388,9 @@ def contextAwareTuplesModule := object:{
 			  myTs.inject: makeRoomTuple("StudentRoom") inContext: [ makeTemplate("GPS", 30, 30),  makeTemplate("Today", var: `day), makeTemplate("Weekday", var: `day) ];
 		  };
 		  fut;
-	  }; //end-testInject */
+	  }; //end-testAsyncInject2Rooms 
+	
+	
 	
 	};//end-contextAwareTuplesTest
 }; //end-contextAwareTuplesModule
