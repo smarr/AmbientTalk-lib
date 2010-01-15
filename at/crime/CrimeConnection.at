@@ -150,9 +150,13 @@ def makeRule(table,act,deact,eventMaker := &newEvent) {
 	def prerequisite := ExpressionList.whichAcceptsFacts();
 	def consequence := ExpressionList.whichAcceptsFactsAndEvents();
 	table.each: {|e| 		
+		system.println("making rule:::  "+e);
+		
 		if: isJavaObject(e) then: { 
+			system.println(" constraint:::  "+e);
 			prerequisite.add(e);
 		} else: {
+			system.println("not constraint:::  "+e.toString());
 			prerequisite.add(convertTupleToCrimeFact(e,nil)); 
 		};
 	};
@@ -242,7 +246,7 @@ def makeCrimeEngine() {
 
 	def when: table activated: act deactivated: deact withConstraints: constraints event: event  {
 	    def rule :=  makeRule(table,act, deact, event);
-		constraints.each:{|c| rule.getPrerequisite().add(c) };
+		  constraints.each:{|c| rule.getPrerequisite().add(c) };
 	    engine.deploy(rule);
 	    isolate: {
 		    def cancel() {
@@ -386,17 +390,31 @@ def CrimeModule := object: {
 		*/
 		def testAsyncConstraintGreaterThen() {	
 			def [fut,res] := makeFuture(); 
-					
-			myCrime.when: [ makeTemplate("testConstraintGreaterThen", var:`x, 4), var: `x greaterThen: 10 ] activated: { |varMap|
-				self.assertEquals(varMap.get(`x),80);
-				res.resolve("OK")
+			
+			def remote := object: {
+			
+			def test(table) {	
+				myCrime.when: table activated: { |varMap|
+					testObject.assertEquals(varMap.get(`x),12);
+					testObject.assertEquals(varMap.get(`y),13);
+					res.resolve("OK")
+				};
 			};
 			
-			def activatedTuple :=  makeTuple("testConstraintGreaterThen", 80, 4);
+			};
+			
+			def testObject := self;
+			actor: { |remote|
+				import /.at.crime.CrimeConnection;
+				remote<-test([ makeTemplate("testConstraintGreaterThen", var:`x, var: `y), var: `x greaterOrEqualTo: 10, var: `x lessOrEqualTo: 14, var: `y greaterOrEqualTo: 10, var: `y lessOrEqualTo: 14 ]);
+			};
+		
+		//	remote.test([ makeTemplate("testConstraintGreaterThen", var:`x, var: `y), var: `x greaterOrEqualTo: 10, var: `x lessOrEqualTo: 14, var: `y greaterOrEqualTo: 10, var: `y lessOrEqualTo: 14 ]);
+			//def activatedTuple :=  makeTuple("testConstraintGreaterThen", 12, 13);
 			def failTuple :=  makeTuple("testConstraintGreaterThen", 3, 4);
 			
 			myCrime.insertTuple(failTuple);
-			myCrime.insertTuple(activatedTuple);
+			//myCrime.insertTuple(activatedTuple);
 			fut;
 		};
 		
