@@ -160,7 +160,7 @@ def convertTupleToCrimeFact(tuple, rule) {
 			if: isNatTable(f) then: {
 				theIndexer.nextAttribute(convertTable(f));
 			} else: {
-				//its a constant and will be converted anyway by the coercer :)
+				//its a constant and will be converted anyway by the coercer 
 				def attr := ExpressionFactory.attribute(f);
 				theIndexer.nextAttribute(attr);
 			};
@@ -349,9 +349,9 @@ def CrimeModule := object: {
 		enableFutures(false);
 		def myCrime := makeCrimeEngine();
 				
-		/*
-		* Tests the reading of crime tuples (does not remove the tuple).  TODO 
-		*/
+		///
+		// Tests the reading of crime tuples (does not remove the tuple).  TODO 
+		//
 		def testReadFromCrime() {
 			def tuple :=  makeTuple("testReadFromCrime", 3, 4);
 			myCrime.insertTuple(tuple);
@@ -359,10 +359,10 @@ def CrimeModule := object: {
 			retrievedTuple := myCrime.readTuple(makeTemplate("testReadFromCrime", var: `x, 4));			
 		};
 		
-		/*
-		* Tests the reading of crime tuples (does not remove the tuple).  TODO 
-		*/
-		def testReadFromCrimeTable() {
+		//
+		// Tests the reading of crime tuples with Tables
+		//
+		def testAsyncReadFromCrimeTable() {
 			def [fut,res] := makeFuture(); 
 			def tuple :=  makeTuple("testReadFromCrimeTable", [3, 4]);
 			myCrime.when:  [makeTemplate("testReadFromCrimeTable", var:`x)] activated: { |varMap|
@@ -374,9 +374,40 @@ def CrimeModule := object: {
 			fut;			
 		};
 		
-		/*
-		* Tests the insertions of crime tuples which are extended with AmbientTalk rules.  
-		*/
+		//
+		// Tests the reading of crime tuples with table matching
+		//
+		def testAsyncReadFromCrimeTableMatch() {
+			def [fut,res] := makeFuture(); 
+			def tuple :=  makeTuple("testAsyncReadFromCrimeTableMatch", [3, 4]);
+			myCrime.when:  [makeTemplate("testAsyncReadFromCrimeTableMatch", [3, 4]) ] activated: { |varMap|
+					res.resolve("OK");
+			};
+			myCrime.insertTuple(tuple);
+			fut;			
+		}; 
+		
+		//
+		// Tests the reading of crime tuples with table matching with variable inside
+		//
+		def testAsyncReadFromCrimeTableMatchVar() {
+			def [fut,res] := makeFuture(); 
+			def tuple :=  makeTuple("testAsyncReadFromCrimeTableMatchVar", [3, 4, 5], 6);
+			myCrime.when:  [ makeTemplate("testAsyncReadFromCrimeTableMatchVar", [var: `x, var: `y, var: `p], var: `q) ] activated: { |varMap|
+					self.assertEquals(3, varMap.get(`x));
+					self.assertEquals(4, varMap.get(`y));
+					self.assertEquals(5, varMap.get(`p));
+					self.assertEquals(6, varMap.get(`q));
+					res.resolve("OK");
+			};
+			myCrime.insertTuple(tuple);
+			fut;			
+		};
+			
+		
+		//
+		// Tests the insertions of crime tuples which are extended with AmbientTalk rules.  
+		//
 		def testRetrieveRuleFromCrime() {
 			def tuple :=  makeTuple("testRetrieveRuleFromCrime", 3, 4);
 			def ruleData := [ makeTemplate("testRetrieveRuleFromCrime", 30, 30) ];
@@ -385,9 +416,9 @@ def CrimeModule := object: {
 			self.assertEquals(retrievedTuple.getItsContextRule, ruleData);
 		};
 		
-	   /*
-		* Test the constraint AmbientTalk construction
-		*/
+	   //
+	   // Test the constraint AmbientTalk construction
+	   //
 		def testAsyncAmbientTalkConstraint() {	
 			def [fut,res] := makeFuture(); 
 			myCrime.when:  [makeTemplate("testAsyncAmbientTalkConstraint", var:`x, var: `y), constraint: [ var:`x, var:`y] with: script: {|x,y| x+y == 7 }]  activated: { |varMap|
@@ -404,11 +435,11 @@ def CrimeModule := object: {
 		};
 		
 		
-	   /*
-		* Test the constraint lessThen construction
-		* when: [Template1,..,TemplateN] activated: Closure 
-		* where template can include constraints put extra requirements on varibales 
-		*/
+	    //
+	    // Test the constraint lessThen construction
+		// when: [Template1,..,TemplateN] activated: Closure 
+		// where template can include constraints put extra requirements on varibales 
+		//
 		def testAsyncConstraint() {	
 			def [fut,res] := makeFuture(); 
 					
@@ -425,9 +456,9 @@ def CrimeModule := object: {
 			fut;
 		};
 	   
-		/*
-		* Test the constraints construction for coordinates
-		*/
+		//
+		// Test the constraints construction for coordinates
+		//
 		def testAsyncConstraintBetween() {	
 			def [fut,res] := makeFuture(); 
 			
@@ -449,11 +480,11 @@ def CrimeModule := object: {
 			fut;
 		};
 		
-		/*
-		* Tests the special construct to retrieve the token which triggered the rule.
-		* For example in  (defrule (some-action) => (t1 ?x ?y) (t2 ?x ?y)  ) 
-		* some-action could receive the following token [ (t1 5 6), (t2 5 6) ]
-		*/
+		//
+	    // Tests the special construct to retrieve the token which triggered the rule.
+		// For example in  (defrule (some-action) => (t1 ?x ?y) (t2 ?x ?y)  ) 
+		// some-action could receive the following token [ (t1 5 6), (t2 5 6) ]
+		//
 		def testAsyncGetActivatedToken() {
 			def [fut,res] := makeFuture(); 
 			myCrime.when: [ makeTemplate("testAsyncGetActivatedToken", var:`x, 4) ] activatedToken: { |token, varMap|
@@ -465,11 +496,11 @@ def CrimeModule := object: {
 			fut;
 		};
 		
-		/*
-		* Tests the special construct to retrieve the token which triggered the rule.
-		* For example in  (defrule (some-action) => (t1 ?x ?y) (t2 ?x ?y)  ) 
-		* some-action could receive the following token [ (t1 5 6), (t2 5 6) ]
-		*/
+		//
+		// Tests the special construct to retrieve the token which triggered the rule.
+		// For example in  (defrule (some-action) => (t1 ?x ?y) (t2 ?x ?y)  ) 
+		// some-action could receive the following token [ (t1 5 6), (t2 5 6) ]
+		//
 		def testAsyncGetDeactivatedToken(){
 			def [fut,res] := makeFuture(); 
 						
@@ -488,9 +519,9 @@ def CrimeModule := object: {
 			fut;		
 		};
 		
-		/*
-		 * Test that test the retraction of previously inserted tuples.
-		 */	
+		//
+		// Test that test the retraction of previously inserted tuples.
+		//	
 		def testAsyncRetracting(){
 			def [fut,res] := makeFuture(); 
 			def countInserts := 0; def countRetracts := 0;
@@ -525,6 +556,9 @@ def CrimeModule := object: {
 				self.assertEquals(3, value);	
 			};
 		};
+		
+		
+		
 		/*
 		def testAsyncSendRule() {
 			def [fut,res] := makeFuture();
