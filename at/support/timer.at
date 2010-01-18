@@ -43,14 +43,11 @@ def long := jlobby.java.lang.Long.TYPE;
 def theTimer := Timer.new();
 def scheduleMethod := theTimer.&schedule.cast(TimerTask, long);
 def scheduleAtFixedRateMethod := theTimer.&schedule.cast(TimerTask, long, long);
-
 def currentTimeMillis := jlobby.java.lang.System.&currentTimeMillis;
-
 def makeLong := /.at.support.symbiosis.&long;
-def ZERO := makeLong(0);
 
 def TimerModule := object: {
-	  
+	def ZERO := makeLong(0);  
 	// convert AmbientTalk number to a Java long representing # millisec
 	def millisec(ms) { makeLong(ms) };
 	def seconds(s) { millisec(s*1000) };
