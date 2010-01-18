@@ -48,10 +48,11 @@
  */
 def catModule := /.at.urbiflock.contextAwareTuples;
 import catModule;
+def timerModule := /.at.support.timer;
 def gameGUI := jlobby.at.urbiflock.game.LocalizerGUI;
 def randomNumberBetween := /.at.support.util.&randomNumberBetween;
 def RED := "gangster";
-def BLUE := "police";
+def BLUE := "policeman";
 deftype EXPLOSIVES;
 deftype ROPE_LADDER;
 deftype LASER_JAMMER;
@@ -62,6 +63,8 @@ deftype WIG;
 deftype MASK;
 deftype GUN;
 def virtualObjects := [EXPLOSIVES, ROPE_LADDER,LASER_JAMMER,KNIFE,SWISS_ARMY_KNIFE,GLASS_BREAKER,WIG,MASK,GUN];
+def OPPOSITE_TEAM_POSITION_TIMEOUT := 5.seconds();
+def TEAM_POSITION_TIMEOUT := 3.seconds();
 
 def typeToString(type){
   type.typeName.text.toLowerCase;
@@ -81,23 +84,31 @@ def makeGameServer() {
 	};
 
 	def addCrimeTarget(name, coordinates, value, @objects){
-		 // crimeTarget tuples should be only received by gangsters
-		 def template := [ makeTemplate("TeamInfo", var: `u, RED), 
-		  makeTemplate("PlayerInfo", var: `u, RED, var: `x, var: `y)];
-		 //+ inRange constraints, currently a rectangle.
+		 // information about a crime location should be only received by gangsters
+		 def template := [ makeTemplate("TeamInfo", var: `u, RED)]; 
+		 ts.inject: makeTuple("CrimeTarget", name, coordinates[1], coordinates[2]) inContext: template;
+		 // To be able to commit the crime, there are extra constraints:
+		// + the player in range is the (local) player where the tuples are.
+		 template := template + [makeTemplate("PlayerInfo", var: `u, RED, var: `x, var: `y)];
+		 // + inRange constraints, currently a rectangle.
 		 template := template + addInRangeConstraints(coordinates, `x, `y);
 		 // + which have the necessary virtual objects to commit this crime
-		 objects.each: { |item| template := template + [makeTemplate("VirtualObject", typeToString(item))]};
-		 def tuple := makeTuple("CrimeTarget", name, coordinates[1], coordinates[2], value);
-		system.println("SERVER: inject: " + tuple + " inContext " + template);
+		 def nameVo := [];
+		 objects.each: { |item| 
+			def name := typeToString(item);
+			template := template + [makeTemplate("VirtualObject", name)];
+		  nameVo := nameVo + [name]; 
+		 };
+		 def tuple := makeTuple("CommitCrime", name, coordinates[1], coordinates[2], value, @nameVo);
+		system.println("SERVER: inject: " + tuple.content.toString + " inContext " + + templateTableToString(template));
 		 ts.inject: tuple inContext: template;
 	};
 
 	def addVirtualObjects(name, coordinates){
-	  def template := [ makeTemplate("TeamInfo", var: `u, RED),
+	  def template := [ //makeTemplate("TeamInfo", var: `u, RED),
 	  makeTemplate("PlayerInfo", var: `u, RED, var: `x, var: `y)];
 	  template := template + addInRangeConstraints(coordinates, `x, `y);
-	  system.println("SERVER: inject: " + name + " inContext " + template);
+	  system.println("SERVER: inject: " + name + " inContext " + templateTableToString(template));
 	  ts.inject: makeTuple("VirtualObject", name) inContext: template;	
 	};
 	
@@ -112,47 +123,101 @@ def makeGameServer() {
 	   10.doTimes: { |i| 
 	    addVirtualObjects(typeToString(virtualObjects[randomNumberBetween(1, virtualObjects.length)]) ,[randomNumberBetween(0, 250), randomNumberBetween(0, 270)])
 	   };
+	   system.println("Server initialized!");
 	 };
 	};	
 };
 
+// added for debug purposes
+def templateTableToString(t){
+	def ret := [];
+  t.each: { |part| 
+	  if: /.at.crime.CrimeConnection.isJavaObject(part) then: {
+		  ret := ret + [part];  // it is a constrain. 
+		} else:{
+			ret := ret + [part.content.toString];
+		};	
+	};
+	ret;
+};
 
 def makePlayer(username, team) {
   
   def myTs := makeTupleSpace(team);
   def teamPlayers := jlobby.java.util.HashMap.new();
 	def location := [0,0];
+	def totalReward := 0;
 	
   def localFacade :=  object:{
-	  def updateLocation(newLocation){
+	  def updatePlayerLocation(newLocation){
 			location := newLocation;
 			//add your own position for your self in the ts.
 			myTs.add(makeTuple("PlayerInfo", username, team, location[1], location[2]));
 		  //broadcast your own position. positionTuple is visible to your team members or nearby enemies!
-		  def tem := makeTemplate("TeamInfo", var: `x, team);
-		  system.println("inject:inContext " + tem.content.toString());
-		  myTs.inject:  makeTuple("PlayerInfo", username, team, location[1], location[2]) inContext: [ tem ];
-		//,makeTuple("Location", newLocation[1], newLocation[2]));
+		  myTs.inject:  makeTuple("PlayerInfo", username, team, location[1], location[2]) inContext: [ makeTemplate("TeamInfo", var: `x, team) ] for: TEAM_POSITION_TIMEOUT;
 	  };
-	  def goOnline() {
+	  def initialize() {
 			myTs.goOnline;
 			myTs.add(makeTuple("TeamInfo", username, team));
-			//track location of users;
-			myTs.whenever: makeTemplate("PlayerInfo", var: `u, var: `t, var: `x, var: `y) matches: {
+			//track location of team members;
+			myTs.whenever: makeTemplate("PlayerInfo", var: `u, var: `t, var: `x, var: `y) read: {
 				def loc := [x,y];
 				system.println("receiving player info " + u + " team " + t + " loc " + loc + " my username " + username);
 				//TODO: added because I could get triggered by my own tuples, but with the user interface I don't want that now.
 				// If we use real GPS, this test is not necesary!
 				if: !( u == username) then: {
-			  	listener.updatePlayerPointPosition(t, u, loc);
-			  } else: { system.println("i received myself")};
+			  	listener.displayPlayerPosition(t, u, loc);
+			  };
+			  //TODO: If I receive the position of opposite team members, then I should show a timer in the GUI.
+			} outOfContext:{
+				//if a user do not update its coordinates, show his latest position in grey
+				if: (x == location[1]).and: {y == location[2]} then: {
+				  listener.showOffline(u);
+			  };
+			};			
+			// policemen and gangsters get to know when some gangster has committed a crime and its reward.
+			myTs.whenever: makeTemplate("CrimeCommitted", var: `name, var: `x, var: `y, var: `reward, var: `username) read:{
+				if: ( BLUE == team) then: { 
+					totalReward := totalReward + reward;
+					listener.display("Pas Op! Gangsters have already stolen a total value of " + totalReward);
+				};
+				listener.display("Gangster " + username + " committed crime for a value of " + reward );
+				listener.displayCrimeTarget(name, [x,y], false);
+			};
+			//notify every 6 minutes communicate your position to the opposite team members.
+			timerModule.whenever: OPPOSITE_TEAM_POSITION_TIMEOUT elapsed:{
+				myTs.inject:  makeTuple("PlayerInfo", username, team, location[1], location[2]) inContext: [ makeTemplate("TeamInfo", var: `x, var: `team), var: `team notEquals: team ];
+			};
+			//init specific behaviour for gangsters to commit crimes.
+			if: (RED == team) then: { initGangsters()};
+	  };
+	  def initGangsters(){
+			//display the crime targets known at the begining
+			myTs.whenever: makeTemplate("CrimeTarget", var: `name, var: `x, var: `y) read:{
+				 listener.displayCrimeTarget(name, [x, y], true);
+			};
+			//commit a crime. This tuple only gets active when you have all the necessary items and are closeby the place.
+			myTs.whenever: makeTemplate("CommitCrime", var: `name, var: `x, var: `y, var: `reward, var: `item1, var: `item2) read:{
+				listener.display("You can commit a crime on " + name + ". Your reward is " + reward);
+				totalReward := totalReward + reward;
+				//assuming that virtual objects are local entities!!
+				myTs.remove(makeTuple("VirtualObject", item1));
+				myTs.remove(makeTuple("VirtualObject", item2));
+				listener.removeVirtualObject(item1);
+				listener.removeVirtualObject(item2);
+				//BETTER IF: myTs.antituple: makeTuple("CrimeTarget", name, x, y);
+				myTs.inject: makeTuple("CrimeCommitted", name, x, y, reward, username);
+				// TODO: user interface should provide a yes/no button. So you shouldn't match until it says yes/no!
+			};
+			//notify user of the finding of a virtual object
+			myTs.whenever: makeTemplate("VirtualObject", var: `itemName) matches: {
+				system.println("receivign a virtual object " + itemName);
+				listener.addVirtualObject(itemName);
 			};
 	  };
-  };
-
-	def listener := gameGUI.new(localFacade, team, username);
-  localFacade;
-	
+	};
+ 	def listener := gameGUI.new(localFacade, team, username);
+  localFacade;	
 };
 
 network.online;

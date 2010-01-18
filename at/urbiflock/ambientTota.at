@@ -59,7 +59,7 @@ def makeTupleSpace(descriptor){
 	   	seenTS.add([ts,descriptor]);
 	  };
 	  ambientTS.each: { |tuple| if: (sendTuple(tuple, self, descriptor)) then: {	toSend.add(tuple) }};
-		if: (toSend.length > 0) then: {
+		if: (toSend.length > 0) then: {	
    		ts<-receiveTuples(toSend.asTable);
 	  };
   };
@@ -84,16 +84,15 @@ def makeTupleSpace(descriptor){
 		// totam propagation protocol (sender side)
 		// toThink: this method could be called twice via inject and discovery when the ts discover.
 		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
-		if: tuple.inScope(descriptor) then:{
-		  true;
-		} else: {
-			if: tuple.decideDie(ts) then: {
-	      		//system.println("AmbientTota: dying young " +  tuple);
-				localTS.removeAll:{|t| t == tuple};
-				ambientTS.removeAll: {|t| t == tuple};
- 		  };
-		  false;
-		}; 
+		def ret := false;
+		if: tuple.decideDie(ts) then: {
+      system.println("AmbientTota: dying young " +  tuple + "in tuple space " + ts);
+			localTS.removeAll:{|t| t.getTupleId == tuple.getTupleId};
+			ambientTS.removeAll: {|t| t.getTupleId == tuple.getTupleId};
+	  } else:{
+		 ret := tuple.inScope(descriptor);
+	  };
+	  ret; 
 	};
 	
 	//todo: separate the public interface between local/remote.
@@ -103,10 +102,17 @@ def makeTupleSpace(descriptor){
 		// add a tuple to the local ts
 	  def add(tuple){
 		//system.println("AmbientTota:add " + tuple.getTupleId + " in ts " + self.owner.getUsername );
-	    localTS.add(tuple);
+	    add: tuple for: /.at.support.timer.ZERO;
+	  };
+	  def add: tuple for: time {
+		  if: (time > /.at.support.timer.ZERO) then: {
+			  /.at.support.timer.when: time elapsed: {
+				  localTS.remove(tuple);
+			  };
+			};
+			localTS.add(tuple);
 	    notifyListeners(tuple);
 	  };
-	
 	  def AtomicRemove( ID ) {
 			system.println("Asked for an atomic remove" + ID);
 			if: (ambientTS.contains( ID, {|t, t1| t1.getTupleId == t})) then: {
@@ -159,6 +165,11 @@ def makeTupleSpace(descriptor){
 		  object:{
 		    def cancel() { ambientTS.removeAll: {|t| t == tuple} };
 		  };
+		};
+				
+		def inject: tuple withLeaseFor: time {
+			def dyingTuple := extendTupleWithLeaseFor(tuple,time);
+			inject: dyingTuple;
 		};
 		
 		// places a listener  on to the local TS ( ~ subscribe in TOTA)
@@ -259,19 +270,52 @@ def extendTuple(tuple, closure) {
 	extend: tuple with: closure taggedAs: [/.at.types.Isolate];
 };
 
+def extendTupleWithLeaseFor(tuple, time){
+	extend: tuple with: { |time|
+		def timeout := time;
+		def timerSubscription := nil;
+		def expired := false;
+		def startSubscription(){
+			self.expired := false;
+	 	  if: (self.timeout > /.at.support.timer.ZERO) then: {
+			  self.timerSubscription := /.at.support.timer.when: time elapsed: {self.whenExpired()}
+		  };
+		};				
+		def whenExpired(){
+			self.expired := true;
+		};
+		startSubscription();
+		def decideDie(ts){
+			self.expired;
+		};
+		
+	} taggedAs: [/.at.types.Isolate] mirroredBy: (object:{
+		def pass(){
+			def passObj := super^pass();
+			def base := self.base;
+			passObj.timeout := base.timerSubscription.getTimeRemaining();
+			passObj.timerSubscription := nil;
+			passObj;
+		};
+		def resolve(){
+			def resolveObj := super^resolve();
+			resolveObj.startSubscription();
+			resolveObj;
+		}
+	}childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror );
+};
+
 // the module object of this file
 def AmbientTotaModule := object: {
 	// public stuff goes here
 	def makeTupleSpace := &makeTupleSpace;
 	def makeTuple := &makeTuple;
 	deftype TotamTuple;
-	
 	def extendTuple: tuple  with: closure {
 		extendTuple(tuple, closure);
 	};
-	
+
 	def AmbientTotaTest := extend: /.at.unit.test.UnitTest.new("AmbientTotaTest", false) with: {
-		
 		import /.at.lang.futures;
 		enableFutures(false);
 		deftype TupleSpace;
@@ -306,8 +350,6 @@ def AmbientTotaModule := object: {
 		
 			fut;
 		};
-		
-		
 		
 		def testAsyncOneHopTuple() {
 			def descriptor := isolate: { def team := "blue"; };
@@ -346,48 +388,89 @@ def AmbientTotaModule := object: {
 		  };		
 			fut;
 		};
-		
-			def testAsyncSendTeamsTuple() {
-				def descriptor := isolate: { def team := "blue"; };
-				def [fut,res] := makeFuture();
-				def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
-				def s := export: myTS as: TupleSpace;
-
-				myTS.when: {|tuple| true } matches: { |tuple|
-					//self.assertEquals(123, tuple.getTupleId);	
-					s.cancel();
-					a<-resolve(res);
-				};
-				
-				def a := actor: { |TupleSpace|
-					
-					def descriptor := isolate: { def team := "red"; };
-					def aTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
-					def s := whenever: TupleSpace discovered: { |ts|
-						aTS.notifyTSDiscovered(ts);
-					};
-			    
-					 def aTuple := /.at.urbiflock.ambientTota.makeTuple(123);
-					
-					def blueTuple() {
-						/.at.urbiflock.ambientTota.extendTuple: aTuple with: {
-							def inScope(descriptor) { descriptor.team == "blue" };
-						};
-					};
-					
-			    	def sT := aTS.inject: blueTuple();
-			
-					def resolve(res) {
-						s.cancel();
-						sT.cancel();
-						res<-resolve(`ok);
-					};
-					
-			  	};		
-				fut;
+		def testAsyncSendTeamsTuple() {
+			def descriptor := isolate: { def team := "blue"; };
+			def [fut,res] := makeFuture();
+			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+			def s := export: myTS as: TupleSpace;
+			myTS.when: {|tuple| true } matches: { |tuple|
+				self.assertEquals(123, tuple.getTupleId);	
+				s.cancel();
+				a<-resolve(res);
 			};
+			def a := actor: { |TupleSpace|
+				def descriptor := isolate: { def team := "red"; };
+				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+				def s := whenever: TupleSpace discovered: { |ts|
+						aTS.notifyTSDiscovered(ts);
+				};
+				def blueTuple() {
+					/.at.urbiflock.ambientTota.extendTuple: /.at.urbiflock.ambientTota.makeTuple(123) with: {
+									def inScope(descriptor) { descriptor.team == "blue" };
+					};
+				};
+				def sT := aTS.inject: blueTuple();
+				def resolve(res) {
+					s.cancel();
+					sT.cancel();
+					res<-resolve(`ok);
+				};
+	  	};		
+			fut;
+		};
+		//TODO arrange this test a bit.
+		def testAsyncInjectWithLeaseFor() {
+			def descriptor := isolate: { def team := "blue"; };
+			def [fut,res] := makeFuture();
+			def [fut2,res2] := makeFuture();
+			def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+			def s := export: myTS as: TupleSpace;
 
+			myTS.when: {|tuple| true } matches: { |tuple|
+				self.assertEquals(123, tuple.getTupleId);	
+			};
+			when: fut2 becomes: { |v|
+				s.cancel();
+			  a<-resolve(res);
+			};
+			def b := actor: { |TupleSpace, res2|
+				def descriptor := isolate: { def team := "blue"; };
+				def myTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+				def goOnline(){
+				  def sub := export: myTS as: TupleSpace;
+				  /.at.support.timer.when: 3.seconds() elapsed:{
+					   sub.cancel();
+					   res2<-resolve(`ok);
+				  };
+				};
+				myTS.when: {|tuple| true } matches: { |tuple|
+					test<-fail("seen tuple that shouldn't see: " + tuple);
+				};
+			};
 			
+			def a := actor: { |TupleSpace, b|			
+				def descriptor := isolate: { def team := "red"; };
+				def aTS := /.at.urbiflock.ambientTota.makeTupleSpace(descriptor);
+				def s := whenever: TupleSpace discovered: { |ts|
+					aTS.notifyTSDiscovered(ts);
+				};			
+				def blueTuple() {
+					/.at.urbiflock.ambientTota.extendTuple: /.at.urbiflock.ambientTota.makeTuple(123) with: {
+						def inScope(descriptor) { descriptor.team == "blue" };
+					};
+				};
+			   def sT := aTS.inject: blueTuple() withLeaseFor: 5.seconds();
+				/.at.support.timer.when: 5.seconds() elapsed:{	b<-goOnline() };
+				def resolve(res) {
+					s.cancel();
+					sT.cancel();
+					res<-resolve(`ok);
+				};	
+			};		
+      fut;
+    }; //end-testAsyncInjectWithLeaseFor
+				
+				
 	};
 };
 AmbientTotaModule;
