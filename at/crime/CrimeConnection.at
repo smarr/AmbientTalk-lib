@@ -44,6 +44,10 @@ def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);
 };
 
+def isNatTable(o) {
+	((reflect: o).listMethods.map: { |e| e.name }).contains(`atPut);
+};
+
 def mapArguments(args,vars) {
 	def argmap := jlobby.java.util.HashMap.new();		
 	def it := vars.iterator;
@@ -59,7 +63,9 @@ def mapArguments(args,vars) {
 			//UGLY UGLY UGLY 
 			//Reason I can't seem to convert a string to literal so I have to do it the otherway around
 			//+ The getName of a variable puts a ?
-			jlobby.edu.vub.crime.grammar.utils.AmbientTalkVisitor.visit(argmap.get("?"+literal.text()));
+			def visitor := jlobby.edu.vub.crime.grammar.utils.AmbientTalkVisitor.new("convert","convert");
+			visitor.visit(argmap.get("?"+literal.text()));
+			visitor.value;
 		};
 	};
 };
@@ -101,12 +107,13 @@ def newEvent(act,deact,vars) {
 };
 
 def convertFactToAmbientTalk(fact) {
-	def visitor :=  AmbientTalkVisitor.new();
+	def visitor :=  AmbientTalkVisitor.new("convert","convert");
 	def attributes := fact.attributes;
 	def it := attributes.iterator;
 	def tab := [];
 	while: { it.hasNext } do: {
-		tab := tab + [visitor.visit(it.next)];
+		visitor.visit(it.next);
+		tab := tab + [visitor.value];
 	};
 	makeTuple(tab);
 };
@@ -120,6 +127,26 @@ def convertTokenToAmbientTalk( token ){
 	tab;
 };
 
+
+def convertTable(table) {
+		def list := ExpressionFactory.list();
+		table.each: { |a|
+			if: isJavaObject(a) then: {
+				//its a variable so we don't need to make it into an argument anymore
+				list.add(a);
+			} else: {
+				if: isNatTable(a) then: {
+					list.add(convertTable(a));
+				} else: {
+					//its a constant and will be converted anyway by the coercer 
+					def attr := ExpressionFactory.attribute(a);
+					list.add(attr);
+				};
+			};
+		};
+		list;
+};
+
 def convertTupleToCrimeFact(tuple, rule) {
 	def newFact := GenericFact.new( "private" , tuple.getField(1) );
 	def theIndexer :=  IndexingVisitor.new(newFact);
@@ -130,9 +157,13 @@ def convertTupleToCrimeFact(tuple, rule) {
 			//its a variable so we don't need to make it into an argument anymore
 			theIndexer.nextAttribute(f);
 		} else: {
-			//its a constant and will be converted anyway by the coercer :)
-			def attr := ExpressionFactory.attribute(f);
-			theIndexer.nextAttribute(attr);
+			if: isNatTable(f) then: {
+				theIndexer.nextAttribute(convertTable(f));
+			} else: {
+				//its a constant and will be converted anyway by the coercer :)
+				def attr := ExpressionFactory.attribute(f);
+				theIndexer.nextAttribute(attr);
+			};
 		};
 	};
 	newFact;
@@ -326,6 +357,21 @@ def CrimeModule := object: {
 			myCrime.insertTuple(tuple);
 			def retrievedTuple := myCrime.readTuple(makeTemplate("testReadFromCrime", var: `x, 4));
 			retrievedTuple := myCrime.readTuple(makeTemplate("testReadFromCrime", var: `x, 4));			
+		};
+		
+		/*
+		* Tests the reading of crime tuples (does not remove the tuple).  TODO 
+		*/
+		def testReadFromCrimeTable() {
+			def [fut,res] := makeFuture(); 
+			def tuple :=  makeTuple("testReadFromCrimeTable", [3, 4]);
+			myCrime.when:  [makeTemplate("testReadFromCrimeTable", var:`x)] activated: { |varMap|
+					self.assertEquals( 3, varMap.get(`x)[1]);
+					self.assertEquals( 4, varMap.get(`x)[2]);
+					res.resolve("OK");
+			};
+			myCrime.insertTuple(tuple);
+			fut;			
 		};
 		
 		/*
