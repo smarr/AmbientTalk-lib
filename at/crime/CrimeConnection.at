@@ -403,6 +403,23 @@ def CrimeModule := object: {
 			myCrime.insertTuple(tuple);
 			fut;			
 		};
+		
+		//
+		// Tests the reading of crime tuples with table matching with variable inside
+		//
+		def testAsyncReadFromCrimeTableMatchVarConstraint() {
+			def [fut,res] := makeFuture(); 
+			def tuple :=  makeTuple("testAsyncReadFromCrimeTableMatchVar", [ 3, 4, 5 ], 6);
+			myCrime.when:  [ makeTemplate("testAsyncReadFromCrimeTableMatchVar", [ var: `x, var: `y, var: `p], var: `q), var: `x lessThen: 10  ] activated: { |varMap|
+					self.assertEquals(3, varMap.get(`x));
+					self.assertEquals(4, varMap.get(`y));
+					self.assertEquals(5, varMap.get(`p));
+					self.assertEquals(6, varMap.get(`q));
+					res.resolve("OK");
+				};
+			myCrime.insertTuple(tuple);
+			fut;			
+		};
 			
 		
 		//
