@@ -14,13 +14,22 @@ def id := 0;
 
 def Environment := object: {
 	def dict := [];
+	def id;
 	
 	def insert(name, value) {
 		def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
 		if: idx == nil then: {
 			dict := dict + [[name, value]];
 		} else: {
-			dict[idx] := [name, value];
+			def curVal := dict[idx];
+			if: ! (curVal[2] == value) then: {
+				if: (is: curVal[2] taggedAs: Table) then: {
+					def vals := curVal[2].find: {|v| (v == value)}; 
+					if: (vals == nil)  then: {
+						curVal[2] := curVal[2] + [value];
+					};
+				} else: { curVal[2] := [curVal[2], value] };
+			};
 		};
 	};
 	
@@ -48,14 +57,8 @@ def Environment := object: {
 		dict.isEmpty();
 	};
 	
-	/* TODO: several merging strategies
-	{ |pair| if: nEnv.find(pair[1]) == false then: { 
-				nEnv.insert(pair[1], pair[2]); 
-			} else: { nEnv.insert(pair[1], [ pair[2], nEnv.find(pair[1])[2] ]); };
-	};
-	*/
 	def merge(envs) {
-		envs.each: { |e| e.dict.each: { |pair| insert(pair[1], pair[2]); }; };
+		envs.each: { |env| env.dict.each: { |pair| insert(pair[1], pair[2]); }; };
 	};
 	
 	def print() {
@@ -220,11 +223,12 @@ def ParallelSplit := object: {
 			def f[futureTable.length()] { i := i+1; futureTable[i][1]; };
 			resolver.resolve(f);
 		};
-		result;
+		result;   // TODO result teruggeven?
 	};	
 		
 	def execute(idx, env) {
-		def clonedEnv := clone: env;
+		def clonedEnv := Environment.new();
+		clonedEnv.merge([env]);
 		if: (idx <= componentTable.length()) then: {
 			def component := componentTable[idx];	 
 			// component is either an activity or a pattern    	
@@ -304,6 +308,7 @@ def Connection := object: {
 
 
 
+// also Structured Synchronizing Merge
 def Synchronize := object: {
     def syncTable := [];
     def nextComponent;
@@ -316,11 +321,11 @@ def Synchronize := object: {
 
     def init(cmp) {
     	nextComponent := cmp;
-		[result, resolver] := makeFuture(); 
+		[result, resolver] := makeMultiFuture(multi);  
     };
 
 	def addSync(fut) {
-		syncTable := syncTable + [[fut, 0 ,[]]];
+		syncTable := syncTable + [[fut, 0, []]];
 	};
 	
 	def addFuture(nbr) {
@@ -346,14 +351,13 @@ def Synchronize := object: {
 		whenEach: branch[1] becomes: { |env| 
 			branch[3] := branch[3] + [env];
 			branch[2] := branch[2] + 1;
-			checkSynchronization(env.find(`id));   //TODO id too simple
-
+			checkSynchronization(env.id);   //TODO id too simple
 		};
 	};
 	
 	def checkSynchronization(idValue) {
 		def envs := [];
-		syncTable.each:{ |branch| envs := envs + branch[3].filter:{ |env| env.find(`id) == idValue; }; };
+		syncTable.each: { |branch| envs := envs + branch[3].filter:{ |env| env.id == idValue; }; };
 		if: (envs.length() == syncTable.length()) then: {
 			nEnv.merge(envs);
 			if: (is: nextComponent taggedAs: Act) then: {
@@ -365,7 +369,6 @@ def Synchronize := object: {
             };
 		};
 	};
-	
 	
 	def execute() {
      	syncTable.each: { |branch| resolve(branch); };
@@ -452,8 +455,9 @@ def SimpleMerge := object: {
 
 	def start(env) {
 		id := id  + 1;
-		def clonedEnv := clone: env;
-		clonedEnv.insert(`id, id);
+		def clonedEnv := Environment.new();
+		def clonedEnv.merge(env);
+		clonedEnv.id := id;
 		execute(clonedEnv);
 		result;
 	};
@@ -471,22 +475,234 @@ def SimpleMerge := object: {
 
 
 
+def MultiChoice := object: {
+	def multi := 1;
+	def started := 0;
+    def componentTable;
+	def futureTable;
+	def result;
+	def resolver;
+	def addedFutures := 0;
+	def conditionActions;
+	
+    def init(bTable) {
+		def i := 0;
+		// convert the "pairs" [service, synchronize] in the component table to sequences
+	//	def b[bTable.length()] { i := i+1; if: (is: bTable[i] taggedAs: Table) then: { Sequence.new(bTable[i]) } else: { bTable[i] }};
+    	componentTable := bTable;
+
+		// make a table to hold all the unresolved futures of the different branches
+		[result, resolver] := makeMultiFuture(multi);
+    };
+
+	def addFuture(nbr) {
+		if: (addedFutures == 0) then: {addedFutures := 1; multi := 0;};
+		multi := multi + 1;
+		componentTable.each: { |cmp| if: (is: cmp[2] taggedAs: Pattern) then: { cmp[2].addFuture(multi); }; };
+		[result, resolver] := makeMultiFuture(multi);
+	};
+  
+	def start(env) {
+		conditionActions := componentTable.filter: { |car| 
+														def rule := car[1];
+														def method := rule.method();
+														def bindings := env.bind(method.parameters()); 
+														rule.apply(bindings); };
+		def f[conditionActions.length()] { makeMultiFuture(multi); };
+		futureTable := f;
+		if: (conditionActions.isEmpty()) then: {
+			raise: XNoCondition.new("No matching condition found");
+		} else: {
+			if: !(started == multi) then: {
+				started := started + 1;
+				execute(1, env);
+				//when all components have been started, the parallelSplit is said to be "done"
+				//and the result Future is resolved as usual (with the future table as value ...)
+				def i := 0;
+				def f[futureTable.length()] { i := i+1; futureTable[i][1]; };
+				resolver.resolve(f);
+			};
+		};
+		result;
+	};	
+		
+	def execute(idx, env) {
+		def clonedEnv := clone: env;	
+		if: (idx <= conditionActions.length()) then: {
+			def component := conditionActions[idx][2];	 
+			// component is either an activity or a pattern    	
+			if: (is: component taggedAs: Act) then: {
+				futureTable[idx][2].resolve(WorkflowPattern^executeActivity(component, clonedEnv));
+       		} else: { // component is a pattern
+				when: component.start(clonedEnv) becomes: { |reply|
+					futureTable[idx][2].resolve(reply);
+				};
+        	};
+			execute(idx+1, env);
+		};
+	};
+} taggedAs: [Pattern];
+
+
+
+def StructuredDiscriminator := object: {
+    def syncTable := [];
+    def nextComponent;
+	def result := nil;
+	def resolver;
+	def started := false;
+	def multi := 1;
+	def addedFutures := 0;
+
+    def init(cmp) {
+    	nextComponent := cmp;
+		[result, resolver] := makeFuture();   // TODO: MultiFuture
+    };
+
+	def addSync(fut) {
+		syncTable := syncTable + [[fut, 0, []]];
+	};
+	
+	def addFuture(nbr) {
+		// TODO: per id (momenteel multi 4 ipv 2)
+		if: (addedFutures == 0) then: {addedFutures := 1; multi := 0;};
+		multi := multi + 1;
+		[result, resolver] := makeMultiFuture(multi);
+		if: (is: nextComponent taggedAs: Pattern) then: {
+			nextComponent.addFuture(multi);
+		};
+	};
+
+	def start(env) {
+		// only start the component once (even with multifutures, is taken care of in execute method)
+		if: !started then: {
+			started := true;
+			execute();
+		};
+		result;
+	};
+	
+	def resolve(branch) {
+		whenEach: branch[1] becomes: { |env| 
+			branch[3] := branch[3] + [env];
+			branch[2] := branch[2] + 1;
+			checkSynchronization(env.id, env);   //TODO id too simple
+		};
+	};
+	
+	def checkSynchronization(idValue, env) {
+		def envs := [];
+		syncTable.each:{ |branch| envs := envs + branch[3].filter:{ |env| env.id == idValue; }; };
+		if: (envs.length() == 1) then: {
+			if: (is: nextComponent taggedAs: Act) then: {
+             	resolver.resolve(WorkflowPattern^executeActivity(nextComponent, env));
+  			} else: { // component is a pattern
+          		when: nextComponent.start(env) becomes: { |reply|
+               		resolver.resolve(reply);
+             	};
+            };
+		};
+	};
+		
+	def execute() {
+     	syncTable.each: { |branch| resolve(branch); };
+    };
+} taggedAs: [SyncPattern];
+
+
+
+def StructuredPartialJoin := object: {
+    def syncTable := [];
+    def nextComponent;
+	def result := nil;
+	def resolver;
+	def started := false;
+	def multi := 1;
+	def addedFutures := 0;
+	def n := 0;
+
+    def init(cmp, nbr) {
+		n := nbr; // TODO: verify that nbr < number of branches
+    	nextComponent := cmp;
+		[result, resolver] := makeFuture();   // TODO: MultiFuture
+    };
+
+	def addSync(fut) {
+		syncTable := syncTable + [[fut, 0, []]];
+	};
+	
+	def addFuture(nbr) {
+		// TODO: per id (momenteel multi 4 ipv 2)
+		if: (addedFutures == 0) then: {addedFutures := 1; multi := 0;};
+		multi := multi + 1;
+		[result, resolver] := makeMultiFuture(multi);
+		if: (is: nextComponent taggedAs: Pattern) then: {
+			nextComponent.addFuture(multi);
+		};
+	};
+
+	def start(env) {
+		// only start the component once (even with multifutures, is taken care of in execute method)
+		if: !started then: {
+			started := true;
+			execute();
+		};
+		result;
+	};
+	
+	def resolve(branch) {
+		whenEach: branch[1] becomes: { |env| 
+			branch[3] := branch[3] + [env];
+			branch[2] := branch[2] + 1;
+			checkSynchronization(env.id, env);   //TODO id too simple
+		};
+	};
+	
+	def checkSynchronization(idValue, env) {
+		def envs := [];
+		syncTable.each:{ |branch| envs := envs + branch[3].filter:{ |env| env.id == idValue; }; };
+		if: (envs.length() == n) then: {
+			if: (is: nextComponent taggedAs: Act) then: {
+             	resolver.resolve(WorkflowPattern^executeActivity(nextComponent, env));
+  			} else: { // component is a pattern
+          		when: nextComponent.start(env) becomes: { |reply|
+               		resolver.resolve(reply);
+             	};
+            };
+		};
+	};
+		
+	def execute() {
+     	syncTable.each: { |branch| resolve(branch); };
+    };
+} taggedAs: [SyncPattern];
+
+
 
 def Local := object: {
 	def block;
 	def result;
 	def resolver;
-	def started := false;
+	def started := 0;
+	def multi := 1;
+	def addedFutures := 0;
 	
 	def init(blk) {
 		block := blk;
-		[result, resolver] := makeFuture();
+		[result, resolver] := makeMultiFuture(multi);
+	};
+	
+	def addFuture(nbr) {
+		// TODO: per id (momenteel multi 4 ipv 2)
+		if: (addedFutures == 0) then: {addedFutures := 1; multi := 0;};
+		multi := multi + 1;
+		[result, resolver] := makeMultiFuture(multi);
 	};
 	
 	def start(env) {
 		// make sure the component is ony started once
-		if: !started then: {
-			started := true;
+		if: ! (multi == started) then: {
+			started := started + 1;
 			resolver.resolve(block(env));
 		};
 		result;
@@ -646,25 +862,8 @@ def hsw := makeServiceWrapper(HService);
 def isw := makeServiceWrapper(IService);
 
 
-def env := Environment.new();
-env.insert(`gps, 100);
-
 /*
-def failedSeq := Sequence.new([ asw.a([`a]), 
-                                bsw.b([`b]), 
-                                Failure.new( hsw.h([]), [ 20, hsw.h([]) ] ), 
-                                csw.c(`c, [`c]), 
-                                Local.new({|env| env.print()}) ]);
-failedSeq.start(env);
-*/
-
-/*
-def exc := ExclusiveChoice.new( {|i| i < 1}, asw.a([`a]), csw.c([`c]) );
-def excSeq := Sequence.new([ isw.i([`i]), exc, Local.new({|env| env.print()}) ]);
-//excSeq.start(env);
-*/
-
-/*
+// Testing simple merge
 def smerge1 := SimpleMerge.new(esw.e([`e]));
 def parSplit1 := ParallelSplit.new([ [bsw.b([`b]), Connection.new(smerge1)],
                                      [csw.c([`c]), Connection.new(smerge1)] ]);
@@ -673,6 +872,7 @@ sequence1.start(env);
 */
 
 /*
+// Testing simple merge
 def smerge1 := SimpleMerge.new(Sequence.new([ esw.e([`e]), fsw.f([`f]) ]));
 def parSplit1 := ParallelSplit.new([ [bsw.b([`b]), Connection.new(smerge1)],
                                      [csw.c([`c]), Connection.new(smerge1)] ]);
@@ -681,17 +881,19 @@ sequence1.start(env);
 */
 
 /*
+// Testing simple merge
 def smerge := SimpleMerge.new( ParallelSplit.new([ [dsw.d([`d]), Local.new({|env| env.print()})],
                                                    [esw.e([`e]), Local.new({|env| env.print()})] ]) );
 def parSplit2 := ParallelSplit.new([ [bsw.b([`b]), Connection.new(smerge)],
                                      [csw.c([`c]), Connection.new(smerge)] ]);
 def smSeq := Sequence.new([ asw.a([`a]), parSplit2 ]);
-env.insert(`id, id + 1);
+env.id := id + 1;
 id := id + 1;
 smSeq.start(env);
 */
 
 /*
+// Testing simple merge
 def parSplit2 := ParallelSplit.new([ [esw.e([`e])],
                                      [fsw.f([`f])] ]);
 def smerge1 := SimpleMerge.new(parSplit2);
@@ -702,6 +904,7 @@ sequence1.start(env);
 */
 
 /*
+// Testing simple merge
 def smerge3 := SimpleMerge.new(gsw.g([`g]));
 def smerge1 := SimpleMerge.new(Connection.new(smerge3));
 def parSplit1 := ParallelSplit.new([ [bsw.b([`b]), Connection.new(smerge1)],
@@ -719,27 +922,72 @@ sequence2.start(env);
 */
 
 /*
+// Testing simple merge, parallel split, synchronize and sequence
 def sync := Synchronize.new( Sequence.new([ fsw.f([`f]), Local.new({|env| env.print()}) ]) );
 def smerge := SimpleMerge.new( ParallelSplit.new([ [dsw.d([`d]), Connection.new(sync)],
                                                    [esw.e([`e]), Connection.new(sync)] ]) );
 def parSplit2 := ParallelSplit.new([ [bsw.b([`b]), Connection.new(smerge)],
                                      [csw.c([`c]), Connection.new(smerge)] ]);
 def smSeq := Sequence.new([ asw.a([`a]), parSplit2 ]);
-env.insert(`id, id + 1);
+env.id := id + 1;
 id := id + 1;
 smSeq.start(env);
 */
 
-
 /*
+// Testing simple merge, followed by parallel split and synchronize
 def sync := Synchronize.new( fsw.f([`f]) );
 def smerge := SimpleMerge.new( ParallelSplit.new([ [dsw.d([`d]), Connection.new(sync)],
                                                    [esw.e([`e]), Connection.new(sync)] ]) );
 def parSplit2 := ParallelSplit.new([ [bsw.b([`b]), Connection.new(smerge)],
                                      [csw.c([`c]), Connection.new(smerge)] ]);
 def smSeq := Sequence.new([ asw.a([`a]), parSplit2 ]);
-env.insert(`id, id + 1);
+env.id := id + 1;
 id := id + 1;
 smSeq.start(env);
 */
 
+/*
+// Testing simple merge, followed by a sequence
+def smerge1 := SimpleMerge.new(Sequence.new([ csw.c([`c]), dsw.d([`d]), esw.e([`e]), Local.new({|env| env.print()}) ]));
+def parSplit1 := ParallelSplit.new([ [asw.a([`a]), Connection.new(smerge1)],
+                                     [bsw.b([`b]), Connection.new(smerge1)] ]);
+parSplit1.start(env);
+*/
+
+/*
+// Testing multi choice
+def mc := MultiChoice.new( [ [{|a| a < 2}, bsw.b([`b])], [ {|a| a > 100}, csw.c([`c])], [{|gps| gps > 99}, dsw.d([`d])] ] );
+def mcSeq := Sequence.new([ asw.a([`a]), mc, Local.new({|env| env.print()}) ]);
+mcSeq.start(env);
+*/
+
+/*
+// Testing structured discriminator
+def structDiscr := StructuredDiscriminator.new( dsw.d([`d]) );
+def parSplit := ParallelSplit.new([ [bsw.b([`b]), Connection.new(structDiscr)],
+                                     [csw.c([`c]), esw.e([`e]), fsw.f([`f]), gsw.g([`g]), Connection.new(structDiscr)] ]);
+def sdSeq := Sequence.new([ asw.a([`a]), parSplit ]);
+sdSeq.start(env);
+*/
+
+/*
+// Testing structured partial join
+def spJoin := StructuredPartialJoin.new( dsw.d([`d]), 2 );
+def parSplit := ParallelSplit.new([ [bsw.b([`b]), Connection.new(spJoin)],
+                                     [csw.c([`c]), esw.e([`e]), fsw.f([`f]), gsw.g([`g]), Connection.new(spJoin)],
+ 									 [isw.i([`i]), Connection.new(spJoin)] ]);
+def sdSeq := Sequence.new([ asw.a([`a]), parSplit ]);
+sdSeq.start(env);
+*/
+
+/* 
+// Testing merging of environments
+def sync := Synchronize.new( Sequence.new([ dsw.d([`d]), Local.new({|env| env.print()}) ]) );
+def parSplit := ParallelSplit.new([ [bsw.b([`a]), Connection.new(sync)],
+                                     [csw.c([`c]), esw.e([`e]), fsw.f([`f]), gsw.g([`g]), Connection.new(sync)] ]);
+def sSeq := Sequence.new([ asw.a([`a]), parSplit ]);
+id := id + 1;
+env.id := id;
+sSeq.start(env);
+*/
