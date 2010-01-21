@@ -109,14 +109,18 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 		def add(tuple){
 			crimeEngine.insertTuple(tuple.content);
 		};
-		
+		//TODO: add check not to read/in locally of a death tuple.
 		def delete(template){
 			crimeEngine.retractTuple(template.content);
 		};
-		
+		//TODO: add check not to read/in locally of a death tuple.
 		def replace(oldTuple, newTuple){
 			delete(oldTuple);
 			add(newTuple);
+    };
+   //TODO: add check not to read/in locally of a death tuple.
+    def read(template){
+	    crimeEngine.readTuple(template.content);
     };
 
 		//TODO: temporal hack because we get Crime tokens in when:activated.
@@ -169,32 +173,34 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 		  def variableNames := varNames(templateTable.content);
 		  closure :=  makeNewClosure(variableNames, closure);
 		  closureOutOfContext :=  makeNewClosure(variableNames, closureOutOfContext);
+		
+		  def notifyClosures( vectorFacts, varMap) {
+				//Call the closure with the correct variables
+		    closure(@mapToTableValues(varMap,variableNames));	
+  		  //Install Deactivation
+  		  def listener := { closureOutOfContext(@mapToTableValues(varMap,variableNames)); };
+  		  installListeners(vectorFacts,listener);
+  		  //save for cancalation;
+  		  savedVectorFacts := vectorFacts;
+  		  savedListener := listener;
+		  };
 		  //def table := templateTable.map: { |template| template.content};
 		  def registration := crimeEngine.when: [templateTable.content] activatedToken: { |vectorFacts,varMap|
 			  //Cancel so it is only triggered once
 			  //and can not be triggered during the awaiting of the remove fact future
 			  registrationClosure(registration);
 			  if: deleteFacts then: {
-			  //Remove the facts from crime
-			  when: removeToken(vectorFacts) becomes: {|removed|
-				  if: removed then: {
-					  //Call the closure with the correct variables
-					  closure(@mapToTableValues(varMap,variableNames));	
-			  		//Install Deactivation
-			  		def listener := { closureOutOfContext(@mapToTableValues(varMap,variableNames)); };
-			  		installListeners(vectorFacts,listener);
-			  		//save for cancalation;
-			  		savedVectorFacts := vectorFacts;
-			  		savedListener := listener;
-			  	} else: {
-					  system.println("We had a match but the token was already removed by somebody else ... ");
-					  system.println("Reinstalling the rule ... ");
-					  when: templateTable matches: closure outOfContext: closureOutOfContext registration: registrationClosure removeTuples: deleteFacts;
-			  	};
-			  };
+			    //Remove the facts from crime
+			    when: removeToken(vectorFacts) becomes: {|removed|
+				    if: removed then: {
+					    notifyClosures( vectorFacts, varMap);
+			  	  } else: {
+					    system.println("We had a match but the token was already removed by somebody else. Reinstalling the rule!");
+					    when: templateTable matches: closure outOfContext: closureOutOfContext registration: registrationClosure removeTuples: deleteFacts;
+			  	  };
+			    };
 		    } else: { 
-			//TODOadd out of context! cleanup!
-			   closure(@mapToTableValues(varMap,variableNames));	
+				  notifyClosures( vectorFacts, varMap);
 			  };
 		  };	
 		  object: {
@@ -283,50 +289,58 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 			super^inject: makeContextAwareTuple(tuple, templateTable);	
 		};
 	
-		def inject: tuple inContext: templateTable withLeaseFor: time{
-			extend: makeContextAwareTuple(tuple, templateTable) with: { |time|
-			//adding stuff for leasing. TODO: now copy and paste!
-			def timeout := time;
-			def timerSubscription := nil;
-			def expired := false;
-			def leasedTuple := false;
-			def startSubscription(){
-				expired := false;
-		 	  if: (time > /.at.support.timer.ZERO) then: {
-			    leasedTuple := true;
-			system.println("activating subscription at " +self);
-				  timerSubscription := /.at.support.timer.when: time elapsed: {self.whenExpired()}
+		def inject: tuple inContext: templateTable withLeaseFor: time {
+			def leasedTuple := extend: makeContextAwareTuple(tuple, templateTable) with: { |time|
+			  //TODO: add check not to read/in locally of a death tuple.
+			  def timeout := time;
+			  def timerSubscription := nil;
+			  def expired := false;
+			  def leasedTuple := false;
+		    def init(time){
+			    timeout := time;
+			    timerSubscription := nil;
+			    expired := false;
+			    if: (time > /.at.support.timer.ZERO) then: {leasedTuple := true};
+		    }; 
+			  def startSubscription(){
+				  expired := false;
+		 	    if: (time > /.at.support.timer.ZERO) then: {
+			      leasedTuple := true;
+			system.println("activating subscription at " +self.content.toString);
+				    timerSubscription := /.at.support.timer.when: time elapsed: {self.whenExpired()}
+			    };
+			  };				
+			  def whenExpired(){
+				  system.println("calling expired in ContextAwareTuples also " + self);
+				  if: (time > /.at.support.timer.ZERO) then: {
+					  expired := true;
+				    // if whenExpired gets called at receiver side, the crime variable should already be set.
+				    if: (nil != self.crime) then: { super^retractFromCrime();}
+				  };
 			  };
-			};				
-			def whenExpired(){
-				system.println("calling expired in ContextAwareTuples also " + self);
-				if: (time > /.at.support.timer.ZERO) then: {
-					expired := true;
-				  // if whenExpired gets called at receiver side, the crime variable should already be set.
-				  if: (nil != self.crime) then: { super^retractFromCrime();}
-				};
-			};
-			startSubscription();
-			def decideDie(ts){
-				expired;
-			};
-		} taggedAs: [/.at.types.Isolate, ContextAwareTotam] mirroredBy: (object:{
-			def pass(){
-				def passObj := super^pass(); 
-				def base := self.base;
-				if: base.leasedTuple then: {
-				  passObj.timeout := base.timerSubscription.getTimeRemaining();
-				  passObj.timerSubscription := nil;
+			  startSubscription();
+			  def decideDie(ts){
+				  expired;
 			  };
-				passObj;
-			};
-			def resolve(){
-				def resolveObj := super^resolve();
-				if: self.base.leasedTuple then: {resolveObj.startSubscription()};
-				resolveObj;
-			}
-		}childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror );
-		
+		  } taggedAs: [/.at.types.Isolate, ContextAwareTotam] mirroredBy: (object:{
+			  def pass(){
+				  //passObj is shared with base-level object!!!
+				  def passObj := super^pass(); 
+				  def base := self.base;
+							  system.println("trying to pass " + passObj.content.toString + " timer " +base.timerSubscription);
+		  		if: base.leasedTuple then: {
+			  	  passObj.timeout := base.timerSubscription.getTimeRemaining();
+			    };
+			system.println("timer of base is " + base.timerSubscription);
+				  passObj;
+			  };
+			  def resolve(){
+				  def resolveObj := super^resolve();
+				  if: self.base.leasedTuple then: {resolveObj.startSubscription()};
+				  resolveObj;
+			  };
+		  }childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror );
+		  super^inject: leasedTuple;
 		}; //end-inject-inContext-withLeaseFor:	
 	};
 };
@@ -536,7 +550,6 @@ def contextAwareTuplesModule := object:{
 			};
 			fut;
 		};
-	
 	
 	};//end-contextAwareTuplesTest
 }; //end-contextAwareTuplesModule

@@ -252,7 +252,10 @@ def makeCrimeEngine() {
 	};
 
 	def readTuple(template) {
-		convertFactToAmbientTalk(engine.read(convertTupleToCrimeFact(template,nil)));
+		def crimeFact := engine.read(convertTupleToCrimeFact(template,nil));
+		if: (nil != crimeFact) then: {
+		  convertFactToAmbientTalk(crimeFact);
+	  } else: { crimeFact};
 	};
 
     def when: table activated: act {
