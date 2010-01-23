@@ -70,14 +70,13 @@ def makeGuanotes(aFlockr) {
 		    def message := msg;
 		    def ts := localInterface;
 	      	// currently inheriting the default, i.e. a tuple that hops forever.
-		    def decideStore(guanotesReceiverTS){ true };
+	      // dirty hack to make sure that an injected tuple doesn't gets inserted 
+	      // to the local tuple space of the flockr which sends the guanote.
+		  //  def decideEnter(receivingTS){ !(localInterface == receivingTS) };
+		    def doAction(receivingTS) {ts := receivingTS };
         def inScope(descriptor) { 
 	        receiver.shouldReceive( ts, descriptor);	
 	      };
-				def decideExecute(receivingTS){
-					ts := receivingTS;
-					true;
-				};
 	      def getReceiverList(){ receiver.getReceiverList()}; 
 	      def getSenderName(){sender};
 	    };
@@ -119,8 +118,8 @@ def makeGuanotes(aFlockr) {
 		
 		// places a listener for guanotes where the flockr owner is the receiver.
 		def listenForGuanotesToOwner(listener) {
-			//Think about this ! the true determines which guanotes have to be displayed.
-			self.when: { |guanote| true } received: { |guanote|
+			//do not trigger GUI listener for guanotes produced by myself.
+			self.when: { |guanote| guanote.sender != aFlockr.getUsername } received: { |guanote|
 				listener<-guanoteReceived(guanote);
 			};
 		};
@@ -251,7 +250,7 @@ def GuanotesModule := object: {
 				myGuanotes.listenForGuanotesToOwner( object: {
 				  def guanoteReceived(guanote) {
 					  test.assertEquals("flockr2", guanote.sender);
-					  test.assertEquals("ping", guanote.message);
+				    test.assertEquals("ping", guanote.message);
 					  res.resolve(`ok);
 					}
 				});
@@ -290,7 +289,7 @@ def GuanotesModule := object: {
 			}; // end-testAsyncGuanoteToOneselfAndFlockr
 			
 	
-			def testAsyncGuanoteToCurrentFlock(){
+		 def testAsyncGuanoteToCurrentFlock(){
 				def [fut,res] := makeFuture();
 				// sending a guanote to a flatten flock, i.e. a list of flockrs.
 				// waiting some time to be sure that flockr2,flockr3 belong to the flockr1 "FriendsFlock".			
