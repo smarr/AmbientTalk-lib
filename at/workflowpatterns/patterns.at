@@ -679,6 +679,111 @@ def StructuredPartialJoin := object: {
 
 
 
+// not pattern of van der Aalst
+def Multiplexer := object: {
+	def number := 0;
+    def component;
+	def result := nil;
+	def resolver;
+	def started := 0;
+	def multi := 1;
+	def addedFutures := 0;
+
+    def init(cmp, n) {
+		number := n;
+    	component := cmp;
+        [result, resolver] := makeMultiFuture(multi);    
+	};
+
+	def addFuture(nbr) {
+		if: (addedFutures == 0) then: {addedFutures := 1; multi := 0;};
+		multi := multi + 1;
+		[result, resolver] := makeMultiFuture(multi);
+		if: (is: component taggedAs: Pattern) then: {
+			component.addFuture(multi);
+		};
+	};
+
+	def start(env) {
+		if: ! (started == multi) then: {
+			started := started + 1;
+			id := id  + 1;
+			def clonedEnv := Environment.new();
+			clonedEnv.merge([env]);
+			clonedEnv.id := id;
+			execute(clonedEnv);
+		};
+		result;
+	};
+	
+	def execute(env) {
+		def nr := 0;
+		while: { nr < number } do: {
+     		if: (is: component taggedAs: Act) then: {
+				resolver.resolve(WorkflowPattern^executeActivity(component, env));
+  			} else: { // component is a pattern
+				def clonedCmp := clone: component;
+       			when: clonedCmp.start(env) becomes: { |reply|
+					resolver.resolve(reply);
+           		};
+       		};
+			nr := nr + 1;
+		};
+    };
+} taggedAs: [Pattern];
+
+
+
+def MultipleInstancesWithoutSynchronization := object: {
+	def number := 0;
+    def component;
+	def result := nil;
+	def resolver;
+	def started := 0;
+	def multi := 1;
+	def addedFutures := 0;
+	def instances := 0;
+
+    def init(cmp) {
+    	component := cmp;
+        [result, resolver] := makeMultiFuture(multi);    
+	};
+
+	def addFuture(nbr) {
+		if: (addedFutures == 0) then: {addedFutures := 1; multi := 0;};
+		multi := multi + 1;
+		[result, resolver] := makeMultiFuture(multi);
+		if: (is: component taggedAs: Pattern) then: {
+			component.addFuture(multi);
+		};
+	};
+
+	def start(env) {
+		if: ! (started == multi) then: {
+			started := started + 1;
+			id := id  + 1;
+			def clonedEnv := Environment.new();
+			clonedEnv.merge([env]);
+			clonedEnv.id := id;
+			execute(clonedEnv);
+		};
+		result;
+	};
+	
+	def execute(env) {
+     	if: (is: component taggedAs: Act) then: {
+			resolver.resolve(WorkflowPattern^executeActivity(component, env));
+  		} else: { // component is a pattern
+			//if: (started > 1) then: { def nbr := 0; while: {nbr < multi} do: { component.addFuture(multi); nbr := nbr + 1; }; }; 
+       		when: component.start(env) becomes: { |reply|
+				resolver.resolve(reply);
+           	};
+       	};
+    };
+} taggedAs: [MultiPattern];
+
+
+
 def Local := object: {
 	def block;
 	def result;
@@ -991,3 +1096,46 @@ id := id + 1;
 env.id := id;
 sSeq.start(env);
 */
+
+/*
+// Testing multiplexer 
+def seq2 := Sequence.new([ dsw.d([`d]), esw.e([`e]), fsw.f([`f]) ]);
+def miws := Multiplexer.new(seq2, 3);
+def seq1 := Sequence.new([ asw.a([`a]), bsw.b([`b]), csw.c([`c]), miws, Local.new({|env| env.print()}) ]);
+id := id + 1;
+env.id := id;
+seq1.start(env);
+*/
+
+/*
+// Testing multiplexer
+def seq2 := Sequence.new([ dsw.d([`d]), esw.e([`e]), fsw.f([`f]) ]);
+def miws := Multiplexer.new(seq2, 3);
+def seq1 := Sequence.new([ asw.a([`a]), bsw.b([`b]), csw.c([`c]), miws, gsw.g([`g]), Local.new({|env| env.print()}) ]);
+id := id + 1;
+env.id := id;
+seq1.start(env);
+*/
+
+/*
+// Testing multiple instances without synchronization: number of instances created = 1, only 1 brancg (sequence)
+def seq2 := Sequence.new([ dsw.d([`d]), esw.e([`e]), fsw.f([`f]) ]);
+def miws := MultipleInstancesWithoutSynchronization.new(seq2, 3);
+def seq1 := Sequence.new([ asw.a([`a]), bsw.b([`b]), csw.c([`c]), miws, Local.new({|env| env.print()}) ]);
+id := id + 1;
+env.id := id;
+seq1.start(env);
+*/
+
+/*
+// Testing multiple instances without synchronization, number of instances created = 2 (although 3 branches for simple merge but 2 is max nr of instances) 
+def seq2 := Sequence.new([ gsw.g([`g]), Sequence.new([ isw.i([`i]), Local.new({|env| env.print()}) ]) ]);
+def miws := MultipleInstancesWithoutSynchronization.new(seq2);
+def parSplit := ParallelSplit.new( [ [ bsw.b([`b]), Connection.new(miws) ], [ csw.c([`c]), dsw.d([`d]), esw.e([`e]), Connection.new(miws) ], [ fsw.f([`f]), Connection.new(miws) ] ]);
+def seq1 := Sequence.new([ asw.a([`a]), parSplit ]);
+id := id + 1;
+env.id := id;
+seq1.start(env);
+*/
+
+
