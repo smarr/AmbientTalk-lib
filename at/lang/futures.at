@@ -43,6 +43,9 @@ def RUINED := 2;
 // all future objects are marked with this type
 deftype Future;
 
+// random number generator for generating unique trace Id's and future Id's
+def rng := jlobby.java.util.Random.new();
+
 //create TimeoutException used for notifying the ruining of a future when its lease expires. 
 deftype TimeoutException <: Exception;
 def XTimeoutException := extend: /.at.exceptions.createException(TimeoutException) with: {
@@ -105,14 +108,14 @@ def FutureMirror := mirror: {
 					}
 			  // note that <-addResolutionListener is a message directed to the future's mirror
 			  // and that no future return value is required
-				})@[MetaMessage, OneWayMessage];
+				})@[MetaMessage, OneWayMessage, /.at.support.tracer.NoTrace];
 			} else: {
 				if: (state == UNRESOLVED) then: {
 					state := RESOLVED;
 					resolvedValue := value;
 					inbox.each: { |msg| value <+ msg };
 					inbox := [];
-					subscribers.each: { |sub| sub<-notifyResolved(value)@OneWayMessage };
+					subscribers.each: { |sub| sub<-notifyResolved(value)@[OneWayMessage,/.at.support.tracer.TraceNotifyResolved] };
 					subscribers := [];
 				};	
 			};	
@@ -136,7 +139,7 @@ def FutureMirror := mirror: {
 				system.println("[futures.at] Warning: future has no listeners to catch exception: " + exception);
 				system.println(exception.stackTrace);
 			} else: {
-				subscribers.each: { |sub| sub<-notifyRuined(exception)@OneWayMessage };
+				subscribers.each: { |sub| sub<-notifyRuined(exception)@[OneWayMessage,/.at.support.tracer.TraceNotifyRuined] };
 				subscribers := [];	
 			}
 		};
@@ -148,10 +151,10 @@ def FutureMirror := mirror: {
 	def addResolutionListener(sub) {
 		// if future has already been resolved/ruined, notify listener immediately
 		if: (state == RESOLVED) then: {
-			sub<-notifyResolved(resolvedValue)@OneWayMessage;
+			sub<-notifyResolved(resolvedValue)@[OneWayMessage,/.at.support.tracer.TraceNotifyResolved];
 		} else: {
 			if: (state == RUINED) then: {
-				sub<-notifyRuined(resolvedValue)@OneWayMessage;
+				sub<-notifyRuined(resolvedValue)@[OneWayMessage,/.at.support.tracer.TraceNotifyRuined];
 			} else: {
 			  subscribers := subscribers + [ sub ];	
 			}
@@ -252,17 +255,35 @@ def FutureMirror := mirror: {
 	 };
 };
 
+deftype FutureId_;
+def FutureId(id) {
+  extend: FutureId_ with: { |id| }
+};
+def getTraceId(future) {
+  def futureId := /.at.support.util.getAnnotationOfType(future, FutureId_);
+  if: (nil != futureId) then: { futureId.id } else: { "" };
+};
+
 def makeFuture(timeout := nil, receiver := nil) {
 	// futures are empty objects mirrored by a future mirror
 	// note that the future mirror is implicitly instantiated for each new future!
-	def future := object: { nil } taggedAs: [ Future ] mirroredBy: FutureMirror;
+	def future := object: { nil } taggedAs: [ Future, FutureId(""+rng.nextLong()) ] mirroredBy: FutureMirror;
   constructResolverFor(future, timeout, receiver);
 };
 
 def constructResolverFor(future, timeout := nil, receiver := nil) {
-	def resolver := isolate: { |future|
-		def resolve(val) { future<-resolveWithValue(val)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
-		def ruin(exc) { future<-ruinWithException(exc)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage]; };
+  def futureId := getTraceId(future);
+	def resolver := isolate: { |future,futureId|
+		def resolve(val) { future<-resolveWithValue(val)@[
+		  /.at.lang.firstclassrefs.MetaMessage,
+		  /.at.lang.futures.OneWayMessage,
+		  /.at.support.tracer.TraceResolved(futureId)
+		]; };
+		def ruin(exc) { future<-ruinWithException(exc)@[
+		  /.at.lang.firstclassrefs.MetaMessage,
+		  /.at.lang.futures.OneWayMessage,
+		  /.at.support.tracer.TraceRuined(futureId,exc)
+		]; };
 	};
 
 	// has the future been annotated with a timeout?
@@ -311,16 +332,25 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 		// which can be leased or not depending on the futureMaker
     def sendTo(receiver, sender) {
 	    def [future, resolver] := futureMaker(receiver);
+      def futureId := /.at.lang.futures.getTraceId(future);
       // extend the original message (this object's parent)
-	    def msgWithFuture := extend: super with: { |future|
+	    def msgWithFuture := extend: super with: { |future,futureId|
 		    // the process method is invoked when an async message arrives
 			  def process(behaviour) {
+					def msg := self;
 					try: {
 						// delegate to parent to actually invoke the method
 						def result := super^process(behaviour);
 						// if everything goes right, resolve the attached future
 						// replace the placeholder symbol with the actual result
-						future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+						future<-resolveWithValue(result)@[
+						  /.at.lang.firstclassrefs.MetaMessage,
+						  /.at.lang.futures.OneWayMessage,
+						  /.at.support.tracer.TraceResolved(futureId, object:{
+						    def receiver := behaviour;
+						    def message := msg;
+						  } taggedAs: [/.at.types.Letter])
+						];
 						result;
 
 				  // note that we need to qualify the full path to the Exception type:
@@ -330,7 +360,11 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 						// ignore the exception since the TimeoutException would have been already raised at sender side. 
 					} catch: /.at.types.Exception using: { |e|
 						try: { 
-					    future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+					    future<-ruinWithException(e)@[
+					      /.at.lang.firstclassrefs.MetaMessage,
+					      /.at.lang.futures.OneWayMessage,
+					      /.at.support.tracer.TraceRuined(futureId, e)
+					    ];
 						} catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e1|
 							// attempt to send a ruinWithException message via an expired single-call lease (attached to the future).
 							// ignore the exception since the TimeoutException would have been already raised at sender side. 
@@ -364,8 +398,9 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 // extend a regular asynchronous message with a future that will be
 // reused upon each message send
 def futurize(msg, future, type := FutureMessage) {
+  def futureId := getTraceId(future);
 	// extend default message with FutureMessage behaviour
-	extend: msg with: { |future|
+	extend: msg with: { |future,futureId|
    
     // return value of the message send is the associated future
     def sendTo(@args) {
@@ -389,13 +424,21 @@ def futurize(msg, future, type := FutureMessage) {
 
     // the process method is invoked when an async message arrives
 	  def process(behaviour) {
+	    def msg := self;
 			try: {
 				// delegate to parent to actually invoke the method
 				def result := super^process(behaviour);
 				
 				// if everything goes right, resolve the attached future
 				// replace the placeholder symbol with the actual result
-				future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+				future<-resolveWithValue(result)@[
+				  /.at.lang.firstclassrefs.MetaMessage,
+				  /.at.lang.futures.OneWayMessage,
+				  /.at.support.tracer.TraceResolved(futureId, object:{
+				    def receiver := behaviour;
+				    def message := msg;
+				  } taggedAs: [/.at.types.Letter])
+				];
 				
 				result;
 
@@ -406,7 +449,11 @@ def futurize(msg, future, type := FutureMessage) {
 				// ignore the exception since the TimeoutException would have been already raised at sender side. 
 			} catch: /.at.types.Exception using: { |e|
 				try:{
-					future<-ruinWithException(e)@[/.at.lang.firstclassrefs.MetaMessage, /.at.lang.futures.OneWayMessage];
+					future<-ruinWithException(e)@[
+					  /.at.lang.firstclassrefs.MetaMessage,
+					  /.at.lang.futures.OneWayMessage,
+					  /.at.support.tracer.TraceRuined(futureId,e)
+					];
 				} catch: /.at.lang.leasedrefs.ExpiredLease using: { |e1|
 					// attempt to send a ruinWithException message via an expired single-call lease (attached to the future).
 					// ignore the exception since the TimeoutException would have been already raised at sender side. 
@@ -502,7 +549,17 @@ def FuturesModule := object: {
 		if: !(is: future taggedAs: Future) then: {
 			raise: /.at.exceptions.XIllegalOperation.new("when:becomes: on non-future value: " + future + (reflect: future).listFields);
 		} else: {
+  		def whenId := "whenId:"+rng.nextLong();
 			future<-addResolutionListener(object: {
+			  // for generating a correct Causeway tracelog:
+			  def traceAs(log, type, args) {
+			    deftype Letter;
+			    def letter := object: {
+			      def receiver := (type == "resolved").ifTrue: { resolvedBlock } ifFalse: { excBlock };
+			      def message := .apply(args);
+			    } taggedAs: [ Letter ];
+			    log.got(whenId, letter);
+			  };
 				def notifyResolved(val) { notify(resolvedBlock, val); };
 				def notifyRuined(exc) {
 					if: (is: exc taggedAs: excType) then: {
@@ -513,7 +570,7 @@ def FuturesModule := object: {
 				};
 			// note that <-addResolutionListener is a message directed to the future's mirror
 			// and that no future return value is required
-			})@[MetaMessage, OneWayMessage];	
+			})@[MetaMessage, OneWayMessage, /.at.support.tracer.TraceRegisterWhen(whenId, getTraceId(future))];
 		};
 		whenFuture; // when returns a future itself
 	};
@@ -612,6 +669,8 @@ def FuturesModule := object: {
 
   // type that identifies this language module
   deftype FuturesModule;
+
+  def getTraceId := &getTraceId;
 
   def futurize := &futurize;
 

@@ -73,7 +73,8 @@ def CausewayTest := extend: /.at.unit.test.UnitTest.new("TracingTest") with: {
 				};
 			};
 
-			when: remote<-m()@FutureMessage becomes: {|v|
+      def fut := remote<-m()@FutureMessage;
+			when: fut becomes: {|v|
 				system.println("got "+v);
 				system.println("closed "+Tracer.close());
 				r1<-resolve(`ok);

@@ -33,7 +33,6 @@
  */
 
 def XIllegalOperation := /.at.exceptions.XIllegalOperation;
-
 def Vector := /.at.collections.vector.Vector;
 
 def FirstClassRefModule := object: {
@@ -79,7 +78,7 @@ def FirstClassRefModule := object: {
 		
 		def receive(msg) {
 			if: (is: msg taggedAs: MetaMessage) then: {
-				self.metaIntercept(msg); 
+				self.metaIntercept(msg);
 		  } else: {
 			  self.intercept(msg); // provided by composite
 		  }
@@ -93,7 +92,7 @@ def FirstClassRefModule := object: {
 				self <+ msg; // process meta-message myself
 			} else: {
 				self.delegate <+ msg;// forward meta-message if not understood
-			  //self.delegate<-receive(msg)@MetaMessage; 
+        // self.delegate<-receive(msg)@[MetaMessage,/.at.support.tracer.NoTrace]; // forward meta-message if not understood
 			}
 		};
 		

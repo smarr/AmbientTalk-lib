@@ -47,16 +47,12 @@
  * tracer module is already activated and it is loaded with a
  * different actor name, an IllegalOperation will be raised.
  *
- * TODO:
- *  - add support for an @Trace annotation on messages that enables the message
- *    itself to control how it is traced. The annotation is available, but
- *    futures don't yet make use of it.
- *
  * @author tvcutsem
  */
 
 def Tracer := jlobby.edu.vub.at.trace.Tracer;
 def TurnCounter := jlobby.edu.vub.at.trace.TurnCounter;
+def InterpreterException := jlobby.edu.vub.at.exceptions.InterpreterException;
 
 import /.at.support.symbiosis;
 import /.at.lang.dynvars;
@@ -80,7 +76,7 @@ deftype TracerModule;
 deftype Trace;
 
 // Usage: <-msg(args)@TraceAs(isolate: {
-//	def traceReceived(rcvr, msg, log) { ... };
+//	def traceReceived(letter, log) { ... };
 //  def traceSent(rcvr, msg, log) { ... };
 // })
 def TraceAs(controller) {
@@ -106,6 +102,7 @@ def makeTraceLog(forName, outputPath := nil) {
 	// filter out stack frames related to the tracer or the dynvars module
 	log.filter("tracer.at");
 	log.filter("dynvars.at");
+	log.filter("futures.at");
 	
 	object: {
 
@@ -167,18 +164,20 @@ def makeTraceLog(forName, outputPath := nil) {
 
 	 /**
 	  * Logs fulfillment of a promise.
-	  * @param condition condition identifier
+	  * @param futureId future identifier
+	  * @param fromLetter an optional letter indicating the message that lead to this result
 	  */
-	 def fulfilled(condition) { log.fulfilled(condition); };
+	 def fulfilled(futureId, fromLetter) { log.fulfilled(futureId, fromLetter); };
 
 	 /**
 	  * Logs rejection of a promise.
-	  * @param condition condition identifier
+	  * @param futureId future identifier	  
 	  * @param reason an ATException
+	  * @param fromLetter an optional letter indicating the message that lead to this result
 	  */
-	 def rejected(condition, reason) {
-	     log.rejected(condition, InterpreterException.forType((tagsOf: reason)[1]),
-			                                                      reason.message);
+	 def rejected(futureId, reason, fromLetter) {
+	     log.rejected(futureId, InterpreterException.forType((tagsOf: reason)[1],
+			                                                      reason.message), fromLetter);
 	 };
 
 	 /**
@@ -192,135 +191,212 @@ def makeTraceLog(forName, outputPath := nil) {
 };
 
 // the public interface of this module
-// parameters:
-//  @actorName a human-readable name for this actor/event loop
-//  @outputPath a directory path to which the logfile will be written
-//
-// if outputPath is nil, the outputfile will be written to the directory
-// from which AmbientTalk was launched.
-// The outputfile will be named 'actorName.json'
-def TraceModule(actorName, outputPath := nil) {
-	// first, check whether the module has already been activated in this actor
-	def actor := reflectOnActor();
-	if: (is: actor taggedAs: TracerModule) then: {
-		// if the tracer was already activated under the same name, then
-		// this module activation simply returns the already active tracing module
-		if: (actor.traceName() == actorName) then: {
-			actor.traceModule();
-		} else: {
-			// there is already a tracer module active in this actor under
-			// another name, signal an error:
-			raise: /.at.exceptions.XIllegalOperation.new(
-				"Tracer module already active under another name: "+actor.traceName());
-		}
-	} else: {
+def TraceModule := object: {
+  
+  // to instantiate a tracer, call this module as if it were a function
+  // parameters:
+  //  @actorName a human-readable name for this actor/event loop
+  //  @outputPath a directory path to which the logfile will be written
+  //
+  // if outputPath is nil, the outputfile will be written to the directory
+  // from which AmbientTalk was launched.
+  // The outputfile will be named 'actorName.json'
+  // if this module is used as an accessor, return the module object, otherwise invoke its run method
+  def apply(args) { if: (args.length == 0) then: { self } else: { self.run(@args) } };
+  def run(actorName, outputPath := nil) {
+  	// first, check whether the module has already been activated in this actor
+  	def actor := reflectOnActor();
+  	if: (is: actor taggedAs: TracerModule) then: {
+  		// if the tracer was already activated under the same name, then
+  		// this module activation simply returns the already active tracing module
+  		if: (actor.traceName() == actorName) then: {
+  			actor.traceModule();
+  		} else: {
+  			// there is already a tracer module active in this actor under
+  			// another name, signal an error:
+  			raise: /.at.exceptions.XIllegalOperation.new(
+  				"Tracer module already active under another name: "+actor.traceName());
+  		}
+  	} else: {
 		
-		// create a new tracelog
-		def traceLog := makeTraceLog(actorName, outputPath);
+  		// create a new tracelog
+  		def traceLog := makeTraceLog(actorName, outputPath);
 		
-		// install a custom actor mirror that counts its turns
-		actor.becomeMirroredBy: (extend: actor with: {
-			def traceName() { actorName };
-			def traceModule() { traceModule };
+  		// install a custom actor mirror that counts its turns
+  		actor.becomeMirroredBy: (extend: actor with: {
+  			def traceName() { actorName };
+  			def traceModule() { traceModule };
 
-			def serve() {
-				traceLog.flip(); // increments the turn counter and resets the anchor counter
+  			def serve() {
+  				traceLog.flip(); // increments the turn counter and resets the anchor counter
 				
-				def log := ?dTracelog;
-				if: !(log == sink) then: {
-		        def inbox := self.listIncomingLetters();
-				    if: (inbox.length > 0) then: {
-					    // last message in inbox = oldest message (first scheduled)
-					    def ltr := inbox[inbox.length];					
-						  def msg := ltr.message;				  
-						  if: (is: msg taggedAs: Trace) then: {
-							  def ann := /.at.support.util.getAnnotationOfType(msg, Trace);
-							  // let the annotation's trace function decide how to trace this message
-							  ann.controller.traceReceived(ltr.receiver, msg, log);
-						  } else: {
-							  def traceId := (reflect: msg).respondsTo(`traceId).
-							                   ifTrue: { msg.traceId } ifFalse: { "" };
-							  log.got(traceId, ltr);		
-						  };
-						};
-				};	
-				super^serve();
-			};
+  				def log := ?dTracelog;
+  				if: !(log == sink) then: {
+  		        def inbox := self.listIncomingLetters();
+  				    if: (inbox.length > 0) then: {
+  					    // last message in inbox = oldest message (first scheduled)
+  					    def ltr := inbox[inbox.length];					
+  						  def msg := ltr.message;				  
+  						  if: (is: msg taggedAs: Trace) then: {
+  							  def ann := /.at.support.util.getAnnotationOfType(msg, Trace);
+  							  // let the annotation's trace function decide how to trace this message
+  							  ann.controller.traceReceived(ltr, log);
+  						  } else: {
+						      def traceId := (reflect: msg).respondsTo(`traceId).
+  							                   ifTrue: { msg.traceId } ifFalse: { "" };
+  							  log.got(traceId, ltr);	
+  						  };
+  						};
+  				};	
+  				super^serve();
+  			};
 
-			// this method is invoked for each outgoing async message send
-			def send(rcvr, msg) {
-				def log := ?dTracelog;
-				if: !(log == sink) then: {
-					if: (is: msg taggedAs: Trace) then: {
-					  def ann := /.at.support.util.getAnnotationOfType(msg, Trace);
-					  // let the annotation's trace function decide how to trace this message
-					  ann.controller.traceSent(rcvr, msg, log);
-				  } else: {
-						def id := generateId(actorName, msg);
-						if: (reflect: msg).respondsTo(`traceId) then: {
-							msg.traceId := id; // this message was sent&traced before, update the traceId value
-						} else: {
-							def msg.traceId := id; // adds a traceId slot to the message
-						};
-						log.sent(id);
-					}
-				};
-				super^send(rcvr, msg);
-			};
+  			// this method is invoked for each outgoing async message send
+  			def send(rcvr, msg) {
+  				def log := ?dTracelog;
+  				if: !(log == sink) then: {
+  					if: (is: msg taggedAs: Trace) then: {
+  					  def ann := /.at.support.util.getAnnotationOfType(msg, Trace);
+  					  // let the annotation's trace function decide how to trace this message
+  					  ann.controller.traceSent(rcvr, msg, log);
+  				  } else: {
+  						def id := generateId(actorName, msg);
+  						if: (reflect: msg).respondsTo(`traceId) then: {
+  							msg.traceId := id; // this message was sent&traced before, update the traceId value
+  						} else: {
+  							def msg.traceId := id; // adds a traceId slot to the message
+  						};
+  						log.sent(id);
+  					}
+  				};
+  				super^send(rcvr, msg);
+  			};
 
-	    // I tried using the following meta-methods, but they were unsuitable:
+  	    // I tried using the following meta-methods, but they were unsuitable:
 
-			// this method is invoked for all local and non-local async message sends
-			// however, for local message sends it is still invoked in the sender's turn!
-			// def schedule(rcvr, msg) {};
+  			// this method is invoked for all local and non-local async message sends
+  			// however, for local message sends it is still invoked in the sender's turn!
+  			// def schedule(rcvr, msg) {};
 
-			// this method is invoked only for non-local async message sends
-			// moreover, when executed, the turn counter was not yet incremented,
-			// so the 'got' event pertaining to this message != the 'sent' events
-			// sent during the same turn
-			//def receive(rcvr, msg) {};
+  			// this method is invoked only for non-local async message sends
+  			// moreover, when executed, the turn counter was not yet incremented,
+  			// so the 'got' event pertaining to this message != the 'sent' events
+  			// sent during the same turn
+  			//def receive(rcvr, msg) {};
 			
-		} taggedAs: [TracerModule]);
+  		} taggedAs: [TracerModule]);
 		
-		actor := nil; // drop reference to current actor
+  		actor := nil; // drop reference to current actor
 		
-		def traceModule := object: {
-			def trace: code {
-				with: dTracelog is: traceLog do: code;
-			};
+  		def traceModule := object: {
+  			def trace: code {
+  				with: dTracelog is: traceLog do: code;
+  			};
 
-			// explicit override if desired
-			def traceOn() { dTracelog.value := traceLog; self };
-			def traceOff() { dTracelog.value := sink; self };
-
-      // enable messages to have control over how they are traced
-      def TraceAs := &TraceAs;
+  			// explicit override if desired
+  			def traceOn() { dTracelog.value := traceLog; self };
+  			def traceOff() { dTracelog.value := sink; self };
       
-      // properly close down the log file
-			def close() {
-				dTracelog.value := sink;
-				def log := traceLog;
-				traceLog := sink;
-				log.close();
-			};
+        // properly close down the log file
+  			def close() {
+  				dTracelog.value := sink;
+  				def log := traceLog;
+  				traceLog := sink;
+  				log.close();
+  			};
 
-			// enables filtering out of certain stack traces
-			// names should be a table of strings denoting .at files, e.g. 'foo.at'
-			def filter(@names) { traceLog.filter(@names) };
+  			// enables filtering out of certain stack traces
+  			// names should be a table of strings denoting .at files, e.g. 'foo.at'
+  			def filter(@names) { traceLog.filter(@names) };
 
-			// explicit logging if required
-			def comment(text) { ?(dTracelog).comment(text) };
-	    def problem(reason) { ?(dTracelog).problem(reason) };
-	    def got(msgId, letter) { ?(dTracelog).got(msgId, letter) };
-	    def sent(msgId) { ?(dTracelog).sent(msgId) };
-	    def returned(msgId) { ?(dTracelog).returned(msgId); };
-	    def sentIf(msgId, condition) { ?(dTracelog).sentIf(msgId, condition); };
-	    def resolved(condition) { ?(dTracelog).resolved(condition) };
-	    def fulfilled(condition) { ?(dTracelog).fulfilled(condition); };
-	    def rejected(condition, reason) { ?(dTracelog).rejected(condition, reason) };
-	    def progressed(condition) { ?(dTracelog).progressed(condition); };
+  			// explicit logging if required
+  			def comment(text) { ?(dTracelog).comment(text) };
+  	    def problem(reason) { ?(dTracelog).problem(reason) };
+  	    def got(msgId, letter) { ?(dTracelog).got(msgId, letter) };
+  	    def sent(msgId) { ?(dTracelog).sent(msgId) };
+  	    def returned(msgId) { ?(dTracelog).returned(msgId); };
+  	    def sentIf(msgId, condition) { ?(dTracelog).sentIf(msgId, condition); };
+  	    def resolved(condition) { ?(dTracelog).resolved(condition) };
+  	    def fulfilled(condition, fromLetter) { ?(dTracelog).fulfilled(condition, fromLetter); };
+  	    def rejected(condition, reason, fromLetter) { ?(dTracelog).rejected(condition, reason, fromLetter) };
+  	    def progressed(condition) { ?(dTracelog).progressed(condition); };
 
-		};
-	};
+  		};
+  	}; // end else
+  }; // end apply
 	
-};
+	// enable messages to have control over how they are traced
+  def TraceAs := &TraceAs;
+  
+  // suppress logging for a message
+  def NoTrace := TraceAs(isolate: {
+    def traceReceived(letter, log) {};
+    def traceSent(rcvr, msg, log) {};
+  });
+  
+  // for 'notifyResolved' or 'notifyRuined' messages
+  // that will trigger a when: observer
+  def TraceNotifyResolved := TraceAs(isolate: {
+    def traceReceived(letter, log) {
+      letter.receiver.traceAs(log, "resolved", letter.message.arguments);
+    };
+    def traceSent(rcvr, msg, log) {};
+  });
+  def TraceNotifyRuined := TraceAs(isolate: {
+    def traceReceived(letter, log) {
+      letter.receiver.traceAs(log, "ruined", letter.message.arguments);
+    };
+    def traceSent(rcvr, msg, log) {};
+  });
+  
+  // for 'addResolutionListener' messages sent to a future
+  def TraceRegisterWhen(whenId, futureId) {
+    TraceAs(isolate: { |whenId,futureId|
+      def done := false;
+      def traceReceived(letter, log) {};
+      def traceSent(rcvr, msg, log) {
+        if: !done then: {
+          done := true;
+          log.sentIf(whenId, futureId);
+        }
+      };
+    });
+  };
+  
+  // fromLetter can be used to parameterize these annotations with the method
+  // from which the result was derived -> allows us to generate
+  // at least some useful position information
+  // e.g. use source of last expression in the method's body
+  // (not entirely accurate in case of escaping cont's, but close enough)
+  
+  // for 'resolveWithValue' or 'ruinWithException' messages
+  // sent to futures
+  def TraceResolved(futureId, fromLetter := nil) {
+    TraceAs(isolate: { |futureId, fromLetter|
+      def done := false;
+      def traceReceived(letter, log) { log.resolved(futureId) };
+		  def traceSent(rcvr, msg, log) {
+		    if: !done then: {
+          done := true;
+          log.fulfilled(futureId, fromLetter);
+          fromLetter := nil;
+        }
+      }
+    })
+  };
+  def TraceRuined(futureId, exc, fromLetter := nil) {
+    TraceAs(isolate: { |futureId, exc, fromLetter|
+      def done := false;
+      def traceReceived(letter, log) { log.resolved(futureId) };
+		  def traceSent(rcvr, msg, log) {
+		    if: !done then: {
+          done := true;
+  		    log.rejected(futureId, exc, fromLetter);
+  		    exc := nil;
+  		    fromLetter := nil;
+        }
+		  };
+    })
+  };
+	
+} taggedAs: [/.at.types.Closure]; // end TraceModule
