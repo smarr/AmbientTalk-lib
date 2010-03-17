@@ -1,0 +1,257 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2007
+ * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+/*
+ * Event-driven set of isolates abstraction of which the contents
+ * can be intensionally described.
+ *
+ * @author alombide
+ */
+
+def VolatileSetsModule := object: {
+
+def volatileSetOf: type where: setCondition {
+	def createSet(theType, theCondition) {
+		object: {
+			def contents := [];
+	
+			def type() { theType };
+			def condition() { theCondition };
+			def snapshot() { contents };
+	
+			def listeners := [];
+			def addListener(listener) {
+				listeners := listeners + [ listener ];
+			};
+			def removeListener(listener) {
+				listeners := listeners.filter: { |l| l != listener };
+			};
+			
+			def intersection: otherSet {
+				def myCondition := condition();
+				def newSet := createSet(
+					theType, 
+					{ |el| myCondition(el).and: { otherSet.condition()(el) }});
+				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				newSet;
+			};
+			
+			def union: otherSet {
+				def myCondition := condition();
+				def newSet := createSet(
+					theType, 
+					{ |el| myCondition(el).or: { otherSet.condition()(el) }});
+				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				newSet;
+			};
+			
+			def complement: otherSet {
+				def myCondition := condition();
+				def newSet := createSet(
+					theType,
+					{ |el| myCondition(el).and: { !(otherSet.condition()(el)) }});
+				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				newSet;
+			};
+			
+			def negate() {
+				def myCondition := condition();
+				def newSet := createSet(
+					theType,
+					{ |el| !myCondition(el) });
+				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				newSet;
+			};
+			
+	
+			def notifyDiscovered(obj) {
+				if: condition()(obj) then: {
+					contents := contents + [ obj ];
+					listeners.each: { |l| l.objectAdded(obj); };
+				}
+			};
+		
+			def notifyDisconnected(obj) {
+				contents := contents.filter: { |c| c != obj };
+				listeners.each: { |l| l.objectRemoved(obj); };
+			};
+		
+			def notifyReconnected(obj) {
+				if: condition()(obj) then: {
+					contents := contents + [ obj ];
+					listeners.each: { |l| l.objectAdded(obj); };
+				}
+			};
+		
+			def notifyChanged(obj) {
+				//system.println("CHANGED: " + obj);
+				if: condition()(obj) then: {
+					contents := contents + [ obj ];
+					listeners.each: { |l| l.objectAdded(obj); };
+				} else: {
+					contents := contents.filter: { |c| c != obj };
+					listeners.each: { |l| l.objectRemoved(obj); };
+				};
+			};	
+		};
+	};
+	
+	def volatileSet := createSet(type, setCondition);
+	/.at.lang.syncIsolates.subscribe: volatileSet to: type;
+	volatileSet;
+};
+
+def VolatileSetsTest() {
+    extend: /.at.unit.test.UnitTest.new("Volatile sets test", false) with: {
+	
+		def testAsyncSetElements() {
+			def publisher := actor: {
+				import /.at.lang.syncIsolates;
+				deftype TestType;
+				def iso1 := syncIsolate: { def id := "iso1"; def category := 1; };
+				def iso2 := syncIsolate: { def id := "iso2"; def category := 1; };
+				def iso3 := syncIsolate: { def id := "iso3"; def category := 2; };
+				def iso4 := syncIsolate: { def id := "iso4"; def category := 1; };
+				
+				publish: iso1 as: TestType;
+				publish: iso2 as: TestType;
+				publish: iso3 as: TestType;
+				
+				def changeCategoryOfIso3() {
+					iso3.category := 1;
+				};
+				def publishIso4() {
+					publish: iso4 as: TestType;
+				};
+				def changeCategoryOfIso1() {
+					iso1.category := 2;
+				};
+			};
+			
+			def objectsAdded := [];
+			def objectsRemoved := [];
+			def listener := object: {
+				def objectAdded(obj) {
+					objectsAdded := objectsAdded + [ obj ];
+				};
+				def objectRemoved(obj) {
+					objectsRemoved := objectsRemoved.filter: { |c| c != obj };
+				};
+			};
+			
+			deftype TestType;
+			def volatileSet := volatileSetOf: TestType where: { |el| el.category == 1 };
+			volatileSet.addListener(listener);
+			
+			def volatileSet2 := volatileSetOf: TestType where: { |el| (el.id == "iso1").or: { el.id == "iso2" } };
+			
+			def timer := /.at.support.timer;
+			timer.when: timer.seconds(5) elapsedWithFuture: {
+				def contents := volatileSet.snapshot();
+				self.assertTrue(contents.length == 2);
+				self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
+				self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
+				self.assertFalse((objectsAdded.find: { |el| el.id == "iso1" }) == nil);
+				self.assertFalse((objectsAdded.find: { |el| el.id == "iso2" }) == nil);
+				
+				objectsAdded := [];
+				publisher<-changeCategoryOfIso3();
+				timer.when: timer.seconds(5) elapsedWithFuture: {
+					def contents := volatileSet.snapshot();
+					self.assertTrue(contents.length == 3);
+					self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
+					self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
+					self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
+					self.assertFalse((objectsAdded.find: { |el| el.id == "iso3" }) == nil);
+					
+					objectsAdded := [];
+					publisher<-publishIso4();
+					timer.when: timer.seconds(5) elapsedWithFuture: {
+						def contents := volatileSet.snapshot();
+						self.assertTrue(contents.length == 4);
+						self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
+						self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
+						self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
+						self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);
+						self.assertFalse((objectsAdded.find: { |el| el.id == "iso4" }) == nil);
+						
+						publisher<-changeCategoryOfIso1();
+						timer.when: timer.seconds(5) elapsedWithFuture: {
+							def contents := volatileSet.snapshot();
+							system.println(contents.length);
+							self.assertTrue(contents.length == 3);
+							self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
+							self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
+							self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);
+							self.assertFalse((objectsRemoved.find: { |el| el.id == "iso1" }) == nil);
+							
+							def union := volatileSet.union: volatileSet2;
+							timer.when: timer.seconds(5) elapsedWithFuture: {
+								def contents := union.snapshot();
+								system.println(contents.length);
+								self.assertTrue(contents.length == 4);
+								self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
+								self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
+								self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
+								self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);
+								
+								def intersection := volatileSet.intersection: volatileSet2;
+								timer.when: timer.seconds(5) elapsedWithFuture: {
+									def contents := intersection.snapshot();
+									system.println(contents.length);
+									self.assertTrue(contents.length == 2);
+									self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
+									self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
+									
+									def complement := volatileSet.complement: volatileSet2;
+									timer.when: timer.seconds(5) elapsedWithFuture: {
+										def contents := complement.snapshot();
+										system.println(contents.length);
+										self.assertTrue(contents.length == 2);
+										self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
+										self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);
+										
+										def negation := volatileSet2.negate();
+										timer.when: timer.seconds(5) elapsedWithFuture: {
+											def contents := negation.snapshot();
+											system.println(contents.length);
+											self.assertTrue(contents.length == 2);
+											self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
+											self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);
+										};
+									};
+								};
+							};
+						};
+					};
+				};
+			};
+		};
+	};
+};
+
+};
