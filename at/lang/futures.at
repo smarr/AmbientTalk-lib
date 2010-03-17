@@ -96,8 +96,9 @@ def FutureMirror := mirror: {
 		if: !(self == value) then: {
 			// is the future resolved by another future?
 			if: (is: value taggedAs: Future) then: {
-				// register this future as a listener with the resolved future value
+				// register this future as a listener with the resolved future value        
 				value<-addResolutionListener(object: {
+				  def traceAs(log, type, args) { }; // this message is not traced
 					def notifyResolved(val) {
 						// re-resolve this future with the actual value
 						resolveWithValue(val);
