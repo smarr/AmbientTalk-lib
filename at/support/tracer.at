@@ -76,7 +76,7 @@ deftype TracerModule;
 deftype Trace;
 
 // Usage: <-msg(args)@TraceAs(isolate: {
-//	def traceReceived(letter, log) { ... };
+//	def traceReceived(rcvr, msg, log) { ... };
 //  def traceSent(rcvr, msg, log) { ... };
 // })
 def TraceAs(controller) {
@@ -99,10 +99,10 @@ def makeTraceLog(forName, outputPath := nil) {
 	def turnCounter := TurnCounter.make(forName);
 	def log := Tracer.new(output, turnCounter.mark);
 	
-	// filter out stack frames related to the tracer or the dynvars module
-	log.filter("tracer.at");
-	log.filter("dynvars.at");
-	log.filter("futures.at");
+	// filter out stack frames related to the following modules
+	log.filter("at/support/tracer.at");
+	log.filter("at/lang/dynvars.at");
+	log.filter("at/lang/futures.at");
 	
 	object: {
 
@@ -165,19 +165,21 @@ def makeTraceLog(forName, outputPath := nil) {
 	 /**
 	  * Logs fulfillment of a promise.
 	  * @param futureId future identifier
-	  * @param fromLetter an optional letter indicating the message that lead to this result
+	  * @param fromReceiver optional receiver that fulfilled the message
+	  * @param fromMessage optional message that got fulfilled
 	  */
-	 def fulfilled(futureId, fromLetter) { log.fulfilled(futureId, fromLetter); };
+	 def fulfilled(futureId, fromReceiver, fromMessage) { log.fulfilled(futureId, fromReceiver, fromMessage); };
 
 	 /**
 	  * Logs rejection of a promise.
 	  * @param futureId future identifier	  
 	  * @param reason an ATException
-	  * @param fromLetter an optional letter indicating the message that lead to this result
+	  * @param fromReceiver optional receiver that rejected the message
+	  * @param fromMessage optional message that got rejected
 	  */
-	 def rejected(futureId, reason, fromLetter) {
+	 def rejected(futureId, reason, fromReceiver, fromMessage) {
 	     log.rejected(futureId, InterpreterException.forType((tagsOf: reason)[1],
-			                                                      reason.message), fromLetter);
+			                                                      reason.message), fromReceiver, fromMessage);
 	 };
 
 	 /**
@@ -240,7 +242,7 @@ def TraceModule := object: {
   						  if: (is: msg taggedAs: Trace) then: {
   							  def ann := /.at.support.util.getAnnotationOfType(msg, Trace);
   							  // let the annotation's trace function decide how to trace this message
-  							  ann.controller.traceReceived(ltr, log);
+  							  ann.controller.traceReceived(ltr.receiver, msg, log);
   						  } else: {
 						      def traceId := (reflect: msg).respondsTo(`traceId).
   							                   ifTrue: { msg.traceId } ifFalse: { "" };
@@ -317,8 +319,8 @@ def TraceModule := object: {
   	    def returned(msgId) { ?(dTracelog).returned(msgId); };
   	    def sentIf(msgId, condition) { ?(dTracelog).sentIf(msgId, condition); };
   	    def resolved(condition) { ?(dTracelog).resolved(condition) };
-  	    def fulfilled(condition, fromLetter) { ?(dTracelog).fulfilled(condition, fromLetter); };
-  	    def rejected(condition, reason, fromLetter) { ?(dTracelog).rejected(condition, reason, fromLetter) };
+  	    def fulfilled(condition, fromReceiver, fromMessage) { ?(dTracelog).fulfilled(condition, fromReceiver, fromMessage); };
+  	    def rejected(condition, reason, fromReceiver, fromMessage) { ?(dTracelog).rejected(condition, reason, fromReceiver, fromMessage) };
   	    def progressed(condition) { ?(dTracelog).progressed(condition); };
 
   		};
@@ -330,21 +332,21 @@ def TraceModule := object: {
   
   // suppress logging for a message
   def NoTrace := TraceAs(isolate: {
-    def traceReceived(letter, log) {};
+    def traceReceived(rcvr, msg, log) {};
     def traceSent(rcvr, msg, log) {};
   });
   
   // for 'notifyResolved' or 'notifyRuined' messages
   // that will trigger a when: observer
   def TraceNotifyResolved := TraceAs(isolate: {
-    def traceReceived(letter, log) {
-      letter.receiver.traceAs(log, "resolved", letter.message.arguments);
+    def traceReceived(rcvr, msg, log) {
+      rcvr.traceAs(log, "resolved", msg.arguments);
     };
     def traceSent(rcvr, msg, log) {};
   });
   def TraceNotifyRuined := TraceAs(isolate: {
-    def traceReceived(letter, log) {
-      letter.receiver.traceAs(log, "ruined", letter.message.arguments);
+    def traceReceived(rcvr, msg, log) {
+      rcvr.traceAs(log, "ruined", msg.arguments);
     };
     def traceSent(rcvr, msg, log) {};
   });
@@ -353,7 +355,7 @@ def TraceModule := object: {
   def TraceRegisterWhen(whenId, futureId) {
     TraceAs(isolate: { |whenId,futureId|
       def done := false;
-      def traceReceived(letter, log) {};
+      def traceReceived(rcvr, msg, log) {};
       def traceSent(rcvr, msg, log) {
         if: !done then: {
           done := true;
@@ -371,29 +373,31 @@ def TraceModule := object: {
   
   // for 'resolveWithValue' or 'ruinWithException' messages
   // sent to futures
-  def TraceResolved(futureId, fromLetter := nil) {
-    TraceAs(isolate: { |futureId, fromLetter|
+  def TraceResolved(futureId, receiver := nil, message := nil) {
+    TraceAs(isolate: { |futureId, receiver, message|
       def done := false;
-      def traceReceived(letter, log) { log.resolved(futureId) };
+      def traceReceived(rcvr, msg, log) { log.resolved(futureId) };
 		  def traceSent(rcvr, msg, log) {
 		    if: !done then: {
           done := true;
-          log.fulfilled(futureId, fromLetter);
-          fromLetter := nil;
+          log.fulfilled(futureId, receiver, message);
+          receiver := nil;
+          message := nil;
         }
       }
     })
   };
-  def TraceRuined(futureId, exc, fromLetter := nil) {
-    TraceAs(isolate: { |futureId, exc, fromLetter|
+  def TraceRuined(futureId, exc, receiver := nil, message := nil) {
+    TraceAs(isolate: { |futureId, exc, receiver, message|
       def done := false;
-      def traceReceived(letter, log) { log.resolved(futureId) };
+      def traceReceived(rcvr, msg, log) { log.resolved(futureId) };
 		  def traceSent(rcvr, msg, log) {
 		    if: !done then: {
           done := true;
-  		    log.rejected(futureId, exc, fromLetter);
+  		    log.rejected(futureId, exc, receiver, message);
   		    exc := nil;
-  		    fromLetter := nil;
+  		    receiver := nil;
+  		    message := nil;
         }
 		  };
     })

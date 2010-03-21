@@ -289,7 +289,7 @@ def createCLWithSingleUseMirror(remoteLease, timeout := DEFAULT_LEASETIME, forSe
   };
 	// other MOP overriden methods
 	def newInstance(initargs){
-		makeClientLeaseWithSingleUse(remoteLease, getClientTags(tagsOf: self.base), timeout, forSelectors)
+		/.at.lang.leasedrefs.makeClientLeaseWithSingleUse(remoteLease, getClientTags(tagsOf: self.base), timeout, forSelectors)
 	};
  };
 }; // end createCLWithSingleUseMirror

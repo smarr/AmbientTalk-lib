@@ -347,10 +347,7 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 						future<-resolveWithValue(result)@[
 						  /.at.lang.firstclassrefs.MetaMessage,
 						  /.at.lang.futures.OneWayMessage,
-						  /.at.support.tracer.TraceResolved(futureId, object:{
-						    def receiver := behaviour;
-						    def message := msg;
-						  } taggedAs: [/.at.types.Letter])
+						  /.at.support.tracer.TraceResolved(futureId, behaviour, msg)
 						];
 						result;
 
@@ -364,7 +361,7 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 					    future<-ruinWithException(e)@[
 					      /.at.lang.firstclassrefs.MetaMessage,
 					      /.at.lang.futures.OneWayMessage,
-					      /.at.support.tracer.TraceRuined(futureId, e)
+					      /.at.support.tracer.TraceRuined(futureId, e, behaviour, msg)
 					    ];
 						} catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e1|
 							// attempt to send a ruinWithException message via an expired single-call lease (attached to the future).
@@ -435,10 +432,7 @@ def futurize(msg, future, type := FutureMessage) {
 				future<-resolveWithValue(result)@[
 				  /.at.lang.firstclassrefs.MetaMessage,
 				  /.at.lang.futures.OneWayMessage,
-				  /.at.support.tracer.TraceResolved(futureId, object:{
-				    def receiver := behaviour;
-				    def message := msg;
-				  } taggedAs: [/.at.types.Letter])
+				  /.at.support.tracer.TraceResolved(futureId, behaviour, msg)
 				];
 				
 				result;
@@ -453,7 +447,7 @@ def futurize(msg, future, type := FutureMessage) {
 					future<-ruinWithException(e)@[
 					  /.at.lang.firstclassrefs.MetaMessage,
 					  /.at.lang.futures.OneWayMessage,
-					  /.at.support.tracer.TraceRuined(futureId,e)
+					  /.at.support.tracer.TraceRuined(futureId,e, behaviour, msg)
 					];
 				} catch: /.at.lang.leasedrefs.ExpiredLease using: { |e1|
 					// attempt to send a ruinWithException message via an expired single-call lease (attached to the future).
