@@ -65,7 +65,6 @@ def ambientTupleSpace := object: {
 	 def contains(tupleId){
 	//	 hashMap.containsKey(tupleId);
 	   { |return|
-	      //def comparator := { |tid| (tid.getTupleId == tupleId.getTupleId).and: {tid.getTupleSpaceId == tupleId.getTupleSpaceId}};
 	      def comparator := { |tid| tid == tupleId};
 	      def keyit := hashMap.keySet().iterator();
 	      while: { keyit.hasNext() } do: {
@@ -78,7 +77,6 @@ def ambientTupleSpace := object: {
 
 	 def remove(tupleId){
 		// hashMap.remove(tupleId);
-		 //def comparator := { |tid| (tid.getTupleId == tupleId.getTupleId).and: {tid.getTupleSpaceId == tupleId.getTupleSpaceId}};
 		 def comparator := { |tid| tid == tupleId};
 		 def keyit := hashMap.keySet().iterator();
 		 def found := false;
@@ -203,7 +201,8 @@ def makeTupleSpace(descriptor := nil){
 			false;
 	  } else:{
 		  //only call inScope method if the tuple space had a descriptor
-		  if: (descriptor != nil) then: { tuple.inScope(descriptor)};
+		  if: (descriptor != nil) then: { tuple.inScope(descriptor)}
+		  else: {true};
 	  };
 	};
   
@@ -249,8 +248,7 @@ def makeTupleSpace(descriptor := nil){
 					// otherwise it would have died as well in other nodes.
 					if: ((is: ambientTuple taggedAs: LeasedTuple).and:{ambientTuple.decideDie(localInterface)}) then: { propagate := false};
 				  if: propagate then:{
-					  value.getTs.each:{ |tsRef| system.println("ts " + tupleSpaceId + "atomicRemovePrivate: propagating antituple to " + tsRef);
-					  tsRef<-receiveTuples([makeAntiTuple(ambientTuple)])};
+					  value.getTs.each:{ |tsRef| tsRef<-receiveTuples([makeAntiTuple(ambientTuple)])};
 				  };
 			  };
 		    result := true;
@@ -844,7 +842,14 @@ def TotamModule := object: {
 			self.assertNotEquals(nil, tuple);
 			self.assertEquals( tuple.getField(1), false);
       self.assertEquals( tuple.getField(3), false);
-			
+      //as tuple space doesn't have a descriptor
+      // an inject results in a add to the ts.
+      def name := "joan";
+      myTS.inject: (tuple: [name, "arnau"]);			
+      tuple := myTS.rdp(tuple:[var:`name, var:`y]);
+      self.assertNotEquals(nil, tuple);
+			self.assertEquals( tuple.getField(1), "joan");
+      self.assertEquals( tuple.getField(2), "arnau");
 		};
 		// tests behaviour of (when:whenever) reactions on read operation
 		def testAsyncLocalOutWhenRead(){
