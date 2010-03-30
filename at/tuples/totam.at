@@ -600,27 +600,51 @@ def makeTuple(tupleId, @fields) {
 		    index;
 	    }.escape();
 	  };
+	  def findAllSymbols(template, aSymbol){
+			def positions := []; def i := 1;
+		  while: { i <= template.length} do: {
+			  def field := template.getField(i);
+			  if: ((is: field taggedAs: /.at.types.Symbol).and: { field.getSymbol == aSymbol}) then: {
+				  positions := positions + [i];
+			  }; 
+			  i := i + 1;
+		  };
+		  positions;
+	  };
 	  def match(t1) {
+		  def result := true;
 		  if: (t1.length == self.length) then: {
-		 	  def it := 1;
-			  def result := true;
-			  fields.each: {|e2| 
+		 	  def it := 1; 
+			  while: { (it <= fields.length).and: { result} } do: { 
 				  def e1 := t1.getField(it); 
-				  result := result.and: { 
-					  if: ((is: e1 taggedAs: /.at.types.Symbol).or: { is: e2 taggedAs: /.at.types.Symbol}) then: {
-						  true;
-					  } else: { e1 == e2}; 
-					};
+				  def e2 := getField(it);
+					def symbolField := nil; def tuple := nil; def template := nil;
+					if: (is: e1 taggedAs: /.at.types.Symbol) then: { symbolField := e1.getSymbol; tuple := self; template := t1 };
+				  if: (is: e2 taggedAs: /.at.types.Symbol) then: { symbolField := e2.getSymbol; tuple := t1; template := self };
+					if: (symbolField != nil) then: {
+						def positions := findAllSymbols(template, symbolField);
+						if: (positions.length > 0) then: { // the field is a symbol which has several appearances in the temple,
+						  //all positions in the tuple should have the same value.
+						  def val := tuple.getField(positions[1]); 
+						  result := { |return|
+							  def sameValue := true;
+						    positions.each: { |p| sameValue := sameValue.and: {(tuple.getField(p)) == val}; if: (!sameValue) then: {return(false)}};
+						    true;
+						  }.escape();
+						} else: { // the field is symbol which is only once in the template, so it works like a wildcard.
+							result := true;
+						};
+					} else: {  // the field is a value
+						result := (e1 == e2); 
+					}; 
 				  it := it + 1; 
 			  };
-			  result;
-		  } else: {
-			  false;
-		  };
+		  } else: { result := false};
+		  result;
 	  };
 	  def toString(){   
 		  def content := fields.map:{ |e| 
-			  if: (is: e taggedAs: /.at.types.Symbol) then:{ e.symbol.text}
+			  if: (is: e taggedAs: /.at.types.Symbol) then:{ e.getSymbol.text}
 			  else: {e};
 			};
 			"<"+ tupleId.toString() + content + ">";
@@ -784,6 +808,7 @@ def TotamModule := object: {
 	// a variable is like a wildcard, "a hole" a tuple which always matches. 
 	def var: symbol {
 	  object: { |symbol|
+		  def getSymbol(){symbol};
 	  } taggedAs: [/.at.types.Isolate, /.at.types.Symbol];	
 	};
 
@@ -810,6 +835,16 @@ def TotamModule := object: {
 			self.assertEquals( tuple.getField(1), "elisa");
       self.assertEquals( tuple.getField(2), 3);
       self.assertEquals( tuple.getField(3), false);
+      //read a template with two variables.
+      def template2Vars := tuple: [var: `x, 3, var:`x];
+			tuple := myTS.rdp( template2Vars );
+			self.assertEquals(nil, tuple, "here");
+			myTS.out( tuple:[false, 3, false]);
+			tuple := myTS.rdp(template2Vars);
+			self.assertNotEquals(nil, tuple);
+			self.assertEquals( tuple.getField(1), false);
+      self.assertEquals( tuple.getField(3), false);
+			
 		};
 		// tests behaviour of (when:whenever) reactions on read operation
 		def testAsyncLocalOutWhenRead(){
@@ -1360,6 +1395,6 @@ def TotamModule := object: {
 				};
 		  };
 		  fut;
-		}; //end-testAsyncWhenInRemote
+		}; //end-testAsyncWhenInRemote 
 	};
 };
