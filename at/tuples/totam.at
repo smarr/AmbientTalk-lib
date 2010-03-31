@@ -363,6 +363,20 @@ def makeTupleSpace(descriptor := nil){
 			  };
 			  nil;
 			}.escape();
+		};
+		
+		// bulk rd operation (~rdg in lighTS)
+		// returns all tuple matching the template in the ts or 
+		// [] if non is present at the time of the request.
+		def rdg(template){
+			def toReturn := [];
+			localTS.each: { |tuple|
+				//it matches the template and it is not death
+				if: ((template.match(tuple)).and: {!tuple.decideDie(localInterface)}) then: { 
+					toReturn := toReturn + [tuple];
+				};
+			};
+			toReturn;
 		};			
 		//inserts a tuple into the ambient ( ~ inject in TOTA)
 		//note that this just exports a tuple to the ambient
@@ -379,7 +393,7 @@ def makeTupleSpace(descriptor := nil){
 			  sendTupleToAmbient(tuple);
 		    //return a publication object to be able to cancel the injection.
 		    object:{
-			    def retract(){atomicRemove(tuple.getTupleId)};
+			    def retract(){atomicRemovePrivate(tuple.getTupleId)};
 		      def cancel(){removeFromTS(tuple)};
 		    };
 		  };
@@ -389,8 +403,8 @@ def makeTupleSpace(descriptor := nil){
 			if: (time > timerModule.ZERO) then: { 
 				// modify the delegation chain as follows:
 				// propagation protocol <- leasingPropagation <- tuple
-			  def leasedTuple := attachLeasingPropagation(tuple.super, time);
-			  tuple.super := leasedTuple;
+			  def leasedPropagation := attachLeasingPropagation(tuple.super, time);
+			  tuple.super := leasedPropagation;
 			};
 			inject: tuple;
 		};
