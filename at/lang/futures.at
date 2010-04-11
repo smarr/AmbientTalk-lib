@@ -555,8 +555,11 @@ def FuturesModule := object: {
 			    } taggedAs: [ Letter ];
 			    log.got(whenId, letter);
 			  };
-				def notifyResolved(val) { notify(resolvedBlock, val); };
+				def notifyResolved(val) {
+				  notify(resolvedBlock, val);
+				};
 				def notifyRuined(exc) {
+				  
 					if: (is: exc taggedAs: excType) then: {
 						notify(excBlock, exc);
 					} else: {
@@ -569,6 +572,10 @@ def FuturesModule := object: {
 		};
 		whenFuture; // when returns a future itself
 	};
+	
+	// TODO: better to call whenAny:... something like "asap:" because
+	// the construct does not *necessarily* apply the closure in a later turn
+	// therefore using the when-prefix may be confusing
 	
 	// an extension of when:becomes: that accepts any language value, not just a future
 	def whenAny: val becomes: closure catch: exc using: handler {

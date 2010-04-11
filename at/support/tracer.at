@@ -376,7 +376,9 @@ def TraceModule := object: {
   def TraceResolved(futureId, receiver := nil, message := nil) {
     TraceAs(isolate: { |futureId, receiver, message|
       def done := false;
-      def traceReceived(rcvr, msg, log) { log.resolved(futureId) };
+      def traceReceived(rcvr, msg, log) {
+        // log.resolved(futureId)
+      };
 		  def traceSent(rcvr, msg, log) {
 		    if: !done then: {
           done := true;
@@ -390,7 +392,9 @@ def TraceModule := object: {
   def TraceRuined(futureId, exc, receiver := nil, message := nil) {
     TraceAs(isolate: { |futureId, exc, receiver, message|
       def done := false;
-      def traceReceived(rcvr, msg, log) { log.resolved(futureId) };
+      def traceReceived(rcvr, msg, log) {
+        // log.resolved(futureId)
+      };
 		  def traceSent(rcvr, msg, log) {
 		    if: !done then: {
           done := true;
