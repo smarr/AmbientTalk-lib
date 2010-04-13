@@ -31,31 +31,105 @@
  * @author egonzale, cfscholl
  */
 def Vector := /.at.collections.vector.Vector;
+def HashMap := jlobby.java.util.HashMap;
 import /.at.lang.futures;
 enableFutures(false);
 import /.at.exceptions;
 deftype TotamTuple;
 deftype LeasedTuple <: TotamTuple;
 deftype TotamTupleSpace;
-def crimeModule := /.at.crime.CrimeConnection;
 def timerModule := /.at.support.timer;
+
+//helper function to construct mirrors tagged as Isolates.
+def mirrorIsolate: closure {
+	 object: closure childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror
+};
+
+//helper function to construct isolate objects overriding print method for debugging/unittesting purposes.
+def isolate: closure printAs: printClosure {
+	def clo := script: printClosure;
+  object: closure taggedAs: [/.at.types.Isolate] mirroredBy: (
+		mirrorIsolate: { |clo| def print() { clo(self.base) } }
+	);
+};
+
+def delayedSerializationMirror :=  mirror: {
+  import /.at.lang.firstclassrefs.TEventualRef exclude pass, invoke, retractUnsentMessages;
+  def connected := true;
+  def inbox := [];
+  def reference;
+
+  def init(base, ref){
+	  super^init(base);
+	  reference := ref;
+	  connected := true;
+	  inbox := [];
+	  //place listeners for connection maintance
+		whenever: reference disconnected:{
+		  connected := false;
+		  def outbox := retract: reference;
+		  inbox := inbox + outbox;
+	  };
+	  whenever: reference reconnected: {
+		  connected := true;
+		  //ToDo: we could cleanup expired tuples here, rather than deciding this at receiver side.
+			inbox.each: { |msg| reference <+ msg };
+			inbox := [];
+	  };
+  };
+  def asFarRef(){reference};
+  def intercept(msg) { 
+	  if: self.connected then: { reference <+ msg } 
+	  else:{ inbox := inbox + [msg] };
+	};
+  def toString() { "delayedSerializationRef:" + reference };		
+  // def transportStrategy; // not needed: proxy is pass-by-far-reference
+  def retractUnsentMessages() { 
+	  def return := inbox; 
+	  inbox := [];
+	  return;
+	};
+	//override equality
+	// disallow synchronous access to the object
+  def invoke(slf, inv) {
+	  // the only legal operation on references is '=='
+	  if: (`(==) == inv.selector) then: {
+			// two delayed serialization refs are equal iff the far ref encapsulate are equal.
+			reference == (reflect: (inv.arguments)[1]).asFarRef();
+	  } else: {
+			raise: XIllegalOperation.new("Cannot synchronously invoke " + inv.selector + " on " + self.dumpContent());
+	  }
+	};
+/*	def name := /.at.support.util.makeMutator(`==);
+	def mutMethod := createMethod(name, [ `aRef ], `{ reference == (reflect: aRef).getFarRef() }, []);
+	self.removeSlot(name);
+	self.addSlot(createClosureMethod(self.base, mutMethod));*/
+};
+
+def delayedSerializationRef: reference {
+	object: { } mirroredBy: { |base| delayedSerializationMirror.new(base, reference)};
+};
 
 def ambientTupleSpace := object: {
 	 def hashMap;
 	 def value := object:{
-	   def tuple; def tableTsRefs;
-	   def init(t) {tuple := t; tableTsRefs := []};
-	   def addTs(tsRef) { tableTsRefs := tableTsRefs + [tsRef]};
-	   def getTs(){tableTsRefs};	 
+	   def tuple; def tableTsIds;
+	   def init(t) {tuple := t; tableTsIds := []};
+	   def addTs(tsId) { 
+		   if: (! tableTsIds.contains(tsId)) then: {
+		     tableTsIds := tableTsIds + [tsId];
+		   };
+		 };
+	   def getTs(){tableTsIds};	 
 	 };
 	 def init(){
-		hashMap := jlobby.java.util.HashMap.new();
+		hashMap := HashMap.new();
 	 };
 	 def each: clo {
 		def valit := hashMap.values().iterator();
 		while: { valit.hasNext() } do: {
 			def value := valit.next();
-			clo(value.tuple, value.tableTsRefs);
+			clo(value.tuple, value.tableTsIds);
 		};
 	 };
 	 def add(tuple){
@@ -63,7 +137,6 @@ def ambientTupleSpace := object: {
 	 };
 	 
 	 def contains(tupleId){
-	//	 hashMap.containsKey(tupleId);
 	   { |return|
 	      def comparator := { |tid| tid == tupleId};
 	      def keyit := hashMap.keySet().iterator();
@@ -76,7 +149,6 @@ def ambientTupleSpace := object: {
 	 };
 
 	 def remove(tupleId){
-		// hashMap.remove(tupleId);
 		 def comparator := { |tid| tid == tupleId};
 		 def keyit := hashMap.keySet().iterator();
 		 def found := false;
@@ -94,10 +166,12 @@ def ambientTupleSpace := object: {
 		 };
 	 };
 	 //application-dependent method.
-	 def addTs(tuple, tsRef){
+	 def addTs(tuple, tsId){
 		 def value := hashMap.get(tuple.getTupleId);
 		 if: (nil != value ) then:{
-			value.addTs(tsRef);
+			value.addTs(tsId);
+		 } else:{ //this shouldn't happen!	
+			  error("trying to add tsId to a tuple not present in the tuple space");
 		 };
 	 };
 };
@@ -129,7 +203,32 @@ def makeTupleSpace(descriptor := nil){
 	// contains tuples which needs to be transmitted to the ambient
 	def ambientTS := ambientTupleSpace.new(); 
 	def localTSListeners := Vector.new(); 
-	def seenTS := Vector.new(); // contains [far reference, descriptor] to the seen TS.
+	def seenTS := HashMap.new(); // contains: key TupleSpaceId - value: [far reference, descriptor].
+	def seenTS.each: clo {
+		def keyit := seenTS.keySet().iterator();
+		def valit := seenTS.values().iterator();
+		while: { valit.hasNext() } do: {
+			def value := valit.next();
+			clo(keyit.next(), value[1], value[2]);
+		};
+	};
+	def seenTS.getTsInfo(tsRef) { // returns [tupleSpaceId, remoteTs, descriptor]
+		def return := nil; def found := false;
+	  def keyit := seenTS.keySet().iterator();
+		def valit := seenTS.values().iterator();
+		while: { (valit.hasNext()).and: {!found}} do: {
+			def value := valit.next(); def key := keyit.next();
+			def farRef := (reflect: value[1]).asFarRef();
+			if: (farRef == tsRef) then: { found := true; return := [key] + value; }
+		};
+		return;
+	};
+	def seenTS.asTable() {
+		def table := [];
+		seenTS.each:{ |id, ref, des| table := table + [[id, ref, des]]};
+		table;
+	};
+	// todo gc seenTS. Only remove if ambientTs do not contain TupleSpaceId.
 	
 	//register listener for in or rd operations
 	def registerListener(l) { 
@@ -155,27 +254,21 @@ def makeTupleSpace(descriptor := nil){
 	};
 	
 	//method starting up the tuple propagation from discovery.
-	def moveTuples(localTs, remoteTs, remoteDescriptor, remoteTupleSpaceId := 0){
+	def moveTuples(localTs, remoteTupleSpaceId, remoteRefTs, remoteDescriptor){
+		def toSend := [];
+		def remoteTs := delayedSerializationRef: remoteRefTs;
 		// add ts to seenTS vector so that it can be
 	  // notified if I add a new tuple to the ambient.
-		def toSend := [];
-   //in the contains function e1 is bound to ts, e2 is [ts, descriptor, tupleSpaceId]
-	  if: !(seenTS.contains(remoteTs, {|e1,e2| e1 == e2[1]})) then:{
-		  if: (remoteTupleSpaceId == 0 ) then:{
-			  // TODO PIGGYBACK tuplespaceId in moveTuples.
-			  when: remoteTs<-getTupleSpaceInfo()@FutureMessage becomes: { |info|
-					def index := seenTS.indexOf(remoteTs, comp);
-					def remoteTsInfo := seenTS.at(index); //returns info in the form [remoteTs, descriptor, tupleSpaceId]
-					remoteTsInfo[3] := info[1];
-				};
-		  };
-	   	seenTS.add([remoteTs,remoteDescriptor,remoteTupleSpaceId]);
+		//to think: should we override info if remoteTupleSpaceId is already in the seenTS?
+		if: (!seenTS.containsKey(remoteTupleSpaceId)) then: {	
+	   	seenTS.put(remoteTupleSpaceId, [remoteTs, remoteDescriptor]);
 	  };
-	  ambientTS.each: { |tuple, sentTs| 
+	  // fill toSend 
+	  ambientTS.each: { |tuple, sentTupleSpaces| 
 		  if: (sendTuple(tuple, localTs, remoteDescriptor)) then: { toSend := toSend + [tuple] };
 		};
 		if: (toSend.length > 0) then: {	
-			toSend.each: {|tuple| ambientTS.addTs(tuple, remoteTs) };
+			toSend.each: {|tuple| ambientTS.addTs(tuple, remoteTupleSpaceId) };
    		remoteTs<-receiveTuples(toSend);
 	  };
   };
@@ -215,10 +308,10 @@ def makeTupleSpace(descriptor := nil){
 			  ambientTS.add(tuple);
 			};
 		  //send tuple to the totam network if sender protocol applies.
-		  seenTS.each: { |ts| 
-			  if: (sendTuple(tuple, localInterface, ts[2])) then: { 
-				  ambientTS.addTs(tuple, ts[1]);
-				  ts[1]<-receiveTuples([tuple]) 
+		  seenTS.each: { |tsId, tsRef, tsDescriptor| 
+			  if: (sendTuple(tuple, localInterface, tsDescriptor)) then: { 
+				  ambientTS.addTs(tuple, tsId);
+				  tsRef<-receiveTuples([tuple]) 
 				};
 		  };
 	  };
@@ -248,7 +341,11 @@ def makeTupleSpace(descriptor := nil){
 					// otherwise it would have died as well in other nodes.
 					if: ((is: ambientTuple taggedAs: LeasedTuple).and:{ambientTuple.decideDie(localInterface)}) then: { propagate := false};
 				  if: propagate then:{
-					  value.getTs.each:{ |tsRef| tsRef<-receiveTuples([makeAntiTuple(ambientTuple)])};
+					  value.getTs.each:{ |tsId| 
+						  def value := seenTS.get(tsId);
+						  def tsRef := value[1];
+						  tsRef<-receiveTuples([makeAntiTuple(ambientTuple)])
+						};
 				  };
 			  };
 		    result := true;
@@ -261,14 +358,10 @@ def makeTupleSpace(descriptor := nil){
   def removeRemoteTuple(tuple){
 	  def tupleId := tuple.getTupleId(); 
 	  // find first the remote far reference for the orignator ts.
-	  def remoteTs := { |return|
-      seenTS.each: { |tsInfo|
-	      if: (tsInfo[3] == tupleId.getTupleSpaceId()) then: {return(tsInfo[1])};
-      };
-      nil;
-    }.escape();
+	  def value := seenTS.get(tupleId.getTupleSpaceId());
     // ask the originator to remove the tuple
-	  if: !(remoteTs == nil) then:{
+	  if: !(nil == value) then:{
+		  def remoteTs := value[1];
 		  remoteTs<-atomicRemove(tupleId)@FutureMessage;
 	  } else: {
 		  //this shouldn't happen, if it is a remote tuple, its ts should be in seenTS
@@ -313,11 +406,10 @@ def makeTupleSpace(descriptor := nil){
 				sendTupleToAmbient(tuple);
 		  };
   	};
-	
-	  def getTupleSpaceInfo() {
-		  [tupleSpaceId, descriptor];
-	  };
-    
+	  //interchanges descriptors (piggypacking the tupleSpaceId)
+	  def getTupleSpaceInfo() { [tupleSpaceId, descriptor] };
+    //added provisional when tupleSpaceId is not interchanged with descriptor.
+    def getTupleSpaceId() { tupleSpaceId};
     //def atomicRemove := &atomicRemovePrivate;
 		def atomicRemove(tupleId, antituple := true) {
 	   atomicRemovePrivate(tupleId,antituple);
@@ -377,7 +469,8 @@ def makeTupleSpace(descriptor := nil){
 				};
 			};
 			toReturn;
-		};			
+		};	
+				
 		//inserts a tuple into the ambient ( ~ inject in TOTA)
 		//note that this just exports a tuple to the ambient
 		//but it does not store in the local ts.
@@ -401,10 +494,11 @@ def makeTupleSpace(descriptor := nil){
 		// injects a tuple into the ambient with a lease.		
 		def inject: tuple timeout: time {
 			if: (time > timerModule.ZERO) then: { 
+			  def leasingPropagation := leasingPropagationProtocol().new(time);
 				// modify the delegation chain as follows:
 				// propagation protocol <- leasingPropagation <- tuple
-			  def leasedPropagation := attachLeasingPropagation(tuple.super, time);
-			  tuple.super := leasedPropagation;
+			  leasingPropagation.super := tuple.super;
+			  tuple.super := leasingPropagation;
 			};
 			inject: tuple;
 		};
@@ -521,11 +615,18 @@ def makeTupleSpace(descriptor := nil){
 			// get the descriptor if it is not known.
 		  if: (descriptor == nil) then: {
 			  when: ts<-getTupleSpaceInfo()@FutureMessage becomes: { |info|	
-				  // info = [tupleSpaceId, descriptor]
-				  moveTuples(self, ts, info[2], info[1]);
+				  moveTuples(self, info[1], ts, info[2]); // info = [tupleSpaceId, descriptor]
 			  };
 			} else: {
-				moveTuples(self, ts, descriptor, tsId);
+				 // ask the remoteTupleSpaceId if necessary
+				 // TODO PIGGYBACK the tuplespaceId in receiveTuples.
+				if: (tsId == 0 ) then:{
+				  when: ts<-getTupleSpaceId()@FutureMessage becomes: { |tupleSpaceId|
+						moveTuples(self, tupleSpaceId, ts, descriptor);
+					};
+				} else:{
+					moveTuples(self, tsId, ts, descriptor);
+				};
 			};
     };
     // get remote interface so that it can be 
@@ -539,25 +640,25 @@ def makeTupleSpace(descriptor := nil){
     def goOnline(){
 	    def p := export: remoteInterface as: TotamTupleSpace;
 	    def s := whenever: TotamTupleSpace discovered: { |remoteTs|
-		    def comp := {|e1,e2| e1 == e2[1]};
-		    if: !(seenTS.contains(remoteTs, comp)) then:{
+		    def remoteTsInfo := seenTS.getTsInfo(remoteTs); 
+		    // returns [tupleSpaceId, remoteTs, descriptor]
+			  if: (nil == remoteTsInfo) then:{ 
 			    // seen this tuple space for first time, we need descriptor and tupleSpaceId
-				  notifyTSDiscovered(remoteTs);
-				} else:{ //re-discovering a tuple space already seen.
-					def index := seenTS.indexOf(remoteTs, comp);
-					def remoteTsInfo := seenTS.at(index); //returns info in the form [remoteTs, descriptor, tupleSpaceId]
-					notifyTSDiscovered(remoteTs, remoteTsInfo[2], remoteTsInfo[3]);
-				};
+			    notifyTSDiscovered(remoteTs);
+			  } else:{ //re-discovering a tuple space already seen.
+				  notifyTSDiscovered(remoteTs, remoteTsInfo[3], remoteTsInfo[1]);
+			  };
 			};
+			network.online();
 	    object:{
 		    def cancel(){ p.cancel(); s.cancel(); };
 	    };
     };
-    // added for debugging purposes
-    def toString(){
-	    def table := [];
-	    localTS.each: {|tuple| table := table + [tuple.toString] };
-	   "<tuple space:" + tupleSpaceId + " withTuples: " +  table + " >";
+    // added for debugging/unittest purposes
+    def dumpContents() {
+			def lts := [];
+	    localTS.each: {|tuple| lts := lts + [tuple] };
+	    [tupleSpaceId, lts, seenTS.asTable()];
     };
 
     //TODOdef atomicRemove := &atomicRemovePrivate;
@@ -586,10 +687,13 @@ def TupleId := isolate: {
 	def isRemote(aTsId){ tupleSpaceId != aTsId };
   def getTupleSpaceId(){tupleSpaceId};
 	def getTupleId() {tupleId};
-	def toString() { "<tsID:" + tupleSpaceId + "tupleId:" + tupleId + "antituple:" + antituple +">" };
 	def ==(aTupleId){ 
 		(tupleId == aTupleId.getTupleId).and: {tupleSpaceId == aTupleId.getTupleSpaceId};//.and:{ antituple == aTupleId.isAntituple()}
 	};	
+} printAs: { |base|
+	def antitupleSign := "+";
+	if: base.antituple then: { antitupleSign := "-"};
+	"<" + base.tupleSpaceId + ":" + base.tupleId + ":" + antitupleSign + ">";
 };
 
 def makeTuple(tupleId, @fields) {
@@ -654,14 +758,17 @@ def makeTuple(tupleId, @fields) {
 		  } else: { result := false};
 		  result;
 	  };
-	  def toString(){   
-		  def content := fields.map:{ |e| 
-			  if: (is: e taggedAs: /.at.types.Symbol) then:{ e.getSymbol.text}
-			  else: {e};
-			};
-			"<"+ tupleId.toString() + content + ">";
-		};
 	  def each: l  { fields.each: l };
+	} printAs: { |base|
+		def content := base.getFields().map:{ |e| 
+		  if: (is: e taggedAs: /.at.types.Symbol) then:{ e.getSymbol.text}
+		  else: {e};
+		};
+		if: (nil == base.super) then: {
+		  "<"+ base.getTupleId() + ":withContent:"+ content +">";
+		} else:{
+		  "<"+ base.getTupleId() + ":withContent:"+ content + ":withPropagationStrategie: "+ base.super +">";
+	  };
 	};
 };
 
@@ -692,6 +799,8 @@ def defaultPropagationProtocol(){
 		def changeTupleContent(ts){self};
 		// if true -> note gets added to local TS
 		def decideStore(ts) {true};
+	} printAs:{ |base|
+	   "<defaultPropagationProtocol>";
 	};
 };
 
@@ -706,48 +815,60 @@ def noPropagationProtocol(){
 		def doAction(ts){};
 		def changeTupleContent(ts){self};
 		def decideStore(ts) {false};
+	}	printAs:{ |base|
+		"<noPropagationProtocol>";
 	};
 };
 // attaches leasing protocol to a given propagation protocol.
 // used implement inject:timeout:
-def attachLeasingPropagation(propagationProtocol, time){
-	extend: propagationProtocol with: { |time|
-		def timeout := time;
+def leasingPropagationProtocol(){
+	object: {
+		def timeout;
 		def timerSubscription := nil;
 		def expired := false;
+		def ZERO := /.at.support.timer.ZERO;
+		def init(time := ZERO, startTicking := true){
+			 timeout := time; 
+			 expired := false;
+			 timerSubscription := nil; 
+			 //initialize the timer.
+			 if: startTicking then: {startSubscription()};
+		};
 		def startSubscription(){
-			self.expired := false;
-	 	  if: (self.timeout > /.at.support.timer.ZERO) then: {
-			  self.timerSubscription := /.at.support.timer.when: time elapsed: {
-				  self.timeout := /.at.support.timer.ZERO;
-				  self.whenExpired();
+	 	  if: ( timeout > ZERO) then: {
+			  timerSubscription := /.at.support.timer.when: timeout elapsed: {
+				  timeout := ZERO;
+				  expired := true;
 			  };
 		  };
 		};				
 		def whenExpired(){
-			self.expired := true;
+			expired := true;
 		};
 		//overrides default decideDie to take into account
 		def decideDie(ts){ self.expired };
 		//do not enter if you are expired.
 		def decideEnter(ts) {!self.expired };
-		//initialize the timer.
-		startSubscription();
-	} taggedAs: [/.at.types.Isolate, LeasedTuple] mirroredBy: ( object:{
-		def pass(){
-			def passObj := super^pass();
-			def base := self.base;
-			if: !base.expired then:{
-			  passObj.timeout := base.timerSubscription.getTimeRemaining();
-			};
-			passObj;
-		};
-		def resolve(){
-			def resolveObj := super^resolve();
-			resolveObj.startSubscription();
-			resolveObj;
-		}
-	}childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror );
+	} taggedAs: [/.at.types.Isolate, LeasedTuple] mirroredBy: ( 
+		mirrorIsolate: {
+		  def print() {"<leasing propagation protocol:" + self.base.timeout + ":"+ self.base.super +">" };		
+		  def pass(){
+		    // we don't use super^pass(); because it returns self!
+			  def base := self.base;
+			  if: (!base.expired) then: {
+				  def time := base.timerSubscription.getTimeRemaining();
+				  def parentPropagation := base.super; //they will pass by isolate
+				  /.at.support.util.uponArrivalBecome: { | time, parentPropagation| 
+					   def lpp := /.at.tuples.totam.leasingPropagationProtocol().new(time);
+					   lpp.super := parentPropagation;
+					   lpp;
+				  };
+			  } else: {
+				  // passing an expired tuple, which will be still transmitted but doesn't enter to the other ts.
+				  super^pass();
+			  };
+		  };
+	 });
 };
 
 def antiTuplePropagationProtocol() {
@@ -766,7 +887,13 @@ def antiTuplePropagationProtocol() {
     };
     def decideStore(ts) {false};
     def changeTupleContent(ts){self};
-  };
+  }	printAs: { |base|
+	  if: (nil == base.super ) then: {
+		  "<antiTuplePropagationProtocol>"
+	  } else:{
+		  "<antiTuplePropagationProtocol: " + base.super + ">"
+		};
+	};
 };
 	
 def makeAntiTuple(tuple){
@@ -774,12 +901,15 @@ def makeAntiTuple(tuple){
 	def tupleId := tuple.getTupleId();
 	def antiTupleId := TupleId.new(tupleId.getTupleSpaceId(), tupleId.getTupleId(), true);
 	def antiTuple := makeTuple(antiTupleId, tuple.getFields());
+	//attach anti tuple propagation
+	def defaultPropagation := antiTuplePropagationProtocol();
+	antiTuple.super := defaultPropagation;
 	// attach leasing propagation policy if original tuple had it
 	if: (is: tuple taggedAs: LeasedTuple) then:{
 		def time := tuple.timerSubscription.getTimeRemaining();
-		antiTuple.super := attachLeasingPropagation(antiTuplePropagationProtocol(), time);
-	} else:{
-		antiTuple.super := antiTuplePropagationProtocol();
+		def leasingPP := leasingPropagationProtocol().new(time);
+		leasingPP.super := defaultPropagation;
+		antiTuple.super := leasingPP;
 	};
 	antiTuple;
 };
@@ -809,14 +939,17 @@ def TotamModule := object: {
   // - The object's dynamic parent is defaultPropagationProtocol.
   // - The object's types are initialized to Isolate, as it gets copied along with the tuple.
 	def propagationProtocol: closure {
-		extend: defaultPropagationProtocol() with: closure taggedAs: [/.at.types.Isolate];
+		extend: defaultPropagationProtocol() with: closure taggedAs: [/.at.types.Isolate] mirroredBy: (
+		   mirrorIsolate: { def print() {"<userDefinedPropagationProtocol>"}}	
+	  );
 	};
-	// object that understands all meta-level operations applicable on tuples, 
+	// returns an object with all meta-level operations for tuple propagation, 
 	// implementing them using default semantics:
-	// tuplw which is always in scope and store itself in every hop.
+	// tuple which is always in scope and store itself in every hop.
 	def defaultPropagationProtocol := &defaultPropagationProtocol;
-  //def attachLeasingPropagation := &attachLeasingPropagation;
-
+	// returns an object implementing a leasing propagation protocol.
+  def leasingPropagationProtocol := &leasingPropagationProtocol;
+	
 	// a variable is like a wildcard, "a hole" a tuple which always matches. 
 	def var: symbol {
 	  object: { |symbol|
@@ -1109,7 +1242,6 @@ def TotamModule := object: {
 				  };
 				};
 			};
-			
 			def a := actor: { |TotamTupleSpace, b|
 				def totamModule := /.at.tuples.totam;			
 				def descriptor := isolate: { def team := "red"; };
@@ -1124,7 +1256,7 @@ def TotamModule := object: {
 				aTS.inject: ablueTuple timeout: 5.seconds();
 				// myTs in unit test should receive this tuple.
 				// myTS in actor b goes online only once the tuple is expired.
-				/.at.support.timer.when: 5.seconds() elapsed:{ b<-goOnline() };
+				/.at.support.timer.when: 5.seconds() elapsed:{ b<-goOnline()};
 				def resolve(res) {
 					s.cancel();
 					res<-resolve(`ok);
@@ -1220,7 +1352,7 @@ def TotamModule := object: {
 				myTS.notifyTSDiscovered(ts);
 			};
 			def se := export: myTS.getRemoteInterface as: TotamTupleSpace;
-		  myTS.inject: makeABlueTuple timeout: 6.seconds();
+		  myTS.inject: makeABlueTuple timeout: 8.seconds();
 			def originator := myTS;
 			whenEach: syncFut becomes:{ |val|
 			  if: (val ==1) then: { s.cancel()};	
@@ -1415,5 +1547,62 @@ def TotamModule := object: {
 		  };
 		  fut;
 		}; //end-testAsyncWhenInRemote 
+		
+		def testAsyncDiscovery(){
+			def [fut,res] := makeFuture();
+		  def [fut2,res2] := makeFuture();
+			def myTS := makeTupleSpace();
+			def sub := myTS.goOnline();	
+			def a := actor: { |res2|
+				import /.at.tuples.totam;
+				deftype TotamTupleSpace;
+				def myTS := makeTupleSpace();
+				def sub; def disc;  
+				def goOnlineHard() {sub := export: myTS.getRemoteInterface as: TotamTupleSpace;}; 
+				def goOnlineSoft(){ disc.reconnect() }; 
+				def goOfflineSoft(){ disc :=  disconnect: myTS.getRemoteInterface; };
+				def goOfflineHard(){
+					sub.cancel();
+					def tuple := myTS.rdp(tuple: [var: `x, 3, false]);
+					if: (nil != tuple) then: { 
+						res2<-ruin(/.at.exceptions.error("unexpected received tuple"));
+					} else: { res2<-resolve(`ok) };
+				};
+			};
+			//start test
+			def discoveredId;
+			when: a<-goOnlineHard()@FutureMessage becomes:{ |val|
+			  timerModule.when: 2.seconds() elapsed:{
+				  def seenTs := (myTS.dumpContents())[3]; 
+			  	discoveredId := (seenTs[1])[1]; 
+				  self.assertEquals(1, seenTs.length);  
+			    when: a<-goOfflineSoft()@FutureMessage becomes:{ |val|
+				    myTS.inject: makeATuple() timeout: 1.seconds();
+				    //wait until it is expired
+				    timerModule.when: 2.seconds() elapsed:{
+				      when: a<-goOnlineSoft()@FutureMessage becomes:{ |val|
+							  // give sometime for the reconnect event.
+					      timerModule.when: 2.seconds() elapsed: {
+					        when: a<-goOfflineHard()@FutureMessage becomes:{ |val|
+						         //test ok
+						        nil;
+						      };
+						    };
+						  };
+						};
+					};
+				};
+			};
+			when: fut2 becomes: { |val|
+			  def seenTs := (myTS.dumpContents())[3]; 
+				self.assertEquals(1, seenTs.length);
+				self.assertEquals(discoveredId,(seenTs[1])[1]);
+				sub.cancel();
+				res.resolve(`ok);
+			} catch: /.at.types.Exception using: { |e| 
+				res.ruin(e);
+			};
+			fut;
+		}; //end-testAsyncDiscovery
 	};
 };
