@@ -57,23 +57,23 @@ public class GuanoteReader extends GuanoteView {
 		replyButton_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 				GuanoteEditor gui = new GuanoteEditor(app, new Guanote() {
-					public String getSenderName() { try {
+					public String getSender() { try {
 						return app.owner().getProfile().username();
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					return null; };
-					public String[] getReceiverList() { try {
-						return new String[] {  g.getSenderName() };
+					public String[] getReceivers() { try {
+						return new String[] {  g.getSender() };
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
 					}
 					return null; 
 					};
-					public String message() { try {
-						return "You wrote: "+ g.message();
+					public String getMessage() { try {
+						return "You wrote: "+ g.getMessage();
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -81,7 +81,7 @@ public class GuanoteReader extends GuanoteView {
 					return null; 
 					};
 					public String toString() { try {
-						return g.getSenderName() +": "+message();
+						return g.getSender() +": "+getMessage();
 					} catch (Exception e) {
 						// TODO Auto-generated catch block
 						e.printStackTrace();
@@ -104,10 +104,10 @@ public class GuanoteReader extends GuanoteView {
 	
 	public static void main(String[] args) {
 		GuanoteReader gui = new GuanoteReader(GuanotesApp._TESTAPP_,new Guanote() {
-			public String getSenderName() { return "sender"; };
-			public String[] getReceiverList() { return new String[] { "rcvr" }; };
-			public String message() { return "test body test test test"; };
-			public String toString() { return getSenderName() +": "+message(); }
+			public String getSender() { return "sender"; };
+			public String[] getReceivers() { return new String[] { "rcvr" }; };
+			public String getMessage() { return "test body test test test"; };
+			public String toString() { return getSender() +": "+getMessage(); }
 		});
 		gui.setVisible(true);
 	}

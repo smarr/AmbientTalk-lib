@@ -61,21 +61,21 @@ public interface GuanotesApp extends Application {
 		
 		public Guanote makeGuanoteFromNames(final String[] receiver, final String sender, final String message) throws Exception {
 			return new Guanote() {
-				public String message() throws Exception {
+				public String getMessage() throws Exception {
 					return message;
 				}
 
-				public String[] getReceiverList() throws Exception {
+				public String[] getReceivers() throws Exception {
 					return  receiver;
 				}
 
-				public String getSenderName() throws Exception {
+				public String getSender() throws Exception {
 					return sender;
 				}
 				
 				public String toString() {
 					try {
-						return "from " + getSenderName() + ": " + message();
+						return "from " + getSender() + ": " + getMessage();
 					} catch (Exception e) {
 						return "Guanote " + e.getMessage();
 					}

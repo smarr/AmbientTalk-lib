@@ -210,10 +210,10 @@ public class GuanoteEditor extends GuanoteView {
 	
 	public static void main(String[] args) {
 		GuanoteEditor gui = new GuanoteEditor(GuanotesApp._TESTAPP_, new Guanote() {
-			public String getSenderName() { return "you"; };
-			public String[] getReceiverList() { return new String[] { "" }; };
-			public String message() { return "Your text here..."; };
-			public String toString() { return getSenderName() +": "+message(); }
+			public String getSender() { return "you"; };
+			public String[] getReceivers() { return new String[] { "" }; };
+			public String getMessage() { return "Your text here..."; };
+			public String toString() { return getSender() +": "+getMessage(); }
 		});
 		gui.setVisible(true);
 	}

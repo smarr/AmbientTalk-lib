@@ -24,7 +24,8 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-def AmbientTotaModule := /.at.urbiflock.ambientTota;
+def TotamModule := /.at.tuples.totam;
+import TotamModule;
 def FutureModule := /.at.lang.futures;
 
 def HashMap := jlobby.java.util.HashMap;
@@ -32,14 +33,15 @@ deftype Guanotes;
 
 def makeGuanotes(aFlockr) {
 	def subscription;	
+	 // TODO: totam should be something part of the system, not the application
+	def totam := makeTupleSpace(aFlockr.getUsername);
   // local interface of guanotes
   def localInterface := extend: /.at.urbiflock.application.makeApplication("Guanotes", aFlockr) with:{
-		import AmbientTotaModule.makeTupleSpace(aFlockr.getUsername);
-    
+	  //helper function for unit test
     def getFlockr(){
 			aFlockr;
 		};
-	  //helper function to flatten a flock.
+	  //helper function for unit test to flatten a flock.
 	  //maybe move to flock.at?
  	  def currentFlock(flockName){
 	    def flock := aFlockr.getFlock(flockName);
@@ -49,37 +51,29 @@ def makeGuanotes(aFlockr) {
 			  // add warning here!
 				[]; 
 			};
-    };
-    //installs a listener for guanotes matching the predicate
-    // replaced the old listenGuanotes for this:
-    def when: predicate received: block {
-	    self.when: predicate matches: { |guanote|
-		    block(guanote);  
-		  };
-    };   
+    };  
     // injects a guanote into the ambient.
     def sendGuanote(aGuanote){
-		  self.inject: aGuanote;
+		  totam.inject: aGuanote;
     }; 
     // guanote has 3 predefined fields: sender, receiver, message
     def makeGuanote(from, to, msg){
 	   //generate ids on ambientTota
-	    AmbientTotaModule.extendTuple: AmbientTotaModule.makeTuple()  with: {
-		    def sender := from;  // fill in by at interface with gui
-		    def receiver := to;  // an object which contains flock
-		    def message := msg;
-		    def ts := localInterface;
-	      	// currently inheriting the default, i.e. a tuple that hops forever.
-	      // dirty hack to make sure that an injected tuple doesn't gets inserted 
-	      // to the local tuple space of the flockr which sends the guanote.
-		  //  def decideEnter(receivingTS){ !(localInterface == receivingTS) };
-		    def doAction(receivingTS) {ts := receivingTS };
+	    def guanotesProtocol := propagationProtocol: { |totam|
+		    def receivingTS := totam;
+		    def doAction(ts) { receivingTS := ts};
         def inScope(descriptor) { 
-	        receiver.shouldReceive( ts, descriptor);	
+	        def flockrTuple := receivingTS.rdp(/.at.tuples.totam.tuple: ["Flockr", /.at.tuples.totam.var: `flock]);
+					if: (flockrTuple != nil) then:{
+						def receiver := self.getField(3);
+	          receiver.shouldReceive( flockrTuple.getField(2), descriptor);
+	        } else: {//this should never happen!
+		        system.println("This should never happen!");
+		        false
+		      };	
 	      };
-	      def getReceiverList(){ receiver.getReceiverList()}; 
-	      def getSenderName(){sender};
 	    };
+	    tuple: ["Guanote", from, to, msg] withPropagationProtocol: guanotesProtocol;
     };
     //temporal function for Gui purposes
 		//change it to do this directly from java
@@ -87,28 +81,25 @@ def makeGuanotes(aFlockr) {
 			sendGuanote( makeGuanote(from, makeReceiver(to), msg));			
     };
 
-		// helper function to extend guanotes without having to worry about the isolate type tag.
-		def extendGuanote: tuple  with: closure {
-			extend: guanote with: closure taggedAs: [/.at.types.Isolate];
-		};
-		
 		def makeReceiver(flockrIds){
     	def receiver := isolate: { |flockrIds|
 				def flockrNames := [];
 				def flocks := [];
-				def shouldReceive(ts, receiverFlockrId) {
+				def shouldReceive(receiverFlockr, receiverFlockrId) {
 					if: !(flockrNames.contains(receiverFlockrId)) then: {
-						flocks.inject: false into: { |result, flock|
-							  result.or: { ts.currentFlock(flock).contains(receiverFlockrId) }
+						flocks.inject: false into: { |result, flockName|
+							 result.or: { 
+							   def flock := receiverFlockr.getFlock(flockName);
+								 if: (flock != nil) then: { flock.getFlockrList().contains(receiverFlockrId)}
+								 else: {	false } 
+							 }
 						}
-					}else: { 
-						true;
-					}
+					} else: { true }
 				};
 				def getReceiverList(){ flockrIds };
 			};			
 			flockrIds.each: {|id| 
-					if: id ~= ".*Flock" then: { 
+					if: (id ~= ".*Flock") then: { 
 						receiver.flocks :=  receiver.flocks + [id] 
 					}
 			 		else: { receiver.flockrNames :=  receiver.flockrNames + [id] }  
@@ -118,9 +109,18 @@ def makeGuanotes(aFlockr) {
 		
 		// places a listener for guanotes where the flockr owner is the receiver.
 		def listenForGuanotesToOwner(listener) {
-			//do not trigger GUI listener for guanotes produced by myself.
-			self.when: { |guanote| guanote.sender != aFlockr.getUsername } received: { |guanote|
-				listener<-guanoteReceived(guanote);
+			def aTemplate := tuple: ["Guanote", var: `from, var: `to, var: `msg];
+			totam.whenever: aTemplate read: {
+				//do not trigger GUI listener for guanotes produced by myself.
+				if: (from != aFlockr.getUsername) then: {
+					 //a guanote for GUI implements Guanote.java interface
+					 def guanote := object: {
+						def getSender() {from};
+						def getReceivers() {to.getReceiverList()};
+						def getMessage() {msg};
+					};
+					listener<-guanoteReceived(guanote) 
+				};
 			};
 		};
 			
@@ -133,12 +133,14 @@ def makeGuanotes(aFlockr) {
 		  //discovery other guanotes
 		  subscription := self.registerApplicationListener( Guanotes, object:{
 			  def notifyApplicationJoined(flockr, profile, remoteGuanotesTs){
-				  localInterface.notifyTSDiscovered(remoteGuanotesTs, profile.username);
+				  totam.notifyTSDiscovered(remoteGuanotesTs, profile.username);
 			  };
 			  def notifyApplicationLeft(flockr, profile, remoteGuanotesTs){
 				  //To think, remove from seenTS??
 			  };
 		  });
+		  //adding the private flockrTuple used to calculate who should receive the guanote
+		  totam.out(tuple:["Flockr", aFlockr]);
 		};
 		def start() {
 			super^start();
@@ -153,13 +155,8 @@ def makeGuanotes(aFlockr) {
   }; // end-localInterface
 	// remote interface of guanotes
 	def remoteInterface := extend: localInterface.remoteApplicationInterface with: {	
-		def getDescriptor() {
-			localInterface.getDescriptor();
-		};
-		// method required since remoteInterface doesn't encapsulate guanotesTS anymore.
-		def receiveTuples(tuples)	{
-			localInterface.receiveTuples(tuples);
-		};	
+		//TODO: nicer way to connect remote interfaces via the framework.
+		import totam.getRemoteInterface();
 	};
 	// add application to a flockr.
 	aFlockr.addApplication(localInterface);
@@ -232,7 +229,7 @@ def GuanotesModule := object: {
 				  // this should be composed via gui interface for every flock where a flockr is registered.
 					myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
-						  test<-assertEquals("flockr1", guanote.sender);
+						  test<-assertEquals("flockr1", guanote.getSender);
 						  flockr2.goOffline();
 						  myGuanotes.stop();
 						  res<-resolve(`ok);
@@ -249,8 +246,8 @@ def GuanotesModule := object: {
 				def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, myGuanotes.makeReceiver(["flockr1","flockr2"]), "HelloWorld");
 				myGuanotes.listenForGuanotesToOwner( object: {
 				  def guanoteReceived(guanote) {
-					  test.assertEquals("flockr2", guanote.sender);
-				    test.assertEquals("ping", guanote.message);
+					  test.assertEquals("flockr2", guanote.getSender);
+				    test.assertEquals("ping", guanote.getMessage);
 					  res.resolve(`ok);
 					}
 				});
@@ -268,10 +265,10 @@ def GuanotesModule := object: {
 				  // this should be composed via gui interface for every flock where a flockr is registered.
 					myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
-						  when: test<-assertEquals("flockr1", guanote.sender)@FutureMessage becomes: { |ack|
+						  when: test<-assertEquals("flockr1", guanote.getSender)@FutureMessage becomes: { |ack|
 							  //sending the same guanote back to flockr1
 							  //it will have the same Id so it shouldn't be received at flockr1
-							  myGuanotes.sendGuanote(guanote);
+							  // TODO!! should this be allowed in guanotes? myGuanotes.sendGuanote(guanote);
 							  //sending a new guanotes to flockr1 which should be received.
 							  def aGuanote := myGuanotes.makeGuanote(flockr2.getUsername, myGuanotes.makeReceiver(["flockr2","flockr1"]), "ping");
 							  myGuanotes.sendGuanote(aGuanote);
@@ -306,7 +303,7 @@ def GuanotesModule := object: {
 			    myGuanotes.goOnline();
        	  myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
-					    test<-assertEquals("flockr1", guanote.sender);
+					    test<-assertEquals("flockr1", guanote.getSender);
 						  flockr2.goOffline();
 						  myGuanotes.stop();
 						  res<-resolve(`ok);
@@ -333,7 +330,7 @@ def GuanotesModule := object: {
 				    def goOnline() { myGuanotes.goOnline() };
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
-							  when: test<-assertEquals("flockr1", guanote.sender)@FutureMessage becomes:{ |ack|
+							  when: test<-assertEquals("flockr1", guanote.getSender)@FutureMessage becomes:{ |ack|
 							    flockr3.goOffline();
 							    myGuanotes.stop();
 							    res<-resolve(`ok);
@@ -357,7 +354,7 @@ def GuanotesModule := object: {
 				    };
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
-							  when: test<-assertEquals("flockr1", guanote.sender)@FutureMessage becomes: { |ack|
+							  when: test<-assertEquals("flockr1", guanote.getSender)@FutureMessage becomes: { |ack|
 							    // shutting down flockr1 
 							    when: test<-flockr1GoOffline()@FutureMessage becomes: { |ack|
 									  // set up flockr 3 after sometime has passed so that the disconnected events gets propagated.
@@ -390,7 +387,7 @@ def GuanotesModule := object: {
 				    myGuanotes.goOnline();
 	       	  myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
-							  test<-assertEquals("flockr1", guanote.sender);
+							  test<-assertEquals("flockr1", guanote.getSender);
 						    def aGuanote := myGuanotes.makeGuanote(flockr2.getUsername, myGuanotes.makeReceiver(myGuanotes.currentFlock("FriendsFlock")), "DagWereld");
 							  myGuanotes.sendGuanote(aGuanote);
 							  flockr2.goOffline();
@@ -409,8 +406,8 @@ def GuanotesModule := object: {
 				    myGuanotes.goOnline();
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
-								test<-assertEquals("flockr2", guanote.sender);
-							  test<-assertEquals("DagWereld", guanote.message);
+								test<-assertEquals("flockr2", guanote.getSender);
+							  test<-assertEquals("DagWereld", guanote.getMessage);
 							  // leave sometime to be sure flockr2 and its guanotes disconnected.
 							  when: seconds(waitTime) elapsed: { 
 								  def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
@@ -424,7 +421,7 @@ def GuanotesModule := object: {
 						});
 					};
 					// waiting some time to be sure that flockr2,flockr4 belong to the flockr1 "FriendsFlock".			
-					when: seconds(waitTime*2) elapsed: {
+					when: seconds(waitTime*3) elapsed: {
 						def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
 						test.assertTrue(connectedFlockrs.contains("flockr4"));
 					  def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, myGuanotes.makeReceiver(myGuanotes.currentFlock("FriendsFlock")), "HelloWorld");
@@ -449,8 +446,8 @@ def GuanotesModule := object: {
 				    def goOnline() {myGuanotes.goOnline()};
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
-								test<-assertEquals("flockr1", guanote.sender);
-							  test<-assertEquals("DagWereld", guanote.message);
+								test<-assertEquals("flockr1", guanote.getSender);
+							  test<-assertEquals("DagWereld", guanote.getMessage);
 							  // leave sometime to be sure flockr2 and its guanotes disconnected.
 							  when: seconds(waitTime) elapsed: { 
 								  def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
@@ -478,8 +475,8 @@ def GuanotesModule := object: {
        	  myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
 						  when: test<-tearDown()@FutureMessage becomes:{ |ack|
-							  test<-assertEquals("flockr1", guanote.sender);
-							  test<-assertEquals("DagWereld", guanote.message);  
+							  test<-assertEquals("flockr1", guanote.getSender);
+							  test<-assertEquals("DagWereld", guanote.getMessage);  
 						    when: aFlockr4<-goOnline()@FutureMessage becomes: { |ack|
 							    def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
 						      test<-assertFalse(connectedFlockrs.contains("flockr1"));

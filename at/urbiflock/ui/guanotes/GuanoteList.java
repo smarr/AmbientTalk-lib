@@ -144,7 +144,7 @@ public class GuanoteList extends Frame implements GuanoteListener {
 	}
 	
 	public void guanoteReceived(Guanote g) throws Exception {
-		guanoteList_.add(shorten(g.getSenderName() + ": " + g.message()));
+		guanoteList_.add(shorten(g.getSender() + ": " + g.getMessage()));
 		guanoteListModel_.add(g);
 	}
 	
@@ -174,10 +174,10 @@ public class GuanoteList extends Frame implements GuanoteListener {
 		
 		try {
 			gui.guanoteReceived(new Guanote() {
-				public String getSenderName() { return "sender"; };
-				public String[] getReceiverList() { return new String[] { "rcvr" }; };
-				public String message() { return "test body test test test"; };
-				public String toString() { return getSenderName() +": "+message(); }
+				public String getSender() { return "sender"; };
+				public String[] getReceivers() { return new String[] { "rcvr" }; };
+				public String getMessage() { return "test body test test test"; };
+				public String toString() { return getSender() +": "+getMessage(); }
 			});
 		} catch (Exception e) {
 			e.printStackTrace();
