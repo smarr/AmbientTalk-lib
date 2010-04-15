@@ -9,6 +9,15 @@ deftype Table;
 deftype SyncPattern <: Pattern;
 deftype MultiPattern <: Pattern;
 deftype Act;
+deftype Compensation;
+deftype RetryType <: Compensation;
+deftype RediscoverType <: Compensation;
+deftype SkipType <: Compensation;
+deftype RestartType <: Compensation;
+deftype FailureType;
+deftype DisconnectionType <: FailureType;
+deftype TimeoutType <: FailureType;
+deftype NotFoundType <: FailureType;
 
 def id := 0;
 
@@ -30,6 +39,15 @@ def Environment := object: {
 					};
 				} else: { curVal[2] := [curVal[2], value] };
 			};
+		};
+	};
+	
+	def replace(name, value) {
+		def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+		if: idx == nil then: {
+			dict := dict + [[name, value]];
+		} else: {
+			dict[idx] := [name, value];
 		};
 	};
 	
@@ -61,6 +79,10 @@ def Environment := object: {
 		envs.each: { |env| env.dict.each: { |pair| insert(pair[1], pair[2]); }; };
 	};
 	
+	def init(@envsToCopy) {
+		self.merge(envsToCopy)
+	};
+	
 	def print() {
 		system.println(dict);
 	};
@@ -68,60 +90,128 @@ def Environment := object: {
 
 
 
-def WorkflowPattern := object: {
+def WorkflowPattern := object: {		
+	def idx := 0;
 	
 	def createAsyncMsg(selector, args) {
-		def msg := "<-" + selector.text()+"(";
-		def sep := "";
-		args.each: { |arg| msg := msg + sep + arg; sep := "," };
-		msg := msg + ")@FutureMessage";
-		msg;
+		reflectOnActor().createMessage(selector, args, [FutureMessage]);
 	};
 	
 	def createTimeoutMsg(selector, args, timeout) {
-		def msg := "<-" + selector.text()+"(";
-		def sep := "";
-		args.each: { |arg| msg := msg + sep + arg; sep := "," };
-		msg := msg + ")@Due(seconds(" + timeout + "))";
-		msg;
+		reflectOnActor().createMessage(selector, args, [Due(seconds(timeout))]);
 	};
 	
-	def executeActivity(activity, env) {
-		def serviceWrapper := activity.getService();
-		def selector := activity.getSelector();
-		def args := activity.getArguments();
-		def output := activity.getOutput();
-		def msg := createAsyncMsg(selector, env.bind(args));
-		def aMsg := eval: (read: msg) in: self;
-		when: serviceWrapper.getTag() discovered: { |service|
-			when: service<+aMsg becomes: { |reply| 
-				// TODO: check if length of reply is the same as output
-				def index := 1;
-				while: { index <= reply.length() } do: {
-					env.insert(output[index], reply[index]);
-					index := index+1;
+	def execute(activity, env, continue, runIdx) {
+		def arguments := activity.parameters;
+		def msg := createAsyncMsg(activity.selector, env.bind(arguments));
+		def timeout := env.find(`timeout)[2]; 
+		if: (is: timeout taggedAs: TimeoutType) then: {
+			msg := createTimeoutMsg(activity.selector, env.bind(arguments), timeout.duration);
+		};
+		def elapsed := false;
+		def compensation := false;
+		when: activity.service.tag discovered: { |service|
+			if: !compensation then: {
+				invoke(activity, service, msg, env, continue, runIdx);
+				elapsed := true;
+			};
+		};
+		/.at.support.timer.when: /.at.support.timer.seconds(20) elapsed: {		
+			if: !elapsed then: {
+				compensation := true;  // in orde to deactivity the when: discovered: event handler
+				env.replace("compensating" + runIdx, true);  // in order to avoid several compensations to be executed
+				def notFound := env.find(`notFound)[2];
+				if: (((is: disconnection taggedAs: NotFoundType).or: {is: disconnection taggedAs: Pattern}).or: {is: disconnection taggedAs: Act}) then: {
+					compensate(activity, notFound.compensation, msg, env, continue, runIdx);
+				} else: {
+					system.println("service not found error, no compensation specified");
 				};
-				reply;
 			};
 		};
 	};
 	
-	def executeActivityAndContinue(idx, activity, env) {
-		def serviceWrapper := activity.getService();
-		def selector := activity.getSelector();
-		def args := activity.getArguments();
-		def output := activity.getOutput();
-		def msg := createAsyncMsg(selector, env.bind(args));
-		def aMsg := eval: (read: msg) in: self;
-		when: serviceWrapper.getTag() discovered: { |service|
-			when: service<+aMsg becomes: { |reply| 
-				// TODO: check if length of reply is the same as output
-				def index := 1;
-				while: { index <= reply.length() } do: {
-					env.insert(output[index], reply[index]);
-					index := index+1;
+	def invoke(activity, service, msg, env, continue, runIdx) {
+		def timeout := env.find(`timeout)[2]; 
+		def disconnection := env.find(`disconnection)[2];
+		def output := activity.output;	
+		when: service <+ msg becomes: { |reply|
+			def idx := 1;
+			reply.each: { |val| env.insert(output[idx], val); idx := idx + 1; }; 
+			continue(reply);
+		} catch: TimeoutException using: { |e|
+			def compensating := env.find("compensating" + runIdx)[2];
+			if: ((is: compensating taggedAs: TimeoutType).or: { (! (is: compensating taggedAs: FailureType)).and: {!compensating} }) then: {
+				env.replace("compensating" + runIdx, timeout);
+				system.println("timeout error");
+				compensate(activity, timeout.compensation, msg, env, continue, runIdx, service);
+			} else: {
+				system.println("timeout error, but other compensation is already executed");
+			};
+		};
+		whenever: service disconnected: {
+			if: (((is: disconnection taggedAs: DisconnectionType).or: {is: disconnection taggedAs: Pattern}).or: {is: disconnection taggedAs: Act}) then: {
+				def compensating := env.find("compensating" + runIdx)[2];
+				if: ((is: compensating taggedAs: DisconnectionType).or: { (! (is: compensating taggedAs: FailureType)).and: {!compensating} }) then: {
+					env.replace("compensating" + runIdx, disconnection);
+					system.println("disconnection error");
+					compensate(activity, disconnection.compensation, msg, env, continue, runIdx, service); 
+				} else: {
+					system.println("disconnection error, but other compensation is already executed");
 				};
-				self.execute(idx+1, env);
+			} else: {
+				system.println("disconnection error, no compensation specified");
+			};
+		};
+	};
+	
+	def compensate(activity, compensation, msg, env, continue, runIdx, service := nil) {
+		if: (compensation == nil) then: {
+			system.println("no compensation specified");
+		} else: { 
+			if: (is: compensation taggedAs: RediscoverType) then: {
+				if: (compensation.triedTimes < compensation.maxTimes) then: {
+					compensation.try();
+					execute(activity, env, continue);
+				} else: {
+					compensate(activity, compensation.action, msg, env, continue, runIdx, service);
+				};
+			} else: {
+				if: (is: compensation taggedAs: RetryType) then: {
+					if: (compensation.triedTimes < compensation.maxTimes) then: {
+						compensation.try();
+						invoke(activity, service, msg, env, continue, runIdx);
+					} else: {
+						compensate(activity, compensation.action, msg, env, continue, runIdx, service);
+					};
+				} else: { 
+					if: (is: compensation taggedAs: SkipType) then: {
+						continue("skipped");
+					} else: { 
+						if: (is: compensation taggedAs: RestartType) then: {
+							compensation.action.restart();
+							run(compensation.action, env, { | _ | _ })  // such that execution of remainder of component is not completed
+						} else: {
+							// compensating action is a component
+							run(compensation, env, continue, env.find("compensating" + runIdx)[2]);
+						};
+					};
+				};
+			};
+		};
+ 	};
+	
+	def run(component, env, continue := { | _ | _ }, compensating := false) {
+		if: (! (((is: compensating taggedAs: FailureType).or: {is: compensating taggedAs: Pattern}).or: {is: compensating taggedAs: Act})) then: {
+			idx := idx + 1;
+		};
+		env.replace("compensating" + idx, compensating);
+		if: (is: component taggedAs: Act) then: {
+			// Component is an activity, wrapping a service object.
+			execute(component, env, continue, idx);
+    	} else: { 
+			// Component is a pattern, the engine must start it and then await its completion
+			when: component.start(env) becomes: { |reply|
+				continue(reply);
 			};
 		};
 	};
@@ -142,6 +232,10 @@ def Sequence := object: {
         [result, resolver] := makeMultiFuture(multi);    
 	};
 	
+	def restart() {
+		started := started - 1;
+	};
+	
 	def start(env) {
 		if: !(started == multi) then: {
 			started := started + 1;
@@ -158,24 +252,11 @@ def Sequence := object: {
 	};
 		
 	def execute(idx, env) {	
+		def component := componentTable[idx];
 		if: (idx < componentTable.length()) then: {
-			def component := componentTable[idx];
-			if: (is: component taggedAs: Act) then: {
-				WorkflowPattern^executeActivityAndContinue(idx, component, env);
-       		} else: { // component is a pattern
-				when: component.start(env) becomes: { |reply|
-					execute(idx+1, env);
-				};
-			};
+			WorkflowPattern^run(component, env, { | _ | self.execute(idx+1, env) });
 		} else: {
-			def component := componentTable[idx];
-			if: (is: component taggedAs: Act) then: {
-				resolver.resolve(WorkflowPattern^executeActivity(component, env));
-       		} else: { // component is a pattern
-				when: component.start(env) becomes: { |reply|
-					resolver.resolve(reply);
-				};
-			};
+			WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
 		};
 	};
 } taggedAs: [Pattern];
@@ -201,7 +282,7 @@ def ParallelSplit := object: {
 		def f[bTable.length()] { makeMultiFuture(multi); };
 		futureTable := f;
 		[result, resolver] := makeMultiFuture(multi);
-		result;
+		result;  
     };
 
 	def addFuture(nbr) {
@@ -216,33 +297,23 @@ def ParallelSplit := object: {
 	def start(env) {
 		if: !(started == multi) then: {
 			started := started + 1;
-			execute(1, env);
+			execute(env);
 			//when all components have been started, the parallelSplit is said to be "done"
 			//and the result Future is resolved as usual (with the future table as value ...)
 			def i := 0;
 			def f[futureTable.length()] { i := i+1; futureTable[i][1]; };
 			resolver.resolve(f);
 		};
-		result;   // TODO result teruggeven?
+		result;   // TODO result teruggeven? (wat bij init)
 	};	
 		
-	def execute(idx, env) {
-		def clonedEnv := Environment.new();
-		clonedEnv.merge([env]);
-		if: (idx <= componentTable.length()) then: {
-			def component := componentTable[idx];	 
-			// component is either an activity or a pattern    	
-			if: (is: component taggedAs: Act) then: {
-				futureTable[idx][2].resolve(WorkflowPattern^executeActivity(component, clonedEnv));
-       		} else: { // component is a pattern
-				when: component.start(clonedEnv) becomes: { |reply|
-					futureTable[idx][2].resolve(reply);
-				};
-        	};
-			execute(idx+1, env);
-		};
+	def execute(env) {
+		1.to: componentTable.length+1 do: { | idx |
+			def clonedEnv := Environment.new(env);
+			WorkflowPattern^run(componentTable[idx], clonedEnv, { | _ | futureTable[idx][2].resolve(_) });
+		}
 	};
-} taggedAs: [Pattern]; 
+} taggedAs: [Pattern];
 
 
 
@@ -360,13 +431,7 @@ def Synchronize := object: {
 		syncTable.each: { |branch| envs := envs + branch[3].filter:{ |env| env.id == idValue; }; };
 		if: (envs.length() == syncTable.length()) then: {
 			nEnv.merge(envs);
-			if: (is: nextComponent taggedAs: Act) then: {
-             	resolver.resolve(WorkflowPattern^executeActivity(nextComponent, nEnv));
-  			} else: { // component is a pattern
-          		when: nextComponent.start(nEnv) becomes: { |reply|
-               		resolver.resolve(reply);
-             	};
-            };
+			WorkflowPattern^run(nextComponent, nEnv, { | _ | resolver.resolve(_) });
 		};
 	};
 	
@@ -389,7 +454,7 @@ def ExclusiveChoice := object: {
         test := block;
 		consequence := then;
 		alternative := else;
-        [result, resolver] := makeFuture();
+        [result, resolver] := makeFuture();  //TODO: multi?
         // if a component in the actionrules is a SyncPattern,
         // add the exclusiveChoice to its syncTable 
        // TODO: only for the one branch ?!?
@@ -412,21 +477,9 @@ def ExclusiveChoice := object: {
 		def method := test.method();
 		def bindings := env.bind(method.parameters()); 
 		if: (test.apply(bindings)) then: {
-			if: (is: consequence taggedAs: Act) then: {
-				resolver.resolve(WorkflowPattern^executeActivity(consequence, env));
-       		} else: { // component is a pattern
-				when: consequence.start(env) becomes: { |reply|
-					resolver.resolve(reply);
-				};
-			};
+			WorkflowPattern^run(consequence, env, { | _ | resolver.resolve(_) });
 		} else: { // alternative branch
-			if: (is: alternative taggedAs: Act) then: {
-				resolver.resolve(WorkflowPattern^executeActivity(alternative, env));
-	       	} else: { // component is a pattern
-				when: alternative.start(env) becomes: { |reply|
-					resolver.resolve(reply);
-				};
-			};
+			WorkflowPattern^run(alternative, env, { | _ | resolver.resolve(_) });
 		};
 		//TODO: meer dan 2 branches                    
   	};
@@ -455,22 +508,15 @@ def SimpleMerge := object: {
 
 	def start(env) {
 		id := id  + 1;
-		def clonedEnv := Environment.new();
-		def clonedEnv.merge(env);
+		def clonedEnv := Environment.new(env);
 		clonedEnv.id := id;
 		execute(clonedEnv);
 		result;
 	};
 	
 	def execute(env) {
-     	if: (is: component taggedAs: Act) then: {
-			resolver.resolve(WorkflowPattern^executeActivity(component, env));
-  		} else: { // component is a pattern
-       		when: component.start(env) becomes: { |reply|
-				resolver.resolve(reply);
-           	};
-       	};
-    };
+		WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
+	};
 } taggedAs: [MultiPattern];
 
 
@@ -515,7 +561,7 @@ def MultiChoice := object: {
 		} else: {
 			if: !(started == multi) then: {
 				started := started + 1;
-				execute(1, env);
+				execute(env);
 				//when all components have been started, the parallelSplit is said to be "done"
 				//and the result Future is resolved as usual (with the future table as value ...)
 				def i := 0;
@@ -526,19 +572,10 @@ def MultiChoice := object: {
 		result;
 	};	
 		
-	def execute(idx, env) {
-		def clonedEnv := clone: env;	
-		if: (idx <= conditionActions.length()) then: {
-			def component := conditionActions[idx][2];	 
-			// component is either an activity or a pattern    	
-			if: (is: component taggedAs: Act) then: {
-				futureTable[idx][2].resolve(WorkflowPattern^executeActivity(component, clonedEnv));
-       		} else: { // component is a pattern
-				when: component.start(clonedEnv) becomes: { |reply|
-					futureTable[idx][2].resolve(reply);
-				};
-        	};
-			execute(idx+1, env);
+	def execute(env) {
+		def clonedEnv := clone: env;
+		1.to: conditionActions.length+1 do: { | idx |
+			WorkflowPattern^run(conditionActions[idx][2], clonedEnv, { | _ | futureTable[idx][2].resolve(_) });
 		};
 	};
 } taggedAs: [Pattern];
@@ -594,13 +631,7 @@ def StructuredDiscriminator := object: {
 		def envs := [];
 		syncTable.each:{ |branch| envs := envs + branch[3].filter:{ |env| env.id == idValue; }; };
 		if: (envs.length() == 1) then: {
-			if: (is: nextComponent taggedAs: Act) then: {
-             	resolver.resolve(WorkflowPattern^executeActivity(nextComponent, env));
-  			} else: { // component is a pattern
-          		when: nextComponent.start(env) becomes: { |reply|
-               		resolver.resolve(reply);
-             	};
-            };
+			WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
 		};
 	};
 		
@@ -662,13 +693,7 @@ def StructuredPartialJoin := object: {
 		def envs := [];
 		syncTable.each:{ |branch| envs := envs + branch[3].filter:{ |env| env.id == idValue; }; };
 		if: (envs.length() == n) then: {
-			if: (is: nextComponent taggedAs: Act) then: {
-             	resolver.resolve(WorkflowPattern^executeActivity(nextComponent, env));
-  			} else: { // component is a pattern
-          		when: nextComponent.start(env) becomes: { |reply|
-               		resolver.resolve(reply);
-             	};
-            };
+			WorklowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
 		};
 	};
 		
@@ -708,8 +733,7 @@ def Multiplexer := object: {
 		if: ! (started == multi) then: {
 			started := started + 1;
 			id := id  + 1;
-			def clonedEnv := Environment.new();
-			clonedEnv.merge([env]);
+			def clonedEnv := Environment.new(env);
 			clonedEnv.id := id;
 			execute(clonedEnv);
 		};
@@ -717,19 +741,14 @@ def Multiplexer := object: {
 	};
 	
 	def execute(env) {
-		def nr := 0;
-		while: { nr < number } do: {
-     		if: (is: component taggedAs: Act) then: {
-				resolver.resolve(WorkflowPattern^executeActivity(component, env));
-  			} else: { // component is a pattern
-				def clonedCmp := clone: component;
-       			when: clonedCmp.start(env) becomes: { |reply|
-					resolver.resolve(reply);
-           		};
-       		};
-			nr := nr + 1;
+		number.doTimes: { | nr |
+			if: (is: component taggedAs: Act) then: {
+				WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
+			} else {
+				WorkflowPattern^run(clone: component, env, { | _ | resolver.resolve(_) });
+			};
 		};
-    };
+  };
 } taggedAs: [Pattern];
 
 
@@ -762,8 +781,7 @@ def MultipleInstancesWithoutSynchronization := object: {
 		if: ! (started == multi) then: {
 			started := started + 1;
 			id := id  + 1;
-			def clonedEnv := Environment.new();
-			clonedEnv.merge([env]);
+			def clonedEnv := Environment.new(env);
 			clonedEnv.id := id;
 			execute(clonedEnv);
 		};
@@ -771,18 +789,212 @@ def MultipleInstancesWithoutSynchronization := object: {
 	};
 	
 	def execute(env) {
-     	if: (is: component taggedAs: Act) then: {
-			resolver.resolve(WorkflowPattern^executeActivity(component, env));
-  		} else: { // component is a pattern
-			//if: (started > 1) then: { def nbr := 0; while: {nbr < multi} do: { component.addFuture(multi); nbr := nbr + 1; }; }; 
-       		when: component.start(env) becomes: { |reply|
-				resolver.resolve(reply);
-           	};
-       	};
-    };
+		WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
+	};
 } taggedAs: [MultiPattern];
 
 
+
+def Failure := object: {
+	def component;
+	def failureEvents; 
+	def result;
+	def resolver;
+	def started := false; // TODO multi
+	
+	def init(c, fe) {
+		component := c;
+		failureEvents := fe;
+		[result, resolver] := makeFuture();  //TOOD multiFuture
+	};
+	
+	def start(env) {
+		if: !started then: {
+			started := true;
+			execute(env);
+		};
+		result;
+	};
+	
+	def replaceFailure(failureEvent, env) {
+		if: (is: failureEvent taggedAs: DisconnectionType) then: {
+			env.replace(`disconnection, failureEvent);
+		} else: {
+			if: (is: failureEvent taggedAs: TimeoutType) then: {
+				env.replace(`timeout, failureEvent);
+			} else: {
+				if: (is: failureEvent taggedAs: NotFoundType) then: {
+					env.replace(`notFound, failureEvent);
+				};
+			};
+		};
+		if: (is: failureEvent.compensation taggedAs: RestartType) then: {
+			failureEvent.compensation.updateAction(component);
+		};
+	};
+	
+	def execute(env) {
+		def prevDisconnection := env.find(`disconnection)[2];
+		def prevTimeout := env.find(`timeout)[2];
+		def prevNotFound := env.find(`notFound)[2];
+		failureEvents.each: { |failure| replaceFailure(failure, env); };
+		WorkflowPattern^run(component, 
+			env, 
+			{ | _ | 
+				env.replace(`disconnection, prevDisconnection);
+				env.replace(`timeout, prevTimeout);
+				resolver.resolve(_) });
+	};
+} taggedAs: [Pattern];
+
+
+
+def Disconnection := object: {
+	def compensation;
+	
+	def init(c) {
+		compensation := c;
+	};
+} taggedAs: [DisconnectionType];
+
+
+def Timeout := object: {
+	def duration;
+	def compensation;
+	
+	def init(d, c) {
+		duration := d;
+		compensation := c;
+	};
+} taggedAs: [TimeoutType];
+
+
+def NotFound := object: {
+	def compensation;
+	
+	def init(c) {
+		compensation := c;
+	};
+} taggedAs: [NotFoundType];
+
+
+def Retry := object: {
+	def maxTimes;
+	def triedTimes := 0;
+	def action; 
+	def result;
+	def resolver;
+	
+	def init(t, a := nil) {
+		[result, resolver] := makeFuture(); //TODO: multi
+		maxTimes := t;
+		action := a;
+	};
+	
+	def try() {
+		triedTimes := triedTimes + 1;
+	};
+} taggedAs: [RetryType];
+
+
+def Rediscover := object: {
+	def maxTimes;
+	def triedTimes := 0;
+	def action; 
+	def result;
+	def resolver;
+	
+	def init(t, a := nil) {
+		[result, resolver] := makeFuture(); //TODO: multi
+		maxTimes := t;
+		action := a;
+	};
+	
+	def try() {
+		triedTimes := triedTimes + 1;
+	};
+} taggedAs: [RediscoverType];
+
+
+def Skip := object: {
+	def maxTimes := 1;
+	def triedTimes := 0;
+	def action := nil; 
+	def result;
+	def resolver;
+	
+	def init() {
+		[result, resolver] := makeFuture(); //TODO: multi
+	};
+	
+	def try() {
+		triedTimes := triedTimes + 1;
+	};
+} taggedAs: [SkipType];
+
+
+def Restart := object: {
+	def maxTimes;
+	def triedTimes := 0;
+	def action; 
+	def result;
+	def resolver;
+	
+	def init(t) {
+		[result, resolver] := makeFuture(); //TODO: multi
+		maxTimes := t;
+	};
+	
+	def try() {
+		triedTimes := triedTimes + 1;
+	};
+	
+	def updateAction(component) {
+		action := component;
+	};
+} taggedAs: [RestartType];
+
+
+
+def Activity := object: {
+	def service;
+	def selector;
+	def parameters;
+	def output;
+	
+	def init(sw, sel, pars, outputVars) {  
+		service	   := sw;
+		selector   := sel;
+		parameters := pars;
+		output     := outputVars;
+	};
+} taggedAs: [Act];
+
+
+def createUnderstandingMirror(baseObject) {
+ 	extend: defaultMirror.new(baseObject) with: {
+   		def doesNotUnderstand(selector) {
+  			{ |@args| 
+				Activity.new(baseObject, selector, args.select(1, args.length()), args[args.length()]) }  
+   		};
+  	};
+};
+
+def makeServiceWrapper(aTag) {
+	object: {
+		def tag() { aTag };
+
+	} mirroredBy: {|emptyBase| createUnderstandingMirror(emptyBase)}
+};
+
+deftype outputT;
+
+def output := extend: outputT with: {
+	def annotateMessage(method) {
+    	system.println("output");
+    	method;
+	};
+};
 
 def Local := object: {
 	def block;
@@ -816,128 +1028,8 @@ def Local := object: {
 
 
 
-// TODO: what if compensation terminates (sub)workflow?
-def Failure := object: {
-	def component;
-	def timeout;
-	def compensatingCmp;
-	def result := nil;
-	def resolver;
-	def started := false;
-	
-	def init(c, timeoutAndCmps) {
-		[result, resolver] := makeFuture();
-		component := c;
-		timeout := timeoutAndCmps[1];
-		compensatingCmp := timeoutAndCmps[2];
-	};
-	
-	def start(env) {
-		if: !started then: {
-			started := true;
-			execute(env, component);
-		};
-		result;
-	};
-	
-	def execute(env, cmp) {
-		if: (is: cmp taggedAs: Act) then: {
-			def msg := WorkflowPattern^createTimeoutMsg(cmp.getSelector(), env.bind(cmp.getArguments()), timeout);
-			def aMsg := eval: (read: msg) in: self;
-			when: cmp.getService().getTag() discovered: { |service|
-				system.println("Discovered service");
-				when: service<+aMsg becomes: { |reply| 
-					system.println("Received reply :: " + reply);
-					// TODO: check if length of reply is the same as output
-					def index := 1;
-					while: { index <= reply.length() } do: {
-						env.insert(cmp.getOutput()[index], reply[index]);
-						index := index+1;
-					};
-					resolver.resolve(reply);
-				} catch: TimeoutException using: { |e|
-					system.println("service timeout");
-					execute(env, compensatingCmp);
-				};
-			};
-		} else: { // component is a pattern  
-			// TODO @Due
-			when: cmp.start(env)@FutureMessage becomes: { |reply|
-           		resolver.resolve(reply);
-			} catch: TimeoutException using: { |e|
-				system.println("timeout in workflow pattern");
-				execute(env, compensatingCmp);
-			};
-		};
-	};
-} taggedAs: [Pattern];
 
-
-
-def Activity := object: {
-	def serviceWrapper;
-	def selector;
-	def arguments;
-	def output;
-	
-	def init(sw, sel, args, outputVars) {  
-		serviceWrapper := sw;
-		selector := sel;
-		arguments := args;
-		output := outputVars;
-	};
-	
-	def getService() {
-		serviceWrapper;
-	};
-	
-	def getSelector() {
-		selector;
-	};
-	
-	def getArguments() {
-		arguments;
-	};
-	
-	def getOutput() {
-		output;
-	};
-} taggedAs: [Act];
-
-
-
-def createUnderstandingMirror(baseObject) {
- 	extend: defaultMirror.new(baseObject) with: {
-   		def doesNotUnderstand(selector) {
-  			{ |@args| 
-				Activity.new(baseObject, selector, args.select(1, args.length()), args[args.length()]) }  
-   		};
-  	};
-};
-
-
-def makeServiceWrapper(tag) {
-	object: {
-	
-		def getTag() {
-			tag;
-		};
-	} mirroredBy: {|emptyBase| createUnderstandingMirror(emptyBase)}
-};
-
-
-
-deftype outputT;
-
-def output := extend: outputT with: {
-	def annotateMessage(method) {
-    	system.println("output");
-    	method;
-	};
-};
-
-
-
+// Test Code
 deftype LocationService;
 deftype WeatherService;
 deftype GUIService;
@@ -965,6 +1057,15 @@ def fsw := makeServiceWrapper(FService);
 def gsw := makeServiceWrapper(GService);
 def hsw := makeServiceWrapper(HService);
 def isw := makeServiceWrapper(IService);
+
+
+
+def env := Environment.new();
+env.insert(`gps, 99);
+env.insert(`timeout, nil);
+env.insert(`disconnection, nil);
+env.insert(`notFound, nil);
+
 
 
 /*
@@ -1137,5 +1238,29 @@ id := id + 1;
 env.id := id;
 seq1.start(env);
 */
+
+
+def seq1 := Failure.new(Sequence.new([ asw.a([`a]), Failure.new(hsw.h([`h]), [Disconnection.new(Rediscover.new(1, bsw.b([`b])))]), hsw.h([`h]), Local.new({|env| env.print()}) ]),
+						[NotFound.new(dsw.d([`d])), Disconnection.new(esw.e([`e]))]);
+//seq1.start(env);
+
+def seq2 := Sequence.new([ asw.a([`a]), Failure.new(hsw.h([`h]), [Disconnection.new(Skip.new()), Timeout.new(20, bsw.b([`b]))]), csw.c([`c]), Local.new({|env| env.print()}) ]);
+//seq2.start(env);
+
+def seq3 := Sequence.new([ asw.a([`a]), Failure.new(hsw.h([`h]), [Disconnection.new(Retry.new(1, Skip.new())), Timeout.new(20, bsw.b([`b]))]), csw.c([`c]), Local.new({|env| env.print()}) ]);
+//seq3.start(env);
+
+def seq4 := Failure.new(Sequence.new([ asw.a([`a]), hsw.h([`h]), csw.c([`c]), Local.new({|env| env.print()}) ]),
+						[Timeout.new(2, Restart.new(1))]);
+//seq4.start(env);
+
+def par1 := ParallelSplit.new([ [asw.a([`a])], [bsw.b([`b]), csw.c([`c]), dsw.d([`d])], [esw.e([`e])] ]);
+//par1.start(env);
+
+def sync := Synchronize.new(fsw.f([`f]));
+def par2 := ParallelSplit.new([ [asw.a([`a]), Connection.new(sync)], [bsw.b([`b]), csw.c([`c]), dsw.d([`d]), Connection.new(sync)], [esw.e([`e]), Connection.new(sync)] ]);
+//par2.start(env);
+
+
 
 
