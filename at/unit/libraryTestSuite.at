@@ -48,7 +48,7 @@ def LibraryTestSuiteModule := object: {
 		/.at.lang.leasedrefs.LeasedRefsTest(),
     /.at.support.timer.TimerTest(),
     /.at.support.util.UtilTest(),
-    /.at.tuples.totam.TotamTest(),
+    /.at.urbiflock.totam.TotamTest(),
     /.at.unit.bugfixes.BugFixTest(),
     /.at.unit.disconnectTest.DisconnectTest(),
 		/.at.tutorial.tutorialTestSuite]);
