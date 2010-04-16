@@ -261,7 +261,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 							} deactivated: { |args|
 							  retractFromCrime(crime);
 							};
-							crimeSub := /.at.urbiflock.contextAwareTuples.makeWrapperObject(sub); 
+							crimeSub := /.at.tuples.contextAwareTuples.makeWrapperObject(sub); 
 						 };
 						 //TODO: dirty hack to have descriptors still.
 						 def inScope(desTarget) {
@@ -412,7 +412,7 @@ def contextAwareTuplesModule := object:{
 		  };
 		  		 			
 		  def theMeetingRoom := actor: {
-			  import /.at.urbiflock.contextAwareTuples;
+			  import /.at.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
@@ -436,7 +436,7 @@ def contextAwareTuplesModule := object:{
 				 };
 		  };
 			def anotherActor := actor:{ |res2|
-				import /.at.urbiflock.contextAwareTuples;
+				import /.at.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  def timerModule := /.at.support.timer;
 				def goOnline(){
@@ -451,7 +451,7 @@ def contextAwareTuplesModule := object:{
 		    };
 		  };
 		  def theMeetingRoom := actor: { |anotherActor|
-			  import /.at.urbiflock.contextAwareTuples;
+			  import /.at.tuples.contextAwareTuples;
 			  def timerModule := /.at.support.timer;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
@@ -476,7 +476,7 @@ def contextAwareTuplesModule := object:{
 		    };
 		  };
 		  def player2 := actor: { 
-			  import /.at.urbiflock.contextAwareTuples;
+			  import /.at.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  myTs.add(makeTuple("GPS", 40, 40));
@@ -486,7 +486,7 @@ def contextAwareTuplesModule := object:{
 		  };
 		 			
 		  def theRoomManager := actor: {
-			  import /.at.urbiflock.contextAwareTuples;
+			  import /.at.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
@@ -512,7 +512,7 @@ def contextAwareTuplesModule := object:{
 		  };
 		 			
 		  def theRoomManager := actor: {
-			  import /.at.urbiflock.contextAwareTuples;
+			  import /.at.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
@@ -538,7 +538,7 @@ def contextAwareTuplesModule := object:{
 			};
 			
 			def remoteTs := actor: {
-				import /.at.urbiflock.contextAwareTuples;
+				import /.at.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
