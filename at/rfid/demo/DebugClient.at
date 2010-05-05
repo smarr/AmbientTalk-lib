@@ -1,0 +1,112 @@
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(true);
+
+import /.librfid.ambient.vector;
+import /.librfid.ambient.hashmap;
+
+def DEBUG := true;
+def INFO  := true;
+
+deftype RFIDTag;
+deftype Foo;
+def createRFIDClient() {
+	
+	def debug(str) {
+		if: (DEBUG) then: {
+			system.println("[DEBUG] " + str);
+		};
+	};
+	
+	def info(str) {
+		if: (INFO) then: {
+			system.println("[INFO] " + str);
+		};
+	};
+	
+	def availableTags := HashMap.new;
+	
+	def lastTag := nil;
+	
+	def localFacade := object: {
+		// local methods
+		
+		def testFarRef() {
+			debug("testFarRef: ");
+			if: (lastTag == nil) then: {
+				debug("no last tag!");
+			} else: {
+				when: lastTag<-inc()@Due(seconds(30)) becomes: { |data|
+					debug("inc gave: " + data);
+				};
+			};
+		};
+		
+		def initLast(anIsolate) {
+			lastTag := lastTag<-initialize(anIsolate);
+		};
+		
+		def testInit() {
+			def i := isolate: { 
+				def ctr := 0 ;
+				def inc(n := 1)@Mutator {
+					ctr := ctr + n;
+				};
+			} taggedAs: [Foo];
+			when: lastTag<-initialize(i) becomes: {|newObject|
+				info("new object aquired: " + newObject);
+			};
+		};
+		
+		def getTag(serial) {
+			availableTags.get(serial).clone();
+		};
+		
+		def run() {
+			
+			whenever: Foo discovered: { |foo|
+				debug("foo discovered: " + foo);
+				lastTag := foo;
+				whenever: foo disconnected: {
+					debug("foo disconnected: " + foo);
+				};
+				whenever: foo reconnected: {
+					debug("foo reconnected: " + foo);
+				};
+			};
+			
+			whenever: RFIDTag discovered: { |tag|
+				when: tag<-getSerial() becomes: { |serial|
+						lastTag := tag;
+						if: (!(availableTags.contains(serial))) then: {
+							debug("discovered: " + serial);
+							availableTags.put(serial, tag);
+                        	
+							whenever: tag disconnected: {
+								debug("tag disconnected: " + serial);
+							};
+							whenever: tag reconnected: {
+								debug("tag reconnected: " + serial);
+							};
+							when: tag takenOffline: {
+								debug("offline: " + serial);
+								availableTags.remove(serial);
+							};
+						} else: {
+							debug("ack: " + serial);
+							// update far ref
+							availableTags.put(serial, tag);
+						};
+					};
+			};
+		};
+	};
+	
+	network.online();
+	localFacade.run();
+	localFacade;
+};
+
+def c := createRFIDClient();
+c;
