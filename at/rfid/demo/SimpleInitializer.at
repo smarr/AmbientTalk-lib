@@ -1,0 +1,20 @@
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(true);
+
+import /.main.Book;
+import /.main.BookWrapper;
+
+
+deftype RFIDTag;
+
+def book1 := aBook.new("Book 1", "Jos, Fons");
+def book2 := aBook.new("Book 2", "Marie, Jan");
+def book3 := aBook.new("Book 3", "Alice, Bob");
+
+
+when: RFIDTag discovered: { |tag|
+	tag<-initialize(book1);
+};
+	

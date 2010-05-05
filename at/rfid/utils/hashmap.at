@@ -1,0 +1,71 @@
+// def Serializable := /.at.types.Isolate;
+
+/**
+ * when manually using the Java hashmaps
+ * we need to define .each for each instance
+ * and when the hashmap is overwritten
+ * the .each method is gone
+ * this wrapper does away with that problem
+ */
+def HashMap := object: {
+
+	def hm := nil;
+
+	def each: clo {
+		def keyit := hm.keySet().iterator();
+		def valit := hm.values().iterator();
+		while: { keyit.hasNext() } do: {
+			clo(keyit.next(), valit.next());
+		};
+	};
+	
+	def put_soft(k, v) {
+		if: (nil == hm.get(k)) then: {
+			hm.put(k, v);
+		};
+	};
+
+	def put(k, v) {
+		hm.put(k, v);
+	};
+
+	def get(k) {
+		hm.get(k);
+	};
+	
+	def remove(k) {
+		if: (!(nil == hm.get(k))) then: {
+			hm.remove(k);
+		};
+	};
+	
+	def clone() {
+		HashMap.new(hm.clone());
+	};
+	
+	def clone_internal() {
+		hm.clone();
+	};
+
+	def size() {
+		hm.size;
+	};
+
+	def contains(k) {
+		(!(nil == hm.get(k)));
+	};
+	
+	def printme() {
+	    system.println("{");
+	    self.each: {|key, val|
+	        system.println("  " + (print: key) + " -> " + (print: val));
+        };
+        system.println("}");
+	};
+
+	def init(ihm := jlobby.java.util.HashMap.new()) {
+		hm := ihm;
+	};
+}; // taggedAs: [ Serializable ];
+
+self;

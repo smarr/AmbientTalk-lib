@@ -1,0 +1,42 @@
+def NewBook := isolate: {
+    
+	def title_ := "";
+	def authors_ := "";
+	def score_ := 0;
+	def votes_ := 0;
+	def dscore_ := 0;
+	def dvotes_ := 0;
+	
+	
+	def getTitle() {
+	    title_;
+	};
+	
+	def getAuthors() {
+		authors_;
+	};
+	
+	def getRating() {
+		//def n := (votes+dvotes);
+		//if: (n == 0) then: {
+		//	nil;
+		//} else: {
+		//	(score+dscore)/n;
+		//};
+		"rating";
+	};
+	
+	def rate(aScore) {
+		//dvotes := dvotes + 1;
+		//dscore := dscore + aScore;
+		//getRating();
+	};
+	
+	def init(title, authors) {
+		title_ := title;
+		authors_ := authors;
+	};
+	
+};
+
+self;

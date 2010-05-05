@@ -1,0 +1,55 @@
+
+def unless: test then: closure {
+	if: !test then: closure;
+};
+
+
+def isolate: closure taggedAs: tagTable {
+	object: closure taggedAs: [/.at.types.Isolate] + tagTable;
+};
+
+/*
+ * check method annotation
+ */ 
+def is: someMethod annotatedAs: someAnnotation {
+	someMethod.annotations.contains(someAnnotation);
+};
+
+deftype Mutator;
+def Types := /.at.types;
+
+def mutatorsOf: someObject {
+	(reflect: someObject).listMethods.select: {|m|
+		is: m annotatedAs: Mutator;
+	};
+};
+
+def is: methodName mutatorOf: someObject {
+	try: {
+		is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
+	} catch: Types.SelectorNotFound using: {|e| false };
+};
+
+
+def try: closure catchUsing: failClosure {
+	try: closure catch: Types.Exception using: { |e| failClosure(e) };
+};
+
+
+
+def DEBUG := false;
+def INFO  := true;
+
+def debug(str) {
+	if: (DEBUG) then: {
+		system.println("[DEBUG] " + str);
+	};
+};
+
+def info(str) {
+	if: (INFO) then: {
+		system.println("[INFO] " + str);
+	};
+};
+
+self;

@@ -1,0 +1,56 @@
+import /.at.lang.futures;
+enableFutures(true);
+import /.at.exceptions;
+
+import /.at.rfid.utils.set;
+
+import /.at.rfid.demo.libraryapp.Book;
+import /.at.rfid.demo.libraryapp.BookWrapper;
+
+deftype Book;
+
+def LibraryWindow := jlobby.at.rfid.demo.libraryapp.LibraryWindow;
+def gui := jlobby.at.rfid.demo.libraryapp.LibraryWindow.new();
+
+def timeouts := Set.new();
+
+//when: RFIDTag discovered: { |tag| }
+	
+
+def book1 := FakeBookWrapper.new("Book 1", "Jos, Fons");
+def book2 := FakeBookWrapper.new("Book 2", "Marie, Jan");
+def book3 := FakeBookWrapper.new("Book 3", "Alice, Bob");
+
+
+gui.addBook(book1);
+gui.addBook(book2);
+gui.addBook(book3);
+
+
+
+
+when: Book discovered: { |book|
+
+	def bookwrapper := BookWrapper.new(book);
+	gui.addBook(bookWrapper);
+
+	whenever: book disconnected: {
+		gui.setAvailable(bookWrapper, false);
+		def timeout := when: 15.seconds elapsed: {
+			gui.removeBook(bookWrapper);
+			timeouts.remove(bookWrapper);
+		};
+		timeouts.add(bookWrapper, timeout);
+		
+	}
+	whenever: book reconnected: {
+		if: (timeouts.contains(bookWrapper)) then: {
+			timeouts.get(bookWrapper).cancel();
+			timeouts.remove(bookWrapper);
+			gui.setAvailable(bookWrapper, true);
+		} else: {
+			gui.addBook(bookWrapper);
+		}
+	}
+	
+}

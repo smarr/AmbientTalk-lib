@@ -1,0 +1,63 @@
+
+def Set := object: {
+
+	def hs := nil;
+
+	def each: clo {
+		def it := hs.iterator();
+		while: { it.hasNext() } do: {
+			clo(it.next());
+		};
+	};
+	
+	def first() {
+		def it := hs.iterator();
+		if: it.hasNext() then: {
+			it.next();
+		} else: {
+			nil;
+		};
+	};
+	
+	def add(o) {
+		hs.add(o);
+	};
+	
+	def clear() {
+		hs.clear();
+	};
+	
+	def contains(o) {
+		hs.contains(o);
+	};
+	
+	def isEmpty() {
+		hs.isEmpty();
+	};
+	
+	def notEmpty() {
+		!isEmpty();
+	};
+	
+	def remove(o) {
+		hs.remove(o);
+	};
+	
+	def clone() {
+		Set.new(hs.clone());
+	};
+	
+	def clone_internal() {
+		hs.clone();
+	};
+
+	def size() {
+		hs.size;
+	};
+
+	def init(ihs := jlobby.java.util.HashSet.new()) {
+		hs := ihs;
+	};
+};
+
+self;

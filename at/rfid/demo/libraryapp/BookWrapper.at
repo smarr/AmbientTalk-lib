@@ -1,0 +1,57 @@
+def FakeBookWrapper := object: {
+	def book_ := nil;
+	def title_ := "Please wait...";
+	def authors_ := "Please wait...";
+	def rating_ := "Please wait...";
+	
+	def getTitle() {
+		title_;
+	};
+	def getAuthors() {
+		authors_;
+	};
+	def getRating() {
+		print: rating_;
+	};
+	
+	def init(title, authors) {
+		title_ := title;
+		authors_ := authors;
+		rating_ := 0;
+	};
+};
+
+def BookWrapper := object: {
+	def book_ := nil;
+	def title_ := "Please wait...";
+	def authors_ := "Please wait...";
+	def rating_ := "Please wait...";
+	
+	def getTitle() {
+		title_;
+	};
+	def getAuthors() {
+		authors_;
+	};
+	def getRating() {
+		rating_;
+	};
+	
+	def init(book) {
+		book_ := book;
+		when: book<-getTitle() becomes: { |title|
+			title_ := title;
+			gui.tableDataChanged();
+		};
+		when: book<-getAuthors() becomes: { |authors|
+			authors_ := authors;
+			gui.tableDataChanged();
+		};
+		when: book<-getRating() becomes: { |rating|
+			rating_ := rating;
+			gui.tableDataChanged();
+		};
+	};
+};
+
+self;

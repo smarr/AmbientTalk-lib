@@ -1,0 +1,79 @@
+// def Serializable := /.at.types.Isolate;
+
+def Vector := object: {
+
+	def vc := nil;
+
+	def each: clo {
+		def it := vc.iterator();
+		while: { it.hasNext() } do: {
+			clo(it.next());
+		};
+	};
+	
+	def add(o) {
+		vc.add(o);
+	};
+	
+	def add_at(i, o) {
+		vc.add(i, o);
+	};
+
+	def get(i) {
+		vc.get(i);
+	};
+	
+	def at(i) {
+		vc.get(i);
+	};
+	
+	def set(i, o) {
+		vc.set(i, o);
+	};
+
+	def clear() {
+		vc.clear();
+	};
+	
+	def contains(o) {
+		vc.contains(o);
+	};
+	
+	def index_of(o) {
+		vc.indexOf(o);
+	};
+	
+	def remove(o) {
+		vc.removeElement(o);
+	};
+	
+	def remove_at(i) {
+		vc.removeElementAt(i);
+	};
+	
+	def clone() {
+		Vector.new(vc.clone());
+	};
+	
+	def remove_all(coll) {
+		vc.removeAll(coll.clone_internal());
+	};
+	
+	def retain_all(coll) {
+		vc.retainAll(coll.clone_internal());
+	};
+	
+	def clone_internal() {
+		vc.clone();
+	};
+
+	def size() {
+		vc.size;
+	};
+
+	def init(ivc := jlobby.java.util.Vector.new()) {
+		vc := ivc;
+	};
+}; // taggedAs: [ Serializable ];
+
+self;
