@@ -1,9 +1,6 @@
 /**
  * AmbientRFID
  * Kevin Pinte
- *
- * SOFT Event 2009
- * DEMO
  * 
  */
 
@@ -13,12 +10,12 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
-import ~.myinit;
+import /.at.rfid.utils.init;
 
 import /.at.rfid.utils.vector;
 import /.at.rfid.utils.hashmap;   
 
-// global variables
+// toggle debug output
 DEBUG := false;
 INFO := true;
 

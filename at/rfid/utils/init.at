@@ -8,9 +8,6 @@ def isolate: closure taggedAs: tagTable {
 	object: closure taggedAs: [/.at.types.Isolate] + tagTable;
 };
 
-/*
- * check method annotation
- */ 
 def is: someMethod annotatedAs: someAnnotation {
 	someMethod.annotations.contains(someAnnotation);
 };

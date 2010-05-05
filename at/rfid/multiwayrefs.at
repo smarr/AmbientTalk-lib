@@ -1,4 +1,4 @@
-import /.at.rfid.utils.set;
+import /.at.rfid.utils.hashset;
 import /.at.rfid.utils.hashmap;
 
 import /.at.lang.futures;
@@ -19,10 +19,6 @@ deftype MultiWayReference;
 // utilities
 
 def DEBUG_MW := true;
-
-def nativeDebug(@args) {
-	debug(@args);
-};
 
 def debug(@args) {
 	if: DEBUG_MW then: {
@@ -89,8 +85,8 @@ def multiWayReferenceMirror :=  mirror: {
 	def connected := false;
 	def inbox := [];
 	def currentReference := nil;
-	def connectedReferences := Set.new;
-	def disconnectedReferences := Set.new;
+	def connectedReferences := HashSet.new;
+	def disconnectedReferences := HashSet.new;
 
 	def init(base, reference){
 		super^init(base);

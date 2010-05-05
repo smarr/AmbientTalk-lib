@@ -1,5 +1,5 @@
 
-def Set := object: {
+def HashSet := object: {
 
 	def hs := nil;
 
