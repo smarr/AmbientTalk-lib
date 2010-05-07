@@ -10,7 +10,7 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
-import /.at.rfid.utils.init;
+import /.at.rfid.utils.extras;
 
 import /.at.rfid.utils.vector;
 import /.at.rfid.utils.hashmap;   
