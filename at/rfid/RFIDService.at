@@ -349,7 +349,7 @@ def createRFIDService(devNum := 0) {
 		def newObject := load(tag);
 		if: (nil != newObject) then: {
 			info("replacing object: " + tagToObject.get(serial) + " with: "+ newObject);
-			replace: tagToObject.get(serial) by: newObject;
+			let: newObject become: tagToObject.get(serial);
 			updateMapping(tag, newObject);
 		};
 		if: (discoTags.contains(serial)) then: {

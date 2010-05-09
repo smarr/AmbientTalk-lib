@@ -229,8 +229,8 @@ def nativeExport: obj as: type {
 	export: obj as: type;
 };
 
-def nativeReplace: obj by: newObject {
-	replace: obj: by: newObject;
+def nativeLet: newObject become: obj {
+	let: newObject become: obj;
 };
 
 // the multiWayReferenceModule
@@ -313,19 +313,19 @@ def MultiWayReferenceModule := object: {
 		export: serviceObject as: type with: { def serial := identifier };
 	};
 	
-	def replace: obj by: newObject {
+	def let: newObject become: obj {
 		if: (is: obj taggedAs: /.at.types.Table) then: {
 			if: (is: newObject taggedAs: /.at.types.Table) then: {
 				// if both are tables
 				// do nothing
 				// XXX we might merge the tables
-				nativeReplace: obj by: newObject;
+				nativeLet: newObject become: obj;
 			} else: {
 				// reuse props of original
-				nativeReplace: obj by: [obj[1], newObject];
+				nativeLet: [obj[1], newObjectobj] become: obj;
 			};
 		} else: {
-			nativeReplace: obj by: newObject;
+			nativeLet: newObjectobj become: obj;
 		};
 	};
 
