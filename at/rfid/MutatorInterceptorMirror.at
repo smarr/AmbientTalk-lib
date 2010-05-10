@@ -1,0 +1,41 @@
+// intercepts methods annotated as mutator and := invocations
+// and calls a given closure with the base object and the invocation
+
+def makeMutatorInterceptor(interceptor) {
+	mirror: {
+		def invokeField(slf, invocation) {
+			def returnValue := super^invokeField(slf, invocation);
+			try: {
+				def methodName := invocation;
+				if: (is: methodName mutatorOf: slf) then: {
+					interceptor(self.base(), methodName);
+				};
+			} catch: Types.SelectorNotFound using: {|e| 
+				// do nothing
+				info("selector not found: " + e.message); 
+			};
+			returnValue; // return original return value
+		};
+		
+		
+		def invoke(slf, invocation) {
+			def returnValue := super^invoke(slf, invocation);
+			try: {
+				def methodName := invocation.selector;
+				if: (is: methodName mutatorOf: slf) then: {
+					interceptor(self.base(), methodName);
+				} else: {
+					if: ((print: methodName) ~= ".*:=$") then: {
+						interceptor(self.base(), methodName);
+					};
+				};
+			} catch: Types.SelectorNotFound using: {|e| 
+				// do nothing
+				info("selector not found: " + e.message); 
+			};
+			returnValue; // return original return value
+		};
+	};
+};
+
+self;

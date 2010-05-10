@@ -10,41 +10,55 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
-import /.at.rfid.utils.extras;
-
 import /.at.rfid.utils.vector;
-import /.at.rfid.utils.hashmap;   
+import /.at.rfid.utils.hashmap; 
+
+import /.at.rfid.utils.extras;
+import /.at.rfid.MutatorInterceptorMirror;  
+
+// globals
+def POLLING_INTERVAL := millisec(500);
+def OFFLINE_TIMEOUT  := 240.seconds();
 
 // toggle debug output
 DEBUG := false;
 INFO := true;
 
 
-def POLLING_INTERVAL := millisec(500); 
-
-
-
-// the RFID service
+// generic RFID type tags
 deftype RFIDTag;
 deftype GenericTag;
-deftype RFIDService;
+
+
 deftype NotAnIsolate <: lobby.at.types.Exception;
 def XNotAnIsolate := lobby.at.exceptions.createException(NotAnIsolate);
 deftype AlreadyIsolate <: lobby.at.types.Exception;
 def XAlreadyIsolate := lobby.at.exceptions.createException(AlreadyIsolate);
 
-def createRFIDService(devNum := 0) {
+def RFIDService := object: {
 	
+	// Java Reader & Tag classes
 	def tagWrapper := jlobby.librfid.file.TagWrapper;
 	def JavaRFIDDevice := jlobby.librfid.file.ReaderWrapper;
-	def device := JavaRFIDDevice.new(devNum);
+	
+	// the RFID reader device
+	def device := nil;
+	
+	// the timeout after which tags are considered permanently discovered
+	def offlineTimeout := OFFLINE_TIMEOUT; // unused
 
+	// interval to poll
+	def pollingInterval := POLLING_INTERVAL; 
+	
+	// holds disconnection objects for tags
 	def discoTags := HashMap.new;     // serial -> discoObject
 	
+	// maintain mappings between tags, serials and proxys
 	def tagToObject := HashMap.new; // serial -> obj
 	def objectToTag := HashMap.new; // obj -> serial
 	def serialToTag := HashMap.new; // serial -> tag
-
+	
+	// the polling loop
 	def loop := nil;
 	
 	// create and remove mapping between tag and object
@@ -67,21 +81,28 @@ def createRFIDService(devNum := 0) {
 		serialToTag.remove(serial);
 	};
 	
-	// export an object for each tag it sports
-	def autoExport(someObject) {
-		(tagsOf: someObject).each: {|tt|
-			export: someObject as: tt;
+	// intercept mutators
+	def tagMutatorInterceptor := { |base, method| 
+		try: {
+			saveToTag(base);
+		} catchUsing: {|e| 
+			info("save to tag failed: " + e.message);
 		};
 	};
 	
-	// dump and load
+	def makeTagMutatorInterceptorMirror() {
+		makeMutatorInterceptor(tagMutatorInterceptor);
+	};
 	
+	
+	// dump and load objects to and from a tag
 	def loadFromSource(tag){
 		def definition := tag.loadToString();
 		if: ((definition == nil).or: {definition == ""}) then: {
 			nil;
 		} else: {
 			try: {
+				definition := definition + "mirroredBy: makeTagMutatorInterceptorMirror()";
 				def obj := eval: (read: definition) in: self;
 				obj;
 			} catch: Types.Exception using: { |e|
@@ -125,7 +146,6 @@ def createRFIDService(devNum := 0) {
 		dumpToSource(tag, obj);
 	};
 	
-	
 	def saveToTag(someObject) {
 		info("saving to tag...");
 		def tag := serialToTag.get(objectToTag.get(someObject));
@@ -143,7 +163,7 @@ def createRFIDService(devNum := 0) {
 		info("obj is an isolate");
 		def tags := (tagsOf: someIsolate).filter: {|e| e != /.at.types.Isolate};
 		info("tags: " + tags);
-		def someObject := object: {} taggedAs: tags mirroredBy: makeMutatorInterceptor();
+		def someObject := object: {} taggedAs: tags mirroredBy: makeTagMutatorInterceptorMirror();
 		info("new object: " + someObject);
 		def ir := reflect: someIsolate;
 		def or := reflect: someObject;
@@ -158,6 +178,7 @@ def createRFIDService(devNum := 0) {
 		someObject;
 	};
 	
+	// copy an object to an isolate
 	def objectToIsolate(someObject) {
 		info("convert object to isolate: " + someObject);
 		if: (is: someObject taggedAs: /.at.types.Isolate) then: {
@@ -178,62 +199,7 @@ def createRFIDService(devNum := 0) {
 		someIsolate;
 	};
 	
-	// intercept mutators
-	def makeMutatorInterceptor() {
-		mirror: {
-			def invokeField(slf, invocation) {
-				info("MUT: invoked field " + invocation);
-				def returnValue := super^invokeField(slf, invocation);
-				try: {
-					def methodName := invocation;
-					if: (is: methodName mutatorOf: slf) then: {
-						info("MUT: MUTATOR!");
-						try: {
-							saveToTag(self.base());
-						} catchUsing: {|e| 
-							info("save to tag failed: " + e.message);
-						};
-					};
-				} catch: Types.SelectorNotFound using: {|e| 
-					// do nothing
-					info("selector not found: " + e.message); 
-				};
-				returnValue; // return original return value
-			};
-			
-			
-			def invoke(slf, invocation) {
-				info("MUT: invoked " + invocation.selector + " full: " + invocation);
-				def returnValue := super^invoke(slf, invocation);
-				try: {
-					def methodName := invocation.selector;
-					if: (is: methodName mutatorOf: slf) then: {
-						info("MUT: MUTATOR!");
-						try: {
-							saveToTag(self.base());
-						} catchUsing: {|e| 
-							info("save to tag failed: " + e.message);
-						};
-					} else: {
-						if: ((print: methodName) ~= ".*:=$") then: {
-							info("MUT: ALSO MUTATOR!");
-							try: {
-								saveToTag(self.base());
-							} catchUsing: {|e| 
-								info("save to tag failed: " + e.message);
-							};
-						};
-					};
-				} catch: Types.SelectorNotFound using: {|e| 
-					// do nothing
-					info("selector not found: " + e.message); 
-				};
-				returnValue; // return original return value
-			};
-	  };
-	};
-	
-	
+	// generic "empty" tag object
 	def GenericTag := object: {
 
 		def tag := nil;
@@ -258,87 +224,9 @@ def createRFIDService(devNum := 0) {
 		def init(atag) {
 			tag := atag;
 		};
+	
 	} taggedAs: [RFIDTag, GenericTag];
 	
-
-	def localFacade := object: {
-		// local methods
-		
-		def TEST(o) {
-			isolateToObject(o);
-		};
-		
-	  def getAvailableTags() {
-			serialToTag;
-		};
-		
-		def getAvailableObjects() {
-			tagToObject;
-		};
-		
-		def getDiscoTags() {
-			discoTags;
-		};
-		
-		def displayEmAll() {
-			tagToObject.printme();
-			objectToTag.printme();
-			serialToTag.printme();
-		};
-		
-		def numTags() {
-			serialToTag.size();
-		};
-		
-		def numDiscoTags() {
-			discoTags.size();
-		};
-		
-		def numConnectedTags() {
-			serialToTag.size() - discoTags.size();
-		};
-		
-		def stop() {
-			loop.cancel();
-		};
-		
-		def run() {
-			debug("RFIDActor started");
-			loop := whenever: POLLING_INTERVAL elapsed: {
-			    
-			  debug("");
-				debug("ROUND started");
-				debug("avail tags: " + serialToTag.size());
-				debug("disco tags: " + discoTags.size());
-				
-				def tags := Vector.new(device.readTransponders(true));
-				debug("in range: " + tags.size());
-				def unseen := serialToTag.clone();
-				
-				tags.each: { |tag|
-					def serial := tag.getSerial();
-					unseen.remove(serial);
-					if: (serialToTag.contains(serial)) then: {
-						// case 1
-						// seen before
-						// check for possible disconnection object
-						ackTag(serial, tag);
-					} else: {
-						// case 2
-						// new tag
-						// export!
-						exportTag(serial, tag);
-					};
-				};
-				debug("  unseen tags: " + unseen.size());
-				unseen.each: {|serial, tag|
-					// case 3:
-					// disappearing tags
-					unseeTag(serial, tag);
-				};
-			};
-		};
-	};
 	
 	// cases to handle RFID inventory
 	// case 1: a tag that was already available
@@ -398,16 +286,104 @@ def createRFIDService(devNum := 0) {
 		};
 	};
 
-
 	
-	// initialization
-	network.online();
-	// export: remoteFacade as: RFIDService;
-	localFacade.run();
-	localFacade;
+	// facade seen by others
+	def facade := object: {
+	
+	def getAvailableTags() {
+		serialToTag;
+	};
+	
+	def getAvailableObjects() {
+		tagToObject;
+	};
+		
+	def getDiscoTags() {
+		discoTags;
+	};
+		
+	def displayEmAll() {
+		tagToObject.printme();
+		objectToTag.printme();
+		serialToTag.printme();
+	};
+		
+	def numTags() {
+		serialToTag.size();
+	};
+	
+	def numDiscoTags() {
+		discoTags.size();
+	};
+		
+	def numConnectedTags() {
+		serialToTag.size() - discoTags.size();
+	};
+		
+	def stop() {
+		loop.cancel();
+	};
+		
+	def run() {
+		debug("RFIDActor started");
+		loop := whenever: pollingInterval elapsed: {
+		    
+			debug("");
+			debug("ROUND started");
+			debug("avail tags: " + serialToTag.size());
+			debug("disco tags: " + discoTags.size());
+				
+			def tags := Vector.new(device.readTransponders(true));
+			debug("in range: " + tags.size());
+			def unseen := serialToTag.clone();
+		
+			tags.each: { |tag|
+				def serial := tag.getSerial();
+				unseen.remove(serial);
+				if: (serialToTag.contains(serial)) then: {
+					// case 1
+					// seen before
+					// check for possible disconnection object
+					ackTag(serial, tag);
+				} else: {
+					// case 2
+					// new tag
+					// export!
+					exportTag(serial, tag);
+				};
+			};
+			debug("  unseen tags: " + unseen.size());
+			unseen.each: {|serial, tag|
+				// case 3:
+				// disappearing tags
+				unseeTag(serial, tag);
+			};
+		};
+	};
+	
+	}; // facade
+	
+
+
+	// initializer
+	def init(devNum := 0) {
+		device := JavaRFIDDevice.new(devNum);
+	};
 	
 };
 
-def s := createRFIDService();
-s;
+def RFIDServiceModule := object: {
+	def createRFIDService(devNum := 0) {
+		def service := RFIDService.new();
+		service.facade;
+	};
+	
+	def createAndRunRFIDService(devNum := 0) {
+		def service := RFIDService.new();
+		def facade := service.facade;
+		facade.run();
+		facade;
+	};
+};
+
 

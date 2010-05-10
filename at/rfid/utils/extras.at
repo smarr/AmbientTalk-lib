@@ -1,17 +1,27 @@
-
+// unless
 def unless: test then: closure {
 	if: !test then: closure;
 };
 
+// export an object for each tag it sports
+def autoExport(someObject) {
+	(tagsOf: someObject).each: {|tt|
+		export: someObject as: tt;
+	};
+};
 
+
+// closure with typetags
 def isolate: closure taggedAs: tagTable {
 	object: closure taggedAs: [/.at.types.Isolate] + tagTable;
 };
 
+// check if methods is annotated with a given typetag
 def is: someMethod annotatedAs: someAnnotation {
 	someMethod.annotations.contains(someAnnotation);
 };
 
+// support for mutator methods
 deftype Mutator;
 def Types := /.at.types;
 
@@ -27,13 +37,12 @@ def is: methodName mutatorOf: someObject {
 	} catch: Types.SelectorNotFound using: {|e| false };
 };
 
-
+// a try:catch: method without that catches any exception
 def try: closure catchUsing: failClosure {
 	try: closure catch: Types.Exception using: { |e| failClosure(e) };
 };
 
-
-
+// debug and info methods
 def DEBUG := false;
 def INFO  := true;
 

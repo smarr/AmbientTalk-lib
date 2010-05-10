@@ -1,0 +1,11 @@
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(false);
+
+// def s := createAndRunRFIDservice();
+
+def s := createRFIDService();
+network.online();
+s.run();
+s;
