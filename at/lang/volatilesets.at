@@ -31,13 +31,17 @@
  *
  * @author alombide
  */
+ 
+def HashMap := jlobby.java.util.HashMap; 
 
 def VolatileSetsModule := object: {
 
 def volatileSetOf: type where: setCondition {
-	def createSet(theType, theCondition) {
+	def idsAndSyncIsos := HashMap.new();
+
+	def createSet(theType, theCondition, initialContents) {
 		object: {
-			def contents := [];
+			def contents := initialContents;
 	
 			def type() { theType };
 			def condition() { theCondition };
@@ -55,7 +59,8 @@ def volatileSetOf: type where: setCondition {
 				def myCondition := condition();
 				def newSet := createSet(
 					theType, 
-					{ |el| myCondition(el).and: { otherSet.condition()(el) }});
+					{ |el| myCondition(el).and: { otherSet.condition()(el) }},
+					[]);
 				/.at.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
@@ -64,7 +69,8 @@ def volatileSetOf: type where: setCondition {
 				def myCondition := condition();
 				def newSet := createSet(
 					theType, 
-					{ |el| myCondition(el).or: { otherSet.condition()(el) }});
+					{ |el| myCondition(el).or: { otherSet.condition()(el) }},
+					[]);
 				/.at.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
@@ -73,7 +79,8 @@ def volatileSetOf: type where: setCondition {
 				def myCondition := condition();
 				def newSet := createSet(
 					theType,
-					{ |el| myCondition(el).and: { !(otherSet.condition()(el)) }});
+					{ |el| myCondition(el).and: { !(otherSet.condition()(el)) }},
+					[]);
 				/.at.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
@@ -82,7 +89,8 @@ def volatileSetOf: type where: setCondition {
 				def myCondition := condition();
 				def newSet := createSet(
 					theType,
-					{ |el| !myCondition(el) });
+					{ |el| !myCondition(el) },
+					[]);
 				/.at.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
@@ -108,19 +116,22 @@ def volatileSetOf: type where: setCondition {
 			};
 		
 			def notifyChanged(obj) {
-				//system.println("CHANGED: " + obj);
 				if: condition()(obj) then: {
+					def oldLength := contents.length;
+					contents := contents.filter: { |c| (reflect: c).getId() != (reflect: obj).getId(); };
 					contents := contents + [ obj ];
-					listeners.each: { |l| l.objectAdded(obj); };
+					if: (contents.length > oldLength) then: {
+						listeners.each: { |l| l.objectAdded(obj); };
+					};
 				} else: {
-					contents := contents.filter: { |c| c != obj };
+					contents := contents.filter: { |c| (reflect: c).getId() != (reflect: obj).getId(); };
 					listeners.each: { |l| l.objectRemoved(obj); };
 				};
 			};	
 		};
 	};
 	
-	def volatileSet := createSet(type, setCondition);
+	def volatileSet := createSet(type, setCondition, []);
 	/.at.lang.syncIsolates.subscribe: volatileSet to: type;
 	volatileSet;
 };
@@ -159,7 +170,7 @@ def VolatileSetsTest() {
 					objectsAdded := objectsAdded + [ obj ];
 				};
 				def objectRemoved(obj) {
-					objectsRemoved := objectsRemoved.filter: { |c| c != obj };
+					objectsRemoved := objectsRemoved + [ obj ];
 				};
 			};
 			
@@ -202,7 +213,6 @@ def VolatileSetsTest() {
 						publisher<-changeCategoryOfIso1();
 						timer.when: timer.seconds(5) elapsedWithFuture: {
 							def contents := volatileSet.snapshot();
-							system.println(contents.length);
 							self.assertTrue(contents.length == 3);
 							self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
 							self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
@@ -212,7 +222,6 @@ def VolatileSetsTest() {
 							def union := volatileSet.union: volatileSet2;
 							timer.when: timer.seconds(5) elapsedWithFuture: {
 								def contents := union.snapshot();
-								system.println(contents.length);
 								self.assertTrue(contents.length == 4);
 								self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
 								self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
@@ -222,15 +231,12 @@ def VolatileSetsTest() {
 								def intersection := volatileSet.intersection: volatileSet2;
 								timer.when: timer.seconds(5) elapsedWithFuture: {
 									def contents := intersection.snapshot();
-									system.println(contents.length);
-									self.assertTrue(contents.length == 2);
-									self.assertFalse((contents.find: { |el| el.id == "iso1" }) == nil);
+									self.assertTrue(contents.length == 1);
 									self.assertFalse((contents.find: { |el| el.id == "iso2" }) == nil);
 									
 									def complement := volatileSet.complement: volatileSet2;
 									timer.when: timer.seconds(5) elapsedWithFuture: {
 										def contents := complement.snapshot();
-										system.println(contents.length);
 										self.assertTrue(contents.length == 2);
 										self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
 										self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);
@@ -238,7 +244,6 @@ def VolatileSetsTest() {
 										def negation := volatileSet2.negate();
 										timer.when: timer.seconds(5) elapsedWithFuture: {
 											def contents := negation.snapshot();
-											system.println(contents.length);
 											self.assertTrue(contents.length == 2);
 											self.assertFalse((contents.find: { |el| el.id == "iso3" }) == nil);
 											self.assertFalse((contents.find: { |el| el.id == "iso4" }) == nil);

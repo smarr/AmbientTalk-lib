@@ -32,16 +32,19 @@
  * @author alombide, cfscholl, egonzale
  */
 
+
 deftype SyncIsolate;
 def HashMap := jlobby.java.util.HashMap;
+def Vector := jlobby.java.util.Vector;
 
 
 def makeSyncIsolateMirror() {
 	mirror: { 
+		def id := /.at.support.timer.now().toString();
 		def notifiers := [];
 	
 		def pass() {
-			copyIsolateWithMirror(self.base, makeFrozenIsolateMirror());
+			copyIsolateWithMirror(self.base, makeFrozenIsolateMirror(id));
 		};
 	
 		def addChangeListener(notifier) {
@@ -78,10 +81,12 @@ def makeSyncIsolateMirror() {
 };
 
 
-def makeFrozenIsolateMirror() {	
+def makeFrozenIsolateMirror(id) {	
 	extend: defaultMirror with: {
 		deftype IllegalOperation;
 		def XIllegalOperation := lobby.at.exceptions.createException(IllegalOperation);
+		
+		def getId() { id };
 		
 		def addSlot(slot) { 
 			raise: XIllegalOperation.new("Cannot add slots to a sealed object."); 
@@ -110,7 +115,7 @@ def makeFrozenIsolateMirror() {
 };
 
 def copyIsolateWithMirror(iso, mirror) {
-	def result := object: {} taggedAs: [ /.at.types.Isolate ] mirroredBy: mirror;
+	def result := object: { } taggedAs: [ /.at.types.Isolate ] mirroredBy: mirror;
 	def fields := (reflect: iso).listFields();
 	fields.each: { |field| 
 	   if: !(field.name ==`super) then: {
@@ -130,8 +135,16 @@ def copyIsolateWithMirror(iso, mirror) {
 
 def typesAndObservers := HashMap.new();
 def subscribersAndNotifiers := HashMap.new();
+def discoveredIsolates := Vector.new();
 
 whenever: SyncIsolate discovered: { |syncIso|
+	discoveredIsolates.add(syncIso);
+	def isolateUpdater := object: {
+		def update(newIsoValue) {
+			syncIso.setIsolate(newIsoValue);
+		};
+	};
+	syncIso.getNotifier<-addUpdater(isolateUpdater);
 	def handlers := typesAndObservers.get(syncIso.getType());
 	if: (nil != handlers) then: {
 		handlers.each: { |subscriber|
@@ -141,6 +154,7 @@ whenever: SyncIsolate discovered: { |syncIso|
 		};
 	};
 	when: syncIso.getNotifier() disconnected: {
+		discoveredIsolates.remove(syncIso);
 		def handlers := typesAndObservers.get(syncIso.getType());
 		if: (nil != handlers) then: {
 			handlers.each: { |subscriber|
@@ -149,6 +163,7 @@ whenever: SyncIsolate discovered: { |syncIso|
 		};
 	};
 	when: syncIso.getNotifier() reconnected: {
+		discoveredIsolates.add(syncIso);
 		def handlers := typesAndObservers.get(syncIso.getType());
 		if: (nil != handlers) then: {
 			handlers.each: { |subscriber|
@@ -169,6 +184,7 @@ def SyncIsolateModule := object: {
 	def publish: iso as: type {
 		def notifier := object: {
 			def subscribers := [];
+			def updaters := [];
 
 			def cancel(subscriber) {
 				subscribers := subscribers.filter: { |el|
@@ -178,16 +194,25 @@ def SyncIsolateModule := object: {
 			};
 
 			def notifyChanged(newIso) {
+				updaters.each: { |updater| updater<-update(newIso) };
 				subscribers.each: { |sub| sub<-notifyChanged(newIso) };
 			};
+			
 
 			def addSubscriber(subscriber) {
 				subscribers := subscribers + [ subscriber ];
 				nil;
 			};
+			
+			def addUpdater(updater) {
+				updaters := updaters + [ updater ];
+				nil;
+			};
 		};
-		def wrappedIsolate := isolate: { |iso, notifier, type| 
-			def getIsolate() { iso };
+		def wrappedIsolate := isolate: { |iso, notifier, type|
+			def theIsolate := iso;
+			def getIsolate() { theIsolate };
+			def setIsolate(newIso) { theIsolate := newIso };
 			def getNotifier() { notifier };
 			def getType() { type }
 		};
@@ -200,6 +225,7 @@ def SyncIsolateModule := object: {
 			def cancel() {
 				subs.cancel();
 				notifier.subscribers := [];
+				notifier.updaters := [];
 				(reflect: iso).removeChangeListener(notifier);
 			};
 		};
@@ -216,6 +242,13 @@ def SyncIsolateModule := object: {
 			typesAndObservers.put(type, [ subscriber ]);
 		} else: {
 			typesAndObservers.put(type, oldSubscribers + [ subscriber ]);
+		};
+		def iterator := discoveredIsolates.iterator();
+		while: { iterator.hasNext() } do: {
+			def syncIso := iterator.next();
+			if: (type == syncIso.getType()) then: {
+				subscriber.notifyDiscovered(syncIso.getIsolate());
+			} 
 		};
 		object: {
 			def cancel() {
