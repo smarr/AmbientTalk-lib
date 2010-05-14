@@ -1,7 +1,9 @@
 // intercepts methods annotated as mutator and := invocations
 // and calls a given closure with the base object and the invocation
 
-def makeMutatorInterceptor(interceptor) {
+import /.at.rfid.utils.extras;
+
+def makeMutatorInterceptor_(interceptor) {
 	mirror: {
 		def invokeField(slf, invocation) {
 			def returnValue := super^invokeField(slf, invocation);
@@ -10,7 +12,7 @@ def makeMutatorInterceptor(interceptor) {
 				if: (is: methodName mutatorOf: slf) then: {
 					interceptor(self.base(), methodName);
 				};
-			} catch: Types.SelectorNotFound using: {|e| 
+			} catch: /.at.types.SelectorNotFound using: {|e| 
 				// do nothing
 				info("selector not found: " + e.message); 
 			};
@@ -29,7 +31,7 @@ def makeMutatorInterceptor(interceptor) {
 						interceptor(self.base(), methodName);
 					};
 				};
-			} catch: Types.SelectorNotFound using: {|e| 
+			} catch: /.at.types.SelectorNotFound using: {|e| 
 				// do nothing
 				info("selector not found: " + e.message); 
 			};
@@ -38,4 +40,6 @@ def makeMutatorInterceptor(interceptor) {
 	};
 };
 
-self;
+def MutatorInterceptorModule := object: {
+	def makeMutatorInterceptor := &makeMutatorInterceptor_;
+};

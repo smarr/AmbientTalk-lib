@@ -3,6 +3,8 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
+import /.at.rfid.RFIDService;
+
 // def s := createAndRunRFIDservice();
 
 def s := createRFIDService();

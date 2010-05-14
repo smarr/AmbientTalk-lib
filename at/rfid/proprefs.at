@@ -1,0 +1,81 @@
+import /.at.rfid.utils.hashset;
+import /.at.rfid.utils.hashmap;
+import /.at.rfid.utils.vector;
+import /.at.rfid.utils.extras;
+
+import /.at.lang.futures;
+enableFutures(false);
+import /.at.exceptions;
+
+deftype Unimplemented <: /.at.types.Exception;
+def XUnimplemented := /.at.exceptions.createException(Unimplemented);
+def abstractMethod(name) {
+	raise: XUnimplemented.new("Invoked abstract method: "+name);
+};
+
+deftype Props;
+
+// the default content filter
+def defaultFilter := { |props| true };
+
+def isTable(remoteRef) {
+	is: remoteRef taggedAs: /.at.types.Table;
+};
+
+def isPropRef(remoteRef) {
+	if: (isTable(remoteRef)) then: {
+		def sizeb  := remoteRef.length() > 1;
+		def tagb   := is: remoteRef[1] taggedAs: Props;
+		sizeb.and: { tagb };
+	} else: { false };
+};
+
+// copies of native functions
+
+def nativeWhenever: serviceType discovered: code {
+	whenever: serviceType discovered: code
+};
+
+def nativeExport: obj as: type {
+	export: obj as: type;
+};
+
+
+// the multiWayReferenceModule
+
+def PropsModule := object: {
+	
+	def whenever: serviceType where: condBlock discovered: code {
+		nativeWhenever: serviceType discovered: { |farReference|
+			if: isPropRef(farReference) then: {
+				if: (try: { condBlock(farReference[1]) } catchUsing: { |e| false }) then: {
+					code(farReference[2]);
+				};
+			};
+		};
+	};
+	
+	def whenever: serviceType discovered: code {
+		whenever: serviceType where: defaultFilter discovered: code;
+	};
+	
+	
+	// allow exporting an object together with a set of properties
+	def export: serviceObject as: type with: clo {
+		def props := isolate: clo taggedAs: [Props];
+		def table := [props, serviceObject];
+		nativeExport: table as: type;
+	};
+
+  // override export:as: to include a property object
+	def export: serviceObject as: type {
+		export: serviceObject as: type with: { nil };
+	};
+	
+	def export: serviceObject as: type identifiedBy: identifier {
+		export: serviceObject as: type with: { def serial := identifier };
+	};
+	
+
+};
+

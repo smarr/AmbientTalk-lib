@@ -42,6 +42,13 @@ def try: closure catchUsing: failClosure {
 	try: closure catch: Types.Exception using: { |e| failClosure(e) };
 };
 
+def pwd() {
+	def ns := (print: ~);
+	ns.explode.select(5,ns.length()).implode;
+};
+
+def AT_HOME := jlobby.java.lang.System.getProperty("AT_HOME");
+
 // debug and info methods
 def DEBUG := false;
 def INFO  := true;

@@ -16,6 +16,8 @@ import /.at.rfid.utils.hashmap;
 import /.at.rfid.utils.extras;
 import /.at.rfid.MutatorInterceptorMirror;  
 
+import /.at.rfid.proprefs;
+
 // globals
 def POLLING_INTERVAL := millisec(500);
 def OFFLINE_TIMEOUT  := 240.seconds();
@@ -28,6 +30,8 @@ INFO := true;
 // generic RFID type tags
 deftype RFIDTag;
 deftype GenericTag;
+
+//jlobby.add(AT_HOME + "/at/rfid/lib/librfid.jar");
 
 
 deftype NotAnIsolate <: lobby.at.types.Exception;
@@ -43,6 +47,9 @@ def RFIDService := object: {
 	
 	// the RFID reader device
 	def device := nil;
+	
+	// the facade
+	def facade := nil;
 	
 	// the timeout after which tags are considered permanently discovered
 	def offlineTimeout := OFFLINE_TIMEOUT; // unused
@@ -60,6 +67,13 @@ def RFIDService := object: {
 	
 	// the polling loop
 	def loop := nil;
+	
+	def exportWithSerial(someObject, tagSerial) {
+		system.println("export with serial: " + someObject + " with " + tagSerial);
+		(tagsOf: someObject).each: {|tt|
+			export: someObject as: tt with: { def serial := tagSerial };
+		};
+	};
 	
 	// create and remove mapping between tag and object
 	def updateMapping(aTag, someObject) {
@@ -105,7 +119,7 @@ def RFIDService := object: {
 				definition := definition + "mirroredBy: makeTagMutatorInterceptorMirror()";
 				def obj := eval: (read: definition) in: self;
 				obj;
-			} catch: Types.Exception using: { |e|
+			} catch: /.at.types.Exception using: { |e|
 				info("could not read and eval: " + definition);
 				info("exeption was: " + e.message);
 				nil;
@@ -217,7 +231,7 @@ def RFIDService := object: {
 			def newObject := isolateToObject(someObject);
 			updateMapping(tag, newObject);
 			dump(tag, newObject);
-			autoExport(newObject);
+			exportWithSerial(newObject, getSerial());
 			newObject;
 		};
 
@@ -231,15 +245,10 @@ def RFIDService := object: {
 	// cases to handle RFID inventory
 	// case 1: a tag that was already available
 	//         - check if there is a disconnection object
+	// !!! semantic subtlety: FIRST reconnect the object, THEN replace it
 	def ackTag(serial, tag) {
 		info("ack serial: " + serial);
 		debug("  ack serial: " + serial);
-		def newObject := load(tag);
-		if: (nil != newObject) then: {
-			info("replacing object: " + tagToObject.get(serial) + " with: "+ newObject);
-			let: newObject become: tagToObject.get(serial);
-			updateMapping(tag, newObject);
-		};
 		if: (discoTags.contains(serial)) then: {
 			// if tag marked offline
 			// take back online
@@ -251,6 +260,12 @@ def RFIDService := object: {
 			discoTags.remove(serial);
 		} else: {
 				debug("ignore 1");
+		};
+		def newObject := load(tag);
+		if: (nil != newObject) then: {
+			info("replacing object: " + tagToObject.get(serial) + " with: "+ newObject);
+			let: newObject become: tagToObject.get(serial);
+			updateMapping(tag, newObject);
 		};
 	};
 	
@@ -265,11 +280,12 @@ def RFIDService := object: {
 			info("empty tag");
 			tagObject := GenericTag.new(tag);
 			updateMapping(tag, tagObject);
-			export: tagObject as: RFIDTag;
+			def s := serial;
+			export: tagObject as: RFIDTag with: { def serial := s };
 		} else: {
 			info("valid tag");
 			updateMapping(tag, tagObject);
-			autoExport(tagObject);
+			exportWithSerial(tagObject, serial);
 		};
 	};
 	
@@ -278,96 +294,113 @@ def RFIDService := object: {
 	def unseeTag(serial, tag) {
 		if: (!(discoTags.contains(serial))) then: {
 			// take all unseen tags offline
-	        debug("  off serial: " + serial);
+	        info("  off serial: " + serial + "object: " + tagToObject.get(serial));
 	        def discoTag := disconnect: tagToObject.get(serial);
 	        discoTags.put(serial, discoTag);
 		} else: {
 		    debug("ignore 2");
 		};
 	};
-
 	
-	// facade seen by others
-	def facade := object: {
+	def startLoop() {
+		if: (loop == nil) then: {
+			debug("RFIDActor started");
+			loop := whenever: pollingInterval elapsed: {
+	    
+				debug("");
+				debug("ROUND started");
+				debug("avail tags: " + serialToTag.size());
+				debug("disco tags: " + discoTags.size());
+			
+				def tags := Vector.new(device.readTransponders(true));
+				debug("in range: " + tags.size());
+				def unseen := serialToTag.clone();
 	
-	def getAvailableTags() {
-		serialToTag;
-	};
-	
-	def getAvailableObjects() {
-		tagToObject;
-	};
-		
-	def getDiscoTags() {
-		discoTags;
-	};
-		
-	def displayEmAll() {
-		tagToObject.printme();
-		objectToTag.printme();
-		serialToTag.printme();
-	};
-		
-	def numTags() {
-		serialToTag.size();
-	};
-	
-	def numDiscoTags() {
-		discoTags.size();
-	};
-		
-	def numConnectedTags() {
-		serialToTag.size() - discoTags.size();
-	};
-		
-	def stop() {
-		loop.cancel();
-	};
-		
-	def run() {
-		debug("RFIDActor started");
-		loop := whenever: pollingInterval elapsed: {
-		    
-			debug("");
-			debug("ROUND started");
-			debug("avail tags: " + serialToTag.size());
-			debug("disco tags: " + discoTags.size());
-				
-			def tags := Vector.new(device.readTransponders(true));
-			debug("in range: " + tags.size());
-			def unseen := serialToTag.clone();
-		
-			tags.each: { |tag|
-				def serial := tag.getSerial();
-				unseen.remove(serial);
-				if: (serialToTag.contains(serial)) then: {
-					// case 1
-					// seen before
-					// check for possible disconnection object
-					ackTag(serial, tag);
-				} else: {
-					// case 2
-					// new tag
-					// export!
-					exportTag(serial, tag);
+				tags.each: { |tag|
+					def serial := tag.getSerial();
+					unseen.remove(serial);
+					if: (serialToTag.contains(serial)) then: {
+						// case 1
+						// seen before
+						// check for possible disconnection object
+						ackTag(serial, tag);
+					} else: {
+						// case 2
+						// new tag
+						// export!
+						exportTag(serial, tag);
+					};
+				};
+				debug("  unseen tags: " + unseen.size());
+				unseen.each: {|serial, tag|
+					// case 3:
+					// disappearing tags
+					unseeTag(serial, tag);
 				};
 			};
-			debug("  unseen tags: " + unseen.size());
-			unseen.each: {|serial, tag|
-				// case 3:
-				// disappearing tags
-				unseeTag(serial, tag);
-			};
+		}; // if
+	};
+	
+	def stopLoop() {
+		if: (loop != nil) then: {
+			loop.cancel();
+			loop := nil;
 		};
 	};
 	
-	}; // facade
+	
+	// create a facade with functions visible to the outside
+	def createFacade() {
+		if: (facade == nil) then: {
+			facade := object: {
+				def getAvailableTags() {
+					serialToTag;
+				};
+		
+				def getAvailableObjects() {
+					tagToObject;
+				};
+			
+				def getDiscoTags() {
+					discoTags;
+				};
+			
+				def displayEmAll() {
+					tagToObject.printme();
+					objectToTag.printme();
+					serialToTag.printme();
+				};
+			
+				def numTags() {
+					serialToTag.size();
+				};
+		
+				def numDiscoTags() {
+					discoTags.size();
+				};
+			
+				def numConnectedTags() {
+					serialToTag.size() - discoTags.size();
+				};
+			
+				def stop() {
+					stopLoop();
+				};
+			
+				def run() {
+					startLoop();
+				};
+			}; // object
+		};
+		facade;
+	};
 	
 
 
 	// initializer
 	def init(devNum := 0) {
 		device := JavaRFIDDevice.new(devNum);
+		facade := createFacade();
 	};
 	
 };
