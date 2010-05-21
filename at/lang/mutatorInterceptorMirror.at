@@ -42,4 +42,27 @@ def makeMutatorInterceptor_(interceptor) {
 
 def MutatorInterceptorModule := object: {
 	def makeMutatorInterceptor := &makeMutatorInterceptor_;
+	
+	
+
+	// check if methods is annotated with a given typetag
+	def is: someMethod annotatedAs: someAnnotation {
+		someMethod.annotations.contains(someAnnotation);
+	};
+
+	// support for mutator methods
+	deftype Mutator;
+
+	def mutatorsOf: someObject {
+		(reflect: someObject).listMethods.select: {|m|
+			is: m annotatedAs: Mutator;
+		};
+	};
+
+	def is: methodName mutatorOf: someObject {
+		try: {
+			is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
+		} catch: Types.SelectorNotFound using: {|e| false };
+	};
+	
 };

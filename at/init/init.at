@@ -50,6 +50,14 @@ def +(n) { 0+n };
 
 */
 
+
+def pwd() {
+	def ns := (print: ~);
+	ns.explode.select(5,ns.length()).implode;
+};
+
+def AT_HOME := jlobby.java.lang.System.getProperty("AT_HOME");
+
 def does: obj respondTo: selector {
 	(reflect: obj).respondsTo(selector)
 };
@@ -255,3 +263,9 @@ def autoExport(someObject) {
 		export: someObject as: tt;
 	};
 };
+
+// a try:catch: method without that catches any exception
+def try: closure catchUsing: failClosure {
+	try: closure catch: /.at.types.Exception using: { |e| failClosure(e) };
+};
+
