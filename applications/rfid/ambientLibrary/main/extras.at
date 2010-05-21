@@ -1,0 +1,42 @@
+
+
+def DEBUG := false;
+def INFO  := true;
+
+def debug(str) {
+	if: (DEBUG) then: {
+		system.println("[DEBUG] " + str);
+	};
+};
+
+def info(str) {
+	if: (INFO) then: {
+		system.println("[INFO] " + str);
+	};
+};
+
+
+// table operations
+def intersect(a, b) {
+	a.filter: {|e| b.contains(e)};
+};
+
+def substract: a from: b {
+	b.filter: {|e| !a.contains(e)};
+};
+
+// string operations
+def trim(s) {
+	(s.replace: "\\s+$" by: {|c| ""}).replace: "^\\s+" by: {|c| ""};
+};
+
+
+// timed java handler:
+def notify: handler for: timeout {
+	/.at.support.timer.when: timeout elapsed: {
+		handler.cancel();
+	};
+};
+
+
+self;

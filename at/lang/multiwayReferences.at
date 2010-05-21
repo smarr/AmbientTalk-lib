@@ -1,5 +1,5 @@
-import /.at.rfid.utils.hashset;
-import /.at.rfid.utils.hashmap;
+import /.at.collections.java.hashset;
+import /.at.collections.java.hashmap;
 
 import /.at.lang.futures;
 enableFutures(false);
@@ -22,7 +22,7 @@ def DEBUG_MW := true;
 
 def debug(@args) {
 	if: DEBUG_MW then: {
-		system.println("[multiwayrefs.at] ", @args);
+		system.println("[multiwayrefs.at] ", args);
 	};
 };
 
@@ -94,7 +94,7 @@ def multiWayReferenceMirror :=  mirror: {
 		// initialize the observable trait, this will provide
 		// the 'observerCatalog' object with two fields storing this
 		// object's observers
-		self.initObservable(`disconnection, `reconnection, `takenOffline, `replacement);
+		self.initObservable(`disconnection, `reconnection, `takenOffline); //, `replacement);
 		
 		addReference(reference);		
 	};
@@ -198,9 +198,9 @@ def multiWayReferenceMirror :=  mirror: {
 		self.addObserver: obs to: self.observerCatalog.disconnection;
 	};
 	
-	def addReplacementObserver(obs) {
-		self.addObserver: obs to: self.observerCatalog.replacement;
-	};
+	//def addReplacementObserver(obs) {
+	//	self.addObserver: obs to: self.observerCatalog.replacement;
+	//};
 	
 	def addTakenOfflineObserver(obs) {
 		self.addObserver: obs to: self.observerCatalog.takenOffline;
@@ -221,8 +221,13 @@ def nativeWhenever: serviceType discovered: code {
 def nativeWhenever: farref disconnected: code {
 	whenever: farref disconnected: code
 };
+
 def nativeWhenever: farref reconnected: code {
 	whenever: farref reconnected: code
+};
+
+def nativeWhenever: farref replaced: code {
+	whenever: farref replaced: code
 };
 
 def nativeExport: obj as: type {
@@ -280,13 +285,13 @@ def MultiWayReferenceModule := object: {
 	
 	// if multiWayReference is indeed a multiway reference, add an observer,
 	// otherwise perform the default behaviour
-	def whenever: multiWayReference replaced: code {
-		if: (is: multiWayReference taggedAs: MultiWayReference) then: {
-			(reflect: multiWayReference).addReplacementObserver(code);
-		} else: {
-			nativeWhenever: multiWayReference replaced: code
-		};
-	};
+	//def whenever: multiWayReference replaced: code {
+	//	if: (is: multiWayReference taggedAs: MultiWayReference) then: {
+	//		(reflect: multiWayReference).addReplacementObserver(code);
+	//	} else: {
+	//		nativeWhenever: multiWayReference replaced: code
+	//	};
+	//};
 	
 		// if multiWayReference is indeed a multiway reference, add an observer,
 	// otherwise perform the default behaviour

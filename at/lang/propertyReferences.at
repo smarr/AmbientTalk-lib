@@ -1,7 +1,6 @@
-import /.at.rfid.utils.hashset;
-import /.at.rfid.utils.hashmap;
-import /.at.rfid.utils.vector;
-import /.at.rfid.utils.extras;
+import /.at.collections.java.hashset;
+import /.at.collections.java.hashmap;
+import /.at.collections.java.vector;
 
 import /.at.lang.futures;
 enableFutures(false);
@@ -44,6 +43,8 @@ def nativeExport: obj as: type {
 // the multiWayReferenceModule
 
 def PropsModule := object: {
+
+	deftype Props;
 	
 	def whenever: serviceType where: condBlock discovered: code {
 		nativeWhenever: serviceType discovered: { |farReference|

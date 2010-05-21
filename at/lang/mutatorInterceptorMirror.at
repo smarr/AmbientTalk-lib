@@ -1,9 +1,27 @@
+// check if methods is annotated with a given typetag
+def is: someMethod annotatedAs: someAnnotation {
+	someMethod.annotations.contains(someAnnotation);
+};
+
+// support for mutator methods
+deftype Mutator;
+
+def mutatorsOf: someObject {
+	(reflect: someObject).listMethods.select: {|m|
+		is: m annotatedAs: Mutator;
+	};
+};
+
+def is: methodName mutatorOf: someObject {
+	try: {
+		is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
+	} catch: Types.SelectorNotFound using: {|e| false };
+};
+
 // intercepts methods annotated as mutator and := invocations
 // and calls a given closure with the base object and the invocation
 
-import /.at.rfid.utils.extras;
-
-def makeMutatorInterceptor_(interceptor) {
+def makeMutatorInterceptor(interceptor) {
 	mirror: {
 		def invokeField(slf, invocation) {
 			def returnValue := super^invokeField(slf, invocation);
@@ -41,28 +59,15 @@ def makeMutatorInterceptor_(interceptor) {
 };
 
 def MutatorInterceptorModule := object: {
-	def makeMutatorInterceptor := &makeMutatorInterceptor_;
 	
-	
-
-	// check if methods is annotated with a given typetag
-	def is: someMethod annotatedAs: someAnnotation {
-		someMethod.annotations.contains(someAnnotation);
-	};
-
-	// support for mutator methods
 	deftype Mutator;
 
-	def mutatorsOf: someObject {
-		(reflect: someObject).listMethods.select: {|m|
-			is: m annotatedAs: Mutator;
-		};
-	};
+	def makeMutatorInterceptor := &makeMutatorInterceptor;
 
-	def is: methodName mutatorOf: someObject {
-		try: {
-			is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
-		} catch: Types.SelectorNotFound using: {|e| false };
-	};
+	def is:annotatedAs: := &is:annotatedAs: ;
+
+	def mutatorsOf: := &mutatorsOf: ;
+
+	def is:mutatorOf: := &is:mutatorOf: ;
 	
 };

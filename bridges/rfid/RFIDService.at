@@ -10,21 +10,32 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
-import /.at.rfid.utils.vector;
-import /.at.rfid.utils.hashmap; 
+import /.at.collections.java.vector;
+import /.at.collections.java.hashmap; 
 
-import /.at.rfid.utils.extras;
-import /.at.rfid.MutatorInterceptorMirror;  
+import /.at.lang.mutatorInterceptorMirror;  
 
-import /.at.rfid.proprefs;
+import /.at.lang.propertyReferences;
 
 // globals
 def POLLING_INTERVAL := millisec(500);
 def OFFLINE_TIMEOUT  := 240.seconds();
 
 // toggle debug output
-DEBUG := false;
-INFO := true;
+def DEBUG := false;
+def INFO := true;
+
+def debug(@args) {
+	if: (DEBUG) then: {
+		system.println("[DEBUG] " + args);
+	};
+};
+
+def info(@args) {
+	if: (INFO) then: {
+		system.println("[INFO] " + args);
+	};
+};
 
 
 // generic RFID type tags

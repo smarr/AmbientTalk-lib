@@ -1,0 +1,86 @@
+deftype Book;
+
+import ~.extras;
+
+def makeBook(title, authors) {
+	def book := isolate: {
+    
+		def title_ := title;
+		def authors_ := authors;
+		def score_ := 0;
+		def votes_ := 0;
+		def reviews_ := [];
+		def keywords_ := [];
+	
+		def getTitle() {
+		    title_;
+		};
+		
+		def setTitle(title)@Mutator {
+			title_ := title;
+		};
+	
+		def getAuthors() {
+			authors_;
+		};
+		
+		def setAuthors(authors)@Mutator {
+			authors_ := authors;
+		};
+	
+		def getRating() {
+			if: (votes_ == 0) then: {
+				"no rating";
+			} else: {
+				print: (score_ / votes_);
+			};
+		};
+	
+		def rate(score)@Mutator {
+			votes_ := votes_ + 1;
+			score_ := score_ + score;
+			getRating();
+		};
+	
+		def getReviews() {
+			reviews_;
+		};
+	
+		def addReview(review)@Mutator {
+			reviews_ := reviews_ + [review];
+		};
+		
+		def setReviews(reviews)@Mutator {
+			reviews_ := reviews;
+		};
+		
+		def clearReviews()@Mutator {
+			reviews_ := [];
+		};
+		
+		def getKeywords() {
+			keywords_;
+		};
+		
+		def addKeywords(@keywords)@Mutator {
+			keywords.each: {|kw|
+				if: (!keywords_.contains(kw)) then: {
+					keywords_ := keywords_ + [kw];
+				};
+			};
+		};
+		
+		def setKeywords(keywords)@Mutator {
+			keywords_ := keywords;
+		};
+		
+		def clearKeywords()@Mutator {
+			keywords_ := [];
+		};
+	
+	} taggedAs: [Book];
+	
+	book;
+};
+
+self;

@@ -1,0 +1,74 @@
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(true);
+import /.at.exceptions;
+
+import /.at.collections.java.hashmap;
+
+import /.at.lang.propertyReferences;
+
+def TagManagerModule := object: {
+	def initialize(serial, modelName) {
+		def sample := possibleModels.get(modelName);
+		def tag := tags.get(serial);
+		if: (tag == nil) then: {
+			system.println("no tag with serial: " + serial);
+		} else: {
+			if: (sample != nil) then: {
+				//system.println("call to initialize");
+				when: tag<-initialize(clone: sample) becomes: { |v|
+					gui.removeTag(serial);
+					tags.remove(serial);
+				};
+			} else: {
+				system.println("no model with name: \"" + modelName + "\"");
+			};
+		};
+	};
+};
+
+def EmptyTagManager := jlobby.utils.TagManager;
+def gui := EmptyTagManager.new(TagManagerModule);
+
+deftype RFIDTag;
+
+// models
+def possibleModels := HashMap.new();
+
+def addSampleModel(name, sample) {
+	possibleModels.put(name, sample);
+	gui.addModel(name);
+};
+
+
+// adding Book support
+import /.main.Book;
+def sampleBook := makeBook("unknown", "unknown");
+addSampleModel("book", sampleBook);
+
+
+
+// empty rfid tags
+
+def tags := HashMap.new();
+
+
+whenever: RFIDTag discovered: { |tag|
+
+	when: tag<-getSerial() becomes: { |serial|
+
+		gui.addTag(serial);
+		tags.put(serial, tag);
+
+		when: tag disconnected: {
+			gui.removeTag(serial);
+			tags.remove(serial);
+		};
+		
+	};
+
+};
+
+network.online();
+

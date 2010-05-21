@@ -3,8 +3,8 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(true);
 
-import /.librfid.ambient.vector;
-import /.librfid.ambient.hashmap;
+import /.at.collections.java.vector;
+import /.at.collections.java.hashmap;
 
 def DEBUG := true;
 def INFO  := true;
@@ -13,15 +13,15 @@ deftype RFIDTag;
 deftype Foo;
 def createRFIDClient() {
 	
-	def debug(str) {
+	def debug(@args) {
 		if: (DEBUG) then: {
-			system.println("[DEBUG] " + str);
+			system.println("[DEBUG] " + args);
 		};
 	};
 	
-	def info(str) {
+	def info(@args) {
 		if: (INFO) then: {
-			system.println("[INFO] " + str);
+			system.println("[INFO] " + args);
 		};
 	};
 	

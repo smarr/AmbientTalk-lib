@@ -3,11 +3,13 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
-import /.at.rfid.RFIDService;
+import /.bridges.RFIDService;
 
-// def s := createAndRunRFIDservice();
+//def service := createAndRunRFIDservice();
 
-def s := createRFIDService();
+def service := createRFIDService();
 network.online();
-s.run();
-s;
+service.run();
+service;
+
+self;

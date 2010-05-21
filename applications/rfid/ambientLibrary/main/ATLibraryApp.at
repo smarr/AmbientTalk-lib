@@ -1,0 +1,104 @@
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(true);
+import /.at.exceptions;
+
+import /.at.collections.java.hashmap;
+import /.at.collections.java.hashset;
+import /.at.collections.java.vector;
+
+import /.at.lang.propertyReferences;
+
+import ~.Book;
+import ~.BookWrapper;
+
+
+def LibraryWindow := jlobby.main.LibraryApp;
+def gui := LibraryWindow.new();
+
+def timeouts := HashMap.new();
+
+//when: RFIDTag discovered: { |tag| }
+	
+
+//def book1 := FakeBookWrapper.new(gui, "Book 1", "Jos, Fons");
+//def book2 := FakeBookWrapper.new(gui, "Book 2", "Marie, Jan");
+//def book3 := FakeBookWrapper.new(gui, "Book 3", "Alice, Bob");
+//def book4 := FakeBookWrapper.new(gui, "Book 4", "An, Jef");
+
+
+//gui.addBook(book1);
+//gui.addBook(book2);
+//gui.addBook(book3);
+
+//book1.rate(4);
+//book2.rate(5);
+//book3.rate(2);
+//book4.rate(3);
+
+//book4.setKeywordsFromString("a,b,c,d,e,y");
+//book1.setKeywordsFromString("f,g,h,i,j");
+//book2.setKeywordsFromString("k,l,m,n,o,u");
+//book3.setKeywordsFromString("p,q,r,s,t");
+
+//when: 5.seconds elapsed: {
+//	system.println("toggle!");
+//	gui.setAvailable(book3, false);
+//	gui.addBook(book4);
+//;
+
+def books := HashSet.new();
+
+
+whenever: Book 
+	where: { |props|
+	
+		system.println("props: " + props + " => " + (reflect: props).listSlots);
+		if: (books.contains(props.serial)) then: {
+			// book was discovered before
+			system.println("seen before, return false");
+			false;
+		} else: {
+			books.add(props.serial);
+			system.println("not seen before, return true and store serial");
+			true;
+		};
+	
+	} discovered: { |book|
+	
+		system.println("book discovered: " + book);
+		def bookWrapper := BookWrapper.new(book, gui);
+		gui.addBook(bookWrapper);
+
+		whenever: book disconnected: {
+			system.println("book disconnected: " + book);
+			gui.setAvailable(bookWrapper, false);
+			if: (timeouts.contains(bookWrapper)) then: {
+				timeouts.get(bookWrapper).cancel();
+				timeouts.remove(bookWrapper);
+			};
+			def timeout := when: 30.seconds elapsed: {
+				gui.removeBook(bookWrapper);
+				timeouts.remove(bookWrapper);
+			};
+			timeouts.put(bookWrapper, timeout);
+		};
+	
+		whenever: book reconnected: {
+			system.println("book reconnected: " + book);
+			if: (timeouts.contains(bookWrapper)) then: {
+				timeouts.get(bookWrapper).cancel();
+				timeouts.remove(bookWrapper);
+				gui.setAvailable(bookWrapper, true);
+			} else: {
+				gui.addBook(bookWrapper);
+				gui.setAvailable(bookWrapper, true);
+			};
+		};
+	};
+
+
+
+
+network.online();

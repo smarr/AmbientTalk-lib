@@ -1,0 +1,348 @@
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(true);
+import /.at.exceptions;
+
+import ~.extras;
+
+def POPUPS := false;
+
+def nativeFakeBookWrapper := object: {
+	def title_ := "...";
+	def authors_ := "...";
+	def rating_ := "...";
+	def reviews_ := [];
+	def gui_ := nil;
+	def keywords_ := [];
+	
+	def getTitle() {
+		title_;
+	};
+	
+	def nativeSetTitle(title) {
+	 title_ := title;
+	};
+	
+	def setTitle(title) {
+		def cb := gui_.addHandler(self);
+		def handler := when: self<-nativeSetTitle(title)@Due(30.seconds) becomes: { |title|
+			cb.cancel();
+		} catch: TimeoutException using: {|e|
+			cb.cancel();
+			gui_.updateBook(self); // put back old values: forces refresh of table data
+		};
+		handler;
+	};
+	
+	def getAuthors() {
+		authors_;
+	};
+	
+	def nativeSetAuthors(authors) {
+		def [future, resolver] := makeFuture();
+		when: 30.seconds elapsed: {
+	 		authors_ := authors;
+	 		resolver.resolve(authors_);
+	 	};
+	 	future;
+	};
+	
+	def setAuthorsWithTimeout(authors) {
+		def cb := gui_.addHandler(self);
+		def handler := when: self<-nativeSetAuthors(authors)@Due(10.seconds) becomes: { |authors|
+			cb.cancel();
+		} catch: TimeoutException using: {|e|
+			cb.cancel();
+			def msg := "Failed to set authors to: \"" + authors + "\".";
+			notify: gui_.addError(self, msg) for: 30.seconds;
+			//gui_.updateBook(self); // forces refresh of table data
+		};
+		true;
+	};
+	
+	def setAuthors(authors) {
+		def msg := "Failed to set authors to: \"" + authors + "\".";
+		notify: gui_.addError(self, msg) for: 30.seconds;
+
+	};
+	
+	def getRating() {
+		if: (rating_ == "...") then: {
+			rating_;
+		} else: {
+			print: rating_;
+		};
+	};
+	
+	def rate(n) {
+		rating_ := n;
+	};
+	
+	def getReviews() {
+		reviews_;
+	};
+	
+	def addReview(review) {
+		def cb := gui_.addHandler(self);
+		when: 10.seconds elapsed: {
+			reviews_ := reviews_ + [review];
+			if: POPUPS then: { gui_.showOkDialog("Review for \"" + title_ + "\" added successfully!") };
+			reviews_;
+			cb.cancel();
+		};
+	};
+	
+	def nativeClearReviews() {
+		reviews_ := [];
+	};
+	
+	def displayReviews(reviewManager) {
+		def cb := gui_.addHandler(self);
+		def handler := when: self<-getReviews()@Due(30.seconds) becomes: { |reviews|
+			reviews := reviews.join("\n");
+			reviewManager.displayReviews(reviews);
+			cb.cancel();
+		} catch: TimeoutException using: {|e|
+			cb.cancel();
+			reviewManager.displayReviews("Could not load reviews.");
+		};
+		handler;
+	};
+	
+	def clearReviews() {
+		def cb := gui_.addHandler(self);
+		def handler := when: self<-nativeClearReviews()@Due(2.seconds) becomes: { |ack|
+			// do noting
+			cb.cancel();
+			true;
+		} catch: TimeoutException using: {|e|
+			cb.cancel();
+			if: POPUPS then: { gui_.errorDialog("Could not clear the reviews of \"" + title_ + "\"") };
+		};
+		nil;
+	};
+	
+	def getMatch(keywords) {
+		print: intersect(keywords_, keywords).length();
+	};
+	
+	def getMatchFromString(keywords) {
+		def kt := keywords.replace: ";" by: {|c| ","};
+		kt := kt.split(",").map: {|kw| trim(kw)};
+		getMatch(kt);
+	};
+	
+	def setKeywords(keywords) {
+		keywords_ := keywords;
+	};
+	
+	def setKeywordsFromString(keywords) {
+		def kt := keywords.replace: ";" by: {|c| ","};
+		keywords_ := kt.split(",").map: {|kw| trim(kw)};
+	};
+	
+	def addKeywords(@keywords) {
+		keywords_ := keywords_ + keywords;
+	};
+	
+	def init(gui, title, authors) {
+		gui_ := gui;
+		title_ := title;
+		authors_ := authors;
+	};
+
+};
+
+def CMD_TIMEOUT := 20.seconds;
+def ERR_DISPLAY := 50.minutes;
+
+def nativeBookWrapper := object: { 
+	def book_ := nil;
+	def title_ := "...";
+	def authors_ := "...";
+	def rating_ := "...";
+	def gui_ := nil;
+	def reviews_ := [];
+	def keywords_ := [];
+	
+	// title
+
+	def getTitle() {
+		title_;
+	};
+	
+	def setTitle(title) {
+		def cb := gui_.addHandler(self);
+		def handler := when: book_<-setTitle(title)@Due(CMD_TIMEOUT) becomes: { |ack|
+			cb.cancel();
+			def msg := "Changed title from \"" + title_ + "\" to: \"" + ack + "\".";
+			if: POPUPS then: { gui_.showOkDialog(msg) };
+			title_ := ack;
+			gui_.tableDataChanged();
+		} catch: TimeoutException using: { |e|
+			cb.cancel();
+			def msg := "Failed to add review for \"" + title_ + "\".";
+			notify: gui_.addError(self, msg) for: ERR_DISPLAY;
+			if: POPUPS then: { gui_.showWarningDialog(msg) };
+		};
+		nil;
+	};
+	
+	// authors
+	
+	def getAuthors() {
+		authors_;
+	};
+	
+	def setAuthors(authors) {
+		def cb := gui_.addHandler(self);
+		def handler := when: book_<-setAuthors(authors)@Due(CMD_TIMEOUT) becomes: { |ack|
+			// do noting
+			cb.cancel();
+			def msg := "Changed authors for \"" + title_ + "\" to: \"" + ack + "\".";
+			if: POPUPS then: { gui_.showOkDialog(msg) };
+			authors_ := ack;
+			gui_.tableDataChanged();
+		} catch: TimeoutException using: { |e|
+			cb.cancel();
+			def msg := "Failed to add review for \"" + title_ + "\".";
+			notify: gui_.addError(self, msg) for: ERR_DISPLAY;
+			if: POPUPS then: { gui_.showWarningDialog(msg) };
+		};
+		nil;
+	};
+	
+	// rating
+	
+	def getRating() {
+		if: (rating_ == "no rating") then: {
+			"?";
+		} else: { 
+			rating_.explode().select(1,4).implode();
+		};
+	};
+	
+	
+	// reviews
+	
+	def addReview(review) {
+		def cb := gui_.addHandler(self);
+		def handler := when: book_<-addReview(review)@Due(CMD_TIMEOUT) becomes: { |ack|
+			// do noting
+			cb.cancel();
+			def msg := "Review for \"" + title_ + "\" added successfully.";
+			if: POPUPS then: { gui_.showOkDialog(msg) };
+			reviews_ := ack;
+			gui_.tableDataChanged();
+		} catch: TimeoutException using: { |e|
+			cb.cancel();
+			def msg := "Failed to add review for \"" + title_ + "\".";
+			notify: gui_.addError(self, msg) for: ERR_DISPLAY;
+			if: POPUPS then: { gui_.showWarningDialog(msg) };
+		};
+		nil;
+	};
+		
+	def clearReviews() {
+		def cb := gui_.addHandler(self);
+		def handler := when: book_<-clearReviews()@Due(2.seconds) becomes: { |ack|
+			// do noting
+			cb.cancel();
+			def msg := "Reviews for \"" + title_ + "\" cleared successfully.";
+			if: POPUPS then: { gui_.showOkDialog(msg) };
+			reviews_ := [];
+			gui_.tableDataChanged();
+		} catch: TimeoutException using: { |e|
+			cb.cancel();
+			def msg := "Failed to clear the reviews for \"" + title_ + "\".";
+			notify: gui_.addError(self, msg) for: ERR_DISPLAY;
+			if: POPUPS then: { gui_.showWarningDialog(msg) };
+		};
+		nil;
+	};
+	
+	def displayReviews(reviewManager) {
+		def handler := when: book_<-getReviews()@Due(CMD_TIMEOUT) becomes: { |reviews|
+			reviews := reviews.join("\n");
+			reviewManager.displayReviews(reviews);
+		} catch: TimeoutException using: { |e|
+			reviewManager.displayReviews("Failed to load reviews.");
+		};
+		handler;
+	};
+	
+	// keywords
+
+	def getMatch(keywords) {
+		print: intersect(keywords_, keywords).length();
+	};
+	
+	def getMatchFromString(keywords) {
+		def kt := keywords.replace: ";" by: { |c| "," };
+		kt := kt.split(",").map: { |kw| trim(kw) };
+		getMatch(kt);
+	};
+	
+	def setKeywords(keywords) {
+		def cb := gui_.addHandler(self);
+		when: book_<-setKeywords(keywords)@Due(CMD_TIMEOUT) becomes: { |ack|
+			cb.cancel();
+			def msg := "Keywords for \"" + title_ + "\" set successfully.";
+			if: POPUPS then: { gui_.showOkDialog(msg) };
+			keywords_ := ack;
+			gui_.tableDataChanged();
+		} catch: TimeoutException using: { |e|
+			cb.cancel();
+			def msg := "Failed to set the reviews for \"" + title_ + "\".";
+			notify: gui_.addError(self, msg) for: ERR_DISPLAY;
+			if: POPUPS then: { gui_.showWarningDialog(msg) };
+		};
+		nil;
+	};
+	
+	def setKeywordsFromString(keywords) {
+		def kt := keywords.replace: ";" by: { |c| "," };
+		kt := kt.split(",").map: { |kw| trim(kw) };
+		setKeywords(kt);
+	};
+	
+	def addKeywords(@keywords) {
+		kt := keywords_ + keywords;
+		setKeywords(kt);
+	};
+	
+	def displayKeywords(keywordWindow) {
+		keywordWindow.displayKeywords(keywords_.join(", "));
+		keywordWindow.setEditable(true);
+	};
+	
+	
+	// initializer
+	def init(book, gui) {
+		system.println("creating book: " + book);
+		book_ := book;
+		gui_ := gui;
+		when: book<-getTitle() becomes: { |title|
+			title_ := title;
+			gui_.tableDataChanged();
+		};
+		when: book<-getAuthors() becomes: { |authors|
+			authors_ := authors;
+			gui_.tableDataChanged();
+		};
+		when: book<-getRating() becomes: { |rating|
+			rating_ := rating;
+			gui_.tableDataChanged();
+		};
+		when: book<-getKeywords() becomes: { |keywords|
+			keywords_ := keywords;
+			gui_.tableDataChanged();
+		};
+	};
+};
+
+def BookWrapperModule := object: {
+	def BookWrapper := nativeBookWrapper;
+	def FakeBookWrapper := nativeFakeBookWrapper;
+};
