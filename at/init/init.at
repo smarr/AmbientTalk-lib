@@ -117,6 +117,10 @@ def asLongAs: cond do: body {
 	nil;
 };
 
+def unless: test then: closure {
+	if: !test then: closure;
+};
+
 /**
  * Defines a pass-by-copy lambda.
  * Example:
@@ -201,6 +205,11 @@ def isolate: closure passAs: transportClosure {
 	})
 };
 
+// closure with typetags
+def isolate: closure taggedAs: tagTable {
+	object: closure taggedAs: [/.at.types.Isolate] + tagTable;
+};
+
 /**
  * alias for extend:with: as a mental note for the programmer he's extending isolates
  */
@@ -238,4 +247,11 @@ def when: remoteRef reconnected: code {
 		}
 	};
 	subscription;
+};
+
+// export an object for each tag it sports
+def autoExport(someObject) {
+	(tagsOf: someObject).each: {|tt|
+		export: someObject as: tt;
+	};
 };
