@@ -3,7 +3,8 @@ import /.at.support.timer;
 import /.at.support.util;
 enableFutures(false);
 
-import /.bridges.RFIDService;
+//import /.bridges.RFIDService;
+import ~.RFIDService;
 
 //def service := createAndRunRFIDservice();
 
