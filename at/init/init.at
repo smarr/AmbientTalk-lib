@@ -50,12 +50,13 @@ def +(n) { 0+n };
 
 */
 
-
-def pwd() {
+// returns the current working directory
+def cwd() {
 	def ns := (print: ~);
 	ns.explode.select(5,ns.length()).implode;
 };
 
+// contains the AT_HOME path
 def AT_HOME := jlobby.java.lang.System.getProperty("AT_HOME");
 
 def does: obj respondTo: selector {
@@ -264,7 +265,7 @@ def autoExport(someObject) {
 	};
 };
 
-// a try:catch: method without that catches any exception
+// a try:catch: method that catches any exception
 def try: closure catchUsing: failClosure {
 	try: closure catch: /.at.types.Exception using: { |e| failClosure(e) };
 };
