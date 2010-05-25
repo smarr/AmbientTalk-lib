@@ -61,7 +61,7 @@ def volatileSetOf: type where: setCondition {
 					theType, 
 					{ |el| myCondition(el).and: { otherSet.condition()(el) }},
 					[]);
-				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				/.experimental.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
 			
@@ -71,7 +71,7 @@ def volatileSetOf: type where: setCondition {
 					theType, 
 					{ |el| myCondition(el).or: { otherSet.condition()(el) }},
 					[]);
-				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				/.experimental.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
 			
@@ -81,7 +81,7 @@ def volatileSetOf: type where: setCondition {
 					theType,
 					{ |el| myCondition(el).and: { !(otherSet.condition()(el)) }},
 					[]);
-				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				/.experimental.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
 			
@@ -91,7 +91,7 @@ def volatileSetOf: type where: setCondition {
 					theType,
 					{ |el| !myCondition(el) },
 					[]);
-				/.at.lang.syncIsolates.subscribe: newSet to: theType;
+				/.experimental.lang.syncIsolates.subscribe: newSet to: theType;
 				newSet;
 			};
 			
@@ -132,7 +132,7 @@ def volatileSetOf: type where: setCondition {
 	};
 	
 	def volatileSet := createSet(type, setCondition, []);
-	/.at.lang.syncIsolates.subscribe: volatileSet to: type;
+	/.experimental.lang.syncIsolates.subscribe: volatileSet to: type;
 	volatileSet;
 };
 
@@ -141,7 +141,7 @@ def VolatileSetsTest() {
 	
 		def testAsyncSetElements() {
 			def publisher := actor: {
-				import /.at.lang.syncIsolates;
+				import /.experimental.lang.syncIsolates;
 				deftype TestType;
 				def iso1 := syncIsolate: { def id := "iso1"; def category := 1; };
 				def iso2 := syncIsolate: { def id := "iso2"; def category := 1; };

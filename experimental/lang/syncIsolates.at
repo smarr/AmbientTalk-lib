@@ -271,7 +271,7 @@ def SyncIsolateModule := object: {
 
 			def setUp() {
 			  publishingActor := actor: {
-				import /.at.lang.syncIsolates;
+				import /.experimental.lang.syncIsolates;
 				def iso1 := syncIsolate: { 
 					def field := "iso1";
 					def setField(x) {
