@@ -15,7 +15,7 @@ def mutatorsOf: someObject {
 def is: methodName mutatorOf: someObject {
 	try: {
 		is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
-	} catch: Types.SelectorNotFound using: {|e| false };
+	} catch: /.at.types.SelectorNotFound using: {|e| false };
 };
 
 // intercepts methods annotated as mutator and := invocations

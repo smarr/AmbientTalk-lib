@@ -1,5 +1,6 @@
 deftype Book;
 
+import /.at.lang.mutatorInterceptorMirror;
 import ~.extras;
 
 def makeBook(title, authors) {

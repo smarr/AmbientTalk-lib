@@ -14,7 +14,7 @@ import ~.Book;
 import ~.BookWrapper;
 
 
-def LibraryWindow := jlobby.main.LibraryApp;
+def LibraryWindow := jlobby.applications.rfid.ambientLibrary.main.LibraryApp;
 def gui := LibraryWindow.new();
 
 def timeouts := HashMap.new();

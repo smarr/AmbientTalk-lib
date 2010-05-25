@@ -28,7 +28,7 @@ def TagManagerModule := object: {
 	};
 };
 
-def EmptyTagManager := jlobby.utils.TagManager;
+def EmptyTagManager := jlobby.applications.rfid.ambientLibrary.util.TagManager;
 def gui := EmptyTagManager.new(TagManagerModule);
 
 deftype RFIDTag;
@@ -43,7 +43,7 @@ def addSampleModel(name, sample) {
 
 
 // adding Book support
-import /.main.Book;
+import /.base.Book;
 def sampleBook := makeBook("unknown", "unknown");
 addSampleModel("book", sampleBook);
 
