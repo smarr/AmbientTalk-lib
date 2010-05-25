@@ -36,7 +36,7 @@ def makeGuanotes(aFlockr) {
 	 // TODO: totam should be something part of the system, not the application
 	def totam := makeTupleSpace(aFlockr.getUsername);
   // local interface of guanotes
-  def localInterface := extend: /.at.urbiflock.application.makeApplication("Guanotes", aFlockr) with:{
+  def localInterface := extend: /.frameworks.urbiflock.application.makeApplication("Guanotes", aFlockr) with:{
 	  //helper function for unit test
     def getFlockr(){
 			aFlockr;
@@ -145,7 +145,7 @@ def makeGuanotes(aFlockr) {
 		def start() {
 			super^start();
 			//setup the gui
-			jlobby.at.urbiflock.ui.guanotes.GuanoteList.new(self);
+			jlobby.frameworks.urbiflock.ui.guanotes.GuanoteList.new(self);
 		  self.goOnline();
 		};
 		def stop(){
@@ -185,13 +185,13 @@ def GuanotesModule := object: {
 			
 			def setUp() {
 				// one flockr1 with 2 friends: flockr2 and flockr3.
-				def profile1 := /.at.urbiflock.profile.makeProfile();
+				def profile1 := /.frameworks.urbiflock.profile.makeProfile();
 				profile1.username := "flockr1";
-			  flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
-				def profile2 := /.at.urbiflock.profile.makeProfile();
+			  flockr1 := /.frameworks.urbiflock.flockr.makeFlockr(profile1);
+				def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2";
 		  	flockr1.addBuddy(profile2);
-				def profile3 := /.at.urbiflock.profile.makeProfile();
+				def profile3 := /.frameworks.urbiflock.profile.makeProfile();
 				profile3.username := "flockr3";
 		  	flockr1.addBuddy(profile3);
 		    //setting up guanotes of flockr1
@@ -221,10 +221,10 @@ def GuanotesModule := object: {
 				myGuanotes.sendGuanote(aGuanote);
 		    // actor containing flockr2
 				def a := actor: { |res,test|	
-					def profile2 := /.at.urbiflock.profile.makeProfile();
+					def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 					profile2.username := "flockr2";
-				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+				  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+			 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.goOnline();
 				  // this should be composed via gui interface for every flock where a flockr is registered.
 					myGuanotes.listenForGuanotesToOwner( object:{
@@ -257,10 +257,10 @@ def GuanotesModule := object: {
 				  import /.at.lang.futures;
 					enableFutures(false);
 					
-					def profile2 := /.at.urbiflock.profile.makeProfile();
+					def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 					profile2.username := "flockr2";
-				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+				  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+			 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.goOnline();
 				  // this should be composed via gui interface for every flock where a flockr is registered.
 					myGuanotes.listenForGuanotesToOwner( object:{
@@ -296,10 +296,10 @@ def GuanotesModule := object: {
 			  };
 				// actor containing flockr2, which belongs to flockr1 "FriendsFlock"
 				def a := actor: { |res, test|	
-					def profile2 := /.at.urbiflock.profile.makeProfile();
+					def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 					profile2.username := "flockr2";
-				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+				  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+			 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.goOnline();
        	  myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
@@ -323,10 +323,10 @@ def GuanotesModule := object: {
 		      def aFlockr3 := actor: { |res, test|	
 						import /.at.lang.futures;
 						enableFutures(false);
-						def profile3 := /.at.urbiflock.profile.makeProfile();
+						def profile3 := /.frameworks.urbiflock.profile.makeProfile();
 						profile3.username := "flockr3";
-					  def flockr3 := /.at.urbiflock.flockr.makeFlockr(profile3);
-				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr3);
+					  def flockr3 := /.frameworks.urbiflock.flockr.makeFlockr(profile3);
+				 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr3);
 				    def goOnline() { myGuanotes.goOnline() };
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
@@ -343,10 +343,10 @@ def GuanotesModule := object: {
 					def aFlockr2 := actor: { |test, aFlockr3, waitTime|	
 						import /.at.lang.futures;
 					  enableFutures(false);
-						def profile2 := /.at.urbiflock.profile.makeProfile();
+						def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 						profile2.username := "flockr2";
-					  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+					  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+				 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr2);
 				    myGuanotes.goOnline();
 				    def goOffline() {
 							flockr2.goOffline();
@@ -377,13 +377,13 @@ def GuanotesModule := object: {
 					def [fut,res] := makeFuture();
 					// flockr2 sends also a "Dag wereld" guanote to its friends when it gets the one of flockr1
 					def aFlockr2 := actor: { |res, test|	
-						def profile2 := /.at.urbiflock.profile.makeProfile();
+						def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 						profile2.username := "flockr2";
-					  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-						def profile4 := /.at.urbiflock.profile.makeProfile();
+					  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+						def profile4 := /.frameworks.urbiflock.profile.makeProfile();
 						profile4.username := "flockr4";
 						flockr2.addBuddy(profile4); // assuming that the guanote of flockr1 arrives after the addBuddy has been proccessed.
-				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+				 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr2);
 				    myGuanotes.goOnline();
 	       	  myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
@@ -399,10 +399,10 @@ def GuanotesModule := object: {
 					// but it will receive a guanote from flockr2 which is one of its friends.
 				  def aFlockr4 := actor: { |res, test, waitTime|	
 					  import /.at.support.timer;
-					  def profile4 := /.at.urbiflock.profile.makeProfile();
+					  def profile4 := /.frameworks.urbiflock.profile.makeProfile();
 						profile4.username := "flockr4";
-					  def flockr4 := /.at.urbiflock.flockr.makeFlockr(profile4);
-				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr4);
+					  def flockr4 := /.frameworks.urbiflock.flockr.makeFlockr(profile4);
+				 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr4);
 				    myGuanotes.goOnline();
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
@@ -439,10 +439,10 @@ def GuanotesModule := object: {
 				def aFlockr4 := actor: { |res, test, waitTime|	
 					  import /.at.support.timer;
 						import /.at.lang.futures exclude seconds, minutes, millisec;
-					  def profile4 := /.at.urbiflock.profile.makeProfile();
+					  def profile4 := /.frameworks.urbiflock.profile.makeProfile();
 						profile4.username := "flockr4";
-					  def flockr4 := /.at.urbiflock.flockr.makeFlockr(profile4);
-				 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr4);
+					  def flockr4 := /.frameworks.urbiflock.flockr.makeFlockr(profile4);
+				 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr4);
 				    def goOnline() {myGuanotes.goOnline()};
 						myGuanotes.listenForGuanotesToOwner( object:{
 						  def guanoteReceived(guanote) {
@@ -464,13 +464,13 @@ def GuanotesModule := object: {
 				// thus the guanote should be transmitted to flockr4.
 				def aFlockr2 := actor: { |res, test, aFlockr4|
 					import /.at.lang.futures;	
-					def profile2 := /.at.urbiflock.profile.makeProfile();
+					def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 					profile2.username := "flockr2";
-				  def flockr2 := /.at.urbiflock.flockr.makeFlockr(profile2);
-					def profile4 := /.at.urbiflock.profile.makeProfile();
+				  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+					def profile4 := /.frameworks.urbiflock.profile.makeProfile();
 					profile4.username := "flockr4";
 					flockr2.addBuddy(profile4); // assuming that the guanote of flockr1 arrives after the addBuddy has been proccessed.
-			 	  def myGuanotes := /.at.urbiflock.guanotes.makeGuanotes(flockr2);
+			 	  def myGuanotes := /.frameworks.urbiflock.guanotes.makeGuanotes(flockr2);
 			    myGuanotes.goOnline();
        	  myGuanotes.listenForGuanotesToOwner( object:{
 					  def guanoteReceived(guanote) {
@@ -490,7 +490,7 @@ def GuanotesModule := object: {
 				  };
 			  };
         //adding flockr4 as friend of flockr1.
-				def profile4 := /.at.urbiflock.profile.makeProfile();
+				def profile4 := /.frameworks.urbiflock.profile.makeProfile();
 				profile4.username := "flockr4";
 		  	flockr1.addBuddy(profile4);
 				// waiting some time to be sure that flockr2,flockr3, flockr4 belong to the flockr1 "FriendsFlock".			

@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.urbiflock.ui.guanotes;
+package frameworks.urbiflock.ui.guanotes;
 
 import java.awt.Button;
 import java.awt.MenuItem;
@@ -39,8 +39,8 @@ import java.awt.event.MouseEvent;
 import javax.swing.BoxLayout;
 import javax.swing.JComboBox;
 
-import at.urbiflock.ui.Flock;
-import at.urbiflock.ui.Flockr;
+import frameworks.urbiflock.ui.Flock;
+import frameworks.urbiflock.ui.Flockr;
 
 /**
  * The UI of a Guanote Editor. This GUI allows the user to

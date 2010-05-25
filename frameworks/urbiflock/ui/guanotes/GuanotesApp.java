@@ -25,18 +25,18 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.urbiflock.ui.guanotes;
+package frameworks.urbiflock.ui.guanotes;
 
 import edu.vub.at.objects.ATTypeTag;
 
 import java.util.Vector;
 
-import at.urbiflock.ui.Application;
-import at.urbiflock.ui.Flock;
-import at.urbiflock.ui.FlockListener;
-import at.urbiflock.ui.Flockr;
-import at.urbiflock.ui.Profile;
-import at.urbiflock.ui.Subscription;
+import frameworks.urbiflock.ui.Application;
+import frameworks.urbiflock.ui.Flock;
+import frameworks.urbiflock.ui.FlockListener;
+import frameworks.urbiflock.ui.Flockr;
+import frameworks.urbiflock.ui.Profile;
+import frameworks.urbiflock.ui.Subscription;
 
 /**
  * The Java interface to an AmbientTalk Guanote urbiflock application.

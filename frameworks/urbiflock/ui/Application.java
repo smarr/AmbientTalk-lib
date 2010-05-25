@@ -1,4 +1,4 @@
-package at.urbiflock.ui;
+package frameworks.urbiflock.ui;
 
 import edu.vub.at.objects.ATTypeTag;
 

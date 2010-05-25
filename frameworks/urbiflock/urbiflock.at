@@ -28,10 +28,10 @@
 /*
  * This is the 'main' file to launch the Urbiflock framework.
  */
-import /.at.urbiflock.flockr;
-import /.at.urbiflock.guanotes;
-import /.at.urbiflock.application;
-import /.at.urbiflock.profile;
+import /.frameworks.urbiflock.flockr;
+import /.frameworks.urbiflock.guanotes;
+import /.frameworks.urbiflock.application;
+import /.frameworks.urbiflock.profile;
 
 def Label := jlobby.java.awt.Label;
 def TextField := jlobby.java.awt.TextField;
@@ -57,7 +57,7 @@ uidField.addActionListener(object: {
 		// create the Guanotes Application
 		def guanotesApp := makeGuanotes(flockr);
 
-		/.at.urbiflock.ir8u.makeIR8U(flockr);
+		/.frameworks.urbiflock.ir8u.makeIR8U(flockr);
 
 		// launch the framework GUI
 		flockr.openApplicationLauncher();

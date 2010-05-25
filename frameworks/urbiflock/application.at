@@ -87,14 +87,14 @@ def makeFrameworkApplications(localFlockrI) {
 	// "My Profile" editor application
 	extend: makeApplication("My Profile", localFlockrI) with: {
 		def start() {
-			jlobby.at.urbiflock.ui.ProfileViewer.new(localFlockrI, localFlockrI.getProfile, true)
+			jlobby.frameworks.urbiflock.ui.ProfileViewer.new(localFlockrI, localFlockrI.getProfile, true)
 		}
 	}
 	,
 	// "Flocks" flock list viewer application
 	extend: makeApplication("Flocks", localFlockrI) with: {
 		def start() {
-			jlobby.at.urbiflock.ui.FlockListViewer.new(localFlockrI)
+			jlobby.frameworks.urbiflock.ui.FlockListViewer.new(localFlockrI)
 		}
 	}
 	]
@@ -116,20 +116,20 @@ object: {
 	  
 		def setUp() {
 			// create two new flockrs, one in this actor, the other in a new actor
-			def profile1 := /.at.urbiflock.profile.makeProfile();
+			def profile1 := /.frameworks.urbiflock.profile.makeProfile();
 			profile1.username := "uid1";
-		  flockr1 := /.at.urbiflock.flockr.makeFlockr(profile1);
+		  flockr1 := /.frameworks.urbiflock.flockr.makeFlockr(profile1);
 		
 		  actorHostingFlockr2 := actor: {
-				import /.at.urbiflock.flockr;
+				import /.frameworks.urbiflock.flockr;
 				deftype TestApp1;
 				
-				def profile2 := /.at.urbiflock.profile.makeProfile();
+				def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 				profile2.username := "uid2";
 				profile2.firstname := "Flockr 2 first name";
 			  def flockr2 := makeFlockr(profile2);
 			  
-				def testApp := /.at.urbiflock.application.makeApplication("testApp", flockr2);
+				def testApp := /.frameworks.urbiflock.application.makeApplication("testApp", flockr2);
 				testApp.export(TestApp1);
 				flockr2.addApplication(testApp);
 			
@@ -162,7 +162,7 @@ object: {
 			
 			when: fut becomes: { |args|
 				def [flockr, profile, app] := args;
-				self.assertEquals("uid2", /.at.urbiflock.flockr.uidOf(flockr), "flockr does not match");
+				self.assertEquals("uid2", /.frameworks.urbiflock.flockr.uidOf(flockr), "flockr does not match");
 				self.assertEquals("uid2", profile.username, "profile does not match");
 				when: app<-name()@FutureMessage becomes: { |nam|
 					self.assertEquals("testApp", nam, "app does not match");

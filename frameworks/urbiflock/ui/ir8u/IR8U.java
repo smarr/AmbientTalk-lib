@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.urbiflock.ui.ir8u;
+package frameworks.urbiflock.ui.ir8u;
 
 
 import java.awt.Button;
@@ -46,8 +46,8 @@ import java.util.Vector;
 import javax.swing.BoxLayout;
 import javax.swing.JOptionPane;
 
-import at.urbiflock.ui.Flockr;
-import at.urbiflock.ui.Profile;
+import frameworks.urbiflock.ui.Flockr;
+import frameworks.urbiflock.ui.Profile;
 
 /**
  * A GUI to read the list of received guanotes, and to

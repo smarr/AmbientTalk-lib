@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.urbiflock.ui.guanotes;
+package frameworks.urbiflock.ui.guanotes;
 
 import java.awt.Color;
 import java.awt.Dimension;

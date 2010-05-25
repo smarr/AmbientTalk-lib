@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.urbiflock.ui;
+package frameworks.urbiflock.ui;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;

@@ -35,7 +35,7 @@ def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
 deftype InvalidFieldType <: lobby.at.types.Exception;
 def XInvalidFieldType := lobby.at.exceptions.createException(InvalidFieldType);
 
-def ProximityModule := /.at.urbiflock.proximity;
+def ProximityModule := /.frameworks.urbiflock.proximity;
 
 /**
  * Each field of a profile has an associated field type.
@@ -209,7 +209,7 @@ def makeProfileMandatoryFields() {
 		};
 		
 		def addFieldTypeMapping(field, typeObject) {
-			fieldTypeMap.put(field, (/.at.support.symbiosis.cast: typeObject into: (jlobby.at.urbiflock.ui.AbstractFieldType)));
+			fieldTypeMap.put(field, (/.at.support.symbiosis.cast: typeObject into: (jlobby.frameworks.urbiflock.ui.AbstractFieldType)));
 		};
 		
 		def removeFieldTypeMapping(field) {

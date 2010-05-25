@@ -73,7 +73,7 @@ object: {
 	def BuddylistTest := extend: /.at.unit.test.UnitTest.new("BuddylistTest") with: {
 		
 		def testBuddyList() {
-			import /.at.urbiflock.profile;
+			import /.frameworks.urbiflock.profile;
 			
 			def bl := makeBuddyList();
 			

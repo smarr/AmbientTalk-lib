@@ -43,8 +43,8 @@
 def Vector := /.at.collections.vector.Vector;
 import /.at.lang.futures;
 
-def ProximityModule := /.at.urbiflock.proximity;
-def FlockModule := /.at.urbiflock.flock;
+def ProximityModule := /.frameworks.urbiflock.proximity;
+def FlockModule := /.frameworks.urbiflock.flock;
 
 // type identifying remote Flockr Users
 deftype FlockrT;
@@ -73,9 +73,9 @@ def makeFlockr(profile) {
 	def flocks := Vector.new();
 	def proximities := Vector.new();
 	
-	def buddyList := /.at.urbiflock.buddylist.makeBuddyList();
+	def buddyList := /.frameworks.urbiflock.buddylist.makeBuddyList();
 	
-	def matchingProfile := /.at.urbiflock.profile.makeProfile();
+	def matchingProfile := /.frameworks.urbiflock.profile.makeProfile();
 	def profileMatchesProximity := nil;
 	def profileMatchingProximities := Vector.new();
 	
@@ -227,8 +227,8 @@ def makeFlockr(profile) {
 			proximities.remove(profileMatchesProximity);
 			matchingProfile := newProfile;
 			// Create new individual profile field matching proximities
-			profileMatchingProximities := /.at.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
-			profileMatchesProximity := /.at.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
+			profileMatchingProximities := /.frameworks.urbiflock.profile.createProfileMatchingProximities(localInterface, matchingProfile);
+			profileMatchesProximity := /.frameworks.urbiflock.profile.constructProfileMatchingProximityFromProximities(localInterface, profileMatchingProximities);
 			proximities.add(profileMatchesProximity);
 			matchingProfilesFlock.setProximity(profileMatchesProximity);
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
@@ -272,13 +272,13 @@ def makeFlockr(profile) {
 		} taggedAs: [ extend: FlockrT with: { |username| }];
 		
 		def openApplicationLauncher() { 
-			jlobby.at.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) 
+			jlobby.frameworks.urbiflock.ui.ApplicationLauncher.new(applications.asTable()) 
 		};
 		
 		def openFlockEditorOnNewFlock() {
-			jlobby.at.urbiflock.ui.FlockEditor.new(/.at.urbiflock.flock.makeFlock(
+			jlobby.frameworks.urbiflock.ui.FlockEditor.new(/.frameworks.urbiflock.flock.makeFlock(
 					"new flock", 
-					/.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true }),
+					/.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true }),
 					localInterface),
 				localInterface);
 		};
@@ -290,7 +290,7 @@ def makeFlockr(profile) {
 		// shouldBeNearby: should the flockr be nearby?
 		def createFlockFromFieldMatchers(flockName, fieldMatchersVector, shouldBeFriend, shouldBeNearby) {
 			// The initial proximity matches with every flockr.
-			def theChainedProximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true });
+			def theChainedProximity := /.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(localInterface, { |p| true });
 			def iterator := fieldMatchersVector.iterator();
 			// We keep the simple proximities to be able to notify them later on.
 			def simpleProximities := Vector.new();
@@ -309,7 +309,7 @@ def makeFlockr(profile) {
 				// The actual value of the profile field.
 				def fieldValue := fieldMatcher.get(3);
 				// Make the proximity for this field:
-				def proximity := /.at.urbiflock.proximity.makeDoesProfileMatchProximity(
+				def proximity := /.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(
 					localInterface, 
 					{ |profile| 
 						// If the flockr's profile doesn't have the field, do not match.
@@ -330,7 +330,7 @@ def makeFlockr(profile) {
 				// We keep the simple proximities to be able to notify them later on.
 				simpleProximities.add(proximity);
 				// The resulting global proximity is a chained AND-proximity of all simple proximities.
-				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	
+				theChainedProximity := /.frameworks.urbiflock.proximity.makeAndProximity(theChainedProximity, proximity);	
 			};
 			// Should the flockr be a friend?
 			def isFriendProximity := nil;
@@ -338,18 +338,18 @@ def makeFlockr(profile) {
 			def isNearbyProximity := nil;
 			// If so, add the corresponding proximity.
 			if: shouldBeFriend then: {
-				isFriendProximity := /.at.urbiflock.proximity.makeIsFriendProximity(localInterface);
-				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, isFriendProximity);
+				isFriendProximity := /.frameworks.urbiflock.proximity.makeIsFriendProximity(localInterface);
+				theChainedProximity := /.frameworks.urbiflock.proximity.makeAndProximity(theChainedProximity, isFriendProximity);
 			};
 			// If so, add the corresponding proximity.
 			if: shouldBeNearby then: {
-				isNearbyProximity := /.at.urbiflock.proximity.makeIsNearbyProximity(localInterface);
-				theChainedProximity := /.at.urbiflock.proximity.makeAndProximity(theChainedProximity, isNearbyProximity);
+				isNearbyProximity := /.frameworks.urbiflock.proximity.makeIsNearbyProximity(localInterface);
+				theChainedProximity := /.frameworks.urbiflock.proximity.makeAndProximity(theChainedProximity, isNearbyProximity);
 			};
 			// Here the global proximity is ready, but the sub-proximities still 
 			// have to be initialized (by notifying them).
 			proximities.add(theChainedProximity);
-			addFlock(/.at.urbiflock.flock.makeFlock(flockName, theChainedProximity, localInterface));
+			addFlock(/.frameworks.urbiflock.flock.makeFlock(flockName, theChainedProximity, localInterface));
 			
 			// Notify the isFriendProximity with all the existing buddies.
 			if: (nil != isFriendProximity) then: {
@@ -391,7 +391,7 @@ def makeFlockr(profile) {
 	flocks.add(NearbyFlock);
 	
 
-	/.at.urbiflock.application.makeFrameworkApplications(localInterface).each: { |application|
+	/.frameworks.urbiflock.application.makeFrameworkApplications(localInterface).each: { |application|
 		applications.add(application);
 	};
 
@@ -447,13 +447,13 @@ object: {
 		
 		def setUp() {
 			// create two new flockrs, one in this actor, the other in a new actor
-			def profile1 := /.at.urbiflock.profile.makeProfile();
+			def profile1 := /.frameworks.urbiflock.profile.makeProfile();
 			profile1.username := "flockr1";
 		  flockr1 := makeFlockr(profile1);
 		
 		  actorHostingFlockr2 := actor: {
-				import /.at.urbiflock.flockr;
-				def profile2 := /.at.urbiflock.profile.makeProfile();
+				import /.frameworks.urbiflock.flockr;
+				def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 				profile2.username := "flockr2";
 				profile2.firstname := "Flockr 2 first name";
 			  def flockr2 := makeFlockr(profile2);
@@ -478,7 +478,7 @@ object: {
 		
 		def testAsyncUidOf() {			
 			when: actorHostingFlockr2<-getFlock()@FutureMessage becomes: { |remoteFlockr|
-				self.assertEquals("flockr2", /.at.urbiflock.flockr.uidOf(remoteFlockr), "uidOf does not work");
+				self.assertEquals("flockr2", /.frameworks.urbiflock.flockr.uidOf(remoteFlockr), "uidOf does not work");
 			};
 		};
 		
@@ -499,7 +499,7 @@ object: {
 		};
 		
 		def testAsyncUpdateProfileInBuddyList() {
-			def profile2 := /.at.urbiflock.profile.makeProfile();
+			def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 			profile2.username := "flockr2";
 			profile2.firstname := "Jef";
 			flockr1.addBuddy(profile2);

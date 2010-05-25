@@ -55,7 +55,7 @@ def makeIR8U(aFlockr) {
   // the local interface of this application: methods of this interface
   // can only be invoked by local client objects, such as the GUI
   // note that this interface extends the standard Application interface
-  def localInterface := extend: /.at.urbiflock.application.makeApplication("IR8U", aFlockr) with: {
+  def localInterface := extend: /.frameworks.urbiflock.application.makeApplication("IR8U", aFlockr) with: {
 	
 	  // this method is called by the GUI when you want someone to vote on you
 	  def askRatingFor(subject) {
@@ -85,7 +85,7 @@ def makeIR8U(aFlockr) {
 			// set up the gui (note that we pass a reference to this
 			// application object to the GUI, such that the GUI can
 			// call back on the application on relevant events)
-			ui := jlobby.at.urbiflock.ui.ir8u.IR8U.new(self);
+			ui := jlobby.frameworks.urbiflock.ui.ir8u.IR8U.new(self);
 						
 			// this call exports the application object such that it
 			// can be found by other nearby IR8U applications

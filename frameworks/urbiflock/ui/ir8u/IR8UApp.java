@@ -25,10 +25,10 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.urbiflock.ui.ir8u;
+package frameworks.urbiflock.ui.ir8u;
 
-import at.urbiflock.ui.Application;
-import at.urbiflock.ui.Flockr;
+import frameworks.urbiflock.ui.Application;
+import frameworks.urbiflock.ui.Flockr;
 
 /**
  * The Java interface to an AmbientTalk IR8U urbiflock application.
