@@ -88,7 +88,7 @@ def CausewayTest := extend: /.at.unit.test.UnitTest.new("TracingTest") with: {
 	// but I did not use futures in the purchase example future to
 	// not complicate the causeway traces with futures tracing
 	def testPurchaseExample() {
-		/.at.demo.purchase_example;
+		/.demo.purchase_example;
 	};
 	
 };

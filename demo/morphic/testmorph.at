@@ -1,8 +1,8 @@
 import /.at.lang.traits;
 
-def Color := /.at.morphic.drawmorph.Color;
-def Shapes := /.at.morphic.drawmorph.Shapes;
-def Morphs := /.at.morphic.morphstructure;
+def Color := /.frameworks.morphic.drawmorph.Color;
+def Shapes := /.frameworks.morphic.drawmorph.Shapes;
+def Morphs := /.frameworks.morphic.morphstructure;
 def ProtoMorph := object: {
 	use: {
 		import Morphs.ProtoMorphTrait;
@@ -10,7 +10,7 @@ def ProtoMorph := object: {
 };
 def CompositeMorph := object: { 
 	use: { 
-		import /.at.morphic.morphstructure.CompositeTrait 
+		import /.frameworks.morphic.morphstructure.CompositeTrait 
 	} 
 };
 
@@ -26,7 +26,7 @@ def BasicMorph := object: {
 	use: {
 		import Morphs.CompositeTrait;
 		import Morphs.PositionTrait alias setPosition := oldSetPosition;
-		import /.at.morphic.eventmorph.DefaultInputEventHandlerTrait;
+		import /.frameworks.morphic.eventmorph.DefaultInputEventHandlerTrait;
 	}
 };
 
@@ -42,8 +42,8 @@ def RectangleMorph := extend: BasicMorph with: {
 	use: {
 		import Morphs.SizeTrait;
 		import Morphs.PickingTrait;
-		import /.at.morphic.drawmorph.ColoredMorphTrait;
-		import /.at.morphic.drawmorph.DrawableMorphTrait;
+		import /.frameworks.morphic.drawmorph.ColoredMorphTrait;
+		import /.frameworks.morphic.drawmorph.DrawableMorphTrait;
 	};
 };
 
@@ -237,7 +237,7 @@ def HandMorph := extend: BasicMorph with: {
 	use: {
 		import Morphs.SizeTrait;
 		import Morphs.PickingTrait;
-		import /.at.morphic.drawmorph.DrawableMorphTrait;
+		import /.frameworks.morphic.drawmorph.DrawableMorphTrait;
 	}
 };
 
@@ -274,10 +274,10 @@ def WorldMorph := object: {
 		import Morphs.SizeTrait;
 		import Morphs.PositionTrait;
 		import Morphs.PickingTrait;
-		import /.at.morphic.drawmorph.ColoredMorphTrait;
-		import /.at.morphic.drawmorph.DrawableMorphTrait;
-		import /.at.morphic.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt frame, canvas and handles awt painting requests */
-		import /.at.morphic.eventmorph.AwtInputEventDispatcherTrait;
+		import /.frameworks.morphic.drawmorph.ColoredMorphTrait;
+		import /.frameworks.morphic.drawmorph.DrawableMorphTrait;
+		import /.frameworks.morphic.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt frame, canvas and handles awt painting requests */
+		import /.frameworks.morphic.eventmorph.AwtInputEventDispatcherTrait;
 	}
 };
 

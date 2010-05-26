@@ -1,4 +1,4 @@
-package at.morphic.apps.musicplayer;
+package applications.morphic.musicplayer;
 
 import java.util.Vector;
 import java.io.*;

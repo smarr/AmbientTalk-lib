@@ -5,16 +5,16 @@
 import /.at.lang.futures;
 enableFutures(true);
 
-def MorphicModule := /.at.morphic.morphic;
-def Color := /.at.morphic.drawmorph.Color;
+def MorphicModule := /.frameworks.morphic.morphic;
+def Color := /.frameworks.morphic.drawmorph.Color;
 def RectangleMorph := MorphicModule.RectangleMorph;
 def WorldMorph := MorphicModule.WorldMorph;
 def LabelMorph := MorphicModule.LabelMorph;
-def NimbusMorph := /.at.morphic.distributed.NimbusMorph;
+def NimbusMorph := /.frameworks.morphic.distributed.NimbusMorph;
 def TrashMorph := MorphicModule.TrashMorph;
-def Rectangle := /.at.morphic.drawmorph.Shapes.Rectangle;
+def Rectangle := /.frameworks.morphic.drawmorph.Shapes.Rectangle;
 
-def AppleScript := jlobby.at.morphic.apps.musicplayer.AppleScript;
+def AppleScript := jlobby.applications.morphic.musicplayer.AppleScript;
 
 def PlayerProxy := object: {
 	def player := nil;

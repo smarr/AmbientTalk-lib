@@ -5,12 +5,12 @@
 import /.at.lang.futures;
 enableFutures(true);
 
-def Color := /.at.morphic.drawmorph.Color;
-def RectangleMorph := /.at.morphic.morphic.RectangleMorph;
-def WorldMorph := /.at.morphic.morphic.WorldMorph;
-def TrashMorph := /.at.morphic.morphic.TrashMorph;
-def LabelMorph := /.at.morphic.morphic.LabelMorph;
-def NimbusMorph := /.at.morphic.distributed.NimbusMorph;
+def Color := /.frameworks.morphic.drawmorph.Color;
+def RectangleMorph := /.frameworks.morphic.morphic.RectangleMorph;
+def WorldMorph := /.frameworks.morphic.morphic.WorldMorph;
+def TrashMorph := /.frameworks.morphic.morphic.TrashMorph;
+def LabelMorph := /.frameworks.morphic.morphic.LabelMorph;
+def NimbusMorph := /.frameworks.morphic.distributed.NimbusMorph;
 //def ButtonMorph := lobby.lib.distributed.ButtonMorph;
 
 def world := WorldMorph.new();

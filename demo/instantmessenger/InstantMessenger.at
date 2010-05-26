@@ -42,10 +42,10 @@ import /.at.lang.futures;
 enableFutures(false);
 
 def MESSAGE_TIMEOUT := seconds(30);
-//def IMGUI := jlobby.at.demo.IMGUI;
-//def IMGUI := /.at.demo.IMConsole;
+//def IMGUI := jlobby.demo.instantmessenger.IMGUI;
+//def IMGUI := /.demo.instantmessenger.IMConsole;
 
-def createIM( IMGUI := /.at.demo.IMConsole, timeout := MESSAGE_TIMEOUT) {
+def createIM( IMGUI := /.demo.instantmessenger.IMConsole, timeout := MESSAGE_TIMEOUT) {
 
   def username := jlobby.java.lang.System.getProperty("user.name");
   def buddyList := jlobby.java.util.HashMap.new();
@@ -135,7 +135,7 @@ def InstantMessengerTest() {
 				def init(im) { im.setUsername("Bact") };
 				def display(text) { };
 			};
-			def B := /.at.demo.InstantMessenger.createIM(IMGUI);
+			def B := /.demo.instantmessenger.InstantMessenger.createIM(IMGUI);
 	  };
 	 fut;  
   };

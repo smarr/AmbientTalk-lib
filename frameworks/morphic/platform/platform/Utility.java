@@ -1,4 +1,4 @@
-package at.morphic.platform;
+package frameworks.morphic.platform;
 
 /** some general utility functions wrapped for the sake of AT/2 symbiosis */
 class Utility {

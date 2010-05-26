@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.morphic.platform;
+package frameworks.morphic.platform;
 
 import edu.vub.at.actors.net.OBJNetwork;
 import edu.vub.at.eval.Evaluator;

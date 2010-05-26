@@ -38,14 +38,14 @@
 import /.at.support.timer;
 import /.at.lang.traits;
 
-def Color := /.at.morphic.drawmorph.Color;
-def RectangleMorph := /.at.morphic.morphic.RectangleMorph;
-def CircleMorph := /.at.morphic.morphic.CircleMorph;
-def WorldMorph := /.at.morphic.morphic.WorldMorph;
-def LabelMorph := /.at.morphic.morphic.LabelMorph;
-def DefaultInputEventHandlerTrait := lobby.at.morphic.eventmorph.DefaultInputEventHandlerTrait;
+def Color := /.frameworks.morphic.drawmorph.Color;
+def RectangleMorph := /.frameworks.morphic.morphic.RectangleMorph;
+def CircleMorph := /.frameworks.morphic.morphic.CircleMorph;
+def WorldMorph := /.frameworks.morphic.morphic.WorldMorph;
+def LabelMorph := /.frameworks.morphic.morphic.LabelMorph;
+def DefaultInputEventHandlerTrait := lobby.frameworks.morphic.eventmorph.DefaultInputEventHandlerTrait;
 
-import /.at.morphic.animation;
+import /.frameworks.morphic.animation;
 
 def world := WorldMorph.new(340,340);
 def world.bat := nil;

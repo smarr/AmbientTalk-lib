@@ -3,7 +3,7 @@ import /.at.lang.traits;
 
 deftype Isolate;
 def Morphs := ~.morphstructure;
-def WorldCanvas := jlobby.at.morphic.platform.WorldCanvas;
+def WorldCanvas := jlobby.frameworks.morphic.platform.WorldCanvas;
 def AwtColor := jlobby.java.awt.Color;
 
 def Color := isolate: {
@@ -112,7 +112,7 @@ def AwtCanvasWorldMorphTrait := trait: { |WorldCanvas, AwtDrawCanvas|
 	
 	def initGraphics() {
 		self.imageBuffer := jlobby.java.awt.image.BufferedImage.new(self.width, self.height, jlobby.java.awt.image.BufferedImage.TYPE_INT_ARGB); 
-		self.canvas := AwtDrawCanvas.new(jlobby.at.morphic.platform.NATAWTCanvas.new(self.imageBuffer.getGraphics()));
+		self.canvas := AwtDrawCanvas.new(jlobby.frameworks.morphic.platform.NATAWTCanvas.new(self.imageBuffer.getGraphics()));
 		self.awtWorldCanvas := WorldCanvas.new(self.width, self.height);
 		self.awtWorldCanvas.openInFrame();
 	};

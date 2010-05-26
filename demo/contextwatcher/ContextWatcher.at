@@ -172,4 +172,4 @@ def makeContextWatcher(GUI,nickname) {
 };
 
 network.online;
-def cw := makeContextWatcher(jlobby.at.demo.CWGUI, "Tom"+now());
+def cw := makeContextWatcher(jlobby.demo.contextwatcher.CWGUI, "Tom"+now());

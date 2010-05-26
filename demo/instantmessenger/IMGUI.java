@@ -24,7 +24,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.demo;
+package demo.instantmessenger;
 
 import java.awt.BorderLayout;
 import java.awt.Button;

@@ -1,7 +1,7 @@
 import /.at.lang.traits;
 import /.at.lang.structuraltypes;
 
-def bitwiseOr := jlobby.at.morphic.platform.Utility.&bitwiseOr;
+def bitwiseOr := jlobby.frameworks.morphic.platform.Utility.&bitwiseOr;
 deftype Isolate;
 
 def Point := isolate: {

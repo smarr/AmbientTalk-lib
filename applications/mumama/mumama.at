@@ -254,7 +254,7 @@ def test() {
 
 	def otherpeer := actor: {
 		def start() {
-			import /.at.demo.mumama.mumama;
+			import /.applications.mumama.mumama;
 			def lib := Set.new();
 			lib.add(Song.new("1200 Micrograms", "Rock into the Future"));
 			lib.add(Song.new("Pendulum", "Fasten Your Seatbelt"));

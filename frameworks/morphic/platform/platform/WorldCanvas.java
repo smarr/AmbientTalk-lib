@@ -1,4 +1,4 @@
-package at.morphic.platform;
+package frameworks.morphic.platform;
 import edu.vub.at.objects.ATObject;
 import edu.vub.at.objects.natives.NATTable;
 import edu.vub.at.objects.natives.grammar.AGSymbol;

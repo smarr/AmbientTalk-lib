@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.demo.mumama;
+package applications.mumama;
 
 public interface Song extends Comparable {
 	public String asString();

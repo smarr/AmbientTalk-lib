@@ -35,7 +35,7 @@ def LibraryTestSuiteModule := object: {
     /.at.collections.list.ListTest(),
     /.at.collections.queue.queueTest(),
 		/.at.crime.CrimeConnection.CrimeTest(),
-    /.at.demo.InstantMessenger.InstantMessengerTest(),
+    /.demo.instantmessenger.InstantMessenger.InstantMessengerTest(),
     /.at.demo.mobiTunes.MobiTunesTest(),
     /.demo.metaprogramming,
     /.at.lang.futures.FuturesTest(),
@@ -61,7 +61,7 @@ def LibraryTestSuiteModule := object: {
     /.at.discovery.templatediscovery.TemplateDiscoveryModuleTest,
     /.at.discovery.composition.DiscoveryCompositionModuleTest,
     /.at.lang.ref_adaptors.AdaptorModuleTest,
-    /.at.demo.locationtracker.LocationTrackerTest
+    /.demo.locationtracker.LocationTrackerTest
     // /.at.discovery.deapspace.DEAPspaceProtocolTest,	
 	]);
 

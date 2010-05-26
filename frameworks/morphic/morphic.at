@@ -415,14 +415,14 @@ def WorldMorph := object: {
 	/.at.lang.traits.use: {
 		import CompositeTrait alias addMorph := oldaddMorph;
 		import PositionTrait;
-		import /.at.morphic.eventmorph.MouseInputHandlerTrait;
-		import /.at.morphic.eventmorph.KeyInputHandlerTrait;
+		import /.frameworks.morphic.eventmorph.MouseInputHandlerTrait;
+		import /.frameworks.morphic.eventmorph.KeyInputHandlerTrait;
 		import SizeTrait;
 		import PickingTrait;
 		import ColoredMorphTrait;
 		import DrawableMorphTrait;
-		import /.at.morphic.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt canvas which handles awt painting requests */
-		import /.at.morphic.eventmorph.AwtInputEventDispatcherTrait;
+		import /.frameworks.morphic.drawmorph.AwtCanvasWorldMorphTrait; /* creates an awt canvas which handles awt painting requests */
+		import /.frameworks.morphic.eventmorph.AwtInputEventDispatcherTrait;
 	}
 };
 self
