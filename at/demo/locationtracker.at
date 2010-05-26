@@ -37,7 +37,7 @@
  */
 
 import /.at.support.timer;
-import /.at.lang.ambientrefs(/.at.m2mi.ar_intensional_impl);
+import /.at.lang.ambientrefs(/.at.discovery.ar_intensional_impl);
 import /.at.lang.futures exclude seconds, millisec, minutes, Future, Due;
 
 deftype LocationService;

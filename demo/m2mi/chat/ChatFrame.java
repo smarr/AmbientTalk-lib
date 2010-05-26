@@ -31,7 +31,7 @@
 //
 //******************************************************************************
 
-package at.m2mi.chat;
+package demo.m2mi.chat;
 
 import edu.rit.util.Transcript;
 

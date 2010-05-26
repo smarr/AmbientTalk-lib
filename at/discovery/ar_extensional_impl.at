@@ -36,7 +36,7 @@ def FuturesModule := /.at.lang.futures;
 def MFuturesModule := /.at.lang.multifutures;
 def Vector := /.at.collections.vector.Vector;
 def OneWayMessage := FuturesModule.OneWayMessage;
-def DiscoveryModule := /.at.ambient.discovery;
+def DiscoveryModule := /.at.discovery.discovery;
 
 import /.at.support.timer;
 import /.at.lang.firstclassrefs;
@@ -64,7 +64,7 @@ def DescriptorObject := object: {
 def ARExtensionalImpl := object: {
 	
 	def implname := "extensional";
-	def capsule := /.at.support.util.uponArrivalBecome: { /.at.ambient.ar_extensional_impl };
+	def capsule := /.at.support.util.uponArrivalBecome: { /.at.discovery.ar_extensional_impl };
 	
 	def extendAmbientReference(arMirror,
 		                         typetagOrProtocol,

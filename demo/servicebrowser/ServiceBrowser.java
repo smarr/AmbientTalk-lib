@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.ambient;
+package demo.servicebrowser;
 
 import java.awt.Color;
 import java.awt.Component;

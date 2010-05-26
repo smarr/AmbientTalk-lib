@@ -35,7 +35,7 @@ def ChatRoom := object: {
 object: {
 	def makeChat(username) {
 		def myChatRoom;
-		def myChatFrame := jlobby.at.m2mi.chat.ChatFrame.new("AT/M2MI Chat Demo -- " + username);
+		def myChatFrame := jlobby.demo.m2mi.chat.ChatFrame.new("AT/M2MI Chat Demo -- " + username);
 		def myChatLog := myChatFrame.getChatLog();
 		def myChatLogStream := jlobby.java.io.PrintStream.new(myChatLog.getOutputStream());
 		
@@ -105,8 +105,8 @@ object: {
 	
 	def ChatTest := extend: /.at.unit.test.UnitTest.new("M2MIChatTest") with: {	
 		def testDemo() {
-			/.at.m2mi.chat.chat.makeChat("Tom");
-			actor: { /.at.m2mi.chat.chat.makeChat("Alice") };
+			/.demo.m2mi.chat.chat.makeChat("Tom");
+			actor: { /.demo.m2mi.chat.chat.makeChat("Alice") };
 		}
 	};
 };

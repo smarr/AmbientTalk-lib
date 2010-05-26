@@ -31,12 +31,12 @@
  */
 
 import /.at.lang.futures;
-import /.at.ambient.discovery;
+import /.at.discovery.discovery;
 def TimerModule := /.at.support.timer;
 
 def newTrackerFor(type) {
-	(if: (is: type taggedAs: /.at.ambient.oomatching.ObjectTemplate) then: {
-		/.at.ambient.templatediscovery.TemplateServiceTracker
+	(if: (is: type taggedAs: /.at.lang.oomatching.ObjectTemplate) then: {
+		/.at.discovery.templatediscovery.TemplateServiceTracker
 	} else: {
 		ServiceTracker
 	}).new(type);
@@ -151,7 +151,7 @@ def DiscoveryCompositionModule := object: {
 				deftype Pear;
 				
 				def peer := actor: { |Apple,Pear|
-					import /.at.ambient.discovery;
+					import /.at.discovery.discovery;
 					export: (isolate: { def color() { "red" } }) as: Apple;
 					export: (isolate: { def color() { "green" } }) as: Pear;
 				};
@@ -168,7 +168,7 @@ def DiscoveryCompositionModule := object: {
 				deftype Shape;
 				
 				def peer := actor: { |Shape|
-					import /.at.ambient.discovery;
+					import /.at.discovery.discovery;
 					export: (isolate: { def kind() { "rectangle" } }) as: Shape;
 					export: (isolate: { def kind() { "circle" } }) as: Shape;
 				};
@@ -187,7 +187,7 @@ def DiscoveryCompositionModule := object: {
 				
 				def makePeer(nam) {
 					actor: { |nam,Bird|
-					  import /.at.ambient.discovery;
+					  import /.at.discovery.discovery;
 					  export: (isolate: { |nam|
 						  def name() { nam };
 						  def ==(other) { nam == other.nam };

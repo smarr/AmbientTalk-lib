@@ -58,7 +58,7 @@
  *
  * @author tvcutsem
  */
-import /.at.m2mi.api;
+import /.bridges.m2mi.api;
 import /.at.support.timer;
 import /.at.lang.dynvars;
 import /.at.support.logger;
@@ -511,7 +511,7 @@ def DEAPspaceProtocol := object: {
 			
 				def peer := actor: {
 					deftype DiscoveryTest;
-					import /.at.ambient.deapspace;
+					import /.at.discovery.deapspace;
 					import /.at.support.timer;
 					def pub := export: (object: {
 						def add(x,y) { system.println("add called!!!"); x + y };

@@ -42,7 +42,7 @@
  *
  * @author tvcutsem
  */
-import /.at.m2mi.api;
+import /.bridges.m2mi.api;
 import /.at.support.timer;
 import /.at.lang.dynvars;
 
@@ -411,7 +411,7 @@ def DiscoveryModule := object: {
 				def peer := actor: {
 					import /.at.support.timer;
 					deftype DiscoveryTest;
-					import /.at.ambient.discovery;
+					import /.at.discovery.discovery;
 					def pub := export: (object: {
 						def add(x,y) { x + y };
 					}) as: DiscoveryTest; 
@@ -447,7 +447,7 @@ def DiscoveryModule := object: {
 		    deftype SimpleDiscoveryTestT;
 	
 		    def peer := actor: {
-			    import /.at.ambient.discovery;
+			    import /.at.discovery.discovery;
 			    deftype SimpleDiscoveryTestT;
 			    def pub := export: (object: {
 				    def answer := 42;
@@ -485,7 +485,7 @@ def DiscoveryModule := object: {
 				};
 
 		    def peer := actor: { |testProtocol|
-			    import /.at.ambient.discovery;
+			    import /.at.discovery.discovery;
 
 			    def pub := export: (object: {
 				    def matchingProtocolDiscoveryTestMethod() { 42 };
@@ -524,7 +524,7 @@ def DiscoveryModule := object: {
 				};
 
 		    def peer := actor: {
-			    import /.at.ambient.discovery;
+			    import /.at.discovery.discovery;
 
 			    def pub := export: (object: {
 				    def m() { 42 };

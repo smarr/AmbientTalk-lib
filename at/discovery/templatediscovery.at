@@ -39,8 +39,8 @@
  * @author tvcutsem
  */
 
-import /.at.ambient.oomatching;
-def ServiceTracker := /.at.ambient.discovery.ServiceTracker;
+import /.at.lang.oomatching;
+def ServiceTracker := /.at.discovery.discovery.ServiceTracker;
 
 deftype TemplateMatchableObject;
 
@@ -80,30 +80,30 @@ def TemplateDiscoveryModule := object: {
 	
   def TemplateServiceTracker := TemplateServiceTrackerPrototype;
 
-  /** @see /.at.ambient.discovery.when:discovered: */
+  /** @see /.at.discovery.discovery.when:discovered: */
 	def when: template discovered: handler {
 		if: (is: template taggedAs: ObjectTemplate) then: {
 			TemplateServiceTracker.new(template).whenDiscovered: handler;
 		} else: {
-			/.at.ambient.discovery.when: template discovered: handler;
+			/.at.discovery.discovery.when: template discovered: handler;
 		}
 	};
 	
-	/** @see /.at.ambient.discovery.whenever:discovered: */
+	/** @see /.at.discovery.discovery.whenever:discovered: */
 	def whenever: template discovered: handler {
 		if: (is: template taggedAs: ObjectTemplate) then: {
 			TemplateServiceTracker.new(template).wheneverDiscovered: handler;
 		} else: {
-			/.at.ambient.discovery.whenever: template discovered: handler;
+			/.at.discovery.discovery.whenever: template discovered: handler;
 		}
 	};
 	
-	/** @see /.at.ambient.discovery.whenever:lost: */
+	/** @see /.at.discovery.discovery.whenever:lost: */
 	def whenever: template lost: handler {
 		if: (is: template taggedAs: ObjectTemplate) then: {
 			TemplateServiceTracker.new(template).wheneverLost: handler;
 		} else: {
-			/.at.ambient.discovery.whenever: template lost: handler;
+			/.at.discovery.discovery.whenever: template lost: handler;
 		}
 	};
 
@@ -112,7 +112,7 @@ def TemplateDiscoveryModule := object: {
 		if: !(is: obj taggedAs: /.at.types.Isolate) then: {
 			raise: XIllegalOperation.new("Can only export isolate objects without a type tag");
 		};
-		/.at.ambient.discovery.export: obj as: TemplateMatchableObject;
+		/.at.discovery.discovery.export: obj as: TemplateMatchableObject;
 	};
 	
 	def TemplateDiscoveryModuleTest() {
@@ -120,7 +120,7 @@ def TemplateDiscoveryModule := object: {
 			
 			def testAsyncDiscoveryViaTemplate() {				
 				def peer := actor: {
-					import /.at.ambient.templatediscovery;
+					import /.at.discovery.templatediscovery;
 					import /.at.support.timer;
 					
 					def pub := export: (isolate: {
@@ -136,7 +136,7 @@ def TemplateDiscoveryModule := object: {
 				};
 
 				import /.at.lang.futures;
-				import /.at.ambient.oomatching;
+				import /.at.lang.oomatching;
 				
 				def [fut1, res1] := makeFuture();
 				def [fut2, res2] := makeFuture();

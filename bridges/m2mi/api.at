@@ -66,7 +66,7 @@ def cast: obj into: interface {
 	Coercer_coerce(obj, interface);
 };
 
-def TypeTagToInterfaceConverter := jlobby.at.m2mi.TypeTagToInterfaceConverter;
+def TypeTagToInterfaceConverter := jlobby.bridges.m2mi.TypeTagToInterfaceConverter;
 def TTTIC_convert := TypeTagToInterfaceConverter.&convert;
 
 def TEventualRef := /.at.lang.firstclassrefs.TEventualRef;
@@ -193,7 +193,7 @@ def M2MIModule := object: {
 			// when passed remotely. Rather it implements its own by-reference parameter
 			// passing semantics
 			def transportStrategy := { |typetag, m2miHandle|
-					/.at.m2mi.api.makeAmbientTalkHandle(typetag, { |type| m2miHandle });
+					/.bridges.m2mi.api.makeAmbientTalkHandle(typetag, { |type| m2miHandle });
 			};
 			
 			def toString() {
@@ -315,7 +315,7 @@ def M2MIModule := object: {
 				// exported its AsyncInvocationOnCustomInterfaceT object
 				def [fut, res] := /.at.lang.futures.makeFuture();
 				def peer := actor: { |res|
-					import /.at.m2mi.api;
+					import /.bridges.m2mi.api;
 					deftype AsyncInvocationOnCustomInterfaceT;
 					export: (object: {
 						def invoke(pkt) {
@@ -400,7 +400,7 @@ def M2MIModule := object: {
 				// exported its object
 				def [fut, res] := /.at.lang.futures.makeFuture();
 				def peer := actor: { |res|
-					import /.at.m2mi.api;
+					import /.bridges.m2mi.api;
 					deftype HandleParameterPassingT;
 					export: (object: {
 						def invoke(pkt) {

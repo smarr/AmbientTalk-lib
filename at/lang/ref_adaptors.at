@@ -70,9 +70,9 @@
  */
 
 import /.at.support.timer;
-import /.at.m2mi.api;
+import /.bridges.m2mi.api;
 import /.at.lang.firstclassrefs;
-import /.at.ambient.discovery;
+import /.at.discovery.discovery;
 
 // time to wait between retries for sending or acknowledging messages
 def SND_INTERVAL := seconds(2);
@@ -202,7 +202,7 @@ def makeExactlyOnceAdaptor(receptor) {
 	  };
 	
 	  def transportStrategy := { |receptor|
-		  /.at.ambient.adaptors.exactlyonceAdaptor: receptor;
+		  /.at.lang.ref_adaptors.exactlyonceAdaptor: receptor;
 	  };
   });
 };
@@ -267,7 +267,7 @@ def makeBatchAdaptor(batchReceptor, batchInterval := BATCH_INTERVAL) {
 	  };
 	
 	  def transportStrategy := { |receptor|
-		  /.at.ambient.adaptors.batchAdaptor: receptor;
+		  /.at.lang.ref_adaptors.batchAdaptor: receptor;
 	  };
   });
 };
@@ -385,7 +385,7 @@ def makeRebindableAdaptorFor(Type) {
 	
 		def transportStrategy := { |Type|
 			// when arriving at the remote host, create a new local rebindable reference
-			/.at.ambient.adaptors.makeRebindableAdaptorFor(Type)
+			/.at.lang.ref_adaptors.makeRebindableAdaptorFor(Type)
 		};
 
 	})
@@ -497,7 +497,7 @@ def AdaptorModule := object: {
 			  };
 			  
 			  deftype BatchedDeliveryToRemoteObjectTestT;
-			  def uniRefToReceptor := /.at.m2mi.api.unireference:
+			  def uniRefToReceptor := /.bridges.m2mi.api.unireference:
 			    BatchedDeliveryToRemoteObjectTestT for: (batchReceptorFor: subject);
 			
 			  def batchRef := batchAdaptor: uniRefToReceptor;
@@ -514,7 +514,7 @@ def AdaptorModule := object: {
 		
 		    def peer := actor: {
 			    deftype RebindableAdaptorTestT;
-			    /.at.ambient.discovery.export: (object: {
+			    /.at.discovery.discovery.export: (object: {
 				    def m() { 42 }
 			    }) as: RebindableAdaptorTestT;
 		    };
@@ -542,8 +542,8 @@ def AdaptorModule := object: {
 		
 		    def peer := actor: {
 			    deftype RebindablePlusExactlyOnceAdaptorTestT;
-			    /.at.ambient.discovery.export: (
-				    /.at.ambient.adaptors.exactlyonceReceptorFor: (object: {
+			    /.at.discovery.discovery.export: (
+				    /.at.lang.ref_adaptors.exactlyonceReceptorFor: (object: {
 				      def test() { 42 }
 			      })) as: RebindablePlusExactlyOnceAdaptorTestT;
 		    };

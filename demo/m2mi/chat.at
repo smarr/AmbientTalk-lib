@@ -38,7 +38,7 @@
  * @author tvcutsem
  */
 
-def M2MI := /.at.m2mi.api;
+def M2MI := /.bridges.m2mi.api;
 def ChatRef := jlobby.edu.rit.chat1.ChatRef;
 
 def startChat() {

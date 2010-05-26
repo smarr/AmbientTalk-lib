@@ -43,7 +43,7 @@ def OneWayMessage := FuturesModule.OneWayMessage;
 
 import /.at.support.timer;
 import /.at.lang.firstclassrefs;
-import /.at.m2mi.api;
+import /.bridges.m2mi.api;
 
 FuturesModule.enableFutures(false); // enable futures for explicitly tagged messages
 
@@ -121,7 +121,7 @@ deftype AmbientMessageHandler;
 def ARIntensionalImpl := object: {
 	
 	def implname := "intensional";
-	def capsule := /.at.support.util.uponArrivalBecome: { /.at.m2mi.ar_intensional_impl };
+	def capsule := /.at.support.util.uponArrivalBecome: { /.at.discovery.ar_intensional_impl };
 	
 	def extendAmbientReference(arMirror,
 		                         typetagOrProtocol,

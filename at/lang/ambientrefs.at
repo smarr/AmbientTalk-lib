@@ -153,7 +153,7 @@ def Expires(timeout) {
 
 def extendWithHandle(msg, handle) { extend: msg with: {|handle|} };
 
-def AmbientRefsModule(ARImplModule := /.at.ambient.ar_extensional_impl) {
+def AmbientRefsModule(ARImplModule := /.at.discovery.ar_extensional_impl) {
 	
 	// a pass-by-copy object that resolves to the correct implementation module when deserialised
 	def ARImplModuleCapsule := ARImplModule.capsule;

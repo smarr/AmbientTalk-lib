@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package at.m2mi;
+package bridges.m2mi;
 
 import edu.rit.classfile.NamedClassReference;
 import edu.rit.classfile.SynthesizedInterfaceDescription;

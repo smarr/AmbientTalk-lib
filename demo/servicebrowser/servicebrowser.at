@@ -99,7 +99,7 @@ def makeServiceBrowser(DiscoveryProtocol) {
 	window
 };
 
-def browser := makeServiceBrowser(/.at.ambient.deapspace);
+def browser := makeServiceBrowser(/.at.discovery.deapspace);
 */
 deftype ServiceDescription;
 
@@ -115,11 +115,11 @@ def servicebrowserModule(DiscoveryProtocol) {
 	};
 	
 	object: {
-		def ServiceBrowser := jlobby.at.ambient.ServiceBrowser.new(/.at.ambient.deapspace.dNormalExpiry.value, command);
+		def ServiceBrowser := jlobby.demo.servicebrowser.ServiceBrowser.new(/.at.discovery.deapspace.dNormalExpiry.value, command);
 
 		def startServiceBrowserWithDEAPSpace() {
-			// requires this protocol to be loaded with /.at.ambient.deapspace
-			def DeapSpace := /.at.ambient.deapspace;
+			// requires this protocol to be loaded with /.at.discovery.deapspace
+			def DeapSpace := /.at.discovery.deapspace;
 			DeapSpace.observer := ServiceBrowser;
 		};	
 	}

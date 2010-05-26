@@ -46,12 +46,24 @@ def LibraryTestSuiteModule := object: {
     /.at.lang.dynvars.DynVarTest(),
     /.at.lang.multivalues.MultivalueTest(),
 		/.at.lang.leasedrefs.LeasedRefsTest(),
+		/.at.lang.oomatching.OOMatchModuleTest,
     /.at.support.timer.TimerTest(),
     /.at.support.util.UtilTest(),
     /.at.tuples.totam.TotamTest(),
     /.test.bugfixes.BugFixTest(),
     /.test.disconnectTest.DisconnectTest(),
-		/.test.tutorial.tutorialTestSuite]);
+		/.test.tutorial.tutorialTestSuite,
+	  // TODO: integrate BOTH ambient ref unit tests with the test suite
+  	// /.at.lang.ambientrefs(/.at.discovery.ar_extensional_impl).AmbientRefsTest,
+  	/.at.lang.ambientrefs(/.at.discovery.ar_intensional_impl).AmbientRefsTest,
+    /.bridges.m2mi.api.M2MITest,
+    /.at.discovery.discovery.DiscoveryModuleTest,
+    /.at.discovery.templatediscovery.TemplateDiscoveryModuleTest,
+    /.at.discovery.composition.DiscoveryCompositionModuleTest,
+    /.at.lang.ref_adaptors.AdaptorModuleTest,
+    /.at.demo.locationtracker.LocationTrackerTest
+    // /.at.discovery.deapspace.DEAPspaceProtocolTest,	
+	]);
 
   def testATDistribution() {
     // first perform a self-test to see if unit tests work

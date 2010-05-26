@@ -569,10 +569,10 @@ def MultiFutureModule := object: {
 			  };
       };
     
-      /* UNIT TEST MOVED TO /.at.m2mi.api because it depends on M2MI
+      /* UNIT TEST MOVED TO /.bridges.m2mi.api because it depends on M2MI
         def testAsyncSendToOmniRef() {
 				/.at.lang.futures.enableFutures(false);
-				import /.at.m2mi.api;
+				import /.bridges.m2mi.api;
 				deftype Foo;
 				def omni := omnireference: Foo;
 				def makeObj(i) {
