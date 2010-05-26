@@ -6,7 +6,7 @@ import /.at.exceptions;
 
 import ~.extras;
 
-def POPUPS := false;
+def POPUPS := true;
 
 def nativeFakeBookWrapper := object: {
 	def title_ := "...";

@@ -110,7 +110,7 @@ def RFIDService := object: {
 	def tagMutatorInterceptor := { |base, method| 
 		try: {
 			saveToTag(base);
-		} catchUsing: {|e| 
+		} catch: {|e| 
 			info("save to tag failed: " + e.message);
 		};
 	};

@@ -49,7 +49,7 @@ def PropsModule := object: {
 	def whenever: serviceType where: condBlock discovered: code {
 		nativeWhenever: serviceType discovered: { |farReference|
 			if: isPropRef(farReference) then: {
-				if: (try: { condBlock(farReference[1]) } catchUsing: { |e| false }) then: {
+				if: (try: { condBlock(farReference[1]) } catch: { |e| false }) then: {
 					code(farReference[2]);
 				};
 			};

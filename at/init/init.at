@@ -51,7 +51,7 @@ def +(n) { 0+n };
 */
 
 // returns the current working directory
-def cwd() {
+def pwd() {
 	def ns := (print: ~);
 	ns.explode.select(5,ns.length()).implode;
 };
@@ -259,14 +259,14 @@ def when: remoteRef reconnected: code {
 };
 
 // export an object for each tag it sports
-def autoExport(someObject) {
+def export: someObject {
 	(tagsOf: someObject).each: {|tt|
 		export: someObject as: tt;
 	};
 };
 
 // a try:catch: method that catches any exception
-def try: closure catchUsing: failClosure {
+def try: closure catch: failClosure {
 	try: closure catch: /.at.types.Exception using: { |e| failClosure(e) };
 };
 

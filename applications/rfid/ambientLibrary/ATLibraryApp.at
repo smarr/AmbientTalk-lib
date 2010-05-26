@@ -78,7 +78,7 @@ whenever: Book
 				timeouts.get(bookWrapper).cancel();
 				timeouts.remove(bookWrapper);
 			};
-			def timeout := when: 30.seconds elapsed: {
+			def timeout := when: 5.seconds elapsed: {
 				gui.removeBook(bookWrapper);
 				timeouts.remove(bookWrapper);
 			};
