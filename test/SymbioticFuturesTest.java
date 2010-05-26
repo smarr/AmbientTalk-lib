@@ -1,5 +1,6 @@
 /**
  * AmbientTalk/2 Project
+ * SymbioticFuturesTest.java created on 2 apr 2008 at 16:33:54
  * (c) Programming Technology Lab, 2006 - 2007
  * Authors: Tom Van Cutsem & Stijn Mostinckx
  * 
@@ -24,21 +25,46 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
+package test;
 
-def tut := /.at.tutorial;
-  
+import edu.vub.at.actors.eventloops.BlockingFuture;
+
 /**
- * Tests the examples featured in the AmbientTalk 2 tutorial
- * on the website, such that failing examples can be easily
- * detected in case of language evolution.
- *
  * @author tvcutsem
+ *
+ * An auxiliary class used in the file bugfixes.at to test the AmbientTalk/Java linguistic symbiosis.
+ * 
  */
-def TutorialTestSuite := /.at.unit.test.TestSuite.new("tutorial testsuite", [
-  tut.basic,
-  tut.objects,
-  tut.multiparadigm,
-  tut.modular,
-  tut.concurrency,
-  tut.metaprogramming,
-  tut.symbiosis ]);
+public class SymbioticFuturesTest {
+
+	private interface Cell {
+		public int access();
+		public BlockingFuture accessFuture(Class type, int bla);
+	}
+	
+	public static void test(final Cell c, final Runnable cont) {
+		Thread t = new Thread(new Runnable() {
+			public void run() {
+				int x = c.access(); // access returns an AT future which is resolved later
+				cont.run();
+			}
+		});
+		t.start();
+	}
+	
+	public static void testFuture(final Cell c, final Runnable cont) {
+		Thread t = new Thread(new Runnable() {
+			public void run() {
+				BlockingFuture fx = c.accessFuture(Integer.class, 1); // access returns an AT future which is resolved later
+				try {
+					Integer i = (Integer) fx.get();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}
+				cont.run();
+			}
+		});
+		t.start();
+	}
+	
+}

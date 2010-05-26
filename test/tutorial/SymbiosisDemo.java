@@ -1,4 +1,4 @@
-package at.tutorial;
+package test.tutorial;
 
 public class SymbiosisDemo {
 	public interface PingPong {

@@ -129,7 +129,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 
 	def testAsyncSymbioticFutures() {
 		def [testF,testR] := makeFuture();
-		jlobby.at.unit.SymbioticFuturesTest.test(object: {
+		jlobby.test.SymbioticFuturesTest.test(object: {
 			import /.at.support.timer;
 			def access() {
 				def [f,r] := makeFuture();
@@ -150,7 +150,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	
 	def testAsyncFutureTypeSymbioticInvocations() {
 		def [testF,testR] := makeFuture();
-		jlobby.at.unit.SymbioticFuturesTest.testFuture(object: {
+		jlobby.test.SymbioticFuturesTest.testFuture(object: {
 			import /.at.support.timer;
 			def accessFuture(x) {
 				def [f,r] := makeFuture();

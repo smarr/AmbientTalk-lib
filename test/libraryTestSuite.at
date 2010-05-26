@@ -33,11 +33,11 @@ def LibraryTestSuiteModule := object: {
   def StandardTestSuite := /.at.unit.test.TestSuite.new("atlib testsuite", [
     /.at.collections.vector.VectorTest(),
     /.at.collections.list.ListTest(),
+    /.at.collections.queue.queueTest(),
 		/.at.crime.CrimeConnection.CrimeTest(),
     /.at.demo.InstantMessenger.InstantMessengerTest(),
     /.at.demo.mobiTunes.MobiTunesTest(),
     /.demo.metaprogramming,
-    /.at.demo.makeQueue.queueTest(),
     /.at.lang.futures.FuturesTest(),
     /.at.lang.multifutures.MultiFuturesTest(),
     /.at.lang.ambientrefs_old.AmbientRefsTest(),
@@ -49,9 +49,9 @@ def LibraryTestSuiteModule := object: {
     /.at.support.timer.TimerTest(),
     /.at.support.util.UtilTest(),
     /.at.tuples.totam.TotamTest(),
-    /.at.unit.bugfixes.BugFixTest(),
-    /.at.unit.disconnectTest.DisconnectTest(),
-		/.at.tutorial.tutorialTestSuite]);
+    /.test.bugfixes.BugFixTest(),
+    /.test.disconnectTest.DisconnectTest(),
+		/.test.tutorial.tutorialTestSuite]);
 
   def testATDistribution() {
     // first perform a self-test to see if unit tests work

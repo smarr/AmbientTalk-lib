@@ -10,7 +10,7 @@
  *
  * Example trace:
  *
- * def makeQueue := /.at.demo.makeQueue.makeQueue
+ * def makeQueue := /.at.collections.queue.makeQueue
  * >><closure:makeQueue>
  *
  * >def q := makeQueue()

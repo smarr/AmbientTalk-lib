@@ -65,7 +65,7 @@ extend: /.at.unit.test.UnitTest.new("SymbiosisTutorial") with: {
 		};
 		
 		def testJavaCallback() {
-			def SymbiosisDemo := jlobby.at.tutorial.SymbiosisDemo;
+			def SymbiosisDemo := jlobby.test.tutorial.SymbiosisDemo;
 			def javaDemo := SymbiosisDemo.new();
 			def atObject := object: {
 				def ping() { javaDemo.run2(self); };
