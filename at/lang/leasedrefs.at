@@ -188,7 +188,7 @@ def createClientLeaseMirror(remoteLease, timeout := DEFAULT_LEASETIME) {
 		
 		// other MOP overriden methods
 		def newInstance(initargs){
-			makeClientLease(remoteLease, getClientTags(tagsOf: self.base), timeout);
+			/.at.lang.leasedrefs.makeClientLease(remoteLease, getClientTags(tagsOf: self.base), timeout);
 		};
 		
 		//TLeasedRef required interface
@@ -257,7 +257,7 @@ def createCLWithRenewalMirror(remoteLease, timeout := DEFAULT_LEASETIME, renewal
 
 	// other MOP overriden methods
 	def newInstance(initargs){
-		makeClientLeaseWithRenewal(remoteLease, getClientTags(tagsOf: self.base), timeout, renewal);
+		/.at.lang.leasedrefs.makeClientLeaseWithRenewal(remoteLease, getClientTags(tagsOf: self.base), timeout, renewal);
 	};
  };
 }; //end createCLWithRenewalMirror
