@@ -24,7 +24,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-def TotamModule := /.at.tuples.totam;
+def TotamModule := /.at.lang.totam;
 import TotamModule;
 def FutureModule := /.at.lang.futures;
 
@@ -63,7 +63,7 @@ def makeGuanotes(aFlockr) {
 		    def receivingTS := totam;
 		    def doAction(ts) { receivingTS := ts};
         def inScope(descriptor) { 
-	        def flockrTuple := receivingTS.rdp(/.at.tuples.totam.tuple: ["Flockr", /.at.tuples.totam.var: `flock]);
+	        def flockrTuple := receivingTS.rdp(/.at.lang.totam.tuple: ["Flockr", /.at.lang.totam.var: `flock]);
 					if: (flockrTuple != nil) then:{
 						def receiver := self.getField(3);
 	          receiver.shouldReceive( flockrTuple.getField(2), descriptor);

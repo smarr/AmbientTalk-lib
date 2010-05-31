@@ -36,6 +36,6 @@
    /.frameworks.urbiflock.application.ApplicationTest(),
    /.frameworks.urbiflock.rete.ReteTest(),
    /.frameworks.urbiflock.proximity.ProximityTest(),
-   /.at.tuples.totam.TotamTest(),
+   /.at.lang.totam.TotamTest(),
    /.frameworks.urbiflock.guanotes.GuanotesTest()
  ]);

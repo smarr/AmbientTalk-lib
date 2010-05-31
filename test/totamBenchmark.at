@@ -2,7 +2,7 @@
 def makeTeamMember(ringSize,id) {
 	actor: { |ringSize, id|
 		
-		import /.at.tuples.totam;
+		import /.at.lang.totam;
 		def descriptor := isolate: {|id|};
 		def myTS := makeTupleSpace(descriptor);
 		def count := 0;

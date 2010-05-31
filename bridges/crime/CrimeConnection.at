@@ -586,7 +586,7 @@ def CrimeModule := object: {
 			def t2 := makeTemplate("testAsyncSendRule", 3, var: `x);
 			
 			def a := actor: {
-				import /.at.crime.CrimeConnection;
+				import /.bridges.crime.CrimeConnection;
 				def myCrime := makeCrimeEngine();
 				
 				def doOperation(rule,res) {				

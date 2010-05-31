@@ -859,7 +859,7 @@ def leasingPropagationProtocol(){
 				  def time := base.timerSubscription.getTimeRemaining();
 				  def parentPropagation := base.super; //they will pass by isolate
 				  /.at.support.util.uponArrivalBecome: { | time, parentPropagation| 
-					   def lpp := /.at.tuples.totam.leasingPropagationProtocol().new(time);
+					   def lpp := /.at.lang.totam.leasingPropagationProtocol().new(time);
 					   lpp.super := parentPropagation;
 					   lpp;
 				  };
@@ -1064,7 +1064,7 @@ def TotamModule := object: {
 			};
 	
 			def a := actor: { |TotamTupleSpace|
-				def totamModule := /.at.tuples.totam;
+				def totamModule := /.at.lang.totam;
 				def descriptor := isolate: { def team := "blue"; };	
 				def aTS := totamModule.makeTupleSpace(descriptor);
 			  // listen for people in the environment
@@ -1110,7 +1110,7 @@ def TotamModule := object: {
 				};
 			};
 			def a := actor: { |test|
-				def totamModule := /.at.tuples.totam;
+				def totamModule := /.at.lang.totam;
 				import /.at.lang.futures;
 				enableFutures(false);
 				def helloTemplate := totamModule.tuple: [totamModule.var: `x, "hallo"];
@@ -1154,7 +1154,7 @@ def TotamModule := object: {
 			};
 	
 			def a := actor: { |TotamTupleSpace|
-				def totamModule := /.at.tuples.totam;
+				def totamModule := /.at.lang.totam;
 			  def descriptor := isolate: { def team := "blue"; };
 			  def aTS := totamModule.makeTupleSpace(descriptor);
 			  // listen for neighbour ts
@@ -1193,7 +1193,7 @@ def TotamModule := object: {
 				a<-resolve(res);
 			};
 			def a := actor: { |TotamTupleSpace, blueProtocol|
-				def totamModule := /.at.tuples.totam;
+				def totamModule := /.at.lang.totam;
 				def descriptor := isolate: { def team := "red"; };
 				def aTS := totamModule.makeTupleSpace(descriptor);
 				def s := whenever: TotamTupleSpace discovered: { |ts|
@@ -1228,7 +1228,7 @@ def TotamModule := object: {
 			  a<-resolve(res);
 			};
 			def b := actor: { |TotamTupleSpace, res2|
-				def totamModule := /.at.tuples.totam;
+				def totamModule := /.at.lang.totam;
 				def descriptor := isolate: { def team := "blue"; };
 				def myTS := totamModule.makeTupleSpace(descriptor);
 				def goOnline(){
@@ -1243,7 +1243,7 @@ def TotamModule := object: {
 				};
 			};
 			def a := actor: { |TotamTupleSpace, b|
-				def totamModule := /.at.tuples.totam;			
+				def totamModule := /.at.lang.totam;			
 				def descriptor := isolate: { def team := "red"; };
 				def aTS := totamModule.makeTupleSpace(descriptor);
 				def s := whenever: TotamTupleSpace discovered: { |ts|
@@ -1296,7 +1296,7 @@ def TotamModule := object: {
 			};
 			def anotherPlayer := actor: {  |syncRes, sync2Res|
 			  deftype TotamTupleSpace;
-				def totamModule := /.at.tuples.totam;	
+				def totamModule := /.at.lang.totam;	
 				def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
         def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
         def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
@@ -1323,7 +1323,7 @@ def TotamModule := object: {
 				import /.at.lang.futures;
 				enableFutures(false);
 				deftype TotamTupleSpace;
-				def totamModule := /.at.tuples.totam;	
+				def totamModule := /.at.lang.totam;	
 			  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
         def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
         def consumeBomb(){
@@ -1386,7 +1386,7 @@ def TotamModule := object: {
 			} ruined: { self.fail("ruined 2nd synchronization future") };
 			
 			def anotherPlayer := actor: {  |syncRes, sync2Res, TotamTupleSpace|
-				def totamModule := /.at.tuples.totam;
+				def totamModule := /.at.lang.totam;
 				def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
 	      def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
 	      //the bomb is present in the tuple space
@@ -1411,7 +1411,7 @@ def TotamModule := object: {
 			def player := actor: { |originator, anotherPlayer, test, syncRes, sync2Res, TotamTupleSpace|
 				import /.at.lang.futures;
 				enableFutures(false);
-				def totamModule :=/.at.tuples.totam;
+				def totamModule :=/.at.lang.totam;
 			  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
 	      def s := export: myTS.getRemoteInterface() as: TotamTupleSpace;
 	      def se := whenever: TotamTupleSpace discovered: { |ts|
@@ -1420,7 +1420,7 @@ def TotamModule := object: {
 				def yetAnotherPlayer(){ 
 					actor: {
 					  deftype TotamTupleSpace;
-						def totamModule :=/.at.tuples.totam;
+						def totamModule :=/.at.lang.totam;
 					  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
 		        def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
 						def read(res, firstRead := true) {
@@ -1505,7 +1505,7 @@ def TotamModule := object: {
 			};
 			def anotherPlayer := actor: {  |syncRes, sync2Res|
 			  deftype TotamTupleSpace;
-				def totamModule := /.at.tuples.totam;	
+				def totamModule := /.at.lang.totam;	
 				def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
         def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
         def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
@@ -1532,7 +1532,7 @@ def TotamModule := object: {
 				import /.at.lang.futures;
 				enableFutures(false);
 				deftype TotamTupleSpace;
-				def totamModule := /.at.tuples.totam;	
+				def totamModule := /.at.lang.totam;	
 			  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
         def s := myTS.goOnline;
         def consumeBomb(){
@@ -1554,7 +1554,7 @@ def TotamModule := object: {
 			def myTS := makeTupleSpace();
 			def sub := myTS.goOnline();	
 			def a := actor: { |res2|
-				import /.at.tuples.totam;
+				import /.at.lang.totam;
 				deftype TotamTupleSpace;
 				def myTS := makeTupleSpace();
 				def sub; def disc;  
