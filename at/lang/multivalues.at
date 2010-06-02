@@ -55,7 +55,7 @@ and by intercepting all meta-level operations on the mirror itself using
 a mirror on the mirror.
 
 def makeMultiValue: table {
-	object: { } mirroredBy: (extend: defaultMirror with: { } taggedAs: [/.at.types.Mirror] mirroredBy: (mirror: {
+	object: { } mirroredBy: (extend: defaultMirror with: { } taggedAs: [/.at.lang.types.Mirror] mirroredBy: (mirror: {
 		// a meta-level operation is invoked on the mirror
 		def invoke(mself, minv) {
 			def [msel, margs] := [minv.selector, minv.arguments];

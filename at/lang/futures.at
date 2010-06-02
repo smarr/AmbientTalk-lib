@@ -28,8 +28,8 @@
 /* The meta-level implementation of the futures language construct */
 
 // import Exception type, used for catching exceptions
-def Exception := /.at.types.Exception;
-def Isolate := /.at.types.Isolate;
+def Exception := /.at.lang.types.Exception;
+def Isolate := /.at.lang.types.Isolate;
 
 // importing leasing constructs, used for automatically ruining futures after certain timeout.
 def LeasingModule := /.at.lang.leasedrefs;
@@ -48,7 +48,7 @@ def rng := jlobby.java.util.Random.new();
 
 //create TimeoutException used for notifying the ruining of a future when its lease expires. 
 deftype TimeoutException <: Exception;
-def XTimeoutException := extend: /.at.exceptions.createException(TimeoutException) with: {
+def XTimeoutException := extend: /.at.lang.exceptions.createException(TimeoutException) with: {
 	 def init(future, receiver := nil, message := nil){
 		 if: (receiver == nil) then: {
 			 super^init("Future: " + future + " timed out");			
@@ -243,7 +243,7 @@ def FutureMirror := mirror: {
 		if: isFullyResolved() then: {
 		  { |resolvedValue|
 			  def [fut, res] := /.at.lang.futures.makeFuture();
-			  if: (is: resolvedValue taggedAs: /.at.types.Exception) then:{
+			  if: (is: resolvedValue taggedAs: /.at.lang.types.Exception) then:{
 				  res.ruin(resolvedValue);
 			  } else:{res.resolve(resolvedValue)};    
 		    fut
@@ -304,7 +304,7 @@ def constructLeaseFor(future, timeout, receiver := nil) {
 	(reflect: futureLease).activateTimer();
 	LeasingModule.when: futureLease expired: {
 	 // if receiver is a far reference, retract expired message(s) from its outbox.
-	 if: ((nil != receiver).and: { is: receiver taggedAs: /.at.types.FarReference}) then:{
+	 if: ((nil != receiver).and: { is: receiver taggedAs: /.at.lang.types.FarReference}) then:{
 	  def outbox := retract: receiver;
 	  // note that future doesn't know to which message got attached. 
 	  // not only is the particular msg expiring with this future retracted, but 'all' expired ones.
@@ -356,7 +356,7 @@ def futurizePerSend(msg, futureMaker, type := FutureMessage) {
 				  } catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e0|
 						// attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
 						// ignore the exception since the TimeoutException would have been already raised at sender side. 
-					} catch: /.at.types.Exception using: { |e|
+					} catch: /.at.lang.types.Exception using: { |e|
 						try: { 
 					    future<-ruinWithException(e)@[
 					      /.at.lang.firstclassrefs.MetaMessage,
@@ -442,7 +442,7 @@ def futurize(msg, future, type := FutureMessage) {
 			}  catch: /.at.lang.leasedrefs.ExpiredLease using:{ |e0|
 				// attempt to send a resolveWithValue message via an expired single-call lease (attached to the future).
 				// ignore the exception since the TimeoutException would have been already raised at sender side. 
-			} catch: /.at.types.Exception using: { |e|
+			} catch: /.at.lang.types.Exception using: { |e|
 				try:{
 					future<-ruinWithException(e)@[
 					  /.at.lang.firstclassrefs.MetaMessage,
@@ -465,7 +465,7 @@ def futurizePerSendC := &futurizePerSend;
 def makeFutureC := &makeFuture;
 
 // all future-carrying messages are marked with this type
-deftype FutureMessageT <: /.at.types.AsyncMessage;
+deftype FutureMessageT <: /.at.lang.types.AsyncMessage;
 def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizePerSendC,FutureMessageT|
   def annotateMessage(msg) {
 		// by default, make a future without timeout
@@ -475,7 +475,7 @@ def FutureMessage := extend: FutureMessageT with: { |makeFutureC,futurizePerSend
 };
 
 // type that signifies that no future should be attached to a message
-deftype OneWayMessage <: /.at.types.AsyncMessage;
+deftype OneWayMessage <: /.at.lang.types.AsyncMessage;
 
 // Addition for the integration of leasing and futures:
 
@@ -491,7 +491,7 @@ def Due(timeout) {
 			def futureMaker := script: { |receiver| makeFutureC(timeout, receiver) } carrying: `[ makeFutureC, timeout ];
 			futurizePerSendC(msg, futureMaker, DueType);
 	  };
-	}// taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+	}// taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag ];
 };
 
 // should future-type message sending be supported for default (unannotated) messages?
@@ -529,7 +529,7 @@ def FuturesModule := object: {
 	// when-catch support, version with one specific catch block
 	def when: future becomes: resolvedBlock catch: excType using: excBlock {
 		if: (future == nil) then: {
-			raise: /.at.exceptions.XIllegalOperation.new("when:becomes: on nil value. Probably an async message does not return a future.");
+			raise: /.at.lang.exceptions.XIllegalOperation.new("when:becomes: on nil value. Probably an async message does not return a future.");
 		};
 		
 		def [whenFuture,resolver] := makeFuture();
@@ -542,7 +542,7 @@ def FuturesModule := object: {
 			nil;
 		};
 		if: !(is: future taggedAs: Future) then: {
-			raise: /.at.exceptions.XIllegalOperation.new("when:becomes: on non-future value: " + future + (reflect: future).listFields);
+			raise: /.at.lang.exceptions.XIllegalOperation.new("when:becomes: on non-future value: " + future + (reflect: future).listFields);
 		} else: {
   		def whenId := "whenId:"+rng.nextLong();
 			future<-addResolutionListener(object: {
@@ -636,7 +636,7 @@ def FuturesModule := object: {
 		def [fut,res] := makeFuture();
 		try: {
 			closure({|val| res.resolve(val)});
-	  } catch: /.at.types.Exception using: { |e| res.ruin(e) };
+	  } catch: /.at.lang.types.Exception using: { |e| res.ruin(e) };
 		fut;
 	};
 	

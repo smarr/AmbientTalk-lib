@@ -32,13 +32,13 @@
  * @author tvcutsem
  */
 
-def XIllegalOperation := /.at.exceptions.XIllegalOperation;
+def XIllegalOperation := /.at.lang.exceptions.XIllegalOperation;
 def Vector := /.at.collections.vector.Vector;
 
 def FirstClassRefModule := object: {
 
   // an annotation identifying messages destined for the mirror itself
-  deftype MetaMessage <: /.at.types.Message;
+  deftype MetaMessage <: /.at.lang.types.Message;
 
   // used to end the asynchronous delegation chain between eventual refs
   // at the meta level
@@ -112,11 +112,11 @@ def FirstClassRefModule := object: {
 		};
 		
 		def isTaggedAs(typeTag) {
-			typeTag.isSubtypeOf(/.at.types.FarReference).or: { (self.super).isTaggedAs(typeTag) }
+			typeTag.isSubtypeOf(/.at.lang.types.FarReference).or: { (self.super).isTaggedAs(typeTag) }
 		};
 		
 		def typeTags() {
-			/.at.support.util.makeSetUnion( ((self.super).typeTags()), [/.at.types.FarReference]);
+			/.at.support.util.makeSetUnion( ((self.super).typeTags()), [/.at.lang.types.FarReference]);
 		};
 
 		// disallow meta-level operations on far references

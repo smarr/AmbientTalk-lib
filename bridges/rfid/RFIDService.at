@@ -45,10 +45,10 @@ deftype GenericTag;
 //jlobby.add(AT_HOME + "/at/rfid/lib/librfid.jar");
 
 
-deftype NotAnIsolate <: lobby.at.types.Exception;
-def XNotAnIsolate := lobby.at.exceptions.createException(NotAnIsolate);
-deftype AlreadyIsolate <: lobby.at.types.Exception;
-def XAlreadyIsolate := lobby.at.exceptions.createException(AlreadyIsolate);
+deftype NotAnIsolate <: lobby.at.lang.types.Exception;
+def XNotAnIsolate := lobby.at.lang.exceptions.createException(NotAnIsolate);
+deftype AlreadyIsolate <: lobby.at.lang.types.Exception;
+def XAlreadyIsolate := lobby.at.lang.exceptions.createException(AlreadyIsolate);
 
 def RFIDService := object: {
 	
@@ -130,7 +130,7 @@ def RFIDService := object: {
 				definition := definition + "mirroredBy: makeTagMutatorInterceptorMirror()";
 				def obj := eval: (read: definition) in: self;
 				obj;
-			} catch: /.at.types.Exception using: { |e|
+			} catch: /.at.lang.types.Exception using: { |e|
 				info("could not read and eval: " + definition);
 				info("exeption was: " + e.message);
 				nil;
@@ -182,11 +182,11 @@ def RFIDService := object: {
 	def isolateToObject(someIsolate) {
 		info("convert isolate to object");
 		info(someIsolate);
-		unless: (is: someIsolate taggedAs: /.at.types.Isolate) then: {
+		unless: (is: someIsolate taggedAs: /.at.lang.types.Isolate) then: {
 			raise: XNotAnIsolate.new("argument is not an isolate: " + someIsolate);
 		};
 		info("obj is an isolate");
-		def tags := (tagsOf: someIsolate).filter: {|e| e != /.at.types.Isolate};
+		def tags := (tagsOf: someIsolate).filter: {|e| e != /.at.lang.types.Isolate};
 		info("tags: " + tags);
 		def someObject := object: {} taggedAs: tags mirroredBy: makeTagMutatorInterceptorMirror();
 		info("new object: " + someObject);
@@ -206,10 +206,10 @@ def RFIDService := object: {
 	// copy an object to an isolate
 	def objectToIsolate(someObject) {
 		info("convert object to isolate: " + someObject);
-		if: (is: someObject taggedAs: /.at.types.Isolate) then: {
+		if: (is: someObject taggedAs: /.at.lang.types.Isolate) then: {
 			raise: XAlreadyIsolate.new("argument is already an isolate: " + someObject);
 		};
-		def tags := (tagsOf: someObject).filter: {|e| e != /.at.types.Isolate};
+		def tags := (tagsOf: someObject).filter: {|e| e != /.at.lang.types.Isolate};
 		def someIsolate := isolate: {} taggedAs: tags;
 		def ir := reflect: someIsolate;
 		def or := reflect: someObject;
@@ -234,7 +234,7 @@ def RFIDService := object: {
 		};
 
 		def initialize(someObject) {
-			if: !(is: someObject taggedAs: /.at.types.Isolate) then: {
+			if: !(is: someObject taggedAs: /.at.lang.types.Isolate) then: {
 				raise: XNotAnIsolate.new("object must be isolate");
 			};
 			info("before convert isolate to object");

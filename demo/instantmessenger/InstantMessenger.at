@@ -57,7 +57,7 @@ def createIM( IMGUI := /.demo.instantmessenger.IMConsole, timeout := MESSAGE_TIM
       from := f;
       content := c;
     };
-  } taggedAs: [/.at.types.Isolate];
+  } taggedAs: [/.at.lang.types.Isolate];
 
 	// the facade object to the IM for local objects, i.e. IMGUI object.
   def localFacade := object: {

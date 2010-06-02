@@ -133,7 +133,7 @@ def DynVarModule := object: {
 			  try: {
 				  with: testVar2 is: 2 do: {
 				    self.assertEquals(2, ?testVar2);
-				    raise: /.at.exceptions.createException(EscapeException);
+				    raise: /.at.lang.exceptions.createException(EscapeException);
 			    };
 			  } catch: EscapeException using: { |e|
 				  self.assertEquals(1, ?testVar2);

@@ -53,7 +53,7 @@ def getAnnotationOfType(obj, type) {
 		    return(anns[idx]);
 	    };
 	
-	    if: (is: obj taggedAs: /.at.types.FarReference) then: {
+	    if: (is: obj taggedAs: /.at.lang.types.FarReference) then: {
 		    return(nil); // stop searching
 	    } else: {
 			  obj := obj.super; // continue searching
@@ -150,9 +150,9 @@ def UtilTest() {
     import /.at.lang.futures; enableFutures(false);
   
     def testGetAnnotationOfType() {
-      def bar := extend: /.at.types.Number with: { nil } taggedAs: [/.at.types.TypeTag];
-      def o := object: { nil } taggedAs: [/.at.types.Closure,bar];
-      def ann := getAnnotationOfType(o, /.at.types.Number);
+      def bar := extend: /.at.lang.types.Number with: { nil } taggedAs: [/.at.lang.types.TypeTag];
+      def o := object: { nil } taggedAs: [/.at.lang.types.Closure,bar];
+      def ann := getAnnotationOfType(o, /.at.lang.types.Number);
       self.assertEquals(bar, ann);
     };
     

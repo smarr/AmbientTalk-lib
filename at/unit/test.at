@@ -57,8 +57,8 @@
  * @author tvcutsem
  */
  
-deftype AssertionFailed <: /.at.types.Exception;
-def XAssertionFailed := /.at.exceptions.createException(AssertionFailed);
+deftype AssertionFailed <: /.at.lang.types.Exception;
+def XAssertionFailed := /.at.lang.exceptions.createException(AssertionFailed);
 
 def FuturesModule := /.at.lang.futures;
 FuturesModule.enableFutures(false); // only enable explicit futures
@@ -171,7 +171,7 @@ def UnitTest := object: {
 							reporter.success(methName);
 							after();
 						} catch: handleError;
-					} catch: /.at.types.Exception using: handleError;	
+					} catch: /.at.lang.types.Exception using: handleError;	
 				};
 				nil;
 		};
@@ -212,7 +212,7 @@ def UnitTest := object: {
 							reporter.success(methName);
 						}	catch: AssertionFailed using: {|e|
 							reporter.failure(methName, e);
-						} catch: /.at.types.Exception using: { |e|
+						} catch: /.at.lang.types.Exception using: { |e|
 							reporter.error(methName, e);
 						};
 						FuturesModule.whenAny: self.tearDown() becomes: { |ignoredValue|
@@ -265,7 +265,7 @@ def TestSuite := object: {
           if: ((self.numFailed + self.numError) == 0) then: {
             reporter.success(nam);
           } else: {
-            reporter.failure(nam, /.at.exceptions.XException.new("subtest failed"));
+            reporter.failure(nam, /.at.lang.exceptions.XException.new("subtest failed"));
           };
           runSubTest(i+1, reporter);
         };
@@ -291,7 +291,7 @@ def TestModule := object: {
 		  def testFalse() { self.assertFalse(dow[2]==dow[3]) };
 		  def testNotEquals() { self.assertNotEquals(dow[2],dow[3]) };
 		  def testLessThan() { self.assertLessThan(dow[1].explode().length, dow[2].explode().length) };
-		  def testException() { self.assert: /.at.types.IndexOutOfBounds raisedIn: { dow[8] } };
+		  def testException() { self.assert: /.at.lang.types.IndexOutOfBounds raisedIn: { dow[8] } };
       def testAsyncSend() {
 	      FuturesModule.when: dow<-at(1)@FuturesModule.FutureMessage becomes: { |v|
 		      self.assertEquals("mo", v);

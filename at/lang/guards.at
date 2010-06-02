@@ -117,7 +117,7 @@ def GuardsModule := object: {
 				block := eval: newBlockStatements in: block.context.lexicalScope;
 				Method;
 			};
-		} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag, GuardType ];
+		} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag, GuardType ];
 	};
 	/* Makes a code block into an object with a guardedMirror and the right tags installed.
 	 * @param block : The code block we want to transform into an object 

@@ -133,7 +133,7 @@ extend: /.at.unit.test.UnitTest.new("OOProgTutorial") with: {
 		      };
 		    };
 		  };
-		  self.assert: /.at.types.SelectorNotFound raisedIn: {
+		  self.assert: /.at.lang.types.SelectorNotFound raisedIn: {
 	        makeBankAccount(100).balance;
 	      };
 		  

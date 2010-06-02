@@ -34,7 +34,7 @@ def Vector := /.at.collections.vector.Vector;
 def HashMap := jlobby.java.util.HashMap;
 import /.at.lang.futures;
 enableFutures(false);
-import /.at.exceptions;
+import /.at.lang.exceptions;
 deftype TotamTuple;
 deftype LeasedTuple <: TotamTuple;
 deftype TotamTupleSpace;
@@ -42,13 +42,13 @@ def timerModule := /.at.support.timer;
 
 //helper function to construct mirrors tagged as Isolates.
 def mirrorIsolate: closure {
-	 object: closure childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror
+	 object: closure childOf: defaultMirror extends: true taggedAs: [/.at.lang.types.Isolate] mirroredBy: defaultMirror
 };
 
 //helper function to construct isolate objects overriding print method for debugging/unittesting purposes.
 def isolate: closure printAs: printClosure {
 	def clo := script: printClosure;
-  object: closure taggedAs: [/.at.types.Isolate] mirroredBy: (
+  object: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: (
 		mirrorIsolate: { |clo| def print() { clo(self.base) } }
 	);
 };
@@ -187,7 +187,7 @@ def makeNewClosure(variableNames, closure) {
 def varNames(template) {
 	def table := [];
 	template.each: { |attribute|	
-		if: (is: attribute taggedAs: /.at.types.Symbol) then: { //its a variable
+		if: (is: attribute taggedAs: /.at.lang.types.Symbol) then: { //its a variable
 			def variableName := attribute.symbol; 
 			if: !(table.contains(variableName)) then: {
 				table := table + [variableName];
@@ -382,7 +382,7 @@ def makeTupleSpace(descriptor := nil){
 				   localTS.remove(toReturn);
 				   resRV.resolve(toReturn);
 			   } else: { resRV.resolve(nil)};
-		    } catch: /.at.types.Exception using: { |e|
+		    } catch: /.at.lang.types.Exception using: { |e|
 			    resRV.resolve(nil);
 			  };
       } else: { // found and not remote, end
@@ -708,7 +708,7 @@ def makeTuple(tupleId, @fields) {
 			  def index := 0;
 		    fields.each:{ |field| 
 			    index := index + 1;
-			    if: (is: field taggedAs: /.at.types.Symbol) then: {
+			    if: (is: field taggedAs: /.at.lang.types.Symbol) then: {
 				     field := field.symbol;
 			    };
 			    if: (field == val) then: {return(index)};
@@ -720,7 +720,7 @@ def makeTuple(tupleId, @fields) {
 			def positions := []; def i := 1;
 		  while: { i <= template.length} do: {
 			  def field := template.getField(i);
-			  if: ((is: field taggedAs: /.at.types.Symbol).and: { field.getSymbol == aSymbol}) then: {
+			  if: ((is: field taggedAs: /.at.lang.types.Symbol).and: { field.getSymbol == aSymbol}) then: {
 				  positions := positions + [i];
 			  }; 
 			  i := i + 1;
@@ -735,8 +735,8 @@ def makeTuple(tupleId, @fields) {
 				  def e1 := t1.getField(it); 
 				  def e2 := getField(it);
 					def symbolField := nil; def tuple := nil; def template := nil;
-					if: (is: e1 taggedAs: /.at.types.Symbol) then: { symbolField := e1.getSymbol; tuple := self; template := t1 };
-				  if: (is: e2 taggedAs: /.at.types.Symbol) then: { symbolField := e2.getSymbol; tuple := t1; template := self };
+					if: (is: e1 taggedAs: /.at.lang.types.Symbol) then: { symbolField := e1.getSymbol; tuple := self; template := t1 };
+				  if: (is: e2 taggedAs: /.at.lang.types.Symbol) then: { symbolField := e2.getSymbol; tuple := t1; template := self };
 					if: (symbolField != nil) then: {
 						def positions := findAllSymbols(template, symbolField);
 						if: (positions.length > 0) then: { // the field is a symbol which has several appearances in the temple,
@@ -761,7 +761,7 @@ def makeTuple(tupleId, @fields) {
 	  def each: l  { fields.each: l };
 	} printAs: { |base|
 		def content := base.getFields().map:{ |e| 
-		  if: (is: e taggedAs: /.at.types.Symbol) then:{ e.getSymbol.text}
+		  if: (is: e taggedAs: /.at.lang.types.Symbol) then:{ e.getSymbol.text}
 		  else: {e};
 		};
 		if: (nil == base.super) then: {
@@ -775,7 +775,7 @@ def makeTuple(tupleId, @fields) {
 def doesTupleHasVariables(tuple){
 	{ |return|
 		tuple.each: { |field|
-		  if: (is: field taggedAs: /.at.types.Symbol) then: { return(true) };
+		  if: (is: field taggedAs: /.at.lang.types.Symbol) then: { return(true) };
 		};
 		false;
 	}.escape();
@@ -849,7 +849,7 @@ def leasingPropagationProtocol(){
 		def decideDie(ts){ self.expired };
 		//do not enter if you are expired.
 		def decideEnter(ts) {!self.expired };
-	} taggedAs: [/.at.types.Isolate, LeasedTuple] mirroredBy: ( 
+	} taggedAs: [/.at.lang.types.Isolate, LeasedTuple] mirroredBy: ( 
 		mirrorIsolate: {
 		  def print() {"<leasing propagation protocol:" + self.base.timeout + ":"+ self.base.super +">" };		
 		  def pass(){
@@ -939,7 +939,7 @@ def TotamModule := object: {
   // - The object's dynamic parent is defaultPropagationProtocol.
   // - The object's types are initialized to Isolate, as it gets copied along with the tuple.
 	def propagationProtocol: closure {
-		extend: defaultPropagationProtocol() with: closure taggedAs: [/.at.types.Isolate] mirroredBy: (
+		extend: defaultPropagationProtocol() with: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: (
 		   mirrorIsolate: { def print() {"<userDefinedPropagationProtocol>"}}	
 	  );
 	};
@@ -954,7 +954,7 @@ def TotamModule := object: {
 	def var: symbol {
 	  object: { |symbol|
 		  def getSymbol(){symbol};
-	  } taggedAs: [/.at.types.Isolate, /.at.types.Symbol];	
+	  } taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.Symbol];	
 	};
 
 	def TotamTest := extend: /.at.unit.test.UnitTest.new("TotamTest", false) with: {
@@ -1174,7 +1174,7 @@ def TotamModule := object: {
 					// actor a should also have the hallo tuple because he is also in scope of this tuple
 					def tuple := aTS.rdp(totamModule.tuple: [123, "hallo"]);
 					if: (nil != tuple) then: { res<-resolve(`ok);}
-				  else:{ res<-ruin(/.at.exceptions.error("one-hop tuple not found in ts " + aTS))};
+				  else:{ res<-ruin(/.at.lang.exceptions.error("one-hop tuple not found in ts " + aTS))};
 
 				};	
 		  };		
@@ -1206,7 +1206,7 @@ def TotamModule := object: {
 					//check that the tuple it is indeed not in this ts.
 					def tuple := aTS.rdp(totamModule.tuple: [123, "hallo"]);
 					if: (nil == tuple) then: {res<-resolve(`ok);}
-					else:{ res<-ruin(/.at.exceptions.error("tuple received by a ts out of the tuple's scope!"))}
+					else:{ res<-ruin(/.at.lang.exceptions.error("tuple received by a ts out of the tuple's scope!"))}
 				};
 	  	};		
 			fut;
@@ -1238,7 +1238,7 @@ def TotamModule := object: {
 					   //try to read the tuple sent by a) which should have expired by now!
 						 def tuple := myTS.rdp(totamModule.tuple: [123, "hallo"]);
 						 if: (nil == tuple) then: { res2<-resolve(`ok);}
-					   else: { res2<-ruin(/.at.exceptions.error("tuple found in ts " + myTS))};
+					   else: { res2<-ruin(/.at.lang.exceptions.error("tuple found in ts " + myTS))};
 				  };
 				};
 			};
@@ -1565,7 +1565,7 @@ def TotamModule := object: {
 					sub.cancel();
 					def tuple := myTS.rdp(tuple: [var: `x, 3, false]);
 					if: (nil != tuple) then: { 
-						res2<-ruin(/.at.exceptions.error("unexpected received tuple"));
+						res2<-ruin(/.at.lang.exceptions.error("unexpected received tuple"));
 					} else: { res2<-resolve(`ok) };
 				};
 			};
@@ -1599,7 +1599,7 @@ def TotamModule := object: {
 				self.assertEquals(discoveredId,(seenTs[1])[1]);
 				sub.cancel();
 				res.resolve(`ok);
-			} catch: /.at.types.Exception using: { |e| 
+			} catch: /.at.lang.types.Exception using: { |e| 
 				res.ruin(e);
 			};
 			fut;

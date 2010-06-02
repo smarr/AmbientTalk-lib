@@ -70,11 +70,11 @@ def makeTraitProviding: prov requiring: req taggedAs: tags {
 		def ==(other) {
 			provides == other
 		};
-	} taggedAs: tags + [/.at.types.Isolate, Trait];
+	} taggedAs: tags + [/.at.lang.types.Isolate, Trait];
 };
 
 deftype BadRequiringProtocolStatement;
-def XBadRequiringProtocolStatement := extend: /.at.exceptions.createException(BadRequiringProtocolStatement) with: {
+def XBadRequiringProtocolStatement := extend: /.at.lang.exceptions.createException(BadRequiringProtocolStatement) with: {
 	def protocol;
 	def missingSelectors;
 	def init(statement) {
@@ -120,7 +120,7 @@ def TraitModule := object: {
 			}
 		};
 		def protocol := (protocolOf: nil);
-		if: (is: requireExpression taggedAs: /.at.types.Table) then: {
+		if: (is: requireExpression taggedAs: /.at.lang.types.Table) then: {
 			protocol := requireExpression.inject: (protocolOf: nil) into: { 
 				|protocol, requireStatement|
 				protocol + retrieveProtocol(requireStatement)

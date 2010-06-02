@@ -15,7 +15,7 @@ def mutatorsOf: someObject {
 def is: methodName mutatorOf: someObject {
 	try: {
 		is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
-	} catch: /.at.types.SelectorNotFound using: {|e| false };
+	} catch: /.at.lang.types.SelectorNotFound using: {|e| false };
 };
 
 // intercepts methods annotated as mutator and := invocations
@@ -30,7 +30,7 @@ def makeMutatorInterceptor(interceptor) {
 				if: (is: methodName mutatorOf: slf) then: {
 					interceptor(self.base(), methodName);
 				};
-			} catch: /.at.types.SelectorNotFound using: {|e| 
+			} catch: /.at.lang.types.SelectorNotFound using: {|e| 
 				// do nothing
 				info("selector not found: " + e.message); 
 			};
@@ -49,7 +49,7 @@ def makeMutatorInterceptor(interceptor) {
 						interceptor(self.base(), methodName);
 					};
 				};
-			} catch: /.at.types.SelectorNotFound using: {|e| 
+			} catch: /.at.lang.types.SelectorNotFound using: {|e| 
 				// do nothing
 				info("selector not found: " + e.message); 
 			};

@@ -253,7 +253,7 @@ def ServiceProtocolTuple := isolate: {
 };
 
 def discover(type, handler, registerWithTracker) {
-	if: (is: type taggedAs: /.at.types.TypeTag) then: {
+	if: (is: type taggedAs: /.at.lang.types.TypeTag) then: {
 		registerWithTracker(trackerFor(type), handler);
 	} else: {
 		if: (is: type taggedAs: StructuralTypes.Protocol) then: {
@@ -263,7 +263,7 @@ def discover(type, handler, registerWithTracker) {
 				}
 			});
 		} else: {
-			raise: /.at.exceptions.XIllegalOperation.new(
+			raise: /.at.lang.exceptions.XIllegalOperation.new(
 				"discovery needs a type tag or protocol object, given "+type);
 		}
 	}
@@ -272,7 +272,7 @@ def discover(type, handler, registerWithTracker) {
 def export(service, type) {
 	def trackerResponder;
 	
-	if: (is: service taggedAs: /.at.types.Isolate) then: {
+	if: (is: service taggedAs: /.at.lang.types.Isolate) then: {
 		trackerResponder := object: {
 			def reportTo(serviceTracker) {
 				serviceTracker<-respond(service);
@@ -385,14 +385,14 @@ def DiscoveryModule := object: {
 	 * does not take the object itself offline.
 	 */
 	def export: obj as: type {
-		if: (is: type taggedAs: /.at.types.TypeTag) then: {
+		if: (is: type taggedAs: /.at.lang.types.TypeTag) then: {
 			export(obj, type);
 		} else: {
 			if: (is: type taggedAs: StructuralTypes.Protocol) then: {
 				StructuralTypes.ensure: obj implements: type;
 				export(ServiceProtocolTuple.new(obj, type), ProtocolExportedObject);
 			} else: {
-				raise: /.at.exceptions.XIllegalOperation.new(
+				raise: /.at.lang.exceptions.XIllegalOperation.new(
 					"export needs a type tag or protocol object, given "+type);
 			}
 		}
@@ -539,7 +539,7 @@ def DiscoveryModule := object: {
         def [fut,res] := makeFuture();
 
 			  def sub := whenever: testProtocol discovered: { |ref|
-				  try: { self.fail("should not discover testProtocol") } catch: /.at.types.Exception using: { |e|
+				  try: { self.fail("should not discover testProtocol") } catch: /.at.lang.types.Exception using: { |e|
 					  res.ruin(e);
 					}
 			  };

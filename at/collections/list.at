@@ -32,8 +32,8 @@
 
 def DEFAULTCOMPARATOR := {|e1,e2| e1 == e2};
 
-deftype EmptyList <: /.at.types.Exception;
-def XEmptyList := /.at.exceptions.createException(EmptyList);
+deftype EmptyList <: /.at.lang.types.Exception;
+def XEmptyList := /.at.lang.exceptions.createException(EmptyList);
 
 // An object-oriented implementation of Scheme-like lists
 

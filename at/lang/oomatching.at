@@ -58,8 +58,8 @@ import /.at.lang.structuralTypes;
 // matching super with anything
 def WILDCARD := nil; //object: { nil };
 
-deftype MatchError <: /.at.types.Exception;
-def XMatchError := /.at.exceptions.createException(MatchError);
+deftype MatchError <: /.at.lang.types.Exception;
+def XMatchError := /.at.lang.exceptions.createException(MatchError);
 
 def OOMatchModule := object: {
 	
@@ -111,7 +111,7 @@ def OOMatchModule := object: {
 				def subjectVal := (reflect: subject).invokeField(subject, field.name);
 				
 				// CONSTRAINT
-				if: (is: templateVal taggedAs: /.at.types.Closure) then: {
+				if: (is: templateVal taggedAs: /.at.lang.types.Closure) then: {
 					// apply constraint
 					if: !(templateVal(subjectVal)) then: {
 						raise: XMatchError.new(

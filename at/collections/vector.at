@@ -32,12 +32,12 @@
 def DEFAULTCAPACITY := 10;
 def DEFAULTCOMPARATOR := {|e1,e2| e1 == e2};
 
-def XIndexOutOfBounds := /.at.exceptions.XIndexOutOfBounds;
-deftype StackUnderflow <: /.at.types.Exception;
-def XStackUnderflow := /.at.exceptions.createException(StackUnderflow).new("Cannot pop empty stack");
+def XIndexOutOfBounds := /.at.lang.exceptions.XIndexOutOfBounds;
+deftype StackUnderflow <: /.at.lang.types.Exception;
+def XStackUnderflow := /.at.lang.exceptions.createException(StackUnderflow).new("Cannot pop empty stack");
 
-deftype EmptyVector <: /.at.types.Exception;
-def XEmptyVector := /.at.exceptions.createException(EmptyVector).new("Cannot pick element from empty vector");
+deftype EmptyVector <: /.at.lang.types.Exception;
+def XEmptyVector := /.at.lang.exceptions.createException(EmptyVector).new("Cannot pick element from empty vector");
 
 def VectorPrototype := object: {
 	
@@ -350,7 +350,7 @@ def VectorPrototype := object: {
 		elements.select(1,free);
 	};
 	
-} taggedAs: [/.at.types.Table];
+} taggedAs: [/.at.lang.types.Table];
 
 def VectorModule := object: {
 

@@ -196,7 +196,7 @@ def MobiTunesPrototype := object: {
 		     // future with an exception
 		     /*rebind: session to: (object: { nil } mirroredBy: (mirror: {
 			     def doesNotUnderStand(selector) {
-				     deftype DisconnectedException <: /.at.types.Exception;
+				     deftype DisconnectedException <: /.at.lang.types.Exception;
 				     raise: object: { nil } taggedAs: [ DisconnectedException ]
 			     };
 		     }));*/

@@ -275,7 +275,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 						  self;
 					  };
 					  def decideStore(ts) {false};
-					} taggedAs: [/.at.types.Isolate, ContextAwareTotam];
+					} taggedAs: [/.at.lang.types.Isolate, ContextAwareTotam];
 			  };	
 			}; //end-makeContextAwareTuple
 				
@@ -317,7 +317,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 			  def decideDie(ts){
 				  expired;
 			  };
-		  } taggedAs: [/.at.types.Isolate, ContextAwareTotam] mirroredBy: (object:{
+		  } taggedAs: [/.at.lang.types.Isolate, ContextAwareTotam] mirroredBy: (object:{
 			  def pass(){
 				  //passObj is shared with base-level object!!!
 				  def passObj := super^pass(); 
@@ -333,7 +333,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 				  if: self.base.leasedTuple then: {resolveObj.startSubscription()};
 				  resolveObj;
 			  };
-		  }childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror );
+		  }childOf: defaultMirror extends: true taggedAs: [/.at.lang.types.Isolate] mirroredBy: defaultMirror );
 		  super^inject: leasedTuple;
 		}; //end-inject-inContext-withLeaseFor:	
 		

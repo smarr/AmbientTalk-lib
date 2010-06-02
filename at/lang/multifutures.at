@@ -79,8 +79,8 @@ def LeasingModule := /.at.lang.leasedrefs;
 
 def OneWayMessage := FuturesModule.OneWayMessage;
 
-def Exception := /.at.types.Exception;
-def XIllegalOperation := /.at.exceptions.XIllegalOperation;
+def Exception := /.at.lang.types.Exception;
+def XIllegalOperation := /.at.lang.exceptions.XIllegalOperation;
 
 // all future objects are marked with this type
 deftype MultiFuture <: FuturesModule.Future;
@@ -313,7 +313,7 @@ def Gather(upperBound := nil, timeout := nil) {
 			def [ multifut, mfresolver] := makeMultiFutureC(upperBound, timeout);
 			FuturesModule.futurize(msg, multifut, GatherType);
 		};
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag ];
 };
 
 def MultiFutureModule := object: {
@@ -468,7 +468,7 @@ def MultiFutureModule := object: {
       def testAsyncManualRuinationOfMultifuture() {
 	      def [mf,resolver] := makeMultiFuture(2);
 	      deftype TestException;
-	      def XTestException := /.at.exceptions.createException(TestException);
+	      def XTestException := /.at.lang.exceptions.createException(TestException);
 	      def fut := whenAll: mf resolved: { |tbl|
 		      self.assertEquals(1, tbl.length);
 			    self.assertEquals(42, tbl[1]);
@@ -511,7 +511,7 @@ def MultiFutureModule := object: {
 		      self.assertEquals(42, val);
 		      r1.resolve(val);
 		    } catch: { |e|
-			    self.assertTrue(is: e taggedAs: /.at.types.IllegalOperation);
+			    self.assertTrue(is: e taggedAs: /.at.lang.types.IllegalOperation);
 			    r2.resolve(e);
 			  };
 			  resolver.ruin(XIllegalOperation.new("test"));

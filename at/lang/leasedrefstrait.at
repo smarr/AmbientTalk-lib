@@ -50,8 +50,8 @@ def LeasedRefTraitModule := object: {
 	deftype ClientLeasedRef <: LeasedRef; 
 	
 	//create ExpiredLease used to notify use of a lease after expiration. 
-	deftype ExpiredLease <: /.at.types.Exception;
-	def XExpiredLease := /.at.exceptions.createException(ExpiredLease);
+	deftype ExpiredLease <: /.at.lang.types.Exception;
+	def XExpiredLease := /.at.lang.exceptions.createException(ExpiredLease);
 	
 	/* Trait for common behaviour amongst client and server leases
 	 * This trait requires:
@@ -108,7 +108,7 @@ def LeasedRefTraitModule := object: {
 			if: ( (self.state == ACTIVE).and: {!(is: self.base taggedAs: ClientLeasedRef) }) then: {
 			  try: { 
 		      takeOffline: self;
-		    } catch: /.at.types.IllegalOperation using: { |e|
+		    } catch: /.at.lang.types.IllegalOperation using: { |e|
 				  // Lease used only locally! Catching this exception means that 
 				  //the lease was never serialized and thus, it was never put online.  
 			    //system.println("[leasedrefs.at] WARNING: lease used only locally: "+e.message);

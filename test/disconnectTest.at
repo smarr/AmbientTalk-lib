@@ -48,7 +48,7 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
       when: o<-disconnect()@FutureMessage becomes:{ |val|
 			  unit<-assertEquals(5,val);
 		  };
-	    when: o disconnected:{ unit<-assertTrue((is: o taggedAs: /.at.types.FarReference)); };
+	    when: o disconnected:{ unit<-assertTrue((is: o taggedAs: /.at.lang.types.FarReference)); };
 		  when: o reconnected:{ res<-resolve(`ok)};
 	  };
 	  fut;
@@ -89,7 +89,7 @@ def DisconnectTest := extend: /.at.unit.test.UnitTest.new("DisconnectTest") with
 			  unit<-assertEquals(5,val);
 		  };
 	    when: o disconnected:{ 
-		    unit<-assertTrue((is: o taggedAs: /.at.types.FarReference)); 
+		    unit<-assertTrue((is: o taggedAs: /.at.lang.types.FarReference)); 
 		    o<-test();
 		    def outbox := retract: o;
 		    when: unit<-assertEquals(1, outbox.length)@FutureMessage becomes: { |ok|

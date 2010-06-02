@@ -131,7 +131,7 @@ def ARIntensionalImpl := object: {
 		  def reach;
 	    def scope;
 
-	    if: (is: typetagOrProtocol taggedAs: /.at.types.TypeTag) then: {
+	    if: (is: typetagOrProtocol taggedAs: /.at.lang.types.TypeTag) then: {
 		    // convert type tag directly into Java interface
 		    reach := omnireference: typetagOrProtocol;
 		    scope := filter;
@@ -201,7 +201,7 @@ def ARIntensionalImpl := object: {
 		};
 
 		def pub := export: broadcastMessageHandler asTypeTag:
-		  ((is: typetagOrProtocol taggedAs: /.at.types.TypeTag).ifTrue: {
+		  ((is: typetagOrProtocol taggedAs: /.at.lang.types.TypeTag).ifTrue: {
 			  typetagOrProtocol;
 			} ifFalse: {
 			  ProtocolAmbientRefType;

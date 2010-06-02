@@ -419,7 +419,7 @@ def LeasingModule := object: {
 				def createReference(object) {	
 					// Checking if we are parameter passing a lease mirror so that we call the default createReference semantics, 
 					// rather than passing it by leased ref.
-					if: ((is: object taggedAs: LeaseMirror).or: { is: object taggedAs: /.at.types.Method }) then: {
+					if: ((is: object taggedAs: LeaseMirror).or: { is: object taggedAs: /.at.lang.types.Method }) then: {
 						 super^createReference(object);
 					} else:{		
 						renewOnCallLease: DEFAULT_LEASETIME for: object;

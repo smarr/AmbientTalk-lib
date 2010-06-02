@@ -70,7 +70,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	// to access 'system' and 'lobby' slots in deserialized code
 	def testAsyncDeserializationInDiscoveryActor() {
 		def peer := actor: {
-			def obj := object: { } taggedAs: [/.at.types.Isolate] mirroredBy: (extend: defaultMirror with: {
+			def obj := object: { } taggedAs: [/.at.lang.types.Isolate] mirroredBy: (extend: defaultMirror with: {
 				def x := 5;
 			  def pass() {
 				  /.at.support.util.uponArrivalBecome: { |x|
@@ -79,7 +79,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 					  x
 					}
 			  }
-			} taggedAs: [/.at.types.Isolate]);
+			} taggedAs: [/.at.lang.types.Isolate]);
 			deftype DeserializationBugfixTest;
 			export: obj as: DeserializationBugfixTest;
 		};
@@ -98,7 +98,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		(actor: {
 			// ref is a far reference
 			def get(ref) {
-			  /.at.unit.test.UnitTest.assert: /.at.types.IllegalOperation raisedIn: { ref.m() };
+			  /.at.unit.test.UnitTest.assert: /.at.lang.types.IllegalOperation raisedIn: { ref.m() };
 		  };
 		})<-get(object: { def m() { 42 } })@FutureMessage;
 	};
@@ -122,7 +122,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	// tests whether fields and methods with the same name cannot
 	// co-exist within the same object (bug #51)
 	def testFieldMethodDuplicates() {
-		self.assert: /.at.types.DuplicateSlot raisedIn: {
+		self.assert: /.at.lang.types.DuplicateSlot raisedIn: {
 			object: { def m; def m(); }
 		}
 	};
@@ -312,9 +312,9 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(1, (reflect: o).removeSlot(`x));
 		
 		// test that x is no longer present
-		self.assert: /.at.types.SelectorNotFound raisedIn: { o.x };
+		self.assert: /.at.lang.types.SelectorNotFound raisedIn: { o.x };
 		// even when accessed from within a method
-		self.assert: /.at.types.UndefinedSlot raisedIn: { o.m };
+		self.assert: /.at.lang.types.UndefinedSlot raisedIn: { o.m };
 
 		def [acc,mut] := /.at.lang.values.createFieldSlot(`x, 5);
 		(reflect: o).addSlot(acc);
@@ -376,7 +376,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 			import A2;
 			def c() { "C" };
 		};
-		self.assert: /.at.types.ImportConflict raisedIn: {
+		self.assert: /.at.lang.types.ImportConflict raisedIn: {
 			def D := object: {
 				import B;
 				import C; // A2's a conflicts with A1's a
@@ -388,7 +388,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	def testRequiredMethodsAreFiltered() {
 		def T := object: {
 			def m() { self.n() };
-			def n() @[/.at.types.Required];
+			def n() @[/.at.lang.types.Required];
 		};
 		def o := object: {
 			import T;

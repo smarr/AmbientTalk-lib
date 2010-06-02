@@ -1,4 +1,4 @@
-// def Serializable := /.at.types.Isolate;
+// def Serializable := /.at.lang.types.Isolate;
 
 def Vector := object: {
 

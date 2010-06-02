@@ -68,8 +68,8 @@ import /.at.collections.vector;
 
 // -- exception declarations --
 
-deftype StructuralTypeMismatch <: /.at.types.Exception;
-def XStructuralTypeMismatch := extend: /.at.exceptions.createException(StructuralTypeMismatch) with: {
+deftype StructuralTypeMismatch <: /.at.lang.types.Exception;
+def XStructuralTypeMismatch := extend: /.at.lang.exceptions.createException(StructuralTypeMismatch) with: {
 	def protocol;
 	def missingSelectors;
 	def init(p, ms, failedObject) {
@@ -82,7 +82,7 @@ def XStructuralTypeMismatch := extend: /.at.exceptions.createException(Structura
 } taggedAs: [ StructuralTypeMismatch ];
 
 deftype BrandMismatch <: StructuralTypeMismatch;
-def XBrandMismatch := extend: /.at.exceptions.createException(BrandMismatch) with: {
+def XBrandMismatch := extend: /.at.lang.exceptions.createException(BrandMismatch) with: {
 	def init(failedObject, failedType) {
 		super^init("object " + failedObject + " not branded with " + failedType);
 	}; 
@@ -146,7 +146,7 @@ def ProtocolPrototype := object: { |XStructuralTypeMismatch,StructuralTypeMismat
 		self.new(selectors + otherProtocol.selectors);
 	};
 	
-} taggedAs: [Protocol, /.at.types.Isolate];
+} taggedAs: [Protocol, /.at.lang.types.Isolate];
 
 // a branded protocol is a protocol that also checks type tags
 def BrandedProtocolPrototype := extend: ProtocolPrototype with: {

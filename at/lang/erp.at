@@ -131,7 +131,7 @@ def makeBehavior(initVal) {
         	def propagate(propagator, value) {
         	  /.at.lang.futures.when: value <+ msg becomes: { |newValue|
       	      propagator(newValue);
-      	    } catch: /.at.types.Exception using: { |e|
+      	    } catch: /.at.lang.types.Exception using: { |e|
       	      controller.break(e);
       	    }
         	};
@@ -186,13 +186,13 @@ def makeBehavior(initVal) {
 
 def snapshot: behavior {
   if: (is: behavior taggedAs: Behavior) then: {
-    if: (is: behavior taggedAs: /.at.types.FarRef) then: {
-      raise: /.at.exceptions.XIllegalOperation.new(
+    if: (is: behavior taggedAs: /.at.lang.types.FarRef) then: {
+      raise: /.at.lang.exceptions.XIllegalOperation.new(
         "cannot snapshot a remote behavior: "+behavior);
     }
     (reflect: behavior).value();
   } else: {
-    raise: /.at.exceptions.XIllegalOperation.new(
+    raise: /.at.lang.exceptions.XIllegalOperation.new(
       "snapshot: requires a behavior, given: "+behavior);
   }
 };
@@ -213,7 +213,7 @@ def snapshot: behavior {
 def whenever: behavior changed: closure catch: clause finally: finalize {
   // such that we can write:
   // whenever: [b1, b2] changed: { |v1, v2| ... }
-  if: (is: behavior taggedAs: /.at.types.Table) then: {
+  if: (is: behavior taggedAs: /.at.lang.types.Table) then: {
     behavior := join: behavior;
     def origclosure := closure;
     closure := { |values| origclosure(@values) };
@@ -221,7 +221,7 @@ def whenever: behavior changed: closure catch: clause finally: finalize {
   
 	def [dependentBehavior, controller] := makeBehavior(behavior.value);
 	def perform(control, val, fun) {
-	  try: { control(fun(val)) } catch: /.at.types.Exception using: { |e| controller.break(e) }
+	  try: { control(fun(val)) } catch: /.at.lang.types.Exception using: { |e| controller.break(e) }
 	};
   behavior<-register(object: {
 	  def onNextValue(nextVal) { perform(controller.nextValue, nextVal, closure) };

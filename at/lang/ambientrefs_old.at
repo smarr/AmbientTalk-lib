@@ -55,7 +55,7 @@ deftype SustainedMessageType; // to annotate sustained messages for omnireferenc
 def SustainedMessage(timeout) {
 	extend: SustainedMessageType with: { |timeout|
 		nil;
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag ];
 };
 
 def debug(@args) {
@@ -74,7 +74,7 @@ def createSturdyUniRef(type, filter := defaultFilter) {
   def [arFuture, arResolver] := FuturesModule.makeFuture();
   def pub := whenever: type discovered: { |remoteRef|
 	  def props := isolate: { nil };
-	  if: (is: remoteRef taggedAs: /.at.types.Table) then: {
+	  if: (is: remoteRef taggedAs: /.at.lang.types.Table) then: {
 		  props := remoteRef[1];
 		  remoteRef := remoteRef[2];
 	  };
@@ -148,7 +148,7 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
 			// register discovery observers
 		  whenever: serviceType discovered: { |potentialPrincipal|
 			  def properties := isolate: { nil };
-			  if: (is: potentialPrincipal taggedAs: /.at.types.Table) then: {
+			  if: (is: potentialPrincipal taggedAs: /.at.lang.types.Table) then: {
 				  // service exported as [ properties, reference ]
 				  properties := potentialPrincipal[1];
 				  potentialPrincipal := potentialPrincipal[2];
@@ -232,8 +232,8 @@ def makeAmbientRefMirror(serviceType, TCardinality, TElasticity, contentFilter) 
   };
 };
 
-deftype Unimplemented <: /.at.types.Exception;
-def XUnimplemented := /.at.exceptions.createException(Unimplemented);
+deftype Unimplemented <: /.at.lang.types.Exception;
+def XUnimplemented := /.at.lang.exceptions.createException(Unimplemented);
 def abstractMethod(name) {
 	raise: XUnimplemented.new("Invoked abstract method: "+name);
 };
@@ -508,7 +508,7 @@ def AmbientRefModule := object: {
 				FuturesModule.when: act<-rcv(a)@FuturesModule.FutureMessage becomes: { |newAR|
 					self.assertTrue(is: newAR taggedAs: AmbientRef);
 					self.assertFalse(a == newAR);
-					//self.assertTrue(is: newAR taggedAs: /.at.types.FarReference);
+					//self.assertTrue(is: newAR taggedAs: /.at.lang.types.FarReference);
 				};
 			};
 			def testAsyncWhereOnSturdyUni() {

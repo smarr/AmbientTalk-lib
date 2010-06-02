@@ -109,7 +109,7 @@ def TemplateDiscoveryModule := object: {
 
   /** export an object 'by copy' such that it can be matched against a template */
 	def export: obj {
-		if: !(is: obj taggedAs: /.at.types.Isolate) then: {
+		if: !(is: obj taggedAs: /.at.lang.types.Isolate) then: {
 			raise: XIllegalOperation.new("Can only export isolate objects without a type tag");
 		};
 		/.at.discovery.discovery.export: obj as: TemplateMatchableObject;
@@ -143,7 +143,7 @@ def TemplateDiscoveryModule := object: {
 				
 				def personTemplate := template: {
 					def name;
-					def age := constraint: { is: _ taggedAs: /.at.types.Number };
+					def age := constraint: { is: _ taggedAs: /.at.lang.types.Number };
 				};
 				
 				def sub := when: personTemplate discovered: { |service|

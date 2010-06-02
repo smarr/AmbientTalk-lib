@@ -38,7 +38,7 @@ def AmbientTalkVisitor := jlobby.edu.vub.crime.grammar.utils.AmbientTalkVisitor;
 def Constraint := jlobby.edu.vub.crime.grammar.Constraint;
 def Operator := jlobby.edu.vub.crime.grammar.attributes.Operator;
 def AmbientTalkConstraint := jlobby.edu.vub.crime.grammar.AmbientTalkConstraint;
-import /.at.exceptions;
+import /.at.lang.exceptions;
 
 def isJavaObject(o) {
 	((reflect: o).listMethods.map: { |e| e.name }).contains(`getClass);

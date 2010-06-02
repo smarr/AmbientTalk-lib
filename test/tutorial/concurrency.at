@@ -42,7 +42,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
 
   def testAIsFarReference() {
-    self.assertTrue(is: a taggedAs: /.at.types.FarReference)
+    self.assertTrue(is: a taggedAs: /.at.lang.types.FarReference)
   };
 
   def testSayHello() {
@@ -60,7 +60,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
 
   def testCalcIsFarReference() {
-    self.assertTrue(is: calculator taggedAs: /.at.types.FarReference);
+    self.assertTrue(is: calculator taggedAs: /.at.lang.types.FarReference);
   };
 
   def testAsyncAddSimpleNumbers() {
@@ -70,7 +70,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
       def result(sum) {
         try: {
           res.resolve(test.assertEquals(3, sum));
-        } catch: /.at.types.Exception using: { |e|
+        } catch: /.at.lang.types.Exception using: { |e|
           res.ruin(e);
         }
       };
@@ -91,7 +91,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
   };
   
   def testComplexNumberIsIsolate() {
-    self.assertTrue(is: complexNumber taggedAs: /.at.types.Isolate);
+    self.assertTrue(is: complexNumber taggedAs: /.at.lang.types.Isolate);
   };
   
   def testComplexnumberAdd() {
@@ -106,7 +106,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
             test.assertEquals(sum.re, 3);
             test.assertEquals(sum.im, 3);
             res.resolve(true);
-          } catch: /.at.types.Exception using: { |e|
+          } catch: /.at.lang.types.Exception using: { |e|
             res.ruin(e);
           }
         };
@@ -121,7 +121,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
     def adder := isolate: { |y|
       def add(n) { x + n };
     };
-    self.assert: /.at.types.UndefinedSlot raisedIn: {
+    self.assert: /.at.lang.types.UndefinedSlot raisedIn: {
       adder.add(3)
     };
   };
@@ -162,7 +162,7 @@ extend: /.at.unit.test.UnitTest.new("Concurrency") with: {
 		def divFuture := calculator<-divide(5,0)@FutureMessage;
 		def fut := when: divFuture becomes: { |div|
 		  self.assertFalse(true); // force exception, expected exception
-		} catch: /.at.types.IllegalArgument using: { |exc|
+		} catch: /.at.lang.types.IllegalArgument using: { |exc|
 		  nil // ok, division by zero
 		};
 		self.assertTrue(is: fut taggedAs: Future);

@@ -105,7 +105,7 @@ def PortalTrait := trait: { |Color, FadeTrait|
 		self.remotePortalEndPointResolver.resolve(remotePortal);
 		self.remotePortalEndPoint := remotePortal;
 		self.isOpen := true;
-		if: (is: self.remotePortalEndPoint taggedAs: /.at.types.FarReference) then: {
+		if: (is: self.remotePortalEndPoint taggedAs: /.at.lang.types.FarReference) then: {
 			def fader;
 			// make portal fade away gradually while there is a disconnection
 			when: self.remotePortalEndPoint disconnected: {
@@ -157,7 +157,7 @@ def PortalMorph := extend: RectangleMorph with: { |PortalTrait|
 	/.at.lang.traits.use: {
 		import PortalTrait alias init := portalInit;
 	};
-} taggedAs: [ PortalMorphT, /.at.types.Isolate ];
+} taggedAs: [ PortalMorphT, /.at.lang.types.Isolate ];
 
 def PLAYER_COLOR := if: (system.getArgv.length > 0) then: { Color.makeColor(@(system.getArgv.map: { |str| str.parseNumeric })) } else: { Color.randomColor() };
 def START_X := 180;

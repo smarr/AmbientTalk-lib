@@ -4,10 +4,10 @@ import /.at.collections.java.vector;
 
 import /.at.lang.futures;
 enableFutures(false);
-import /.at.exceptions;
+import /.at.lang.exceptions;
 
-deftype Unimplemented <: /.at.types.Exception;
-def XUnimplemented := /.at.exceptions.createException(Unimplemented);
+deftype Unimplemented <: /.at.lang.types.Exception;
+def XUnimplemented := /.at.lang.exceptions.createException(Unimplemented);
 def abstractMethod(name) {
 	raise: XUnimplemented.new("Invoked abstract method: "+name);
 };
@@ -18,7 +18,7 @@ deftype Props;
 def defaultFilter := { |props| true };
 
 def isTable(remoteRef) {
-	is: remoteRef taggedAs: /.at.types.Table;
+	is: remoteRef taggedAs: /.at.lang.types.Table;
 };
 
 def isPropRef(remoteRef) {

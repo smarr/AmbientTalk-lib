@@ -59,7 +59,7 @@ def DescriptorObject := object: {
 	def ==(other) {
 		(does: other respondTo: `service).and: { service == other.service };
 	};
-} taggedAs: [/.at.types.Isolate, DescriptorT];
+} taggedAs: [/.at.lang.types.Isolate, DescriptorT];
 
 def ARExtensionalImpl := object: {
 	
@@ -250,7 +250,7 @@ def ARExtensionalImpl := object: {
 	};
 
 	def exportServiceObject(serviceObject, typetagOrProtocol, attributes) {
-		if: (is: typetagOrProtocol taggedAs: /.at.types.TypeTag) then: {
+		if: (is: typetagOrProtocol taggedAs: /.at.lang.types.TypeTag) then: {
 			DiscoveryModule.export: DescriptorObject.new(serviceObject, attributes)
 			                as: typetagOrProtocol;
 		} else: {

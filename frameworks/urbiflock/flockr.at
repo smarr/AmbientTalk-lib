@@ -256,7 +256,7 @@ def makeFlockr(profile) {
 		  (discSubscription != nil).ifTrue: { discSubscription.cancel()};  
 			try: { 
 	      takeOffline: self.remoteInterface;
-	    } catch: /.at.types.IllegalOperation using: { |e| /*flockr used only locally*/ };
+	    } catch: /.at.lang.types.IllegalOperation using: { |e| /*flockr used only locally*/ };
 	    nil;
 		};
 		

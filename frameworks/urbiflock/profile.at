@@ -26,14 +26,14 @@
  */
 
 
-deftype MandatoryFieldRemoval <: lobby.at.types.Exception;
-def XMandatoryFieldRemoval := lobby.at.exceptions.createException(MandatoryFieldRemoval);
+deftype MandatoryFieldRemoval <: lobby.at.lang.types.Exception;
+def XMandatoryFieldRemoval := lobby.at.lang.exceptions.createException(MandatoryFieldRemoval);
 
-deftype DuplicateField <: lobby.at.types.Exception;
-def XDuplicateField := lobby.at.exceptions.createException(DuplicateField);
+deftype DuplicateField <: lobby.at.lang.types.Exception;
+def XDuplicateField := lobby.at.lang.exceptions.createException(DuplicateField);
 
-deftype InvalidFieldType <: lobby.at.types.Exception;
-def XInvalidFieldType := lobby.at.exceptions.createException(InvalidFieldType);
+deftype InvalidFieldType <: lobby.at.lang.types.Exception;
+def XInvalidFieldType := lobby.at.lang.exceptions.createException(InvalidFieldType);
 
 def ProximityModule := /.frameworks.urbiflock.proximity;
 
@@ -45,8 +45,8 @@ def ProximityModule := /.frameworks.urbiflock.proximity;
  * child type.
  */
 def AbstractFieldTypeObject := isolate: {
-	deftype ChildObjectResponsibility <: lobby.at.types.Exception;
-	def XChildObjectResponsibility := lobby.at.exceptions.createException(ChildObjectResponsibility);
+	deftype ChildObjectResponsibility <: lobby.at.lang.types.Exception;
+	def XChildObjectResponsibility := lobby.at.lang.exceptions.createException(ChildObjectResponsibility);
 	
 	def isString() { false };
 	def isEnumeration() { false };
@@ -73,7 +73,7 @@ def AbstractFieldTypeObject := isolate: {
 def StringFieldTypeObject := extend: AbstractFieldTypeObject with: {
 	def fieldSize := 20;		// Used for the size of the input field in the GUI.
 	def isString() { true };
-	def isPossibleValue(aValue) { is: aValue taggedAs: /.at.types.Text };
+	def isPossibleValue(aValue) { is: aValue taggedAs: /.at.lang.types.Text };
 	def name() { "Text" };
 	def defaultValue() { "" };
 	def getFieldSize() { fieldSize };
@@ -102,7 +102,7 @@ def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
 	def getFieldSize() { fieldSize };
 	def setFieldSize(newSize) { fieldSize := newSize };
 	def isPossibleValue(aValue) {
-		(is: aValue taggedAs: /.at.types.Number).and: {
+		(is: aValue taggedAs: /.at.lang.types.Number).and: {
 			((nil == lowerBound).or: { aValue >= lowerBound }).and: {
 				(nil == higherBound).or: { aValue <= higherBound }
 			} 
@@ -110,7 +110,7 @@ def IntegerTypeFieldObject := extend: AbstractFieldTypeObject with: {
 	};
 	def name() { "Integer" };
 	def defaultValue() { 
-		if: (is: lowerBound taggedAs: /.at.types.Number) then: {  
+		if: (is: lowerBound taggedAs: /.at.lang.types.Number) then: {  
 			lowerBound; 
 		} else: { 
 			0 

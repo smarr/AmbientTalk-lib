@@ -71,7 +71,7 @@ def createIsolateClosureMethod(scope, meth) {
 
 			meth.applyInScope(args, ctx.withLexicalEnvironment(externalFrame));
 		}
-	} taggedAs: [/.at.types.Isolate];
+	} taggedAs: [/.at.lang.types.Isolate];
 };
 
 self;

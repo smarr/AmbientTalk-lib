@@ -207,7 +207,7 @@ def script: clo {
  *    transferred as usual via the parameter list of the closure.
  */
 def isolate: closure passAs: transportClosure {
-	object: closure taggedAs: [/.at.types.Isolate] mirroredBy: (mirror: {
+	object: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: (mirror: {
 		def pass() {
 			/.at.support.util.uponArrivalBecome: transportClosure
 		};
@@ -216,18 +216,18 @@ def isolate: closure passAs: transportClosure {
 
 // closure with typetags
 def isolate: closure taggedAs: tagTable {
-	object: closure taggedAs: [/.at.types.Isolate] + tagTable;
+	object: closure taggedAs: [/.at.lang.types.Isolate] + tagTable;
 };
 
 /**
  * alias for extend:with: as a mental note for the programmer he's extending isolates
  */
 def extendIsolate: obj with: clo {
-	extend: obj with: clo taggedAs: [/.at.types.Isolate];
+	extend: obj with: clo taggedAs: [/.at.lang.types.Isolate];
 };
 
 def extendIsolate: obj with: clo taggedAs: tags {
-	extend: obj with: clo taggedAs: tags + [/.at.types.Isolate]
+	extend: obj with: clo taggedAs: tags + [/.at.lang.types.Isolate]
 };
 
 def when: remoteRef disconnected: code {
@@ -267,6 +267,6 @@ def export: someObject {
 
 // a try:catch: method that catches any exception
 def try: closure catch: failClosure {
-	try: closure catch: /.at.types.Exception using: { |e| failClosure(e) };
+	try: closure catch: /.at.lang.types.Exception using: { |e| failClosure(e) };
 };
 

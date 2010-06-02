@@ -148,7 +148,7 @@ def TimerModule := object: {
 		when: timeout elapsed: {
 			try: {
 				res.resolve(closure());
-			} catch: /.at.types.Exception using: { |e| res.ruin(e) };
+			} catch: /.at.lang.types.Exception using: { |e| res.ruin(e) };
 		};
 		fut
 	};

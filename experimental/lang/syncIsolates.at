@@ -72,7 +72,7 @@ def makeSyncIsolateMirror() {
 				};
 				 def accessor() { readField };
 				 def mutator() { writeField }
-			   } taggedAs: [ /.at.types.Field ];
+			   } taggedAs: [ /.at.lang.types.Field ];
 			 };
 			 self.addField(makeNotifyingField(name, value));
 			nil;
@@ -84,7 +84,7 @@ def makeSyncIsolateMirror() {
 def makeFrozenIsolateMirror(id) {	
 	extend: defaultMirror with: {
 		deftype IllegalOperation;
-		def XIllegalOperation := lobby.at.exceptions.createException(IllegalOperation);
+		def XIllegalOperation := lobby.at.lang.exceptions.createException(IllegalOperation);
 		
 		def getId() { id };
 		
@@ -106,16 +106,16 @@ def makeFrozenIsolateMirror(id) {
 				 };
 				 def accessor() { readField };
 				 def mutator() { writeField }
-			   } taggedAs: [ /.at.types.Field, /.at.types.Isolate ];
+			   } taggedAs: [ /.at.lang.types.Field, /.at.lang.types.Isolate ];
 			 };
 			 self.addField(makeFrozenField(name, value));
 			nil;
 		};
-	} taggedAs: [ /.at.types.Isolate ];
+	} taggedAs: [ /.at.lang.types.Isolate ];
 };
 
 def copyIsolateWithMirror(iso, mirror) {
-	def result := object: { } taggedAs: [ /.at.types.Isolate ] mirroredBy: mirror;
+	def result := object: { } taggedAs: [ /.at.lang.types.Isolate ] mirroredBy: mirror;
 	def fields := (reflect: iso).listFields();
 	fields.each: { |field| 
 	   if: !(field.name ==`super) then: {
@@ -178,7 +178,7 @@ def SyncIsolateModule := object: {
 	def SyncIsolate := SyncIsolate;
 	
 	def syncIsolate: isoCode {
-		object: isoCode taggedAs: [ /.at.types.Isolate ] mirroredBy: makeSyncIsolateMirror();
+		object: isoCode taggedAs: [ /.at.lang.types.Isolate ] mirroredBy: makeSyncIsolateMirror();
 	};
 
 	def publish: iso as: type {

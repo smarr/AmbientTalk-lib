@@ -3,7 +3,7 @@
  * to allow Scala-like pattern matching in AmbientTalk.
  */
 
-import /.at.types;
+import /.at.lang.types;
 
 // Creates a new case object with the given name, the fields which
 // need to be inserted in the object and the context in which the 

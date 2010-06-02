@@ -259,7 +259,7 @@ def makeTuple(tupleId := nil){
 };
 
 def extendTuple(tuple, closure) {
-	extend: tuple with: closure taggedAs: [/.at.types.Isolate];
+	extend: tuple with: closure taggedAs: [/.at.lang.types.Isolate];
 };
 
 def extendTupleWithLeaseFor(tuple, time){
@@ -281,7 +281,7 @@ def extendTupleWithLeaseFor(tuple, time){
 		};
 		startSubscription();
 		def decideDie(ts){ self.expired };
-	} taggedAs: [/.at.types.Isolate] mirroredBy: (object:{
+	} taggedAs: [/.at.lang.types.Isolate] mirroredBy: (object:{
 		def pass(){
 			def passObj := super^pass();
 			def base := self.base;
@@ -295,7 +295,7 @@ def extendTupleWithLeaseFor(tuple, time){
 			resolveObj.startSubscription();
 			resolveObj;
 		}
-	}childOf: defaultMirror extends: true taggedAs: [/.at.types.Isolate] mirroredBy: defaultMirror );
+	}childOf: defaultMirror extends: true taggedAs: [/.at.lang.types.Isolate] mirroredBy: defaultMirror );
 };
 
 // the module object of this file

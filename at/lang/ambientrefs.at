@@ -112,8 +112,8 @@ def ProtocolM := /.at.lang.structuraltypes;
 import /.at.support.timer;
 import /.at.lang.firstclassrefs;
 
-deftype IllegalAnnotation <: /.at.types.Exception;
-def XIllegalAnnotation := /.at.exceptions.createException(IllegalAnnotation);
+deftype IllegalAnnotation <: /.at.lang.types.Exception;
+def XIllegalAnnotation := /.at.lang.exceptions.createException(IllegalAnnotation);
 
 deftype ARAnnotation;
 
@@ -129,7 +129,7 @@ deftype Sustain <: MsgDiscoveryLifetime;
 def Transient(period) {
 	extend: TransientT with: { |period|
 		def ==(other) { super == other };
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag ];
 };
 
 deftype MsgCommunicationLifetime <: ARAnnotation;
@@ -141,14 +141,14 @@ deftype DueT <: Twoway;
 def Due(timeout) {
 	extend: DueT with: { |timeout|
 		def ==(other) { super == other };
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag ];
 };
 
 deftype Expirable <: TransientT, DueT;
 def Expires(timeout) {
 	extend: Expirable with: { |timeout|
 		def ==(other) { super == other };
-	} taggedAs: [/.at.types.Isolate, /.at.types.TypeTag ];
+	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag ];
 };
 
 def extendWithHandle(msg, handle) { extend: msg with: {|handle|} };
@@ -611,7 +611,7 @@ def AmbientRefsModule(ARImplModule := /.at.discovery.ar_extensional_impl) {
 						// after this, there will be 2 copies of a, one created upon parameter passing
 						// and one created upon method return
 						self.assertTrue(is: newAR taggedAs: AmbientReference);
-						// self.assertFalse(is: newAR taggedAs: /.at.types.FarReference);
+						// self.assertFalse(is: newAR taggedAs: /.at.lang.types.FarReference);
 						self.assertFalse(a == newAR);
 					};
 				};

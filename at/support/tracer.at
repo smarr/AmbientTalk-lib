@@ -216,7 +216,7 @@ def TraceModule := object: {
   		} else: {
   			// there is already a tracer module active in this actor under
   			// another name, signal an error:
-  			raise: /.at.exceptions.XIllegalOperation.new(
+  			raise: /.at.lang.exceptions.XIllegalOperation.new(
   				"Tracer module already active under another name: "+actor.traceName());
   		}
   	} else: {
@@ -407,4 +407,4 @@ def TraceModule := object: {
     })
   };
 	
-} taggedAs: [/.at.types.Closure]; // end TraceModule
+} taggedAs: [/.at.lang.types.Closure]; // end TraceModule
