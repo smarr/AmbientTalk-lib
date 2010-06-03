@@ -1,3 +1,4 @@
+import /.at.lang.values;
 import /.at.lang.futures;
 import /.at.lang.multifutures;
 enableFutures(false);
@@ -848,7 +849,6 @@ def Failure := object: {
 } taggedAs: [Pattern];
 
 
-
 def Disconnection := object: {
 	def compensation;
 	
@@ -955,6 +955,13 @@ def Restart := object: {
 } taggedAs: [RestartType];
 
 
+import /.at.lang.futures;
+import /.at.lang.multifutures;
+import /.at.lang.values;
+enableFutures(false);
+network.online();
+
+deftype Act;
 
 def Activity := object: {
 	def service;
@@ -970,13 +977,17 @@ def Activity := object: {
 	};
 } taggedAs: [Act];
 
-
-def createUnderstandingMirror(baseObject) {
+def createServiceMirror(baseObject) {
  	extend: defaultMirror.new(baseObject) with: {
-   		def doesNotUnderstand(selector) {
-  			{ |@args| 
-				Activity.new(baseObject, selector, args.select(1, args.length()), args[args.length()]) }  
-   		};
+			def invoke(rcv, inv) {
+				if: (self.respondsTo(inv.selector))
+					then: { super.invoke(rcv, inv) }
+					else: { 
+						if: (is: inv taggedAs: Trigger)
+							then: { TriggerPattern.new(baseObject, inv.selector, inv.arguments) }
+							else: { Activity.new(baseObject, inv.selector, inv.arguments.select(1, inv.arguments.length()), inv.arguments[inv.arguments.length()]) }
+					}
+			}
   	};
 };
 
@@ -984,8 +995,49 @@ def makeServiceWrapper(aTag) {
 	object: {
 		def tag() { aTag };
 
-	} mirroredBy: {|emptyBase| createUnderstandingMirror(emptyBase)}
+	} mirroredBy: {|emptyBase| createServiceMirror(emptyBase)}
 };
+
+deftype Trigger;
+deftype TriggerP;
+
+def TriggerPattern := object: {
+	def listenerType;
+	def selector;
+	def params;
+	
+	def init(serviceWrapper, sel, pars) {  
+		listenerType	:= createTypeTag(serviceWrapper.tag.typeName.text + "Listener");
+		selector			:= sel;
+		params				:= pars;
+	};
+	
+	def makeListener(env, res) {
+		def listener := object: { 
+			def environment := env; 
+			def resolver 		:= res;
+			def parameters  := params;
+			def subscription;
+		};
+		
+		(reflect: listener).addMethod(createMethod(selector, `[@values], `{
+			1.to: parameters.length + 1 do: { | idx | self.environment.insert(self.parameters[idx], values[idx]) };
+			self.subscription.cancel();
+			self.resolver.resolve(values)
+		}, []));
+		
+		listener
+	};
+	
+	def start(env) {
+		def [fut,res] := makeFuture();
+		def listener	:= makeListener(env, res);
+
+		listener.subscription := export: listener as: listenerType;
+		
+		fut
+	}
+} taggedAs: [TriggerP];
 
 deftype outputT;
 

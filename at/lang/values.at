@@ -36,6 +36,8 @@ def createSymbol(name)
 	
 def createInvocation(@args)
 	{ jlobby.edu.vub.at.objects.natives.NATMethodInvocation.new(@args) };
+def createTypeTag(@args)
+	{ jlobby.edu.vub.at.objects.natives.NATTypeTag.atValue(@args)}
 	
 /* while this version of createFieldSlot worked, it returned a pair of
    closures rather than methods, while the current slot-based reflective API
