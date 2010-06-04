@@ -143,13 +143,13 @@ public class LibraryApp extends JFrame {
 	    bookTable_.setRowSorter(sorter_);
 		sorter_.setSortsOnUpdates(true);
 	    
-	    ImageIcon starIcon = new ImageIcon(LibraryApp.class.getResource("/icons/flatstar.png"));
+	    ImageIcon starIcon = new ImageIcon(LibraryApp.class.getResource("../icons/flatstar.png"));
 	    JLabel ratingLabel = new JLabel("", starIcon, JLabel.CENTER);
 	    TableCellRenderer ratingRenderer = new HeaderRenderer();
 	    ratingColumn.setHeaderRenderer(ratingRenderer);
 	    ratingColumn.setHeaderValue(ratingLabel);
 	    
-	    ImageIcon heartIcon = new ImageIcon(LibraryApp.class.getResource("/icons/flatheart.png"));
+	    ImageIcon heartIcon = new ImageIcon(LibraryApp.class.getResource("../icons/flatheart.png"));
 	    JLabel favorLabel = new JLabel("", heartIcon, JLabel.CENTER);
 	    TableCellRenderer favorRenderer = new HeaderRenderer();
 	    favorColumn.setHeaderRenderer(favorRenderer);
@@ -414,10 +414,10 @@ public class LibraryApp extends JFrame {
 		private HashMap<Integer, Integer> bookStates_ = new HashMap<Integer, Integer>();
 		private HashMap<Integer, Vector<String>> bookErrors_ = new HashMap<Integer, Vector<String>>();
 		
-		private ImageIcon greenIcon_ = createImageIcon("/icons/green.png");
-		private ImageIcon orangeIcon_ = createImageIcon("/icons/orange.png");
-		private ImageIcon redIcon_ = createImageIcon("/icons/red.png");
-		private ImageIcon greyIcon_ = createImageIcon("/icons/grey.png");
+		private ImageIcon greenIcon_ = createImageIcon("../icons/green.png");
+		private ImageIcon orangeIcon_ = createImageIcon("../icons/orange.png");
+		private ImageIcon redIcon_ = createImageIcon("../icons/red.png");
+		private ImageIcon greyIcon_ = createImageIcon("../icons/grey.png");
 		
 		protected ImageIcon createImageIcon(String path) {
 			java.net.URL imgURL = getClass().getResource(path);

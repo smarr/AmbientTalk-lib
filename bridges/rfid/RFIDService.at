@@ -42,8 +42,6 @@ def info(@args) {
 deftype RFIDTag;
 deftype GenericTag;
 
-//jlobby.add(AT_HOME + "/at/rfid/lib/librfid.jar");
-
 
 deftype NotAnIsolate <: lobby.at.lang.types.Exception;
 def XNotAnIsolate := lobby.at.lang.exceptions.createException(NotAnIsolate);
