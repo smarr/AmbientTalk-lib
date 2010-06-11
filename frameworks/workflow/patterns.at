@@ -745,7 +745,7 @@ def Multiplexer := object: {
 		number.doTimes: { | nr |
 			if: (is: component taggedAs: Act) then: {
 				WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
-			} else {
+			} else: {
 				WorkflowPattern^run(clone: component, env, { | _ | resolver.resolve(_) });
 			};
 		};
@@ -953,15 +953,6 @@ def Restart := object: {
 		action := component;
 	};
 } taggedAs: [RestartType];
-
-
-import /.at.lang.futures;
-import /.at.lang.multifutures;
-import /.at.lang.values;
-enableFutures(false);
-network.online();
-
-deftype Act;
 
 def Activity := object: {
 	def service;
