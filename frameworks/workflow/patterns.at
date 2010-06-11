@@ -122,7 +122,7 @@ def WorkflowPattern := object: {
 				compensation := true;  // in orde to deactivity the when: discovered: event handler
 				env.replace("compensating" + runIdx, true);  // in order to avoid several compensations to be executed
 				def notFound := env.find(`notFound)[2];
-				if: (((is: disconnection taggedAs: NotFoundType).or: {is: disconnection taggedAs: Pattern}).or: {is: disconnection taggedAs: Act}) then: {
+				if: (((is: notFound taggedAs: NotFoundType).or: {is: notFound taggedAs: Pattern}).or: {is: notFound taggedAs: Act}) then: {
 					compensate(activity, notFound.compensation, msg, env, continue, runIdx);
 				} else: {
 					system.println("service not found error, no compensation specified");
