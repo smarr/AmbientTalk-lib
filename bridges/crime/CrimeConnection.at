@@ -109,12 +109,14 @@ def newEvent(act,deact,vars) {
 def convertFactToAmbientTalk(fact) {
 	def visitor :=  AmbientTalkVisitor.new("convert","convert");
 	def attributes := fact.attributes;
+	system.println("fact.atributes" + attributes);
 	def it := attributes.iterator;
 	def tab := [];
 	while: { it.hasNext } do: {
 		visitor.visit(it.next);
 		tab := tab + [visitor.value];
 	};
+	//system.println("tab is " + tab);
 	makeTuple(tab);
 };
 
@@ -244,7 +246,10 @@ def makeCrimeEngine() {
     };
 
     def retractTuple(tuple) {
-	    engine.retract(convertTupleToCrimeFact(tuple,nil));
+	  def crimeFact := engine.retract(convertTupleToCrimeFact(tuple,nil));
+	  if: (nil != crimeFact) then: {
+		convertFactToAmbientTalk(crimeFact);
+	  } else: { crimeFact}; 
     };
 
 	def retractCrimeFact(fact) {
@@ -252,9 +257,9 @@ def makeCrimeEngine() {
 	};
 
 	def readTuple(template) {
-		def crimeFact := engine.read(convertTupleToCrimeFact(template,nil));
-		if: (nil != crimeFact) then: {
-		  convertFactToAmbientTalk(crimeFact);
+	  def crimeFact := engine.read(convertTupleToCrimeFact(template,nil));
+	  if: (nil != crimeFact) then: {
+		convertFactToAmbientTalk(crimeFact);
 	  } else: { crimeFact};
 	};
 
