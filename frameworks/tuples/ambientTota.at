@@ -230,7 +230,15 @@ def makeTupleSpace(descriptor){
 				ambientTS.removeAll: {|t| t.getTupleId == ID};
 				true;
 			} else: {	false };
-	  };		
+	  };
+	  
+	  // added for debugging/unittest purposes
+    def dumpContents() {
+		def lts := []; def ats := [];
+	    localTS.each: {|tuple| lts := lts + [tuple] };
+	    ambientTS.each:{ |tuple| ats := ats + [tuple]};
+	    [lts, ats];
+    };		
 	}; // end-of-public interface
 };
 

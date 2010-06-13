@@ -151,19 +151,19 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 			when: templateTable matches: closure outOfContext: closureOutOfContext registration: {|r| } removeTuples: false;
 		};
 			
-		def when: templateTable matches: closure {
+		def when: templateTable in: closure {
 			when: templateTable matches: closure outOfContext: {} registration: {|r| r.cancel();} removeTuples: true;
 		};
 		
-		def when: templateTable matches: closure outOfContext: closureOutOfContext  {
+		def when: templateTable in: closure outOfContext: closureOutOfContext  {
 			when: templateTable matches: closure outOfContext: closureOutOfContext registration: {|r| r.cancel();} removeTuples: true;
 		};
 		
-		def whenever: templateTable matches: closure {
+		def whenever: templateTable in: closure {
 			when: templateTable matches: closure outOfContext: {} registration: {|r| } removeTuples: true;
 		};
 		
-		def whenever: templateTable matches: closure outOfContext: closureOutOfContext {
+		def whenever: templateTable in: closure outOfContext: closureOutOfContext {
 			when: templateTable matches: closure outOfContext: closureOutOfContext registration: {|r| } removeTuples: true;
 		};
 		
@@ -253,7 +253,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 						};
 					  def doAction(ts) {
 						  localTs := ts;
-						system.println("arrived at " + ts + " tuple " + self.content.toString());
+						//system.println("arrived at " + ts + " tuple " + self.content.toString());
 							def crime := ts.getCrimeEngine();
 							listeners := makeListeners(self.getTupleId, remoteTupleSpace);
 							def sub := crime.when: table activated: { |args|
@@ -261,7 +261,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 							} deactivated: { |args|
 							  retractFromCrime(crime);
 							};
-							crimeSub := /.at.tuples.contextAwareTuples.makeWrapperObject(sub); 
+							crimeSub := /.frameworks.tuples.contextAwareTuples.makeWrapperObject(sub); 
 						 };
 						 //TODO: dirty hack to have descriptors still.
 						 def inScope(desTarget) {
@@ -322,7 +322,7 @@ def makeTupleSpace( descriptor := "dummyDescriptor") {
 				  //passObj is shared with base-level object!!!
 				  def passObj := super^pass(); 
 				  def base := self.base;
-							  system.println("trying to pass " + passObj.content.toString + " timer " +base.timerSubscription);
+							//  system.println("trying to pass " + passObj.content.toString + " timer " +base.timerSubscription);
 		  		if: base.leasedTuple then: {
 			  	  passObj.timeout := base.timerSubscription.getTimeRemaining();
 			    };
@@ -368,6 +368,8 @@ def contextAwareTuplesModule := object:{
 	def var: symbol lessOrEqualTo: value { crimeModule^var: symbol lessOrEqualTo: value};
 	def var: symbol greaterOrEqualTo: value {crimeModule^var: symbol greaterOrEqualTo: value };
 	def var: symbol notEquals: value {crimeModule^var: symbol notEquals: value};
+	def var: symbol equalsTo: value  {crimeModule^var: symbol equalsTo: value};
+	def var: symbol lessThan: value {crimeModule^var: symbol lessThen: value};
 	
 	def contextAwareTuplesTest := extend: /.at.unit.test.UnitTest.new("contextAwareTuples", false) with: {
 		import /.at.lang.futures;
@@ -412,7 +414,7 @@ def contextAwareTuplesModule := object:{
 		  };
 		  		 			
 		  def theMeetingRoom := actor: {
-			  import /.at.tuples.contextAwareTuples;
+			  import /.frameworks.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
@@ -436,7 +438,7 @@ def contextAwareTuplesModule := object:{
 				 };
 		  };
 			def anotherActor := actor:{ |res2|
-				import /.at.tuples.contextAwareTuples;
+				import /.frameworks.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  def timerModule := /.at.support.timer;
 				def goOnline(){
@@ -451,7 +453,7 @@ def contextAwareTuplesModule := object:{
 		    };
 		  };
 		  def theMeetingRoom := actor: { |anotherActor|
-			  import /.at.tuples.contextAwareTuples;
+			  import /.frameworks.tuples.contextAwareTuples;
 			  def timerModule := /.at.support.timer;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
@@ -476,7 +478,7 @@ def contextAwareTuplesModule := object:{
 		    };
 		  };
 		  def player2 := actor: { 
-			  import /.at.tuples.contextAwareTuples;
+			  import /.frameworks.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  myTs.add(makeTuple("GPS", 40, 40));
@@ -486,7 +488,7 @@ def contextAwareTuplesModule := object:{
 		  };
 		 			
 		  def theRoomManager := actor: {
-			  import /.at.tuples.contextAwareTuples;
+			  import /.frameworks.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
@@ -512,7 +514,7 @@ def contextAwareTuplesModule := object:{
 		  };
 		 			
 		  def theRoomManager := actor: {
-			  import /.at.tuples.contextAwareTuples;
+			  import /.frameworks.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};
@@ -538,7 +540,7 @@ def contextAwareTuplesModule := object:{
 			};
 			
 			def remoteTs := actor: {
-				import /.at.tuples.contextAwareTuples;
+				import /.frameworks.tuples.contextAwareTuples;
 			  def myTs := makeTupleSpace();
 			  myTs.goOnline;
 			  def goOffline() {myTs.goOffline()};

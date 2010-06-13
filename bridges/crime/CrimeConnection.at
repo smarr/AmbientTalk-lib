@@ -109,7 +109,7 @@ def newEvent(act,deact,vars) {
 def convertFactToAmbientTalk(fact) {
 	def visitor :=  AmbientTalkVisitor.new("convert","convert");
 	def attributes := fact.attributes;
-	system.println("fact.atributes" + attributes);
+	//system.println("fact.atributes" + attributes);
 	def it := attributes.iterator;
 	def tab := [];
 	while: { it.hasNext } do: {
