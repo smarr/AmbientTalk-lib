@@ -221,7 +221,7 @@ def MobiTunesPrototype := object: {
 		  def test := self;
 		  
 		  // expecting peerA to find peerB and to have a 66% match
-		  def peerA := /.at.demo.mobiTunes.new("A", { |usr, match|
+		  def peerA := /.demo.mobiTunes.new("A", { |usr, match|
 		    test.assertEquals("B", usr);
 		    test.assertEquals(66, match);
 		    res.resolve(true);
@@ -231,7 +231,7 @@ def MobiTunesPrototype := object: {
 		  peerA.addSong("3", "A");
 		  peerA.goOnline();
 		  def otherPeerHost := actor: {
-		    def peerB := /.at.demo.mobiTunes.new("B");
+		    def peerB := /.demo.mobiTunes.new("B");
 		    peerB.addSong("1", "AB");
 		    peerB.addSong("2", "AB");
 		    peerB.addSong("3", "B");

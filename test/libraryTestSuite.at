@@ -36,7 +36,7 @@ def LibraryTestSuiteModule := object: {
     /.at.collections.queue.queueTest(),
 		/.bridges.crime.CrimeConnection.CrimeTest(),
     /.demo.instantmessenger.InstantMessenger.InstantMessengerTest(),
-    /.at.demo.mobiTunes.MobiTunesTest(),
+    /.demo.mobiTunes.MobiTunesTest(),
     /.demo.metaprogramming,
     /.at.lang.futures.FuturesTest(),
     /.at.lang.multifutures.MultiFuturesTest(),
