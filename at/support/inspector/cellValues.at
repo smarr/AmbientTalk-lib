@@ -29,9 +29,61 @@
  * @author Christophe Scholliers
  * @email cfscholl@vub.ac.be
  */
-package at.support;
 
-public interface CellDescriptor {
-	 public boolean isField();
-	 public void setValue(Object value);
+def printMirror() {
+	mirror: {
+		def printValue;
+		def print() { (reflect: printValue).print;};
+		def setPrint(val) { printValue := val; };
+	};
 };
+
+def cellValue(theValue,value) {
+	object: { 
+		def isField() { 
+			false; 
+		};
+		def setValue(val) {
+			theValue := eval: (read: val) in: value;
+			(reflect: self).setPrint(theValue);
+		};
+		def getVal() {
+			theValue;
+		};
+		(reflect: self).setPrint(theValue);
+	} mirroredBy: printMirror;
+};
+
+
+def changeableCell(field,value) {
+	def cellValueField := cellValue(field.readField(),value);
+	extend: cellValueField with: {		
+		def update(mirror,value) {
+			mirror.grabField(field.name).writeField(super.getVal());
+	 	};
+	
+	 	def isField() {
+			!(is: (super.getVal) taggedAs: /.at.support.inspector.inspectorMirrors.Object );
+		};
+	} mirroredBy: (reflect: cellValueField);
+};
+
+def changeableMethod(methodSignature, theValue, name, value) {
+	object: {
+		def isField() {
+			true;
+		};
+ 		def setValue(value) {
+				theValue := value;
+		};
+		def update(mirror,value) {
+				mirror.removeSlot(name);
+				def result := eval: (read: "def "+methodSignature+"{"+theValue+"}") in: value;
+				(reflect: self).setPrint(theValue);
+		};
+		
+		(reflect: self).setPrint(theValue);
+	} mirroredBy: printMirror;
+};
+
+self;

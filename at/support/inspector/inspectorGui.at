@@ -31,9 +31,9 @@
  */
 
 import /.at.support.symbiosis; 
-import /.at.support.inspectorMirrors;
-import /.at.support.ATextArea;
-import /.at.support.cellValues;
+import /.at.support.inspector.inspectorMirrors;
+import /.at.support.inspector.ATextArea;
+import /.at.support.inspector.cellValues;
 
 /*  
  *  Inspector GUI
@@ -183,8 +183,14 @@ def inspect(value) {
 	//Update the inspector
 	updateInspector();
 	//Register an after advice on the inspectedObject to update the inspector
-	on: value after: (matchMethod: ".*") do: {|invocation, value| updateInspector(); value; };
+	try: {
+		on: value after: (matchMethod: ".*") do: {|invocation, value| updateInspector(); value; };
+	}
+	catch:{ |e|
+		system.println("The state of this object: "+ value +  " will not be reflected in the gui");
+	};	
 };
+
 def InspectorGUIModule := object: {
 	
   def InspectorGUITest() { 

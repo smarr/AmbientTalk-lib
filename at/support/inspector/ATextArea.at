@@ -32,7 +32,7 @@
 
 def swing := jlobby.javax.swing;
 def awt   := jlobby.java.awt;
-def ImmutableModel := jlobby.at.support.ImmutableModel;
+def ImmutableModel := jlobby.at.support.inspector.ImmutableModel;
 
 //=========================================================
 // Interface for key events

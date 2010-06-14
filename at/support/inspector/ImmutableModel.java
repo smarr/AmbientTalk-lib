@@ -29,7 +29,7 @@
  * @author Christophe Scholliers
  * @email cfscholl@vub.ac.be
  */
-package at.support;
+package at.support.inspector;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
