@@ -442,6 +442,7 @@ def MultiChoice := object: {
 def StructuredDiscriminator := object: {
     def nextComponent;
     def started := false;
+    def environments := [];
 
     def init(cmp) {
     	nextComponent := cmp;
@@ -449,15 +450,16 @@ def StructuredDiscriminator := object: {
 
 	def start(env) {
 		def [result, resolver] := makeFuture();
-		if: ! started then: {
-			started := true;
-			execute(env, resolver);
-		};
+		environments := environments + [env];
+		execute(env, resolver);
 		result;
 	};
 		
 	def execute(env, resolver) {
-		WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
+		def envs := environments.filter: { |e| e.id == env.id };
+		if: (envs.length() == 1) then: {
+			WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
+		};
     };
 } taggedAs: [Pattern];
 
