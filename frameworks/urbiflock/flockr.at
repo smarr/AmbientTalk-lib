@@ -75,9 +75,10 @@ def makeFlockr(profile) {
 	
 	def buddyList := /.frameworks.urbiflock.buddylist.makeBuddyList();
 	
-	def matchingProfile := /.frameworks.urbiflock.profile.makeProfile();
-	def profileMatchesProximity := nil;
-	def profileMatchingProximities := Vector.new();
+	// DEADCODE-prof
+	//def matchingProfile := /.frameworks.urbiflock.profile.makeProfile();
+	//def profileMatchesProximity := nil;
+	//def profileMatchingProximities := Vector.new();
 	
 	def hasOpenFlockEditorF := false;
 	
@@ -141,7 +142,7 @@ def makeFlockr(profile) {
 			uidFlockrMap.put(uid, flockr);
 		};
 		def getProfile() { myProfile };
-		def getMatchingProfile() { matchingProfile };
+		// DEADCODE-prof def getMatchingProfile() { matchingProfile };
 		def getUsername(){ username };
 		
 		/**
@@ -221,7 +222,8 @@ def makeFlockr(profile) {
 		def addProximity(proximity) { proximities.add(proximity) };
 		def removeProximity(proximity) { proximities.remove(proximity) };
 		
-		def updateMatchingProfile(newProfile) {
+	    /* DEADCODE-prof. Remove when GUI DoesProfileMatchProximityEditor is cleared.
+		 def updateMatchingProfile(newProfile) {
 			// Clean up old individual profile field matching proximities
 			profileMatchingProximities.each: { |proximity| removeProfileChangedListener(proximity) };
 			proximities.remove(profileMatchesProximity);
@@ -245,19 +247,19 @@ def makeFlockr(profile) {
 				} catch: TimeoutException using: { |e|
 				};
 			}
-		};
+		};*/
 		
 		// takes a flockr offline: 
 		// stops a flockr from being exported to the network
 		// + from discovering other flockrs in the network
 		// + removes it from the table of exported objects
 		def goOffline() { 
-			(publication != nil).ifTrue: { publication.cancel()}; 
+		  (publication != nil).ifTrue: { publication.cancel()}; 
 		  (discSubscription != nil).ifTrue: { discSubscription.cancel()};  
-			try: { 
-	      takeOffline: self.remoteInterface;
-	    } catch: /.at.lang.types.IllegalOperation using: { |e| /*flockr used only locally*/ };
-	    nil;
+		  try: { 
+	        takeOffline: self.remoteInterface;
+	      } catch: /.at.lang.types.IllegalOperation using: { |e| /*flockr used only locally*/ };
+	      nil;
 		};
 		
 		/*
@@ -403,7 +405,7 @@ def makeFlockr(profile) {
 	discSubscription := whenever: FlockrT discovered: { |flockr|
 		
 		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
-		//	system.println("DEBUG: Flockr: " + username + "discovered" + newProfile.username);
+			system.println("DEBUG: Flockr: " + username + "added to his/her map " + newProfile.username);
 
       // keep track of the flockr far reference via its UID
 			uidFlockrMap.put(uidOf(flockr), flockr);
@@ -415,7 +417,7 @@ def makeFlockr(profile) {
 			   is signalled before the removeFlockr event. Can this ever happen?
 			*/
 			when: flockr disconnected: {
-			//	system.println("DEBUG: Flockr:" + username + "noticed a disconnection from " + flockr);
+				system.println("DEBUG: Flockr:" + username + "removed from his/her map" + uidOf(flockr));
 				uidFlockrMap.remove(uidOf(flockr));
 				// Note: the 'newProfile' profile may be outdated by now, but it only serves
 				// to remove all profiles with the same username from the RETE network

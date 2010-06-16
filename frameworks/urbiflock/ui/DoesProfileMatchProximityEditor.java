@@ -6,6 +6,7 @@ import java.util.Iterator;
 
 import edu.vub.at.objects.natives.grammar.AGSymbol;
 
+//TOFIX: This is dead code now, necessary anymore?
 public class DoesProfileMatchProximityEditor extends ProfileViewer {
 	
 	public DoesProfileMatchProximityEditor(Flockr flockr, Profile p) {
