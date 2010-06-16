@@ -191,7 +191,6 @@ def WorkflowPattern := object: {
 						continue("skipped");
 					} else: { 
 						if: (is: compensation taggedAs: RestartType) then: {
-							compensation.action.restart();
 							run(compensation.action, env, { | _ | _ })  // such that execution of remainder of component is not completed
 						} else: {
 							// compensating action is a component
@@ -253,16 +252,12 @@ def Sequence := object: {
 
 def ParallelSplit := object: {
     def componentTable;
-	def futureTable;
 	
     def init(bTable) {
 		def i := 0;
 		// convert the "pairs" [service, synchronize] in the component table to sequences
 		def b[bTable.length()] { i := i+1; if: (is: bTable[i] taggedAs: Table) then: { Sequence.new(bTable[i]) } else: { bTable[i] }};
     	componentTable := b;
-		// make a table to hold all the unresolved futures of the different branches
-		def f[bTable.length()] { makeFuture(); };
-		futureTable := f;  
     };
   
 	def start(env) {
@@ -274,13 +269,8 @@ def ParallelSplit := object: {
 	def execute(env, resolver) {
 		1.to: componentTable.length+1 do: { | idx |
 			def clonedEnv := Environment.new(env);
-			WorkflowPattern^run(componentTable[idx], clonedEnv, { | _ | futureTable[idx][2].resolve(_) });
+			WorkflowPattern^run(componentTable[idx], clonedEnv, { | _ | resolver.resolve(_) });
 		};
-		//when all components have been started, the parallelSplit is said to be "done"
-		//and the result Future is resolved as usual (with the future table as value ...)
-		def i := 0;
-		def f[futureTable.length()] { i := i+1; futureTable[i][1]; };
-		resolver.resolve(f);
 	};
 } taggedAs: [Pattern];
 
@@ -795,6 +785,7 @@ def Local := object: {
 		result;
 	};
 } taggedAs: [Pattern];
+
 
 
 
