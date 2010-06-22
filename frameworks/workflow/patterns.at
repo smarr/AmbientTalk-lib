@@ -8,7 +8,7 @@ deftype Pattern;
 deftype Service;
 deftype Table;
 deftype SyncPattern <: Pattern;
-deftype Act;
+deftype Activity;
 deftype Compensation;
 deftype RetryType <: Compensation;
 deftype RediscoverType <: Compensation;
@@ -124,7 +124,7 @@ def WorkflowPattern := object: {
 				compensation := true;  // in orde to deactivity the when: discovered: event handler
 				env.replace("compensating" + runIdx, true);  // in order to avoid several compensations to be executed
 				def notFound := env.find(`notFound)[2];
-				if: (((is: notFound taggedAs: NotFoundType).or: {is: notFound taggedAs: Pattern}).or: {is: notFound taggedAs: Act}) then: {
+				if: (((is: notFound taggedAs: NotFoundType).or: {is: notFound taggedAs: Pattern}).or: {is: notFound taggedAs: Activity}) then: {
 					compensate(activity, notFound.compensation, msg, env, continue, runIdx);
 				} else: {
 					system.println("service not found error, no compensation specified");
@@ -152,7 +152,7 @@ def WorkflowPattern := object: {
 			};
 		};
 		whenever: service disconnected: {
-			if: (((is: disconnection taggedAs: DisconnectionType).or: {is: disconnection taggedAs: Pattern}).or: {is: disconnection taggedAs: Act}) then: {
+			if: (((is: disconnection taggedAs: DisconnectionType).or: {is: disconnection taggedAs: Pattern}).or: {is: disconnection taggedAs: Activity}) then: {
 				def compensating := env.find("compensating" + runIdx)[2];
 				if: ((is: compensating taggedAs: DisconnectionType).or: { (! (is: compensating taggedAs: FailureType)).and: {!compensating} }) then: {
 					env.replace("compensating" + runIdx, disconnection);
@@ -203,11 +203,11 @@ def WorkflowPattern := object: {
  	};
 	
 	def run(component, env, continue := { | _ | _ }, compensating := false) {
-		if: (! (((is: compensating taggedAs: FailureType).or: {is: compensating taggedAs: Pattern}).or: {is: compensating taggedAs: Act})) then: {
+		if: (! (((is: compensating taggedAs: FailureType).or: {is: compensating taggedAs: Pattern}).or: {is: compensating taggedAs: Activity})) then: {
 			idx := idx + 1;
 		};
 		env.replace("compensating" + idx, compensating);
-		if: (is: component taggedAs: Act) then: {
+		if: (is: component taggedAs: Activity) then: {
 			// Component is an activity, wrapping a service object.
 			execute(component, env, continue, idx);
     	} else: { 
@@ -681,7 +681,7 @@ def Restart := object: {
 
 
 
-def Activity := object: {
+def ActivityPattern := object: {
 	def service;
 	def selector;
 	def parameters;
@@ -693,7 +693,7 @@ def Activity := object: {
 		parameters := pars;
 		output     := outputVars;
 	};
-} taggedAs: [Act];
+} taggedAs: [Activity];
 
 
 
@@ -705,7 +705,7 @@ def createServiceMirror(baseObject) {
 					else: { 
 						if: (is: inv taggedAs: Trigger)
 							then: { TriggerPattern.new(baseObject, inv.selector, inv.arguments) }
-							else: { Activity.new(baseObject, inv.selector, inv.arguments.select(1, inv.arguments.length()), inv.arguments[inv.arguments.length()]) }
+							else: { ActivityPattern.new(baseObject, inv.selector, inv.arguments.select(1, inv.arguments.length()), inv.arguments[inv.arguments.length()]) }
 					}
 			}
   	};
