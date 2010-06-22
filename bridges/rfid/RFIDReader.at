@@ -29,10 +29,15 @@
  * RFID reader. It allows initializing a reader and provides a language
  * construct to respond when it has read a tag.
 **/
+
+import /.at.collections.java.hashset;
+import /.at.collections.java.vector;
+import /.at.support.timer;
+
 def initializeReader(POLLING_INTERVAL, devNum := 0) {
 	def JavaRFIDDevice	:= jlobby.librfid.rfid.Device;
 	def device 					:= JavaRFIDDevice.new(devNum);
-	def observers				:= Set.new();
+	def observers				:= HashSet.new();
 		
 	whenever: POLLING_INTERVAL elapsed: {
 		def tags := Vector.new(device.readTransponders(true));
@@ -40,7 +45,9 @@ def initializeReader(POLLING_INTERVAL, devNum := 0) {
 		observers.each: { | observer |
 			tags.each: { |tag|
 				observer.apply([tag])
+			};
 		};
+	};
 		
 	def RFIDReader := object: {
 		def addTagObserver(anObserver) 		{ observers.add(anObserver) };
@@ -51,6 +58,14 @@ def initializeReader(POLLING_INTERVAL, devNum := 0) {
 def whenever: aReader hasRead: aTag_DoThis {
 	aReader.addTagObserver(aTag_DoThis);
 	
-	object: { def cancel() { 
-		aReader.removeTagObserver(aTag_DoThis) } };
+	object: { 
+		def cancel() { 
+			aReader.removeTagObserver(aTag_DoThis) 
+		}; 
+	};
 };
+
+self;
+
+def d := initializeReader(3.seconds);
+whenever: d hasRead: {|t| system.println(t.getSerialString()) };
