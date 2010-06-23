@@ -61,10 +61,14 @@ def DescriptorObject := object: {
 } taggedAs: [/.at.lang.types.Isolate, DescriptorT];
 
 def ARExtensionalImpl(DiscoveryModule := /.at.discovery.discovery) {
+    def discoveryModuleCapsule := DiscoveryModule.capsule;
+
 	object: {
 
 		def implname := "extensional";
-		def capsule := /.at.support.util.uponArrivalBecome: { /.at.discovery.ar_extensional_impl };
+		def capsule := /.at.support.util.uponArrivalBecome: { |discoveryModuleCapsule|
+		  /.at.discovery.ar_extensional_impl(discoveryModuleCapsule);
+		};
 
 		def extendAmbientReference(arMirror,
 			                         typetagOrProtocol,

@@ -40,6 +40,13 @@ def nativeExport: 	obj	 as: 					type 		{ export: obj as: type };
 
 def DiscoveryModule := object: {
 	
+   /**
+     * An object that, when deserialized, resolved back to this module
+     */
+	def capsule := /.at.support.util.uponArrivalBecome: {
+	  /.at.discovery.pure_discovery;
+	};
+	
 	/**
 	 * Invokes the handler with a discovered service matching the
 	 * given type. If multiple discovered services are present,

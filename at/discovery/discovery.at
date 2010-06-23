@@ -297,6 +297,13 @@ def export(service, type) {
 def DiscoveryModule := object: {
 	
 	/**
+     * An object that, when deserialized, resolved back to this module
+     */
+	def capsule := /.at.support.util.uponArrivalBecome: {
+	  /.at.discovery.discovery;
+	};
+	
+	/**
 	 * Creates a service tracker or 'sniffer' object that can
 	 * search the ambient for services of a given type.
 	 * The tracker can optionally be parameterized with the discovery
