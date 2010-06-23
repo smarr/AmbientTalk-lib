@@ -437,7 +437,7 @@ def CrimeModule := object: {
 			def tuple :=  makeTuple("testRetrieveRuleFromCrime", 3, 4);
 			def ruleData := [ makeTemplate("testRetrieveRuleFromCrime", 30, 30) ];
 			myCrime.insertTuple(tuple, ruleData);
-			def retrievedTuple := myCrime.retractTuple(makeTemplate("testRetrieveRuleFromCrime", var: `x, 4));
+			def retrievedTuple := myCrime.retractCrimeFact(convertTupleToCrimeFact(tuple,makeTemplate("testRetrieveRuleFromCrime", var: `x, 4)));
 			self.assertEquals(retrievedTuple.getItsContextRule, ruleData);
 		};
 		
