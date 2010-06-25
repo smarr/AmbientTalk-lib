@@ -75,11 +75,12 @@ def RFIDService := object: {
 	def serialToTag := HashMap.new; // serial -> tag
 	
 	// the polling loop
-	def loop := nil;
+	def loop := false;
 	
 	def exportWithSerial(someObject, tagSerial) {
 		system.println("export with serial: " + someObject + " with " + tagSerial);
-		(tagsOf: someObject).each: {|tt|
+		//(tagsOf: someObject).each: {|tt|
+		(tagsOf: someObject.super).each: {|tt| // XXX
 			export: someObject as: tt with: { def serial := tagSerial };
 		};
 	};
@@ -126,7 +127,7 @@ def RFIDService := object: {
 		} else: {
 			try: {
 				definition := definition + "mirroredBy: makeTagMutatorInterceptorMirror()";
-				def obj := eval: (read: definition) in: self;
+				def obj := eval: (read: definition) in: (object:{});
 				obj;
 			} catch: /.at.lang.types.Exception using: { |e|
 				info("could not read and eval: " + definition);
@@ -273,7 +274,8 @@ def RFIDService := object: {
 		def newObject := load(tag);
 		if: (nil != newObject) then: {
 			info("replacing object: " + tagToObject.get(serial) + " with: "+ newObject);
-			let: newObject become: tagToObject.get(serial);
+			//let: newObject become: tagToObject.get(serial);
+			tagToObject.super := newObject; // XXX
 			updateMapping(tag, newObject);
 		};
 	};
@@ -288,13 +290,19 @@ def RFIDService := object: {
 			// empty tag
 			info("empty tag");
 			tagObject := GenericTag.new(tag);
-			updateMapping(tag, tagObject);
+			//updateMapping(tag, tagObject);
+			def wrapper := extend: tagObject with: {}; // XXX
+			updateMapping(tag, wrapper); // XXX
 			def s := serial;
-			export: tagObject as: RFIDTag with: { def serial := s };
+			//export: tagObject as: RFIDTag with: { def serial := s };
+			export: wrapper as: RFIDTag with: { def serial := s }; //XXX
 		} else: {
 			info("valid tag");
-			updateMapping(tag, tagObject);
-			exportWithSerial(tagObject, serial);
+			//updateMapping(tag, tagObject);
+			//exportWithSerial(tagObject, serial);
+			def wrapper := extend: tagObject with: {}; // XXX
+			updateMapping(tag, wrapper); // XXX
+			exportWithSerial(wrapper, serial); // XXX
 		};
 	};
 	
@@ -303,7 +311,7 @@ def RFIDService := object: {
 	def unseeTag(serial, tag) {
 		if: (!(discoTags.contains(serial))) then: {
 			// take all unseen tags offline
-	        info("  off serial: " + serial + "object: " + tagToObject.get(serial));
+	        info("  off serial: " + serial + " object: " + tagToObject.get(serial));
 	        def discoTag := disconnect: tagToObject.get(serial);
 	        discoTags.put(serial, discoTag);
 		} else: {
@@ -311,50 +319,51 @@ def RFIDService := object: {
 		};
 	};
 	
-	def startLoop() {
-		if: (loop == nil) then: {
-			debug("RFIDActor started");
-			loop := whenever: pollingInterval elapsed: {
-	    
-				debug("");
-				debug("ROUND started");
-				debug("avail tags: " + serialToTag.size());
-				debug("disco tags: " + discoTags.size());
-			
-				def tags := Vector.new(device.readTransponders(true));
-				debug("in range: " + tags.size());
-				def unseen := serialToTag.clone();
-	
-				tags.each: { |tag|
-					def serial := tag.getSerial();
-					unseen.remove(serial);
-					if: (serialToTag.contains(serial)) then: {
-						// case 1
-						// seen before
-						// check for possible disconnection object
-						ackTag(serial, tag);
-					} else: {
-						// case 2
-						// new tag
-						// export!
-						exportTag(serial, tag);
-					};
-				};
-				debug("  unseen tags: " + unseen.size());
-				unseen.each: {|serial, tag|
-					// case 3:
-					// disappearing tags
-					unseeTag(serial, tag);
+	def inventory() {
+		if: loop then: {
+			debug("");
+			debug("ROUND started");
+			debug("avail tags: " + serialToTag.size());
+			debug("disco tags: " + discoTags.size());
+		
+			def tags := Vector.new(device.readTransponders(true));
+			debug("in range: " + tags.size());
+			def unseen := serialToTag.clone();
+
+			tags.each: { |tag|
+				def serial := tag.getSerial();
+				unseen.remove(serial);
+				if: (serialToTag.contains(serial)) then: {
+					// case 1
+					// seen before
+					// check for possible disconnection object
+					ackTag(serial, tag);
+				} else: {
+					// case 2
+					// new tag
+					// export!
+					exportTag(serial, tag);
 				};
 			};
-		}; // if
+			debug("  unseen tags: " + unseen.size());
+			unseen.each: {|serial, tag|
+				// case 3:
+				// disappearing tags
+				unseeTag(serial, tag);
+			};
+			self<-inventory();
+		};
+	};
+	
+	def startLoop() {
+		unless: loop then: {
+			loop := true;
+			inventory();
+		};
 	};
 	
 	def stopLoop() {
-		if: (loop != nil) then: {
-			loop.cancel();
-			loop := nil;
-		};
+		loop := false;
 	};
 	
 	

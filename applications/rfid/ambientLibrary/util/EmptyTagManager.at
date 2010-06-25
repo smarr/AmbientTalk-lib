@@ -43,7 +43,7 @@ def addSampleModel(name, sample) {
 
 
 // adding Book support
-import /.base.Book;
+import /.applications.rfid.ambientLibrary.Book;
 def sampleBook := makeBook("unknown", "unknown");
 addSampleModel("book", sampleBook);
 
