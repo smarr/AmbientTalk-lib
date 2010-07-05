@@ -1,0 +1,28 @@
+def hashset := /.at.collections.java.hashset.HashSet;
+
+def witnessSet := extend: hashset with: {
+	
+	def add(o,w) {
+		super^add(o);
+		when: w disconnected: {
+			super^remove(o);
+		};
+	};
+	
+	def addRebind(o,w) {
+		super^add(o);
+		when: w disconnected: {
+			super^remove(o);
+		};
+		
+		when: w reconnected: {
+			super^add(o);
+		};
+	};
+	
+	
+	def init(ihs := jlobby.java.util.HashSet.new()) {
+		super^init(ihs);
+	};
+
+};

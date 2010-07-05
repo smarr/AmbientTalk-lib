@@ -1,0 +1,112 @@
+deftype Service;
+def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
+def filterMirror := /.at.lang.filterMirror;
+def XSelectorNotFound := /.at.lang.exceptions.XSelectorNotFound;
+def witnessSet := /.experimental.collections.witnessSet;
+
+import /.at.lang.futures;
+enableFutures(false);
+
+deftype ModifiableType;
+deftype PublicType;
+
+def Public := extend: PublicType with: { 
+		def annotateMethod(Method) {
+			extend: Method with: {
+				def registerBeforeCallBack(advice, caller) {
+					system.println("register ...");
+				};
+			};
+		};
+} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag, PublicType ];
+
+
+def makeAspectMirror(base) { 
+	extend: defaultMirror.new(base) with: {
+		def aspectSet := witnessSet.new();
+			
+		def beforeCallBack(joinpoint, advice, caller) {
+			def mirror := self;
+			def aspect := object: { 
+				def apply(delegate, invocation) {						
+					def method := mirror.grabMethod(invocation.selector);
+					if: (nil != method.annotations().find: {|a| [PublicType, ModifiableType].contains(a); }) then: {
+						if: joinpoint(invocation.selector.text,invocation.arguments) then: {
+							advice<-notify(invocation.selector.text,invocation.arguments);
+						};
+					};
+				};
+			};
+			aspectSet.add(aspect,caller);
+		};
+		
+		def beforeCall(methodName, advice, caller) {
+			system.println("beforeCall");
+		}; 
+		
+		def invoke(delegate, invocation) {
+			system.println("invoke");
+			aspectSet.each: { |aspect|
+				aspect.apply(delegate,invocation);
+			};	
+		};
+
+		//default behaviour to intercept meta-level messages.
+		def metaIntercept(msg) {
+			// have to go meta-meta because we need to know whether the
+			// *mirror* itself can respond to the selector
+			if: ((reflect: self).respondsTo(msg.selector)) then: {
+				self <+ msg; // process meta-message myself
+			} else: {
+				super.receive(msg);//TODO ERROR !!!
+			}
+		};
+		
+		def receive(msg) {
+			if: (is: msg taggedAs: MetaMessage) then: {
+				self.metaIntercept(msg); 
+		  } else: {
+			  	super^receive(msg);
+		  }
+		};
+	};	
+};
+
+def service: block {
+	  object: block taggedAs: [Service] mirroredBy: { |base| makeAspectMirror(base) };
+};
+
+def Television :=  service: {
+	def location := "Living Room";	
+	//Annotate
+	def setPause()@Public {
+		system.println("Set pause");
+	}
+};
+
+Television.setPause;
+
+export: Television as: Service;
+	 
+def jos := actor: {
+	def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
+	import /.at.lang.futures;
+	enableFutures(false);
+	
+	def advice := object:{
+		def notify(methodName,arguments) {
+			system.println("notified");
+		};
+	};
+	
+	when: Service discovered: { |s|
+		when: s<-beforeCallBack( script:{|methodName,arguments| methodName~="set.*" },advice,self)@[MetaMessage,FutureMessage] becomes: { |f|
+			when: Television<-setPause()@FutureMessage becomes: { |x|
+				takeOffline: self;
+			};
+		};
+	};
+}; 
+
+
+
