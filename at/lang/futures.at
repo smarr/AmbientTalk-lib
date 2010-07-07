@@ -75,7 +75,7 @@ def FutureMirror := mirror: {
 
   // a future is a special kind of far reference
   // therefore, this mirror mixes in the 'far reference' behaviour
-  import TEventualRef;
+  import TEventualRef exclude retractUnsentMessages;
   
 	// constructor: used to initialize the state of the new future
 	def init(@args) {
@@ -85,6 +85,19 @@ def FutureMirror := mirror: {
 		inbox := [];
 		subscribers := [];
 	};
+
+  def retractUnsentMessages() {
+    // unresolved, return messages pending in inbox
+    // as a side effect, the inbox is emptied
+    if: (state == UNRESOLVED) then: {
+      def oldInbox := self.inbox;
+      inbox := [];
+      oldInbox;
+    } else: {
+      // resolved, forward 'retract:' to resolved value
+      retract: resolvedValue;
+    }
+  };
 
   // Using resolveWithValue(value) rather than resolve(value) as to
   // not accidentally override the resolve() MOP method of the defaultMirror
@@ -308,7 +321,7 @@ def constructLeaseFor(future, timeout, receiver := nil) {
 	  def outbox := retract: receiver;
 	  // note that future doesn't know to which message got attached. 
 	  // not only is the particular msg expiring with this future retracted, but 'all' expired ones.
-	  outbox.each: { |msg| 
+	  outbox.each: { |msg|
 		 if: !((is: msg taggedAs: DueType).and:{(reflect: msg.future).isExpired()}) then: {
 			 receiver <+ msg;
 		 };
@@ -660,6 +673,10 @@ def FuturesModule := object: {
 
   // make the FutureMessage type publicly visible
   def FutureMessage := FutureMessage;
+
+  // shorter aliases, for ease-of-use
+  def OneWay := OneWayMessage;
+  def TwoWay := FutureMessage;
 
   //make the Due function publicly visible 
   def Due := &Due;
