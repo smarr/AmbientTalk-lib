@@ -258,6 +258,25 @@ def when: remoteRef reconnected: code {
 	subscription;
 };
 
+// example:
+// def fut := when: S discovered: { |s|
+//   system.println("S discovered");
+//   s; // fut will be resolved to 's'
+// } within: 2.minutes;
+// no discovery within 2 minutes = fut broken with timeout exception
+def when: typetag discovered: code within: timeout {
+  def [fut, res] := /.at.lang.futures.makeFuture();
+  def sub := when: typetag discovered: { |s|
+    res.resolve(code(s));
+  };
+  /.at.support.timer.when: timeout elapsed: {
+    res.ruin(
+      /.at.lang.futures.XTimeoutException.new(fut));
+    sub.cancel();
+  };
+  fut
+};
+
 // export an object for each tag it sports
 def export: someObject {
 	(tagsOf: someObject).each: {|tt|
@@ -269,4 +288,3 @@ def export: someObject {
 def try: closure catch: failClosure {
 	try: closure catch: /.at.lang.types.Exception using: { |e| failClosure(e) };
 };
-
