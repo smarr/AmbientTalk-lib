@@ -1,0 +1,22 @@
+import /.at.lang.futures;
+deftype EchoService;
+
+def echoF := when: EchoService discovered: { |echo|
+  system.println("Discovered an echo service");
+  echo;
+} within: 2.minutes
+
+echoF<-echo("test1");
+
+def res := echoF<-echo("test2")@TwoWay;
+when: res becomes: { |value|
+  system.println("Reply: " + value);
+}
+
+when: echoF<-echo("test3")@Due(5.seconds) becomes: { |value|
+  system.println("Reply: " + value);
+} catch: TimeoutException using: { |e|
+  system.println("Request timed out");
+}
+
+echoF<-echo("test4");
