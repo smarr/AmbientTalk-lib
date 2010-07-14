@@ -22,7 +22,7 @@ def DEBUG_MW := true;
 
 def debug(@args) {
 	if: DEBUG_MW then: {
-		system.println("[multiwayrefs.at] ", args);
+		system.println("[multiwayrefs] ", args.join(" ; "));
 	};
 };
 
@@ -42,7 +42,7 @@ def identifiedBySerialFilter(props) {
 		try: {
 			def serial := props.serial;
 			true;
-		} catch: Types.SelectorNotFound using: {|e| 
+		} catch: /.at.lang.types.SelectorNotFound using: {|e| 
 			// do nothing
 			debug("props selector not found: " + e.message); 
 			false;
@@ -74,12 +74,16 @@ def getSerial(remoteRef) {
 	};
 };
 
+def isMultiwayReference(any) {
+	is: any taggedAs: MultiWayReference;
+};
+
 
 // the mirror to construct multiWayReferences
 
 
 def multiWayReferenceMirror :=  mirror: {
-	import TEventualRef exclude pass, invoke;//, retractUnsentMessages;
+	import TEventualRef exclude pass, invoke, retractUnsentMessages;
 	import TObservable alias init := initObservable;
 	
 	def connected := false;
@@ -95,8 +99,11 @@ def multiWayReferenceMirror :=  mirror: {
 		// the 'observerCatalog' object with two fields storing this
 		// object's observers
 		self.initObservable(`disconnection, `reconnection, `takenOffline); //, `replacement);
+
+		debug("created multiway ref for: " + (print: reference));
 		
-		addReference(reference);		
+		addReference(reference[2]);
+		reference[2];	
 	};
 
 	def addReference(reference, isConnected := true) {
@@ -110,7 +117,7 @@ def multiWayReferenceMirror :=  mirror: {
 		};
 		
 		// adjust connected state and current reference
-		if: (!connected).and: { connectedReferences.notEmpty() } then: {
+		if: ((!connected).and: { connectedReferences.notEmpty() }) then: {
 			connected := true;
 			currentReference := connectedReferences.first();
 		};
@@ -121,7 +128,7 @@ def multiWayReferenceMirror :=  mirror: {
 		whenever: reference disconnected:{
 			connectedReferences.remove(reference);
 			disconnectedReferences.add(reference);
-			if: (connected).and: { connectedReferences.isEmpty() } then: {
+			if: ((connected).and: { connectedReferences.isEmpty() }) then: {
 				connected := false;
 			} else: {
 				if: (reference == currentReference) then: {
@@ -136,7 +143,7 @@ def multiWayReferenceMirror :=  mirror: {
 		whenever: reference reconnected: {
 			disconnectedReferences.remove(reference);
 			connectedReferences.add(reference);
-			if: (!connected).and: { connectedReferences.notEmpty() } then: {
+			if: ((!connected).and: { connectedReferences.notEmpty() }) then: {
 				connected := true;
 				currentReference := connectedReferences.first();
 			};
@@ -158,7 +165,6 @@ def multiWayReferenceMirror :=  mirror: {
 	def toString() { "MultiWayReference: " + currentReference };		
 	
 	// def transportStrategy; // not needed: proxy is pass-by-far-reference
-	
 	def retractUnsentMessages() { 
 		def return := inbox; 
 		inbox := [];
@@ -168,10 +174,16 @@ def multiWayReferenceMirror :=  mirror: {
 	//override equality
 	// disallow synchronous access to the object
 	def invoke(slf, inv) {
+		//system.println("invoke called with: " + slf + ", " + inv);
 		// the only legal operation on references is '=='
 		if: (`(==) == inv.selector) then: {
 			// two delayed serialization refs are equal iff the far ref encapsulate are equal.
-			currentReference == (reflect: (inv.arguments)[1]).asFarRef();
+			//currentReference == (reflect: (inv.arguments)[1]).asFarRef();
+			if: isMultiwayReference((inv.arguments)[1]) then: {
+				currentReference == (reflect: (inv.arguments)[1]).asFarRef();
+			} else: {
+				self == (inv.arguments)[1];
+			};
 		} else: {
 			raise: XIllegalOperation.new("Cannot synchronously invoke " + inv.selector + " on " + self.dumpContent());
 		};
@@ -208,7 +220,7 @@ def multiWayReferenceMirror :=  mirror: {
 	
 };
 
-def createMultiWayReference: reference {
+def createMultiWayReference(reference){
 	object: { } taggedAs: [MultiWayReference] mirroredBy: { |base| multiWayReferenceMirror.new(base, reference)};
 };
 
@@ -244,20 +256,25 @@ def MultiWayReferenceModule := object: {
 	
 	def multiWayReferences := HashMap.new;
 	
-	def referenceTypes := "multiWayReferences";
+	def referenceTypes := "multiwayReferences";
 	
 	def whenever: serviceType discovered: code {
 		nativeWhenever: serviceType discovered: { |farReference|
 			if: identifiedBySerial(farReference) then: {
 				def serial := getSerial(farReference);
+				debug("indentified by serial: " + serial);
 				def multiWayRef := multiWayReferences.get(serial);
 				if: (multiWayRef == nil) then: {
-					(reflect: multiWayRef).addReference(farReference);
-				} else: {
+					debug("unknown multiway reference");
 					multiWayRef := createMultiWayReference(farReference);
+					multiWayReferences.put(serial, multiWayRef);
+					code(multiWayRef);
+				} else: {
+					debug("known multiway reference");
+					(reflect: multiWayRef).addReference(farReference[2]);
 				};
-				code(multiWayRef);
 			} else: {
+				debug("normal far ref: " + farReference);
 				code(farReference);
 			};
 		};
@@ -318,6 +335,7 @@ def MultiWayReferenceModule := object: {
 		export: serviceObject as: type with: { def serial := identifier };
 	};
 	
+	/*
 	def let: newObject become: obj {
 		if: (is: obj taggedAs: /.at.lang.types.Table) then: {
 			if: (is: newObject taggedAs: /.at.lang.types.Table) then: {
@@ -333,6 +351,7 @@ def MultiWayReferenceModule := object: {
 			nativeLet: newObjectobj become: obj;
 		};
 	};
+	*/
 
 };
 
