@@ -164,21 +164,19 @@ def multiWayReferenceMirror :=  mirror: {
 	
 	def toString() { "MultiWayReference: " + currentReference };		
 	
-	// def transportStrategy; // not needed: proxy is pass-by-far-reference
 	def retractUnsentMessages() { 
 		def return := inbox; 
 		inbox := [];
 		return;
 	};
 	
-	//override equality
+	// override equality
 	// disallow synchronous access to the object
 	def invoke(slf, inv) {
-		//system.println("invoke called with: " + slf + ", " + inv);
+		//debug("invoke called with: " + slf + ", " + inv);
 		// the only legal operation on references is '=='
 		if: (`(==) == inv.selector) then: {
 			// two delayed serialization refs are equal iff the far ref encapsulate are equal.
-			//currentReference == (reflect: (inv.arguments)[1]).asFarRef();
 			if: isMultiwayReference((inv.arguments)[1]) then: {
 				currentReference == (reflect: (inv.arguments)[1]).asFarRef();
 			} else: {
@@ -187,10 +185,6 @@ def multiWayReferenceMirror :=  mirror: {
 		} else: {
 			raise: XIllegalOperation.new("Cannot synchronously invoke " + inv.selector + " on " + self.dumpContent());
 		};
-		/*	def name := /.at.support.util.makeMutator(`==);
-		def mutMethod := createMethod(name, [ `aRef ], `{ reference == (reflect: aRef).getFarRef() }, []);
-		self.removeSlot(name);
-		self.addSlot(createClosureMethod(self.base, mutMethod));*/
 	};
 	
 	def pass() {
@@ -199,7 +193,7 @@ def multiWayReferenceMirror :=  mirror: {
 	
 	// a multiway reference has four kinds of observers: disconnection,
 	// reconnection, takenOffline and replaced observers
-	//import TObservable alias init := initObservable;
+	// import TObservable alias init := initObservable;
 	
 		
 	def addConnectionObserver(obs) {
@@ -310,7 +304,7 @@ def MultiWayReferenceModule := object: {
 	//	};
 	//};
 	
-		// if multiWayReference is indeed a multiway reference, add an observer,
+	// if multiWayReference is indeed a multiway reference, add an observer,
 	// otherwise perform the default behaviour
 	def whenever: multiWayReference takenOffline: code {
 		if: (is: multiWayReference taggedAs: MultiWayReference) then: {
@@ -326,7 +320,7 @@ def MultiWayReferenceModule := object: {
 		nativeExport: [props, serviceObject] as: type;
 	};
 
-  // override export:as: to include a property object
+    // override export:as: to include a property object
 	def export: serviceObject as: type {
 		export: serviceObject as: type with: { nil };
 	};
@@ -365,4 +359,3 @@ def MultiWayReferenceModule := object: {
 
 
 };
-
