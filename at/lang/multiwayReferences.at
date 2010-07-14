@@ -18,7 +18,7 @@ deftype MultiWayReference;
 
 // utilities
 
-def DEBUG_MW := true;
+def DEBUG_MW := false;
 
 def debug(@args) {
 	if: DEBUG_MW then: {
@@ -352,6 +352,17 @@ def MultiWayReferenceModule := object: {
 		};
 	};
 	*/
+	
+	// returns the id of an object
+	def getObjectId(obj) {
+		{ |return| (print: obj).find: "\\d+" do: { |s| return(s) } }.escape();
+	};
+	
+	// returns the combined ids of given objects
+	def combineObjectIds(@objects) {
+		(objects.map: {|e| getObjectId(e)}).join(":");
+	};
+
 
 };
 
