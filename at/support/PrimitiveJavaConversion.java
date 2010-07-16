@@ -42,7 +42,7 @@ public class PrimitiveJavaConversion {
 	 * @throws IllegalArgumentException if the number is not in the proper range of byte values
 	 */
 	public static Byte intToByte(int number) throws IllegalArgumentException {
-		if (number < Byte.MIN_VALUE | number > Byte.MAX_VALUE) {
+		if (number < Byte.MIN_VALUE || number > Byte.MAX_VALUE) {
 			throw new IllegalArgumentException("Number " + number + " cannot be converted to byte");
 		}
 		return new Byte((byte) number);
@@ -55,7 +55,7 @@ public class PrimitiveJavaConversion {
 	 * @throws IllegalArgumentException if the fraction is not in the proper range of float values
 	 */
 	public static Float doubleToFloat(double fraction) throws IllegalArgumentException {
-		if (fraction < Float.MIN_VALUE | fraction > Float.MAX_VALUE) {
+		if (fraction < -Float.MAX_VALUE || fraction > Float.MAX_VALUE) {
 			throw new IllegalArgumentException("Fraction " + fraction + " cannot be converted to float");
 		}
 		return new Float((float) fraction);
@@ -78,7 +78,7 @@ public class PrimitiveJavaConversion {
 	 * @throws IllegalArgumentException if the number is not in the proper range of short values
 	 */
 	public static Short intToShort(int number) throws IllegalArgumentException {
-		if (number < Short.MIN_VALUE | number > Short.MAX_VALUE) {
+		if (number < Short.MIN_VALUE || number > Short.MAX_VALUE) {
 			throw new IllegalArgumentException("Number " + number + " cannot be converted to short");
 		}
 		return new Short((short) number);
