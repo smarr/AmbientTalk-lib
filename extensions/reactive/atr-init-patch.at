@@ -1,0 +1,3 @@
+
+
+import lobby.extensions.reactive.meta_interpreter.install(true);

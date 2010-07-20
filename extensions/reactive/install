@@ -1,0 +1,50 @@
+#!/bin/bash
+
+# Installs the AmbientTalk/R support into the distribution directory
+# This script has three options: patch, native, reflective
+
+# If no option parameter is supplied, use this as the default one.
+DEFAULT_OPTION="patch"
+
+if [ -z "$1" ]
+then
+  echo "Installing using the default setting: $DEFAULT_OPTION"
+  CURRENT_OPTION=$DEFAULT_OPTION
+else
+  CURRENT_OPTION=$1
+fi
+
+# extracts the path where the 'iat' shell script is located
+CURRENTWD=`dirname $0`
+
+# AT_HOME is the directory of the AmbientTalk to be extended with reactive programming support
+# if AT_HOME env var is not defined, set it to based on the location of this script
+if ! [ $AT_HOME ]; then
+  AT_HOME=$CURRENTWD/../../..
+fi
+
+# AT_INIT is the name of the default init file, it is set based on AT_HOME is not specified
+if ! [ $AT_INIT ]; then
+  AT_INIT=$AT_HOME/atlib/at/init/init.at
+fi
+
+# Checks script name and installs the proper packages
+case $CURRENT_OPTION in
+    "patch"      ) 
+		cp ./atr-patch.jar-excluded   $AT_HOME/\!atr-patch.jar
+	;;
+    "native"     )
+		cp ./atr-patch.jar-excluded   $AT_HOME/\!atr-patch.jar
+		cp ./atr-native.jar-excluded  $AT_HOME/atr-native.jar
+    ;;
+    "reflective" )
+		cp ./atr-patch.jar-excluded   $AT_HOME/\!atr-patch.jar
+		mkdir $AT_HOME/.atr-restore
+		cp  $AT_INIT $AT_HOME/.atr-restore/init.at
+		cat $AT_INIT $CURRENTWD/atr-init-patch.at > $CURRENTWD/atr_init.at
+		mv $CURRENTWD/atr_init.at $AT_INIT
+    ;;
+    *            ) echo "Usage: install [patch|native|reflective]";;
+esac 
+
+exit 0

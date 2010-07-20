@@ -1,0 +1,41 @@
+AmbientTalk/R
+-------------
+
+This folder contains the necessary code to extend AmbientTalk with support for reactive programming.
+
+Reactive programming introduces time-varying values (called reactive values), and introduces a form
+of CONTAGION.  When a reactive value is passed as an argument to any operation, its result is a new
+dependent reactive value.
+
+Consider for instance an expression of the following form:
+def c := a + b;
+
+If either a or b is a reactive value, the c is a reactive value as well and its (snapshot) value is
+computed anew whenever a and/or b is updated.
+
+To enforce correct contagion semantics, the interpreter has to lift all expressions that contain at
+least one reactive value as an argument.  In order to lift expressions that contain reactive values
+transparently, the default semantics of method/function application have to be redefined. Hence, it
+is not sufficient to import the AmbientTalk code in this directory  to obtain a reactive version of
+the language.  Additionally, the interpreter needs to be patched.
+
+----
+
+To patch the AmbientTalk interpreter, one can use the install script included in this directory. It
+installs the necessary files to extend an AmbientTalk interpreter with AmbientTalk/R concepts.
+
+The script customizes the interpreter located in $AT_HOME (by default it extends the interpreter of
+this distribution folder).
+
+There are three possible options:
+patch: inserts a JAR file in the class path (preceding ambienttalk2.jar) specializing the semantics
+  of method application to support transparent reactive computation.  
+  
+  The patch only installs the necessary hooks which call to the actors mirror object.  Defining the
+  corresponding methods can be done natively, or in AmbientTalk itself.
+  
+native: in addition to installing the patch,  also installs a JAR file with a native implementation
+  of AmbientTalk/R.  This installs a customized (natively implemented) actor mirror.
+  
+reflective: in addition to installing the patch, also append to the default init file to extend the
+  default actor mirror with the reflective definitions found in the meta_interpreter folder.
