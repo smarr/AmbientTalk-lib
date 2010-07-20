@@ -7,48 +7,79 @@ def witnessSet := /.experimental.collections.witnessSet;
 import /.at.lang.futures;
 enableFutures(false);
 
-deftype ModifiableType;
-deftype PublicType;
+deftype Modifiable;
+deftype Public;
+deftype Private;
+def theResolvedFuture := future: {|resolve| resolve(nil) };
 
-def Public := extend: PublicType with: { 
-		def annotateMethod(Method) {
-			extend: Method with: {
-				def registerBeforeCallBack(advice, caller) {
-					system.println("register ...");
-				};
-			};
+def ExclusiveMethodAnnotation(conflicts,Type) {
+	extend: Type with: { 
+		def annotateMethod(method) {
+			def index := method.annotations().find: {|a| conflicts.contains(a); };
+			if: (nil != index) then: {
+				raise: jlobby.edu.vub.at.exceptions.XIllegalOperation.new("Conflicting type found: " +method.annotations()[index]+ " for type "+ Type );
+			};	
+			method;		
 		};
-} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag, PublicType ];
+	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag, Type];
+};
 
+Private := ExclusiveMethodAnnotation([Public,Modifiable],Private);
+Public  := ExclusiveMethodAnnotation([Private,Modifiable],Public);
+Modifiable := ExclusiveMethodAnnotation([Private,Public],Modifiable);
 
 def makeAspectMirror(base) { 
 	extend: defaultMirror.new(base) with: {
-		def aspectSet := witnessSet.new();
-			
+		def aspectBeforeSet := witnessSet.new();
+		def aspectAfterSet  := witnessSet.new();
+		
+		def afterCallBack(joinpoint, advice, caller) {
+		 	install(joinpoint, advice, caller, [Public, Modifiable],aspectAfterSet); 
+		};
+		
+		def afterCall(methodName, advice, caller) {
+			install(joinpoint, advice, caller, [Modifiable],aspectAfterSet); 
+		}; 
+		
 		def beforeCallBack(joinpoint, advice, caller) {
+		 	install(joinpoint, advice, caller, [Public, Modifiable],aspectBeforeSet); 
+		};
+		
+		def beforeCall(methodName, advice, caller) {
+			install(joinpoint, advice, caller, [Modifiable],aspectBeforeSet); 
+		}; 
+			
+		def install(joinpoint, advice, caller, types,set) {
 			def mirror := self;
 			def aspect := object: { 
 				def apply(delegate, invocation) {						
 					def method := mirror.grabMethod(invocation.selector);
-					if: (nil != method.annotations().find: {|a| [PublicType, ModifiableType].contains(a); }) then: {
+					if: (nil != method.annotations().find: {|a| types.contains(a); }) then: {
 						if: joinpoint(invocation.selector.text,invocation.arguments) then: {
-							advice<-notify(invocation.selector.text,invocation.arguments);
+							advice<-notify(invocation.selector.text,invocation.arguments)@FutureMessage;
 						};
 					};
 				};
 			};
-			aspectSet.add(aspect,caller);
+			set.addRebind(aspect,caller);
 		};
 		
-		def beforeCall(methodName, advice, caller) {
-			system.println("beforeCall");
-		}; 
+		def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
+		
 		
 		def invoke(delegate, invocation) {
 			system.println("invoke");
-			aspectSet.each: { |aspect|
-				aspect.apply(delegate,invocation);
-			};	
+			if: ([`==, `print ].contains(invocation.selector) ) then: {
+					super^invoke(delegate, invocation);
+			} else: {
+				when: (group: ([theResolvedFuture]+ aspectBeforeSet.map: { |aspect| aspect.apply(delegate,invocation); })) becomes: { |Idc| 	
+					def return := super^invoke(delegate, invocation);
+					aspectAfterSet.each: { |aspect|
+						aspect.apply(delegate,invocation);
+					};
+					return;
+				};
+			};
 		};
 
 		//default behaviour to intercept meta-level messages.
@@ -79,12 +110,11 @@ def service: block {
 def Television :=  service: {
 	def location := "Living Room";	
 	//Annotate
-	def setPause()@Public {
+	def setPause()@[Public] {
 		system.println("Set pause");
+		42;
 	}
 };
-
-Television.setPause;
 
 export: Television as: Service;
 	 
@@ -92,6 +122,7 @@ def jos := actor: {
 	def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
 	import /.at.lang.futures;
 	enableFutures(false);
+	def publication;
 	
 	def advice := object:{
 		def notify(methodName,arguments) {
@@ -99,10 +130,15 @@ def jos := actor: {
 		};
 	};
 	
+	def reconnect() {
+		publication.reconnect();
+	};
+	
 	when: Service discovered: { |s|
-		when: s<-beforeCallBack( script:{|methodName,arguments| methodName~="set.*" },advice,self)@[MetaMessage,FutureMessage] becomes: { |f|
+		when: s<-beforeCallBack( script:{|methodName,arguments| methodName~="set.*" },advice,advice)@[MetaMessage,FutureMessage] becomes: { |f|
 			when: Television<-setPause()@FutureMessage becomes: { |x|
-				takeOffline: self;
+				system.println("Die antwoord: " + x);
+				publication := disconnect: advice;
 			};
 		};
 	};
