@@ -39,12 +39,13 @@
 
 def makeMultivalue(values) {
 	object: { } mirroredBy: (mirror: {
-  	def invoke(@args) { forall: .invoke(@args) };
-		def receive(@args) { forall: .receive(@args) };
-		def print(@args) { forall: .print(@args) };
-	  def forall: msg {
-		  makeMultivalue(values.map: { |v| (reflect: v) <+ msg })
-	  };
+  	  def invoke(rcvr, invocation) {
+		makeMultivalue(values.map: { |v| v <+ invocation })
+  	  };
+      def receive(msg) {
+        makeMultivalue(values.map: { |v| v <+ msg })
+      };
+      def print(@args) { "<multivalue:"+values+">"; };
 	  def asTable := values;
   });
 };
