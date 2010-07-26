@@ -197,7 +197,7 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 		  def handle(exc) {
 		    test.assertEquals("division by zero", exc.message);
 		  };
-		})
+		} taggedAs: [/.at.lang.types.Handler])
   };
 
   // test multitple catch blocks
