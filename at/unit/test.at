@@ -60,6 +60,8 @@
 deftype AssertionFailed <: /.at.lang.types.Exception;
 def XAssertionFailed := /.at.lang.exceptions.createException(AssertionFailed);
 
+def TimerM := /.at.support.timer;
+
 def FuturesModule := /.at.lang.futures;
 FuturesModule.enableFutures(false); // only enable explicit futures
 
@@ -81,13 +83,17 @@ def consoleReporter := object: {
 	def numSuccess := 0;
 	def numFailed := 0;
 	def numError := 0;
+	def startTime := nil;
+	
 	def init() {
 		numSuccess := 0;
 		numFailed := 0;
 		numError := 0;
+		startTime := nil;
 	};
 	def start(testName, numTests) {
 		system.println("Starting unit test " + testName + "("+numTests+" tests)");
+		startTime := TimerM.now();
 	};
 	def success(methName) {
 		numSuccess := numSuccess + 1;
@@ -104,7 +110,8 @@ def consoleReporter := object: {
 		system.println(exc.stackTrace);
 	};
 	def stop(testName) {
-		system.println("Unit test " + testName + " done. Success: " + numSuccess + " Failed: " + numFailed + " Error: " + numError);
+	    def time := (TimerM.now() - startTime).intValue;
+		system.println("Unit test " + testName + " done. Success: " + numSuccess + " Failed: " + numFailed + " Error: " + numError + " Runtime: "+time+" ms");
 	};
 };
 
@@ -256,7 +263,8 @@ def TestSuite := object: {
     } else: {
       unitTests[i].runTest(extend: consoleReporter.new() with: {
         def start(nam, numTests) {
-          system.println("-- Starting subtest "+nam+" --")
+          system.println("-- Starting subtest "+nam+" --");
+          super^start(nam, numTests);
         };
         def stop(nam) {
           system.println("-- Stopping subtest "+nam+" --");
