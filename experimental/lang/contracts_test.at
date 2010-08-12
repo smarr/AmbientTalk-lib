@@ -1,0 +1,103 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2010
+ * Authors: Dries Harnie & Christophe Scholliers
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+ /* Simple test script for ambient contracts, see also /.experimental.lang.contracts */
+
+import /.experimental.lang.contracts;
+import /.at.lang.futures;
+enableFutures(false);
+
+network.online;
+
+deftype Control;
+
+def phone_actor := actor: { |Control|
+	import /.experimental.lang.contracts;
+	
+	def phone := object: {
+		def IncomingCall() { name + " is ringing" };
+		def name := "Bob's phone";
+		def location := "study";
+	};
+	
+	def control := object: {
+		def name := "phone";
+		def offline() { takeOffline: phone; };
+		def online() { export: phone as: protocolOf: phone };
+	};
+	
+	export: control as: Control;
+	
+	control.online();
+};
+
+def audio_actor := actor: { |Control|
+	import /.experimental.lang.contracts;
+	
+	def audio := object: {
+		def pause() {"audio device is pausing"};
+		def location := "study";
+	};
+	
+	def control := object: {
+		def name := "audio";
+		def offline() { takeOffline: audio; };
+		def online() { export: audio as: protocolOf: audio };
+	};
+	
+	export: control as: Control;
+	
+	control.online();
+};
+
+
+def Phone := protocol: {
+	def IncomingCall();
+	def name := "Bob's Phone";
+	def location;
+};
+
+def AudioDevice := role: {
+	def pause();
+	def location;
+};
+
+def c := contract: {
+	def phone := Frail: one(Phone);
+	def devices := WeakRebind: many(AudioDevice);	
+};
+
+def phoneC := nil;
+def audioC := [];
+
+whenever: Control discovered: { |c|
+	when: c<-name()@FutureMessage becomes: { |name|
+		if: (name == "phone") then: {phoneC := c} else: {audioC := audioC + [c]};
+	};
+};
+
+c.start();

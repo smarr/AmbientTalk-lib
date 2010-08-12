@@ -1,0 +1,230 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2010
+ * Authors: Dries Harnie & Christophe Scholliers
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+ /* Implementation of ambient contracts, as written in the CEDI2010 paper. */
+
+import /.at.lang.structuraltypes;
+import /.at.discovery.discovery;
+
+def role: obj {
+	def proto := protocolOf: obj;
+}; 
+
+deftype DiscoveringField <: /.at.lang.types.Field;
+
+deftype Marker;
+
+def RebindStrategies := isolate: {
+	def Frail := object: {
+		def disconnect(field, contract, object) {
+			contract.fail();
+		};
+		
+		def reconnect(field, contract, object) {
+			// do nothing
+		};
+	};
+	
+	def WeakRebind := object: {
+		def disconnect(field, contract, object) {
+			contract.pause()
+		};
+		
+		def reconnect(field, contract, object) {
+			// do nothing
+		};
+	};
+	
+	def SturdyRebind := object: {
+		def disconnect(field, contract, object) {
+			contract.pause();
+		};
+		
+		def reconnect(field, contract, object) {
+			// do nothing
+		};
+	};
+};
+
+def makeDiscoveringField(maxAmount, role, rebind, contract, name) {
+	def val := [];
+	def found := jlobby.java.util.HashSet.new();
+	def selected := jlobby.java.util.HashSet.new();
+	def cancelers := nil;
+	
+	object: {
+		def online := false;
+		def new(newHost) { self }; // singleton pattern
+		def readField() { if: (maxAmount == 1) then: { if: (val == nil) then: { nil } else: { val[1] } } else: { val } };
+		def writeField(newVal) { if: (maxAmount == 1) then: { val := [newVal] } else: { val := newVal } };
+		def accessor() { (reflect: self).grabMethod(`readField) };
+		def mutator() { (reflect: self).grabMethod(`writeField) };
+		def name := name;
+		
+		def satisfied() {
+			def amount := val.length;
+			(maxAmount == nil).or: { amount == maxAmount };
+		};
+		
+		def addObj(obj) {
+			found.add(obj);
+			if: ((maxAmount == nil).or: {val.length < maxAmount})  then: { // no limit
+				val := val + [obj];
+				if: satisfied() then: { selected.add(obj); val := val + [obj]; contract.fieldSatisfied(self); };
+			}
+		};
+		
+		def startDiscovering() {
+			if: (cancelers == nil) then: { // Can only start discovery once
+			    system.println("starting discovery for " + name);
+			    if: satisfied() then: { contract.fieldSatisfied(self); };
+				cancelers := [whenever: role discovered: { |obj|
+					addObj(obj);
+					
+					def d := whenever: obj disconnected: {
+						found.remove(obj);
+						if: (selected.contains(obj)) then: {
+							rebind.disconnect(self, contract, obj);
+						};
+					};
+					
+					def r := whenever: obj reconnected: {
+						addObj(obj);
+						if: (selected.contains(obj)) then: {
+							rebind.reconnect(self, contract, obj);
+						};
+					};
+					
+					cancelers := cancelers + [d, r];
+				}];
+			};
+		};
+		
+		def stopDiscovering() {
+			if: (cancelers != nil) then: {
+				cancelers.each: {|c| c.cancel() };
+				cancelers := nil;
+				online := false;
+			};
+		};
+	} taggedAs: [ DiscoveringField ];
+};
+
+// MAPPING OPERATORS
+def one(role) {
+	object: {def amount := 1; def role := role} taggedAs: [Marker];
+};
+
+def many(role) {
+	object: {def amount := nil; def role := role} taggedAs: [Marker];
+};
+
+def exactly(amount, role) {
+	object: {def amount := amount; def role := role} taggedAs: [Marker];
+};
+
+// REBINDING STRATEGIES
+def Frail: participant {
+	(reflect: participant).defineField(`rebind, RebindStrategies.Frail);
+	participant;
+};
+
+def WeakRebind: participant {
+	(reflect: participant).defineField(`rebind, RebindStrategies.WeakRebind);
+	participant;
+};
+
+def SturdyRebind: participant {
+	(reflect: participant).defineField(`rebind, RebindStrategies.SturdyRebind);
+	participant;
+};
+
+// INVARIANTS
+def stateInvariant: block on: participant {
+
+};
+
+def invariant: block {
+
+};
+
+def contract: block {
+
+	def fields := [];
+
+	def contract := object: {
+		def contract := self;
+		
+		def start() {
+			system.println("contract started");
+			fields.each: {|f| f.startDiscovering() };
+		};
+		
+		def stop() {
+			system.println("contract stopped");
+			fields.each: {|f| f.stopDiscovering() };
+		};
+		
+		def fail() {
+			system.println("contract failed");
+			stop();
+		};
+		
+		def pause() {
+			system.println("contract paused");
+		};
+		
+		def fieldSatisfied(f) {
+			system.println("field " + f.name + " satisfied");
+		};
+	};
+	
+	def scope := block.context.lexicalScope;
+	(reflect: scope).listFields.each: { |f| 
+		if: (f.name != `super) then: {
+			(reflect: contract).addField(f);
+		};
+	};
+		
+	block.applyInScope([], contract);
+	
+	(reflect: contract).listFields.each: { |f|
+		if: (is: f.readField taggedAs: Marker) then: {
+			def realName := f.name;
+			def marker := f.readField();
+			system.println("adding field " + realName + " to contract");
+			(reflect: contract).removeSlot(f.name);
+			def newField := makeDiscoveringField(marker.amount, marker.role, marker.rebind, contract, f.name);
+			(reflect: contract).addField(newField);
+			fields := fields + [newField];
+		}
+	};
+	
+	contract;
+};
+
+self;
