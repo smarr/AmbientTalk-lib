@@ -10,6 +10,15 @@ def HashSet := object: {
 		};
 	};
 	
+	def map: clo {
+		def collect := [];
+		def it := hs.iterator();
+		while: { it.hasNext() } do: {
+			collect := collect + [clo(it.next())];
+		};
+		collect;
+	};
+	
 	def first() {
 		def it := hs.iterator();
 		if: it.hasNext() then: {
