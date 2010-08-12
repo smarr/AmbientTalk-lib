@@ -1,5 +1,35 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Programming Technology Lab, 2006 - 2010
+ * Authors: Dries Harnie & Christophe Scholliers
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+ /* Aspect mirrors for ambient contracts, as written in the CEDI2010 paper. 
+    This mirror enables remote aspect deployment. */
+
 deftype Service;
-def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
+deftype ContractMetaMessage;
 def filterMirror := /.at.lang.filterMirror;
 def XSelectorNotFound := /.at.lang.exceptions.XSelectorNotFound;
 def witnessSet := /.experimental.collections.witnessSet;
@@ -24,125 +54,152 @@ def ExclusiveMethodAnnotation(conflicts,Type) {
 	} taggedAs: [/.at.lang.types.Isolate, /.at.lang.types.TypeTag, Type];
 };
 
-Private := ExclusiveMethodAnnotation([Public,Modifiable],Private);
-Public  := ExclusiveMethodAnnotation([Private,Modifiable],Public);
-Modifiable := ExclusiveMethodAnnotation([Private,Public],Modifiable);
+def AspectMirrorModule := object: {
+	def Private := ExclusiveMethodAnnotation([Public,Modifiable],Private);
+	def Public  := ExclusiveMethodAnnotation([Private,Modifiable],Public);
+	def Modifiable := ExclusiveMethodAnnotation([Private,Public],Modifiable);
 
-def makeAspectMirror(base) { 
-	extend: defaultMirror.new(base) with: {
-		def aspectBeforeSet := witnessSet.new();
-		def aspectAfterSet  := witnessSet.new();
-		
-		def afterCallBack(joinpoint, advice, caller) {
-		 	install(joinpoint, advice, caller, [Public, Modifiable],aspectAfterSet); 
-		};
-		
-		def afterCall(methodName, advice, caller) {
-			install(joinpoint, advice, caller, [Modifiable],aspectAfterSet); 
-		}; 
-		
-		def beforeCallBack(joinpoint, advice, caller) {
-		 	install(joinpoint, advice, caller, [Public, Modifiable],aspectBeforeSet); 
-		};
-		
-		def beforeCall(methodName, advice, caller) {
-			install(joinpoint, advice, caller, [Modifiable],aspectBeforeSet); 
-		}; 
+	def makeAspectMirror(base) { 
+		extend: defaultMirror.new(base) with: {
+			def aspectBeforeSet := witnessSet.new();
+			def aspectAfterSet  := witnessSet.new();
 			
-		def install(joinpoint, advice, caller, types,set) {
-			def mirror := self;
-			def aspect := object: { 
-				def apply(delegate, invocation) {						
-					def method := mirror.grabMethod(invocation.selector);
-					if: (nil != method.annotations().find: {|a| types.contains(a); }) then: {
-						if: joinpoint(invocation.selector.text,invocation.arguments) then: {
-							advice<-notify(invocation.selector.text,invocation.arguments)@FutureMessage;
+			def afterCallBack(joinpoint, advice, caller) {
+			 	install(joinpoint, advice, caller, [Public, Modifiable],aspectAfterSet); 
+			};
+			
+			def afterCall(methodName, advice, caller) {
+				install(joinpoint, advice, caller, [Modifiable],aspectAfterSet); 
+			}; 
+			
+			def beforeCallBack(joinpoint, advice, caller) {
+			 	install(joinpoint, advice, caller, [Public, Modifiable],aspectBeforeSet); 
+			};
+			
+			def beforeCall(methodName, advice, caller) {
+				install(joinpoint, advice, caller, [Modifiable],aspectBeforeSet); 
+			}; 
+				
+			def install(joinpoint, advice, caller, types,set) {
+				def mirror := self;
+				def aspect := object: { 
+					def apply(delegate, invocation) {						
+						def method := mirror.grabMethod(invocation.selector);
+						if: (nil != method.annotations().find: {|a| types.contains(a); }) then: {
+							if: joinpoint(invocation.selector.text,invocation.arguments) then: {
+								advice<-notify(invocation.selector.text,invocation.arguments)@FutureMessage;
+							};
 						};
 					};
 				};
+				set.addRebind(aspect,caller);
 			};
-			set.addRebind(aspect,caller);
-		};
-		
-		def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
-		
-		
-		def invoke(delegate, invocation) {
-			system.println("invoke");
-			if: ([`==, `print ].contains(invocation.selector) ) then: {
-					super^invoke(delegate, invocation);
-			} else: {
-				when: (group: ([theResolvedFuture]+ aspectBeforeSet.map: { |aspect| aspect.apply(delegate,invocation); })) becomes: { |Idc| 	
+			
+			def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
+			
+			
+			def invoke(delegate, invocation) {
+				aspectBeforeSet.each: { |aspect| aspect.apply(delegate,invocation); };
+				def return := super^invoke(delegate, invocation);
+				aspectAfterSet.each: { |aspect|
+					aspect.apply(delegate,invocation);
+				};
+				return;
+			};
+			
+			def invoke_async(delegate, invocation) {
+				when: (group: ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate,invocation); })) becomes: { |Idc| 	
 					def return := super^invoke(delegate, invocation);
-					aspectAfterSet.each: { |aspect|
-						aspect.apply(delegate,invocation);
+					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate,invocation) };
+					when: (group: futures) becomes: { |Idc|
+						return;
 					};
-					return;
 				};
 			};
-		};
+	
+			//default behaviour to intercept meta-level messages.
+			def metaIntercept(msg) {
+				// have to go meta-meta because we need to know whether the
+				// *mirror* itself can respond to the selector
+				if: ((reflect: self).respondsTo(msg.selector)) then: {
+					self <+ msg; // process meta-message myself
+				} else: {
+					super.receive(msg);//TODO ERROR !!!
+				}
+			};
+			
+			def receive(msg) {
+				if: (is: msg taggedAs: ContractMetaMessage) then: {
+					self.metaIntercept(msg); 
+			  } else: {
+				  	super^receive(extend: msg with: {
+				  		def process(receiver) {
+				  			// If the message was tagged with FutureMessage, we need to pipeline the future to the future returned by invoke_async.
+					  		def result := (reflect: receiver).invoke_async(receiver, self);
+					  		if: (reflect: msg).respondsTo(`future) then: {
+						  		self.future<-resolveWithValue(result)@[/.at.lang.firstclassrefs.MetaMessage,
+		      						 								   /.at.lang.futures.OneWayMessage,
+		      													 	   /.at.support.tracer.TraceResolved(self.futureId, receiver, msg)];
+	      					};
+	      					result
+	      				}
+      				} taggedAs: (tagsOf: msg) );
+			  }
+			};
+		};	
+	};
+	
+	
+	def service: block taggedAs: tags {
+		object: block taggedAs: tags + [Service] mirroredBy: { |base| makeAspectMirror(base) };
+	};
+	
+	def service: block {
+		service: block taggedAs: [];
+	};
+};
 
-		//default behaviour to intercept meta-level messages.
-		def metaIntercept(msg) {
-			// have to go meta-meta because we need to know whether the
-			// *mirror* itself can respond to the selector
-			if: ((reflect: self).respondsTo(msg.selector)) then: {
-				self <+ msg; // process meta-message myself
-			} else: {
-				super.receive(msg);//TODO ERROR !!!
+def TestModule := object: {
+	import AspectMirrorModule;
+	
+	def run() {
+		def Television :=  service: {
+			def location := "Living Room";	
+			//Annotate
+			def setPause()@[Public] {
+				system.println("Set pause");
+				42;
 			}
 		};
 		
-		def receive(msg) {
-			if: (is: msg taggedAs: MetaMessage) then: {
-				self.metaIntercept(msg); 
-		  } else: {
-			  	super^receive(msg);
-		  }
-		};
-	};	
-};
-
-def service: block {
-	  object: block taggedAs: [Service] mirroredBy: { |base| makeAspectMirror(base) };
-};
-
-def Television :=  service: {
-	def location := "Living Room";	
-	//Annotate
-	def setPause()@[Public] {
-		system.println("Set pause");
-		42;
+		export: Television as: Service;
+			 
+		def jos := actor: {
+			deftype ContractMetaMessage;
+			import /.at.lang.futures;
+			enableFutures(false);
+			def publication;
+			
+			def advice := object:{
+				def notify(methodName,arguments) {
+					system.println("notified");
+				};
+			};
+			
+			def reconnect() {
+				publication.reconnect();
+			};
+			
+			when: Service discovered: { |s|
+				when: s<-beforeCallBack( script:{|methodName,arguments| methodName~="set.*" },advice,advice)@[MetaMessage,FutureMessage] becomes: { |f|
+					when: Television<-setPause()@FutureMessage becomes: { |x|
+						system.println("Die antwoord: " + x);
+						publication := disconnect: advice;
+					};
+				};
+			};
+		}; 
 	}
 };
 
-export: Television as: Service;
-	 
-def jos := actor: {
-	def MetaMessage := /.at.lang.firstclassrefs.MetaMessage;
-	import /.at.lang.futures;
-	enableFutures(false);
-	def publication;
-	
-	def advice := object:{
-		def notify(methodName,arguments) {
-			system.println("notified");
-		};
-	};
-	
-	def reconnect() {
-		publication.reconnect();
-	};
-	
-	when: Service discovered: { |s|
-		when: s<-beforeCallBack( script:{|methodName,arguments| methodName~="set.*" },advice,advice)@[MetaMessage,FutureMessage] becomes: { |f|
-			when: Television<-setPause()@FutureMessage becomes: { |x|
-				system.println("Die antwoord: " + x);
-				publication := disconnect: advice;
-			};
-		};
-	};
-}; 
-
-
-
+AspectMirrorModule;
