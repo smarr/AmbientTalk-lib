@@ -146,6 +146,11 @@ def ProtocolPrototype := object: { |XStructuralTypeMismatch,StructuralTypeMismat
 		self.new(selectors + otherProtocol.selectors);
 	};
 	
+	// check if the given selector is a part of this protocol.
+	def includes(sel) {
+		selectors.contains(sel);
+	};
+	
 } taggedAs: [Protocol, /.at.lang.types.Isolate];
 
 // a branded protocol is a protocol that also checks type tags

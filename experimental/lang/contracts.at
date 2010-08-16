@@ -29,16 +29,25 @@
 
 import /.at.lang.structuraltypes;
 import /.at.discovery.discovery;
+import /.experimental.lang.AspectMirror;
+import /.experimental.lang.DispatchingMirror;
 
-def role: obj {
-	def proto := protocolOf: obj;
-}; 
 
-deftype DiscoveringField <: /.at.lang.types.Field;
+deftype ContractField <: /.at.lang.types.Field;
 
 deftype Marker;
 
-def RebindStrategies := isolate: {
+/* Alias for protocolOf. */
+def role: obj {
+	protocolOf: obj;
+};
+
+/* Rebinding strategies when a field disconnects. There are three choices:
+ *   - Frail makes the composition fail if a service annotated with this keyword disconnects;
+ *   - WeakRebind denotes that the composition pauses until an equivalent service is discovered;
+ *   - SturdyRebind works like WeakRebind, but only resumes if the original service reconnects.
+ */
+def RebindStrategies := object: {
 	def Frail := object: {
 		def disconnect(field, contract, object) {
 			contract.fail();
@@ -70,38 +79,74 @@ def RebindStrategies := isolate: {
 	};
 };
 
-def makeDiscoveringField(maxAmount, role, rebind, contract, name) {
-	def val := [];
-	def found := jlobby.java.util.HashSet.new();
-	def selected := jlobby.java.util.HashSet.new();
-	def cancelers := nil;
-	
+/* Fields are part of a contract. They keep track of the devices discovered and
+ * signal the contract once they are satisfied. Once satisfied, disconnections will
+ * consult the rebind strategy to either wait for a reconnection, fail, or wait
+ * for a device that also implements the role. See rebinding strategies above.
+ */
+def makeContractField(maxAmount, role) {
 	object: {
-		def online := false;
-		def new(newHost) { self }; // singleton pattern
-		def readField() { if: (maxAmount == 1) then: { if: (val == nil) then: { nil } else: { val[1] } } else: { val } };
-		def writeField(newVal) { if: (maxAmount == 1) then: { val := [newVal] } else: { val := newVal } };
+		// The name of the field
+		def name;
+		
+		def contract;
+		
+		def rebind;
+		
+		// The devices found in the environment that conform to the given role
+		def found :=  /.at.collections.java.hashset.HashSet.new();
+		
+		// The devices actually selected to take part in the contract
+		def selected :=  /.at.collections.java.hashset.HashSet.new();
+		
+		// Stopping the contract also halts all ongoing role subscriptions
+		// (when:discovered: returns a canceler object)
+		def cancelers := [];
+	
+	
+		def invariants := [];
+					
+		def beforeCallBack: pointcut do: advice {
+			invariants := invariants + [`beforeCallBack, pointcut, advice];
+		};
+					
+		def invariant: block {
+			system.println(block);
+			eval: `{#@(block.method.bodyExpression.statements)} in: {}.context.lexicalScope;
+		};
+
+		// TODO: return the selected set (with a DispatchingMirror installed) instead of self.
+		def readField() { self };
+		
+		// Writing to the field adds the object to the contract
+		def writeField(obj) { addObj(obj) };
+		
+		def new(newHost) { self };
 		def accessor() { (reflect: self).grabMethod(`readField) };
 		def mutator() { (reflect: self).grabMethod(`writeField) };
-		def name := name;
 		
-		def satisfied() {
-			def amount := val.length;
-			(maxAmount == nil).or: { amount == maxAmount };
+		// TODO: check invariants
+		def checkSatisfied() {
+			def amount := selected.size;
+			if: ((maxAmount == nil).or: { amount == maxAmount }) then: {
+				contract.fieldSatisfied(self)
+			}
 		};
 		
+		// Add the object to the set of found objects. If we can still add more to selected, do so.
 		def addObj(obj) {
 			found.add(obj);
-			if: ((maxAmount == nil).or: {val.length < maxAmount})  then: { // no limit
-				val := val + [obj];
-				if: satisfied() then: { selected.add(obj); val := val + [obj]; contract.fieldSatisfied(self); };
+			if: ((maxAmount == nil).or: {selected.size < maxAmount})  then: { // no limit
+				selected.add(obj);
+				checkSatisfied();
 			}
 		};
 		
 		def startDiscovering() {
-			if: (cancelers == nil) then: { // Can only start discovery once
+			if: (cancelers == []) then: { // Can only start discovery once
 			    system.println("starting discovery for " + name);
-			    if: satisfied() then: { contract.fieldSatisfied(self); };
+			    checkSatisfied();
+			    
 				cancelers := [whenever: role discovered: { |obj|
 					addObj(obj);
 					
@@ -125,41 +170,41 @@ def makeDiscoveringField(maxAmount, role, rebind, contract, name) {
 		};
 		
 		def stopDiscovering() {
-			if: (cancelers != nil) then: {
-				cancelers.each: {|c| c.cancel() };
-				cancelers := nil;
-				online := false;
-			};
+			cancelers.each: {|c| c.cancel() };
+			cancelers := [];
 		};
-	} taggedAs: [ DiscoveringField ];
+		
+	   system.println("field "+name+" invariants:" + invariants);
+	}  taggedAs: [ ContractField ]   mirroredBy: { |base| makeDispatchingMirror(base, {base.selected}, role); };
 };
+
 
 // MAPPING OPERATORS
 def one(role) {
-	object: {def amount := 1; def role := role} taggedAs: [Marker];
+	makeContractField(1,role); 
 };
 
 def many(role) {
-	object: {def amount := nil; def role := role} taggedAs: [Marker];
+	makeContractField(nil,role); 
 };
 
 def exactly(amount, role) {
-	object: {def amount := amount; def role := role} taggedAs: [Marker];
+	makeContractField(amount,role); 
 };
 
 // REBINDING STRATEGIES
 def Frail: participant {
-	(reflect: participant).defineField(`rebind, RebindStrategies.Frail);
+	participant.rebind := RebindStrategies.Frail;
 	participant;
 };
 
 def WeakRebind: participant {
-	(reflect: participant).defineField(`rebind, RebindStrategies.WeakRebind);
+	participant.rebind := RebindStrategies.WeakRebind;
 	participant;
 };
 
 def SturdyRebind: participant {
-	(reflect: participant).defineField(`rebind, RebindStrategies.SturdyRebind);
+	participant.rebind := RebindStrategies.SturdyRebind;
 	participant;
 };
 
@@ -168,8 +213,8 @@ def stateInvariant: block on: participant {
 
 };
 
-def invariant: block {
-
+def invariant: block on: participant {
+	participant.invariant: block;
 };
 
 def contract: block {
@@ -201,8 +246,10 @@ def contract: block {
 		def fieldSatisfied(f) {
 			system.println("field " + f.name + " satisfied");
 		};
+		
 	};
 	
+	// TODO inject contract stuff into scope
 	def scope := block.context.lexicalScope;
 	(reflect: scope).listFields.each: { |f| 
 		if: (f.name != `super) then: {
@@ -213,14 +260,19 @@ def contract: block {
 	block.applyInScope([], contract);
 	
 	(reflect: contract).listFields.each: { |f|
-		if: (is: f.readField taggedAs: Marker) then: {
+		if: (is: f.readField taggedAs: ContractField) then: {
 			def realName := f.name;
-			def marker := f.readField();
+			def contractField := f.readField();
+			contractField.name := realName;
+			contractField.contract := contract;
+			
+			
 			system.println("adding field " + realName + " to contract");
 			(reflect: contract).removeSlot(f.name);
-			def newField := makeDiscoveringField(marker.amount, marker.role, marker.rebind, contract, f.name);
-			(reflect: contract).addField(newField);
-			fields := fields + [newField];
+			
+			(reflect: contract).addField(contractField);
+			
+			fields := fields + [contractField];
 		}
 	};
 	

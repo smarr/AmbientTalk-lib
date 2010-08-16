@@ -42,6 +42,8 @@ def phone_actor := actor: { |Control|
 		def IncomingCall() { name + " is ringing" };
 		def name := "Bob's phone";
 		def location := "study";
+		def pause() { system.println("phone device is pausing") };
+		
 	};
 	
 	def control := object: {
@@ -59,7 +61,7 @@ def audio_actor := actor: { |Control|
 	import /.experimental.lang.contracts;
 	
 	def audio := object: {
-		def pause() {"audio device is pausing"};
+		def pause() { system.println("audio device is pausing") };
 		def location := "study";
 	};
 	
@@ -79,6 +81,7 @@ def Phone := protocol: {
 	def IncomingCall();
 	def name := "Bob's Phone";
 	def location;
+	def pause();
 };
 
 def AudioDevice := role: {
@@ -88,8 +91,16 @@ def AudioDevice := role: {
 
 def c := contract: {
 	def phone := Frail: one(Phone);
-	def devices := WeakRebind: many(AudioDevice);	
+	def devices := WeakRebind: many(AudioDevice);
+	
+	invariant: {
+		beforeCallBack:  <-IncomingCall()   do: {
+			devices<-pause();
+		};
+	} on: phone;
 };
+
+
 
 def phoneC := nil;
 def audioC := [];
