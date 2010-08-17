@@ -43,13 +43,13 @@ def makeDispatchingMirror(base, group, protocol) {
 		};
 	
 		def receive(msg) {
+			system.println("receive: " + msg + " prot: " + protocol.selectors);
 			if: (protocol.includes(msg.selector)) then: {
 					group().each: {|object| 
 						system.println("sending to "+ base.selected);
 						object<+msg;
 					}
 				} else: {
-					//TODO potentialy very vettig !
 					msg.invocation := extend: msg.invocation with: {} taggedAs: ([DispatchingMirrorMarker] + (tagsOf: msg.invocation) );
 					super^receive(msg);
 				}

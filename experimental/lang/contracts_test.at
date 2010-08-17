@@ -38,12 +38,10 @@ deftype Control;
 def phone_actor := actor: { |Control|
 	import /.experimental.lang.contracts;
 	
-	def phone := object: {
-		def IncomingCall() { name + " is ringing" };
+	def phone := service: {
+		def IncomingCall()@[Public] { system.println(name + " is ringing"); };
 		def name := "Bob's phone";
-		def location := "study";
-		def pause() { system.println("phone device is pausing") };
-		
+		def location := "study";		
 	};
 	
 	def control := object: {
@@ -81,10 +79,9 @@ def Phone := protocol: {
 	def IncomingCall();
 	def name := "Bob's Phone";
 	def location;
-	def pause();
 };
 
-def AudioDevice := role: {
+def AudioDevice := protocol: {
 	def pause();
 	def location;
 };
@@ -94,7 +91,8 @@ def c := contract: {
 	def devices := WeakRebind: many(AudioDevice);
 	
 	invariant: {
-		beforeCallBack:  <-IncomingCall()   do: {
+		beforeCallBack: `IncomingCall  do: { |MN,args|
+			system.println("aksjdf;sadlkjfa;sdlkfjasd;lkfjs;lfs");
 			devices<-pause();
 		};
 	} on: phone;

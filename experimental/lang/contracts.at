@@ -102,19 +102,7 @@ def makeContractField(maxAmount, role) {
 		// Stopping the contract also halts all ongoing role subscriptions
 		// (when:discovered: returns a canceler object)
 		def cancelers := [];
-	
-	
-		def invariants := [];
-					
-		def beforeCallBack: pointcut do: advice {
-			invariants := invariants + [`beforeCallBack, pointcut, advice];
-		};
-					
-		def invariant: block {
-			system.println(block);
-			eval: `{#@(block.method.bodyExpression.statements)} in: {}.context.lexicalScope;
-		};
-
+				
 		// TODO: return the selected set (with a DispatchingMirror installed) instead of self.
 		def readField() { self };
 		
@@ -140,6 +128,19 @@ def makeContractField(maxAmount, role) {
 				selected.add(obj);
 				checkSatisfied();
 			}
+		};
+		
+		
+		def beforeCallBack: msgName  do: block {
+			def advice := object:{ 
+				def notify(a,b) { 
+					block.applyInScope([a,b],contract) 
+				} 
+			};
+			def pointcut := script:{|methodName,arguments| msgName.text == methodName; };
+			selected.each:{ |service| 
+				service<-beforeCallBack( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage] 
+			};
 		};
 		
 		def startDiscovering() {
@@ -174,7 +175,7 @@ def makeContractField(maxAmount, role) {
 			cancelers := [];
 		};
 		
-	   system.println("field "+name+" invariants:" + invariants);
+	   system.println("field "+name);
 	}  taggedAs: [ ContractField ]   mirroredBy: { |base| makeDispatchingMirror(base, {base.selected}, role); };
 };
 
@@ -213,16 +214,22 @@ def stateInvariant: block on: participant {
 
 };
 
-def invariant: block on: participant {
-	participant.invariant: block;
-};
+
 
 def contract: block {
 
 	def fields := [];
 
 	def contract := object: {
+		def satisfied := 0;
+	
 		def contract := self;
+		def invariants := [];
+		
+		def invariant: block on: participant {
+			invariants := invariants + [[participant,block]];		
+		};
+		
 		
 		def start() {
 			system.println("contract started");
@@ -243,8 +250,18 @@ def contract: block {
 			system.println("contract paused");
 		};
 		
+		def contractSatisfied() {
+			system.println("contract satisfied");
+			invariants.each:{|i| i[2].applyInScope([], i[1]); };
+		};
+		
 		def fieldSatisfied(f) {
+			satisfied := satisfied + 1;
 			system.println("field " + f.name + " satisfied");
+			if: (fields.length() == satisfied ) then: {
+				contractSatisfied();
+			};
+			
 		};
 		
 	};
