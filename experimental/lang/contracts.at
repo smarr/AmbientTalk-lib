@@ -130,19 +130,28 @@ def makeContractField(maxAmount, role) {
 			}
 		};
 		
-		
 		def beforeCallBack: msgName  do: block {
+			installCallback(`beforeCallBack, msgName, block);
+		};
+		
+		def afterCallBack: msgName  do: block {
+			installCallback(`afterCallBack, msgName, block);
+		};
+
+		def installCallback(selector, msgName, block) {
 			def advice := object:{ 
 				def notify(a,b) { 
-					block.applyInScope([a,b],contract) 
+					block.applyInScope([a,b],contract.clone) 
 				} 
 			};
 			def pointcut := script:{|methodName,arguments| msgName.text == methodName; };
-			selected.each:{ |service| 
-				service<-beforeCallBack( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage] 
-			};
+			
+			def msg := <-dummy( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage];
+			msg.selector := selector;
+			
+			selected.each:{ |service| service <+ msg };
 		};
-		
+
 		def startDiscovering() {
 			if: (cancelers == []) then: { // Can only start discovery once
 			    system.println("starting discovery for " + name);

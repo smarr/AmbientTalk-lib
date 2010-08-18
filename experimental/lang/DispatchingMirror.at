@@ -25,9 +25,9 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
  
-  /* This mirror is supposed to sit in front of a collection that implements a given protocol
-   * and forward any messages it understands. Synchronous access is not allowed.
-   */
+ /* This mirror is supposed to sit in front of a collection that implements a given protocol
+  * and forward any messages it understands. Synchronous access is not allowed.
+  */
 import /.at.lang.exceptions;
 
 deftype DispatchingMirrorMarker;
@@ -35,10 +35,10 @@ deftype DispatchingMirrorMarker;
 def makeDispatchingMirror(base, group, protocol) { 
 	extend: defaultMirror.new(base) with: {
 		def invoke(delegate, invocation) {
-			if: ((is: invocation taggedAs: DispatchingMirrorMarker).or: { does: base respondTo: invocation.selector }) then: {
-				super^invoke(delegate, invocation);
-			} else: {
+			if: (protocol.includes(invocation.selector).and: { !(self.respondsTo( invocation.selector ))}) then: {
 				raise: XIllegalOperation.new("Synchronous invocation " + invocation.selector  + " on an object "+ base + ","+ self.listMethods +"," +self.listSlots  +" mirrored by a DispatchingMirror");
+			} else: {
+				super^invoke(delegate, invocation);
 			}
 		};
 	
@@ -50,7 +50,6 @@ def makeDispatchingMirror(base, group, protocol) {
 						object<+msg;
 					}
 				} else: {
-					msg.invocation := extend: msg.invocation with: {} taggedAs: ([DispatchingMirrorMarker] + (tagsOf: msg.invocation) );
 					super^receive(msg);
 				}
 		}

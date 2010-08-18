@@ -114,7 +114,6 @@ def AspectMirrorModule := object: {
 			};
 			
 			def invoke_async(delegate, invocation) {
-				system.println(aspectBeforeSet.map: {|x|x;});
 				when: (group: ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate,invocation); })) becomes: { |Idc| 	
 					def return := super^invoke(delegate, invocation);
 					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate,invocation) };
