@@ -102,6 +102,9 @@ def makeContractField(maxAmount, role) {
 		// Stopping the contract also halts all ongoing role subscriptions
 		// (when:discovered: returns a canceler object)
 		def cancelers := [];
+		
+		// List of messages to send to each new object that enters the selected set.
+		def invariantsToSend := [];
 				
 		// TODO: return the selected set (with a DispatchingMirror installed) instead of self.
 		def readField() { self };
@@ -116,9 +119,11 @@ def makeContractField(maxAmount, role) {
 		// TODO: check invariants
 		def checkSatisfied() {
 			def amount := selected.size;
-			if: ((maxAmount == nil).or: { amount == maxAmount }) then: {
+			def ret := (maxAmount == nil).or: { amount == maxAmount };
+			if: ret then: {
 				contract.fieldSatisfied(self)
-			}
+			};
+			ret
 		};
 		
 		// Add the object to the set of found objects. If we can still add more to selected, do so.
@@ -126,7 +131,9 @@ def makeContractField(maxAmount, role) {
 			found.add(obj);
 			if: ((maxAmount == nil).or: {selected.size < maxAmount})  then: { // no limit
 				selected.add(obj);
-				checkSatisfied();
+				if: checkSatisfied() then: {
+					invariantsToSend.each: {|msg| obj <+ msg };
+				}
 			}
 		};
 		
@@ -141,7 +148,7 @@ def makeContractField(maxAmount, role) {
 		def installCallback(selector, msgName, block) {
 			def advice := object:{ 
 				def notify(a,b) { 
-					block.applyInScope([a,b],contract.clone) 
+					block.applyInScope([a,b], clone: contract) 
 				} 
 			};
 			def pointcut := script:{|methodName,arguments| msgName.text == methodName; };
@@ -150,6 +157,11 @@ def makeContractField(maxAmount, role) {
 			msg.selector := selector;
 			
 			selected.each:{ |service| service <+ msg };
+			invariantsToSend := invariantsToSend + [msg];
+		};
+		
+		def applyInvariants(invariants) {
+			invariants.applyInScope([], self);
 		};
 
 		def startDiscovering() {
@@ -182,6 +194,7 @@ def makeContractField(maxAmount, role) {
 		def stopDiscovering() {
 			cancelers.each: {|c| c.cancel() };
 			cancelers := [];
+			invariantsToSend := [];
 		};
 		
 	   system.println("field "+name);
@@ -261,7 +274,7 @@ def contract: block {
 		
 		def contractSatisfied() {
 			system.println("contract satisfied");
-			invariants.each:{|i| i[2].applyInScope([], i[1]); };
+			invariants.each:{|i| i[1].applyInvariants(i[2]) };
 		};
 		
 		def fieldSatisfied(f) {

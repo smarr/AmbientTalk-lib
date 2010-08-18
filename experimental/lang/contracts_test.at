@@ -97,7 +97,7 @@ def c := contract: {
 		};
 		
 		afterCallBack: `IncomingCall  do: { |methodName,args|
-			system.println("pausing all audio devices");
+			system.println("unpausing all audio devices");
 			devices<-pause();
 		};
 	} on: phone;
