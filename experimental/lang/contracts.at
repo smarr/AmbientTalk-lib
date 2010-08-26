@@ -49,6 +49,10 @@ def role: obj {
  */
 def RebindStrategies := object: {
 	def Frail := object: {
+		def discover(field, contract, object) {
+			field.addObj(object);
+		};
+	
 		def disconnect(field, contract, object) {
 			if: field.selected.contains(object) then: {
 				contract.fail();
@@ -61,10 +65,21 @@ def RebindStrategies := object: {
 	};
 	
 	def WeakRebind := object: {
+		def disconnected;
+			
+		def init() { 
+			disconnected := jlobby.java.util.HashSet.new;
+			self;
+		};
+		
+		def discover(field, contract, object) {
+			field.addObj(object);
+		};
+		
 		def disconnect(field, contract, object) {
 			if: (field.selected.contains(object)) then: {
 				field.selected.remove(object);
-				field.disconnected.add(object);
+				disconnected.add(object);
 				if: !(field.checkSatisfied()) then: {
 					contract.pause();
 				};
@@ -72,7 +87,7 @@ def RebindStrategies := object: {
 		};
 		
 		def reconnect(field, contract, object) {
-			if: (field.disconnected.contains(object)) then: {
+			if: (disconnected.contains(object)) then: {
 				field.selected.add(object);
 				checkSatisfied();
 			};
@@ -80,12 +95,33 @@ def RebindStrategies := object: {
 	};
 	
 	def SturdyRebind := object: {
+		def disconnected;
+	
+		def init() { 
+			disconnected := jlobby.java.util.HashSet.new;
+			self;
+		};
+		
+		def discover(field, contract, object) {
+			if: ((disconnected.isEmpty).and: { !isSatisfied() }) then: {
+				field.addObj(object);
+			}
+		};
+		
 		def disconnect(field, contract, object) {
-			contract.pause();
+			if: (field.selected.contains(object)) then: {
+				disconnected.add(object);
+				contract.pause();
+			};
 		};
 		
 		def reconnect(field, contract, object) {
-			// do nothing
+			if: (disconnected.contains(object)) then: {
+				disconnected.remove(object);
+				if: (disconnected.isEmpty()) then: {
+					//contract.unpause();
+				}
+			}
 		};
 	};
 };
@@ -110,9 +146,6 @@ def makeContractField(maxAmount, role) {
 		// The devices actually selected to take part in the contract
 		def selected :=  /.at.collections.java.hashset.HashSet.new();
 		
-		// Disconnected devices that were selected previously
-		def selected :=  /.at.collections.java.hashset.HashSet.new();
-		
 		// Stopping the contract also halts all ongoing role subscriptions
 		// (when:discovered: returns a canceler object)
 		def cancelers := [];
@@ -132,17 +165,21 @@ def makeContractField(maxAmount, role) {
 		
 		// TODO: check invariants
 		def checkSatisfied() {
-			def amount := selected.size;
-			def ret := (maxAmount == nil).or: { amount == maxAmount };
+			def ret := isSatisfied();
 			if: ret then: {
 				contract.fieldSatisfied(self)
 			};
 			ret
 		};
 		
+		// Returns true if the contract is "full".
+		def isSatisfied() {
+			def amount := selected.size;
+			(maxAmount == nil).or: { amount == maxAmount };
+		};
+		
 		// Add the object to the set of found objects. If we can still add more to selected, do so.
 		def addObj(obj) {
-			found.add(obj);
 			if: ((maxAmount == nil).or: {selected.size < maxAmount})  then: { // no limit
 				selected.add(obj);
 				if: checkSatisfied() then: {
@@ -183,8 +220,9 @@ def makeContractField(maxAmount, role) {
 			    system.println("starting discovery for " + name);
 			    checkSatisfied();
 			    
-				cancelers := [whenever: role discovered: { |obj|
-					addObj(obj);
+				def c := whenever: role discovered: { |obj|
+					found.add(obj);
+					rebind.discover(self, contract, obj);
 					
 					def d := whenever: obj disconnected: {
 						found.remove(obj);
@@ -192,12 +230,13 @@ def makeContractField(maxAmount, role) {
 					};
 					
 					def r := whenever: obj reconnected: {
-						addObj(obj);
+						found.add(obj);
 						rebind.reconnect(self, contract, obj);
 					};
 					
-					cancelers := cancelers + [d, r];
-				}];
+					cancelers := [d, r];
+				};
+				cancelers := [c] + cancelers;
 			};
 		};
 		
@@ -207,8 +246,7 @@ def makeContractField(maxAmount, role) {
 			invariantsToSend := [];
 		};
 		
-	   system.println("field "+name);
-	}  taggedAs: [ ContractField ]   mirroredBy: { |base| makeDispatchingMirror(base, {base.selected}, role); };
+	}  taggedAs: [ ContractField ] mirroredBy: { |base| makeDispatchingMirror(base, {base.selected}, role); };
 };
 
 
@@ -222,22 +260,22 @@ def many(role) {
 };
 
 def exactly(amount, role) {
-	makeContractField(amount,role); 
+	makeContractField(amount, role); 
 };
 
 // REBINDING STRATEGIES
 def Frail: participant {
-	participant.rebind := RebindStrategies.Frail;
+	participant.rebind := RebindStrategies.Frail.new;
 	participant;
 };
 
 def WeakRebind: participant {
-	participant.rebind := RebindStrategies.WeakRebind;
+	participant.rebind := RebindStrategies.WeakRebind.new;
 	participant;
 };
 
 def SturdyRebind: participant {
-	participant.rebind := RebindStrategies.SturdyRebind;
+	participant.rebind := RebindStrategies.SturdyRebind.new;
 	participant;
 };
 

@@ -61,6 +61,7 @@ def spawn_audio_actor() {
 		
 		def audio := object: {
 			def pause() { system.println("audio device is pausing") };
+			def unpause() { system.println("audio device is unpausing") };
 			def location := "study";
 		};
 		
@@ -86,6 +87,7 @@ def Phone := protocol: {
 
 def AudioDevice := protocol: {
 	def pause();
+	def unpause();
 	def location;
 };
 
@@ -101,7 +103,7 @@ def c := contract: {
 		
 		afterCallBack: `IncomingCall  do: { |methodName,args|
 			system.println("unpausing all audio devices");
-			devices<-pause();
+			devices<-unpause();
 		};
 	} on: phone;
 };

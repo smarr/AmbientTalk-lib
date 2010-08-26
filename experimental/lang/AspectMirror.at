@@ -67,22 +67,22 @@ def AspectMirrorModule := object: {
 			def aspectAfterSet  := witnessSet.new();
 			
 			def afterCallBack(joinpoint, advice, caller) {
-			 	install(joinpoint, advice, caller, [Public, Modifiable],aspectAfterSet); 
+			 	install(joinpoint, advice, caller, [Public, Modifiable], aspectAfterSet); 
 			};
 			
 			def afterCall(methodName, advice, caller) {
-				install(joinpoint, advice, caller, [Modifiable],aspectAfterSet); 
+				install(joinpoint, advice, caller, [Modifiable], aspectAfterSet); 
 			}; 
 			
 			def beforeCallBack(joinpoint, advice, caller) {
-			 	install(joinpoint, advice, caller, [Public, Modifiable],aspectBeforeSet); 
+			 	install(joinpoint, advice, caller, [Public, Modifiable], aspectBeforeSet); 
 			};
 			
 			def beforeCall(methodName, advice, caller) {
-				install(joinpoint, advice, caller, [Modifiable],aspectBeforeSet); 
+				install(joinpoint, advice, caller, [Modifiable], aspectBeforeSet); 
 			}; 
 				
-			def install(joinpoint, advice, caller, types,set) {
+			def install(joinpoint, advice, caller, types, set) {
 				def mirror := self;
 				def aspect := object: { 
 					def apply(delegate, invocation) {						
@@ -93,7 +93,7 @@ def AspectMirrorModule := object: {
 							} else: {
 								theResolvedFuture;
 							}
-						}else: {
+						} else: {
 							theResolvedFuture;
 						};
 					};
@@ -102,7 +102,6 @@ def AspectMirrorModule := object: {
 			};
 			
 			def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
-			
 			
 			def invoke(delegate, invocation) {
 				aspectBeforeSet.each: { |aspect| aspect.apply(delegate,invocation); };
