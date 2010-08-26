@@ -46,7 +46,7 @@ def makeDispatchingMirror(base, group, protocol) {
 			system.println("receive: " + msg + " prot: " + protocol.selectors);
 			if: (protocol.includes(msg.selector)) then: {
 					group().each: {|object| 
-						system.println("sending to "+ base.selected);
+						system.println("sending to "+ base.selected.to_array);
 						object<+msg;
 					}
 				} else: {

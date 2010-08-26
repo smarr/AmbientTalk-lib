@@ -28,6 +28,10 @@ def HashSet := object: {
 		};
 	};
 	
+	def to_array() {
+		map: { |x| x }
+	};
+	
 	def add(o) {
 		hs.add(o);
 	};
