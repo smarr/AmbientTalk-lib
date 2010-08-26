@@ -178,7 +178,8 @@ def makeContractField(maxAmount, role) {
 			(maxAmount == nil).or: { amount == maxAmount };
 		};
 		
-		// Add the object to the set of found objects. If we can still add more to selected, do so.
+		// If we can still add more to selected, do so.
+		// TODO: checkSatisfied can trigger applyInvariants, which will apply the aspects twice on the given object
 		def addObj(obj) {
 			if: ((maxAmount == nil).or: {selected.size < maxAmount})  then: { // no limit
 				selected.add(obj);
@@ -207,12 +208,15 @@ def makeContractField(maxAmount, role) {
 			def msg := <-dummy( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage];
 			msg.selector := selector;
 			
+			system.println("Installing callback");
 			selected.each:{ |service| service <+ msg };
 			invariantsToSend := invariantsToSend + [msg];
 		};
 		
 		def applyInvariants(invariants) {
-			invariants.applyInScope([], self);
+			if: (invariantsToSend == []) then: {
+				invariants.applyInScope([], self);
+			};
 		};
 
 		def startDiscovering() {
@@ -291,7 +295,7 @@ def contract: block {
 	def fields := [];
 
 	def contract := object: {
-		def satisfied := 0;
+		def satisfied := jlobby.java.util.HashSet.new;
 	
 		def contract := self;
 		def invariants := [];
@@ -326,9 +330,9 @@ def contract: block {
 		};
 		
 		def fieldSatisfied(f) {
-			satisfied := satisfied + 1;
+			satisfied.add(f);
 			system.println("field " + f.name + " satisfied");
-			if: (fields.length() == satisfied ) then: {
+			if: (fields.length() == satisfied.size() ) then: {
 				contractSatisfied();
 			};
 			
