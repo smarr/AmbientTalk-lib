@@ -28,8 +28,7 @@
  /* Simple test script for ambient contracts, see also /.experimental.lang.contracts */
 
 import /.experimental.lang.contracts;
-import /.at.lang.futures;
-enableFutures(false);
+
 
 network.online;
 
@@ -55,14 +54,14 @@ def phone_actor := actor: { |Control|
 	control.online();
 };
 
-def spawn_audio_actor() {
-	actor: { |Control|
+def spawn_audio_actor(loc := "study") {
+	actor: { |Control, loc|
 		import /.experimental.lang.contracts;
 		
 		def audio := service: {
 			def pause() { system.println("audio device is pausing") };
 			def unpause() { system.println("audio device is unpausing") };
-			def location := "study";
+			def location := loc;
 		};
 		
 		def control := object: {
@@ -94,7 +93,7 @@ def AudioDevice := protocol: {
 
 def c := contract: {
 	def phone := Frail: one(Phone);
-	def devices := WeakRebind: one(AudioDevice);
+	def devices := WeakRebind: many(AudioDevice);
 		
 	stateInvariant: `location on: devices equals: "test";
 	

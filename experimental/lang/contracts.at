@@ -31,7 +31,8 @@ import /.at.lang.structuraltypes;
 import /.at.discovery.discovery;
 import /.experimental.lang.AspectMirror;
 import /.experimental.lang.DispatchingMirror;
-
+import /.at.lang.futures;
+enableFutures(false);
 
 deftype ContractField <: /.at.lang.types.Field;
 
@@ -243,10 +244,9 @@ def makeContractField(maxAmount, role) {
 						stateInvariants.each: { |a|
 							def field := a[1];
 							def value := a[2];
-							system.println("sending stuff ");
-												
-							on: obj before: {|methodName,arguments| methodName == (field.text+":=") } CallBack: { |m,args|
-								system.println("checking stuff ");
+							
+							def stateBlock := { |m,args|
+								system.println("checking stuff for invariant " + field);
 								
 								def set := stateMap.get(obj);
 								def satisfied := (set.size == stateInvariants.length );
@@ -263,9 +263,14 @@ def makeContractField(maxAmount, role) {
 										rebind.disconnect(self, contract, obj);	
 									}
 								};
-								
-								
 							};
+								
+							system.println("installing callback for state invariant on " + field);
+							on: obj before: {|methodName,arguments| methodName == (field.text+":=") } CallBack: stateBlock;
+							
+							system.println("checking state invariant on " + field + " now");
+							def msg := eval: `(<-#field()@[/.at.lang.futures.FutureMessage]) in: self;
+							when: obj <+ msg becomes: { |response| stateBlock(field, [response]); };
 						};
 					} else: {
 						found.add(obj);
