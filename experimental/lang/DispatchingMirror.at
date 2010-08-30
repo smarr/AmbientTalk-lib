@@ -41,7 +41,7 @@ def makeDispatchingMirror(base, group, protocol) {
 				super^invoke(delegate, invocation);
 			}
 		};
-	
+		
 		def receive(msg) {
 			system.println("receive: " + msg + " prot: " + protocol.selectors);
 			if: (protocol.includes(msg.selector)) then: {
@@ -53,7 +53,7 @@ def makeDispatchingMirror(base, group, protocol) {
 					super^receive(msg);
 				}
 		}
-	}
+	} 
 };
 
 def DispatchingMirrorModule := object: {

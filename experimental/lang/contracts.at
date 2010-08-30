@@ -39,7 +39,7 @@ deftype Marker;
 
 /* Alias for protocolOf. */
 def role: obj {
-	protocolOf: obj;
+	protocol: obj;
 };
 
 /* Rebinding strategies when a field disconnects. There are three choices:
@@ -143,6 +143,10 @@ def makeContractField(maxAmount, role) {
 		// The devices found in the environment that conform to the given role
 		def found :=  /.at.collections.java.hashset.HashSet.new();
 		
+		// Keep track of the amount of state invariants every potential role candidate satisifies. 
+		def stateMap :=  /.at.collections.java.hashmap.HashMap.new();
+		
+		
 		// The devices actually selected to take part in the contract
 		def selected :=  /.at.collections.java.hashset.HashSet.new();
 		
@@ -152,6 +156,9 @@ def makeContractField(maxAmount, role) {
 		
 		// List of messages to send to each new object that enters the selected set.
 		def invariantsToSend := [];
+				
+		// List of messages to send to each new object that enters the selected set.
+		def stateInvariants := [];		
 				
 		// TODO: return the selected set (with a DispatchingMirror installed) instead of self.
 		def readField() { self };
@@ -196,6 +203,10 @@ def makeContractField(maxAmount, role) {
 		def afterCallBack: msgName  do: block {
 			installCallback(`afterCallBack, msgName, block);
 		};
+		
+		def addStateInvariant(field, value) {
+			stateInvariants := stateInvariants + [[field, value]];
+		};
 
 		def installCallback(selector, msgName, block) {
 			def advice := object:{ 
@@ -225,9 +236,43 @@ def makeContractField(maxAmount, role) {
 			    checkSatisfied();
 			    
 				def c := whenever: role discovered: { |obj|
-					found.add(obj);
-					rebind.discover(self, contract, obj);
+															
+					//TODO canceler
+					if: (stateInvariants.length > 0) then: {
+						stateMap.put(obj,/.at.collections.java.hashset.HashSet.new());
+						stateInvariants.each: { |a|
+							def field := a[1];
+							def value := a[2];
+							system.println("sending stuff ");
+												
+							on: obj before: {|methodName,arguments| methodName == (field.text+":=") } CallBack: { |m,args|
+								system.println("checking stuff ");
+								
+								def set := stateMap.get(obj);
+								def satisfied := (set.size == stateInvariants.length );
+								
+								if: (args[1] == value ) then: {
+									set.add(a);
+									if: ( !satisfied.and: { set.size == stateInvariants.length } ) then: {
+										found.add(obj);
+										rebind.discover(self, contract, obj);
+									};
+								} else: {
+									set.remove(a);
+									if: satisfied then: {
+										rebind.disconnect(self, contract, obj);	
+									}
+								};
+								
+								
+							};
+						};
+					} else: {
+						found.add(obj);
+						rebind.discover(self, contract, obj);
+					};
 					
+						
 					def d := whenever: obj disconnected: {
 						found.remove(obj);
 						rebind.disconnect(self, contract, obj);
@@ -304,6 +349,16 @@ def contract: block {
 			invariants := invariants + [[participant,block]];		
 		};
 		
+		def stateInvariant: field on: participant equals: value {
+			/* block := eval: `{ { afterCallBack:  `#(jlobby.edu.vub.at.objects.natives.grammar.AGAssignmentSymbol.jAlloc("`"+field.text + ":="))  do: { |methodName,args|
+			//block := eval: `{ { afterCallBack:  `#(jlobby.edu.vub.at.objects.natives.grammar.AGAssignmentSymbol.jAlloc("`"+field.text + ":="))  do: { |methodName,args|
+
+				system.println("Intercepted remote assignment of:  " + "field to :" + args);
+			}; } } in: {}.context.lexicalScope;
+			
+			invariants := invariants + [[participant, block ]];*/
+			participant.addStateInvariant(field, value);
+		};
 		
 		def start() {
 			system.println("contract started");
@@ -356,17 +411,12 @@ def contract: block {
 			def contractField := f.readField();
 			contractField.name := realName;
 			contractField.contract := contract;
-			
-			
 			system.println("adding field " + realName + " to contract");
 			(reflect: contract).removeSlot(f.name);
-			
 			(reflect: contract).addField(contractField);
-			
 			fields := fields + [contractField];
 		}
-	};
-	
+	};	
 	contract;
 };
 

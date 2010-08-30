@@ -33,6 +33,7 @@ def filterMirror := /.at.lang.filterMirror;
 def XSelectorNotFound := /.at.lang.exceptions.XSelectorNotFound;
 def witnessSet := /.experimental.collections.witnessSet;
 
+import /.at.support.util;
 import /.at.lang.futures;
 enableFutures(false);
 deftype ContractMetaMessage;
@@ -83,18 +84,34 @@ def AspectMirrorModule := object: {
 			}; 
 				
 			def install(joinpoint, advice, caller, types, set) {
+				system.println("install ");
 				def mirror := self;
 				def aspect := object: { 
-					def apply(delegate, invocation) {						
-						def method := mirror.grabMethod(invocation.selector);
-						if: (nil != method.annotations().find: {|a| types.contains(a); }) then: {
-							if: joinpoint(invocation.selector.text,invocation.arguments) then: {
+				
+					def executeJoinPoint(invocation) {
+						if: joinpoint(invocation.selector.text,invocation.arguments) then: {
+								system.println("JP ok ");
 								advice<-notify(invocation.selector.text,invocation.arguments)@FutureMessage;
-							} else: {
-								theResolvedFuture;
-							}
 						} else: {
 							theResolvedFuture;
+						};
+					};
+				
+					def apply(delegate, invocation) {
+						// For primitives
+						if:  isPrimitive(invocation.selector) then: {							
+							def method := mirror.grabMethod(invocation.selector);
+							if: (nil != method.annotations().find: {|a| types.contains(a); }) then: {
+								executeJoinPoint(invocation);
+							} else: {
+								theResolvedFuture;
+							};
+						} else: { 
+							if: isMutator(invocation.selector) then: {
+								system.println("mutator ");
+								
+								executeJoinPoint(invocation);
+							}else: { theResolvedFuture }; 
 						};
 					};
 				};
@@ -104,11 +121,14 @@ def AspectMirrorModule := object: {
 			def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
 			
 			def invoke(delegate, invocation) {
-				aspectBeforeSet.each: { |aspect| aspect.apply(delegate,invocation); };
+			   	system.println("invoke Message... "+ invocation.selector);
+			   
+				aspectBeforeSet.each: { |aspect| 
+							   	system.println("before for message... "+ invocation.selector);
+				
+				aspect.apply(delegate,invocation); };			
 				def return := super^invoke(delegate, invocation);
-				aspectAfterSet.each: { |aspect|
-					aspect.apply(delegate,invocation);
-				};
+				aspectAfterSet.each: { |aspect|	aspect.apply(delegate,invocation); };
 				return;
 			};
 			
@@ -129,12 +149,14 @@ def AspectMirrorModule := object: {
 				if: ((reflect: self).respondsTo(msg.selector)) then: {
 					self <+ msg; // process meta-message myself
 				} else: {
+					system.println("Meta fuuuuuucccccckkkkkk ... ");
 					super.receive(msg);//TODO ERROR !!!
 				}
 			};
 			
 			def receive(msg) {
-				if: (is: msg taggedAs: ContractMetaMessage) then: {
+				system.println("Receive Message... ");
+				if: (is: msg taggedAs: ContractMetaMessage) then: {					
 					self.metaIntercept(msg); 
 			  } else: {
 				  	super^receive(extend: msg with: {
@@ -162,6 +184,23 @@ def AspectMirrorModule := object: {
 	def service: block {
 		service: block taggedAs: [];
 	};
+	
+	def advice: block { 
+		object:{
+			def notify(methodName,arguments) {
+				block(methodName,arguments);
+			};
+		};
+	};
+	
+	def on: obj before: script CallBack: advice {
+		obj<-beforeCallBack(
+			script: script, 
+			advice: advice, 
+			advice)@[ContractMetaMessage];
+	};
+	
+	
 };
 
 def TestModule := object: {
@@ -176,7 +215,7 @@ def TestModule := object: {
 				42;
 			}
 		};
-		
+				
 		export: Television as: Service;
 			 
 		def jos := actor: {
@@ -206,5 +245,8 @@ def TestModule := object: {
 		}; 
 	}
 };
+
+
+//TestModule.run();
 
 AspectMirrorModule;

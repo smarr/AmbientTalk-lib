@@ -59,13 +59,14 @@ def spawn_audio_actor() {
 	actor: { |Control|
 		import /.experimental.lang.contracts;
 		
-		def audio := object: {
+		def audio := service: {
 			def pause() { system.println("audio device is pausing") };
 			def unpause() { system.println("audio device is unpausing") };
 			def location := "study";
 		};
 		
 		def control := object: {
+			def move(loc) { audio.location := loc; };
 			def name := "audio";
 			def offline() { takeOffline: audio; };
 			def online() { export: audio as: protocolOf: audio };
@@ -93,9 +94,11 @@ def AudioDevice := protocol: {
 
 def c := contract: {
 	def phone := Frail: one(Phone);
-	def devices := WeakRebind: many(AudioDevice);
+	def devices := WeakRebind: one(AudioDevice);
+		
+	stateInvariant: `location on: devices equals: "test";
 	
-	invariant: {
+	/* invariant: {
 		beforeCallBack: `IncomingCall  do: { |methodName,args|
 			system.println("pausing all audio devices");
 			devices<-pause();
@@ -105,17 +108,20 @@ def c := contract: {
 			system.println("unpausing all audio devices");
 			devices<-unpause();
 		};
-	} on: phone;
+	} on: phone;  */
 };
-
-
 
 def phoneC := nil;
 def audioC := /.at.collections.java.hashset.HashSet.new;
 
+
+def move(to := "test") {
+	audioC.to_array[1]<-move(to);
+};
+
 whenever: Control discovered: { |c|
 	when: c<-name()@FutureMessage becomes: { |name|
-		if: (name == "phone") then: {phoneC := c} else: {audioC.add(c)};
+		if: (name == "phone") then: { phoneC := c } else: {audioC.add(c)};
 	};
 };
 
