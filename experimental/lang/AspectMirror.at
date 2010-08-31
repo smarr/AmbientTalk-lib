@@ -84,13 +84,11 @@ def AspectMirrorModule := object: {
 			}; 
 				
 			def install(joinpoint, advice, caller, types, set) {
-				system.println("install ");
 				def mirror := self;
 				def aspect := object: { 
 				
 					def executeJoinPoint(invocation) {
 						if: joinpoint(invocation.selector.text,invocation.arguments) then: {
-								system.println("JP ok ");
 								advice<-notify(invocation.selector.text,invocation.arguments)@FutureMessage;
 						} else: {
 							theResolvedFuture;
@@ -98,8 +96,8 @@ def AspectMirrorModule := object: {
 					};
 				
 					def apply(delegate, invocation) {
-						// For primitives
-						if:  isPrimitive(invocation.selector) then: {							
+						def isMethod := (nil != mirror.listMethods.find: { |m| m.name == invocation.selector });
+						if: isMethod then: {							
 							def method := mirror.grabMethod(invocation.selector);
 							if: (nil != method.annotations().find: {|a| types.contains(a); }) then: {
 								executeJoinPoint(invocation);
@@ -111,11 +109,12 @@ def AspectMirrorModule := object: {
 								system.println("mutator ");
 								
 								executeJoinPoint(invocation);
-							}else: { theResolvedFuture }; 
+							} else: { theResolvedFuture }; 
 						};
 					};
 				};
 				set.addRebind(aspect,caller);
+				system.println("Installed aspect on " + base + " ("+aspectBeforeSet.size+"/"+aspectAfterSet.size+")");
 			};
 			
 			def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
@@ -123,10 +122,7 @@ def AspectMirrorModule := object: {
 			def invoke(delegate, invocation) {
 			   	system.println("invoke Message... "+ invocation.selector);
 			   
-				aspectBeforeSet.each: { |aspect| 
-							   	system.println("before for message... "+ invocation.selector);
-				
-				aspect.apply(delegate,invocation); };			
+				aspectBeforeSet.each: { |aspect| aspect.apply(delegate,invocation); };			
 				def return := super^invoke(delegate, invocation);
 				aspectAfterSet.each: { |aspect|	aspect.apply(delegate,invocation); };
 				return;

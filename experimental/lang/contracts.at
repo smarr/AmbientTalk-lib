@@ -190,8 +190,9 @@ def makeContractField(maxAmount, role) {
 		// TODO: checkSatisfied can trigger applyInvariants, which will apply the aspects twice on the given object
 		def addObj(obj) {
 			if: ((maxAmount == nil).or: {selected.size < maxAmount})  then: { // no limit
+				def wasSatisfied := isSatisfied();
 				selected.add(obj);
-				if: checkSatisfied() then: {
+				if: (checkSatisfied().and: { wasSatisfied }) then: {
 					invariantsToSend.each: {|msg| obj <+ msg };
 				}
 			}
@@ -210,12 +211,9 @@ def makeContractField(maxAmount, role) {
 		};
 
 		def installCallback(selector, msgName, block) {
-			def advice := object:{ 
-				def notify(a,b) { 
-					block.applyInScope([a,b], clone: contract) 
-				} 
-			};
-			def pointcut := script:{|methodName,arguments| msgName.text == methodName; };
+			// TODO: figure out proper way to undo arg bindings made by block.
+			def advice := advice: { |msgName, args| block.applyInScope([msgName, args], clone: contract); };
+			def pointcut := script: {|mn,a| msgName.text == mn; };
 			
 			def msg := <-dummy( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage];
 			msg.selector := selector;
