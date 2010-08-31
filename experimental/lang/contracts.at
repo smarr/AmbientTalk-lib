@@ -206,8 +206,49 @@ def makeContractField(maxAmount, role) {
 			installCallback(`afterCallBack, msgName, block);
 		};
 		
+		/* A state invariant. It works by hooking into calls like `field:= in participants of the contract.
+         * Whenever the field is assigned to, the invariant object is added to or removed from the stateMap
+         * set in the enclosing field. Upon installation and reconnection the field is queried.
+         */
 		def addStateInvariant(field, value) {
-			stateInvariants := stateInvariants + [[field, value]];
+			def parentField := self;
+			def stateInvariant := object: {
+			    def callback(m, args, obj) {
+					def set := stateMap.get(obj);
+					def satisfied := (set.size == stateInvariants.length );
+					
+					if: (args[1] == value ) then: {
+						set.add(self);
+						if: ( !satisfied.and: { set.size == stateInvariants.length } ) then: {
+							found.add(obj);
+							rebind.discover(parentField, contract, obj);
+						}
+					} else: {
+						set.remove(self);
+						if: satisfied then: {
+							found.remove(obj);
+							rebind.disconnect(parentField, contract, obj);	
+						}
+					}
+				};
+				
+				def msg := eval: `(<-#field()@[/.at.lang.futures.FutureMessage]) in: self;
+				def setter := (field.text+":=");
+				
+				def installOn(obj) {
+					// TODO canceler
+					system.println("installing callback for state invariant on " + field);
+					on: obj before: {|methodName,arguments| methodName == setter } CallBack: { |m, args| callback(m, args, obj) };
+					
+					system.println("checking state invariant on " + field + " now");
+					check(obj);
+				};
+				
+				def check(obj) {
+					when: obj <+ msg becomes: { |response| callback(field, [response], obj) };
+				};
+			};
+			stateInvariants := stateInvariants + [stateInvariant];
 		};
 
 		def installCallback(selector, msgName, block) {
@@ -236,40 +277,9 @@ def makeContractField(maxAmount, role) {
 			    
 				def c := whenever: role discovered: { |obj|
 															
-					//TODO canceler
 					if: (stateInvariants.length > 0) then: {
-						stateMap.put(obj,/.at.collections.java.hashset.HashSet.new());
-						stateInvariants.each: { |a|
-							def field := a[1];
-							def value := a[2];
-							
-							def stateBlock := { |m,args|
-								system.println("checking stuff for invariant " + field);
-								
-								def set := stateMap.get(obj);
-								def satisfied := (set.size == stateInvariants.length );
-								
-								if: (args[1] == value ) then: {
-									set.add(a);
-									if: ( !satisfied.and: { set.size == stateInvariants.length } ) then: {
-										found.add(obj);
-										rebind.discover(self, contract, obj);
-									};
-								} else: {
-									set.remove(a);
-									if: satisfied then: {
-										rebind.disconnect(self, contract, obj);	
-									}
-								};
-							};
-								
-							system.println("installing callback for state invariant on " + field);
-							on: obj before: {|methodName,arguments| methodName == (field.text+":=") } CallBack: stateBlock;
-							
-							system.println("checking state invariant on " + field + " now");
-							def msg := eval: `(<-#field()@[/.at.lang.futures.FutureMessage]) in: self;
-							when: obj <+ msg becomes: { |response| stateBlock(field, [response]); };
-						};
+						stateMap.put(obj, /.at.collections.java.hashset.HashSet.new());
+						stateInvariants.each: { |inv| inv.installOn(obj) };
 					} else: {
 						found.add(obj);
 						rebind.discover(self, contract, obj);
@@ -278,12 +288,14 @@ def makeContractField(maxAmount, role) {
 						
 					def d := whenever: obj disconnected: {
 						found.remove(obj);
+						stateMap.get(obj).clear();
 						rebind.disconnect(self, contract, obj);
 					};
 					
 					def r := whenever: obj reconnected: {
-						found.add(obj);
-						rebind.reconnect(self, contract, obj);
+						//found.add(obj);
+						stateInvariants.each: { |inv| inv.check(obj) };
+						//rebind.reconnect(self, contract, obj);
 					};
 					
 					cancelers := [d, r];
