@@ -74,7 +74,11 @@ def RebindStrategies := object: {
 		};
 		
 		def discover(field, contract, object) {
-			field.addObj(object);
+			if: (disconnected.contains(object)) then: {
+				reconnected(field, contract, object);
+			} else: {
+				field.addObj(object);
+			};
 		};
 		
 		def disconnect(field, contract, object) {
@@ -104,8 +108,12 @@ def RebindStrategies := object: {
 		};
 		
 		def discover(field, contract, object) {
-			if: ((disconnected.isEmpty).and: { !isSatisfied() }) then: {
+			if: ((disconnected.isEmpty).and: { !field.isSatisfied() }) then: {
 				field.addObj(object);
+			} else: {
+				if: (disconnected.contains(object)) then: {
+					reconnected(field, contract, object);
+				}
 			}
 		};
 		
@@ -284,7 +292,6 @@ def makeContractField(maxAmount, role) {
 						found.add(obj);
 						rebind.discover(self, contract, obj);
 					};
-					
 						
 					def d := whenever: obj disconnected: {
 						found.remove(obj);
