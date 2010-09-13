@@ -1,0 +1,186 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab (2006-2010)
+ * Authors: Eline Philips
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF frameworks.workflowRCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+
+deftype Compensation;
+deftype RetryType <: Compensation;
+deftype RediscoverType <: Compensation;
+deftype SkipType <: Compensation;
+deftype RestartType <: Compensation;
+deftype FailureType;
+deftype DisconnectionType <: FailureType;
+deftype TimeoutType <: FailureType;
+deftype NotFoundType <: FailureType;
+
+
+def Failure(c, fe) {
+    object: {   
+        def component := c;
+        def failureEvents := fe; 
+
+        def start(env) {
+            def [result, resolver] := makeFuture(); 
+            execute(env, resolver);
+            result;
+        };
+    
+        def replaceFailure(failureEvent, env) {
+            if: (is: failureEvent taggedAs: DisconnectionType) then: {
+                env.replace(`disconnection, failureEvent);
+            } else: {
+                if: (is: failureEvent taggedAs: TimeoutType) then: {
+                    env.replace(`timeout, failureEvent);
+                } else: {
+                    if: (is: failureEvent taggedAs: NotFoundType) then: {
+                        env.replace(`notFound, failureEvent);
+                    };
+                };
+            };
+            if: (is: failureEvent.compensation taggedAs: RestartType) then: {
+                failureEvent.compensation.updateAction(component);
+            };
+        };
+    
+        def execute(env, resolver) {
+            def prevDisconnection := env.find(`disconnection)[2];
+            def prevTimeout := env.find(`timeout)[2];
+            def prevNotFound := env.find(`notFound)[2];
+            failureEvents.each: { |failure| replaceFailure(failure, env); };
+            WorkflowPattern^run(component, 
+                                env, 
+                                { | _ | 
+                                    env.replace(`disconnection, prevDisconnection);
+                                    env.replace(`timeout, prevTimeout);
+                                    resolver.resolve(_) });
+        };
+    } taggedAs: [Pattern];
+};
+
+
+
+def Disconnection(c) {
+    object: {
+        def compensation := c;
+    } taggedAs: [DisconnectionType];
+};
+
+
+def Timeout(d, c) {
+    object: {
+        def duration := d;
+        def compensation := c;
+    } taggedAs: [TimeoutType];
+};
+
+
+def NotFound(c) {
+    object: {
+        def compensation := c;
+    } taggedAs: [NotFoundType];
+};
+
+
+
+def Retry(t, a := nil) {
+    object: {
+        def maxTimes := t;
+        def triedTimes := 0;
+        def action := a; 
+        def [result, resolver] := makeFuture();
+    
+        def try() {
+            triedTimes := triedTimes + 1;
+        };
+    } taggedAs: [RetryType];
+};
+
+
+def Rediscover(t, a := nil) {
+    object: {
+        def maxTimes := t;
+        def triedTimes := 0;
+        def action := a; 
+        def [result, resolver] := makeFuture;
+    
+        def try() {
+            triedTimes := triedTimes + 1;
+        };
+    } taggedAs: [RediscoverType];
+};
+
+
+def Skip() {
+    object: {
+        def maxTimes := 1;
+        def triedTimes := 0;
+        def action := nil; 
+        def [result, resolver] := makeFuture(); 
+    
+        def try() {
+            triedTimes := triedTimes + 1;
+        };
+    } taggedAs: [SkipType];
+};
+
+
+def Restart(t) {
+    object: {
+        def maxTimes := t;
+        def triedTimes := 0;
+        def action; 
+        def [result, resolver] := makeFuture();
+    
+        def try() {
+            triedTimes := triedTimes + 1;
+        };
+    
+        def updateAction(component) {
+            action := component;
+        };
+    } taggedAs: [RestartType];
+};
+
+
+def CompensatingActionsModule := object: {
+    def Compensation := Compensation;
+    def RetryType := RetryType;
+    def RediscoverType := RediscoverType;
+    def SkipType := SkipType;
+    def RestartType := RestartType;
+    def FailureType := FailureType;
+    def DisconnectionType := DisconnectionType;
+    def TimeoutType := TimeoutType;
+    def NotFoundType := NotFoundType;
+    def Failure := &Failure;
+    def Disconnection := &Disconnection;
+    def Timeout := &Timeout;
+    def NotFound := &NotFound;
+    def Restart := &Restart;
+    def Skip := &Skip;
+    def Rediscover := &Rediscover;
+    def Retry := &Retry;
+};

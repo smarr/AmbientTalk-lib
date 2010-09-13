@@ -1,0 +1,196 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab (2006-2010)
+ * Authors: Eline Philips
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+
+def initModule := lobby.frameworks.workflow.WFinit;
+def environmentModule := lobby.frameworks.workflow.environment;
+def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
+def intensionalModule := lobby.frameworks.workflow.intensional;
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+import crimeModule;
+import initModule;
+import environmentModule;
+import workflowPatternModule;
+import intensionalModule;
+import /.at.lang.values;
+import /.at.lang.futures;
+import /.at.lang.multifutures;
+enableFutures(false);
+
+deftype Service;
+
+
+//TODO: ugly implementation, use something as volatile sets (experimental.lang)
+def ServiceDatabase := object: {
+    def services := [];
+    def servicesMapping := [];
+        
+    def findAll(tag) {
+        def result := [];
+        services.each: { |s| if: (is: s taggedAs: tag) then: {result := result + [s];}; };
+        result;
+    };
+    
+    def find(id) {
+    	def idx := servicesMapping.find: { |pair| pair[1] == id }; 
+    	def bla := if: (idx == nil) then: { "nil"; } else: { servicesMapping[idx][2]; };
+    	if: (idx == nil) then: { nil; } else: { servicesMapping[idx][2]; };
+    };
+    
+    def init() {
+        whenever: Service discovered: { |service| 
+        	if: (servicesMapping.map: { |pair| pair[2]; }).contains(service) then: {
+        		system.println("Service already discovered");
+        	} else: {  
+            	system.println("service discovered ");
+            	when: service<-export(factId)@FutureMessage becomes: { |result|
+            		system.println("RESULT VAN EXPORT " + result);
+            		result.each: { |fact| myCrime.insertTuple(fact); };
+            	};
+            	//myCrime.insertTuple(makeTuple("FarRef", id, service));
+				servicesMapping := servicesMapping + [[factId, service]];
+            	factId := factId + 1; 
+            	services := services + [service];
+            	whenever: service disconnected: {
+                	system.println("Service disconnected");
+                	// TODO myCrime retract
+                	def idx := services.find: { |s| s == service; };
+                	services := services.select(1, idx) + services.select(idx + 1, services.length());
+            	};
+            };
+        };
+    };
+};
+
+
+
+
+def SnapshotGroup(tag, var, cmp) {
+    object: {
+        def groupTag := tag;
+        def varName := var;
+        def component := cmp;
+        def started := false;
+    
+        def start(env) {
+            def [result, resolver] := makeFuture();
+            execute(env, resolver);
+            result;
+        };
+    
+        def execute(env, resolver) {
+        	def ServiceDB := env.find(`serviceDB);
+            def services := [];
+            if: (is: tag taggedAs: Rule) then: {
+            	tag.findall( { |varMaps| varMaps.each: { |v|
+            											def s := ServiceDB.find(v.get(`id));
+            											services := services + [s]; };  
+            							 executeServices(env, resolver, services) ;});
+            } else: {
+            	services := ServiceDB.findAll(groupTag);
+            	executeServices(env, resolver, services);
+           	};
+		};
+		
+		def executeServices(env, resolver, services) {
+            groupId := groupId + 1;
+            services.each: { |s| def clonedEnv := Environment.new(env); 
+                                clonedEnv.insert(varName, s); 
+                                def groupInfo := env.find(`groupInfo);
+                                clonedEnv.replace(`groupInfo, [groupId, services.length(), groupInfo]);
+                                WorkflowPattern^run(component, clonedEnv, { | _ | resolver.resolve(_) }); }; 
+        };
+    } taggedAs: [Pattern];
+};
+
+
+
+def Barrier(c, cmp) {
+    object: {
+        def condition := c;
+        def component := cmp;
+        def passedEnv := Environment.new();
+    
+        def start(env) { 
+            def [result, resolver] := makeFuture();
+            execute(env, resolver);
+            result;
+        };
+    
+        def execute(env, resolver) {
+            def groupInfo := env.find(`groupInfo);
+            if: (check(env)) then: {
+                def passed := passedEnv.find(groupInfo[1]);
+                def nrPassed := if: (passed == false) then: { 0; } else: {passed[2]};
+                passedEnv.replace(groupInfo[1], nrPassed+1);
+                WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
+            } else: {
+                system.println("Condition of barrier no langer holds.");
+            };
+        };
+    
+        def check(env) {
+            def groupInfo := env.find(`groupInfo);
+            def passed := passedEnv.find(groupInfo[1]);
+            def nrPassed := if: (passed == false) then: { 0; } else: {passed[2]};
+            condition.check(groupInfo[2], nrPassed);
+        };
+    } taggedAs: [Pattern];
+};
+
+
+
+def Percentage(p) {
+    object: {
+        def pct := p;
+    
+        def check(total, nbr) {
+            nbr/total <= pct;
+        };
+    } taggedAs: [Pattern];
+};
+
+
+def Amount(a) {
+    object: {
+        def amount := a;
+    
+        def check(total, nbr) {
+            nbr < amount;
+        };
+    } taggedAs: [Pattern];
+};
+
+
+def CRIMEGroupInteractionsModule := object: {
+    deftype Service;
+    def ServiceDatabase := ServiceDatabase;
+    def SnapshotGroup := &SnapshotGroup;
+    def Barrier := &Barrier;
+    def Percentage := &Percentage;
+    def Amount := &Amount;
+};

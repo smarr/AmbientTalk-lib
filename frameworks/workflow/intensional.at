@@ -1,0 +1,99 @@
+
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+def initModule := lobby.frameworks.workflow.WFinit;
+def activityModule := lobby.frameworks.workflow.activity;
+
+import crimeModule;
+import initModule;
+import activityModule;
+import /.at.lang.values;
+import /.at.lang.futures;
+import /.at.lang.multifutures;
+
+
+def myCrime := makeCrimeEngine();
+def factId := 1;
+deftype Rule;
+deftype RuleActivity <: Activity;
+
+
+def CrimeRuleActivity := object: {
+    def rule;
+    def selector;
+    def parameters;
+    def output;
+    
+    def init(r, sel, pars, outputVars) {  
+        rule       := r;
+        selector   := sel;
+        parameters := pars;
+        output     := outputVars;
+    };  
+} taggedAs: [RuleActivity];
+
+    
+    
+
+def createRuleActivityMirror(baseObject) { 
+    extend: defaultMirror.new(baseObject) with: {
+        def invoke(rcv, inv) {
+            if: (self.respondsTo(inv.selector)) then: { 
+                super.invoke(rcv, inv) 
+            } else: {
+                if: (is: inv taggedAs: Trigger) then: { 
+                    TriggerPattern.new(baseObject, inv.selector, inv.arguments) 
+                } else: {
+                    if: (is: inv taggedAs: Output) then: {
+                        def theMethodTags := (tagsOf: inv);
+                        def theOutputTag  := theMethodTags.at(theMethodTags.find: { | aTag | is: aTag taggedAs: OutputTag });
+                        CrimeRuleActivity.new(baseObject, inv.selector, inv.arguments, theOutputTag.outputArgs)
+                    } else: { 
+                        CrimeRuleActivity.new(baseObject, inv.selector, inv.arguments, []) 
+                    }
+                }
+            }
+        }
+    };
+};
+
+
+
+def makeRule(@temp) {
+	object: {
+		def template := temp;
+		
+		def find(closure) {
+			myCrime.when: template activated: { |varMap|
+				closure(varMap);
+			};
+		};
+		
+		def findallAux() {
+			def [future, resolver] := makeMultiFuture(10000); //TODO factId); factId == 1 (CRIMEgroupInteractions factId++)
+			myCrime.when: template activated: { |varMap|
+				resolver.resolve(varMap);
+			};
+			future;
+		};
+		
+		def findall(closure) {
+			def results := [];
+			whenEach: findallAux() becomes: { |varMap|
+				results := results + [varMap];
+			};
+			/.at.support.timer.when: /.at.support.timer.seconds(1) elapsed: {   
+				closure(results);
+			};
+		};
+	} taggedAs: [Rule] mirroredBy: { |emptyBase| createRuleActivityMirror(emptyBase)};
+};
+
+ 
+ 
+def IntensionalModule := object: {
+	def myCrime := myCrime;
+	def makeRule := &makeRule;
+	def RuleActivity := RuleActivity;
+	def factId := factId;
+	def Rule := Rule;
+}; 

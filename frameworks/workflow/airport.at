@@ -1,0 +1,81 @@
+def initModule := lobby.frameworks.workflow.WFinit;
+def environmentModule := lobby.frameworks.workflow.environment;
+def activityModule := lobby.frameworks.workflow.activity;
+def workflowPatternModule := lobby..workflowPattern;
+def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
+def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
+//def groupInteractionsModule := lobby.frameworks.workflow.groupInteractions;
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+def intensionalModule := lobby.frameworks.workflow.intensional;
+def CRIframeworks.workflowgroupInteractionsModule := lobby.frameworks.workflow.CRIframeworks.workflowgroupInteractions;
+
+import initModule;
+import environmentModule;
+import activityModule;
+import workflowPatternModule;
+import standardPatternsModule;
+import compensatingActionsModule;
+//import groupInteractionsModule;
+import crimeModule;
+import intensionalModule;
+import CRIframeworks.workflowgroupInteractionsModule;
+
+
+def WFenv := Environment.new();
+def ServiceDB := ServiceDatabase.new();
+
+
+WFenv.insert(`passenger, "Stijn Verhaegen");
+WFenv.insert(`flight, "BA376 to NewYork");
+
+import /.at.lang.values;
+import /.at.lang.futures;
+import /.at.lang.multifutures;
+enableFutures(false);
+network.online();
+
+
+deftype MessagingServiceNOWs <: Service;
+deftype AnnouncementServiceNOWs <: Service;
+deftype AssistanceNOWs <: Service;
+deftype BoardingResponsibleNOWs <: Service;
+deftype LastMinuteNOWs <: Service;
+deftype LuggageServiceNOWs <: Service;
+deftype ControlTowerNOWs <: Service;
+
+
+def MessagingService := makeServiceWrapper(MessagingServiceNOWs);
+def AnnouncementService := makeServiceWrapper(AnnouncementServiceNOWs);
+def Assistance := makeServiceWrapper(AssistanceNOWs);
+def BoardingResponsible := makeServiceWrapper(BoardingResponsibleNOWs);
+def LastMinute := makeServiceWrapper(LastMinuteNOWs);
+def LuggageService := makeServiceWrapper(LuggageServiceNOWs);
+def ControlTower := makeServiceWrapper(ControlTowerNOWs);
+
+
+//==================================
+def seq4 := Sequence( BoardingResponsible.waitForPassenger(Env.passenger), ControlTower.takeoff(Env.flight) );
+def structDiscr := StructuredDiscriminator( seq4 );
+
+def sync2 := Synchronize( ControlTower.takeoff(Env.flight) );
+def seq5 := Sequence( LastMinute.freeSeat(Env.flight, Env.passenger), Connection(sync2) );
+def seq6 := Sequence( LuggageService.removeLuggage(Env.flight, Env.passenger), Connection(sync2) );
+def seq7 := Sequence( BoardingResponsible.closeGate(Env.flight), Connection(sync2) );
+def seq8 := Sequence( MessagingService.gateClosed(Env.flight, Env.passenger), Connection(sync2) );
+def parSplit2 := ParallelSplit( seq5, seq6, seq7, seq8 );
+
+def sync1 := Synchronize( parSplit2 ); 
+
+def exc1 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
+def exc2 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
+def exc3 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
+
+def seq1 := Sequence( MessagingService.reminder(Env.passenger)@Output(Env.found), exc1 );
+def seq2 := Sequence( AnnouncementService.missingPerson(Env.passenger)@Output(Env.found), exc2 );
+def seq3 := Sequence( Assistance.missingPerson(Env.passenger)@Output(Env.found), exc3 );
+
+def parSplit1 := ParallelSplit( seq1, seq2, seq3 );
+
+
+
+

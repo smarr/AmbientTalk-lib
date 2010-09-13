@@ -1,0 +1,99 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab (2006-2010)
+ * Authors: Eline Philips
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+ 
+def initModule := lobby.frameworks.workflow.WFinit;
+import initModule;
+ 
+ 
+ def Environment := object: {
+    def dict := [];
+    def id;
+
+    def insert(name, value) {
+        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+        if: idx == nil then: {
+            dict := dict + [[name, value]];
+        } else: {
+            dict[idx] := [name, value];
+        };
+    };
+    
+    def replace(name, value) {
+        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+        if: idx == nil then: {
+            dict := dict + [[name, value]];
+        } else: {
+            dict[idx] := [name, value];
+        };
+    };
+    
+    def delete(name) {
+        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+        if: idx != nil then: {
+            dict[idx] := [];
+        };
+    };
+    
+    def find(name) {
+        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
+        if: idx == nil then: {
+            nil;
+        } else: {
+            dict[idx][2];
+        };
+    };
+    
+    def bind(arguments) { 
+        arguments.map: { |arg| if: (is: arg taggedAs: Variable) then: { find(arg.variable); } else: { find(arg); }; };
+    };
+    
+    def isEmpty() {
+        dict.isEmpty();
+    };
+    
+    def merge(envs) {
+        envs.each: { |env| env.dict.each: { |pair| insert(pair[1], pair[2]); }; };
+    };
+    
+    def init(@envsToCopy) {
+    	initModule.id := initModule.id + 1;
+    	self.id := initModule.id;
+        self.merge(envsToCopy)
+    };
+    
+    def print() {
+        system.println(dict);
+    };
+};
+
+
+ 
+def environmentModule := object: {
+    def Environment := Environment;
+};
+

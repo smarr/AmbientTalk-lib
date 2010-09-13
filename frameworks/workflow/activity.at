@@ -1,0 +1,153 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab (2006-2010)
+ * Authors: Eline Philips
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+
+
+def initModule := lobby.frameworks.workflow.WFinit;
+import initModule;
+
+
+def ServiceActivity := object: {
+    def service;
+    def selector;
+    def parameters;
+    def output;
+    
+    def init(sw, sel, pars, outputVars) {  
+        service    := sw;
+        selector   := sel;
+        parameters := pars;
+        output     := outputVars;
+    };  
+} taggedAs: [Activity];
+
+
+
+def Output := extend: lobby.at.lang.values.createTypeTag(`Output) with: {
+    def outputArgs;
+    def apply(args) { self.new(args) };
+    def init(args) { outputArgs := args; };
+} taggedAs: [OutputTag];
+    
+    
+
+def createServiceMirror(baseObject) { 
+    extend: defaultMirror.new(baseObject) with: {
+        def invoke(rcv, inv) {
+            if: (self.respondsTo(inv.selector)) then: { 
+                super.invoke(rcv, inv) 
+            } else: {
+                if: (is: inv taggedAs: Trigger) then: { 
+                    TriggerPattern.new(baseObject, inv.selector, inv.arguments) 
+                } else: {
+                    if: (is: inv taggedAs: Output) then: {
+                        def theMethodTags := (tagsOf: inv);
+                        def theOutputTag  := theMethodTags.at(theMethodTags.find: { | aTag | is: aTag taggedAs: OutputTag });
+                        ServiceActivity.new(baseObject, inv.selector, inv.arguments, theOutputTag.outputArgs)
+                    } else: { 
+                        ServiceActivity.new(baseObject, inv.selector, inv.arguments, []) 
+                    }
+                }
+            }
+        }
+    };
+};
+
+
+
+def makeServiceWrapper(aTag) {
+    object: {
+        def tag() { aTag };
+
+    } mirroredBy: {|emptyBase| createServiceMirror(emptyBase)}
+};
+
+
+
+def VariableActivity := object: {
+    def variableName;
+    def selector;
+    def parameters;
+    def output;
+    
+    def init(var, sel, pars, outputVars) {  
+        variableName   := var;
+        selector       := sel;
+        parameters     := pars;
+        output         := outputVars;
+    };  
+} taggedAs: [VarActivity];
+
+
+def createVariableWrapper(selector) {
+    
+    object: {
+        def variable := selector;
+    
+    } taggedAs: [Variable] mirroredBy: {|emptyBase| 
+        extend: defaultMirror.new(emptyBase) with: {
+            def invoke(rcv, inv) {
+                if: (self.respondsTo(inv.selector)) then: { 
+                    super.invoke(rcv, sel); 
+                } else: {
+                    if: (is: inv taggedAs: Trigger) then: { 
+                        system.println("Triggers are not supported for VariableWrappers") 
+                    } else: {
+                        if: (is: inv taggedAs: Output) then: {
+                            def theMethodTags := (tagsOf: inv);
+                            def theOutputTag  := theMethodTags.at(theMethodTags.find: { | aTag | is: aTag taggedAs: OutputTag });
+                            VariableActivity.new(emptyBase.variable, inv.selector, inv.arguments, theOutputTag.outputArgs)
+                        } else: { 
+                            VariableActivity.new(emptyBase.variable, inv.selector, inv.arguments, []) 
+                        }
+                    }   
+                }
+            }
+        };
+    }; 
+};
+
+
+def Env := object: {
+
+    } mirroredBy: {|emptyBase| 
+        extend: defaultMirror.new(emptyBase) with: {
+            def invokeField(rcv, sel) {
+                if: (self.respondsTo(sel)) then: { 
+                    super.invokeField(rcv, sel) 
+                } else: {
+                    createVariableWrapper(sel);
+                }
+        }
+    };
+};
+
+
+def ActivityModule := object: {
+    def makeServiceWrapper := &makeServiceWrapper;
+    def Env := Env;
+    def Output := Output;
+};
