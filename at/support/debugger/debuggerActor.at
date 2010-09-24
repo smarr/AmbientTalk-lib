@@ -1,0 +1,130 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2010
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/** 
+ * Implementation of debugger Actor module of the AmbientTalk debugger called REME-D (read remedy). 
+ * More information about REME-D at AmbientTalk's google code site.
+ * @author egonzale
+**/
+deftype DebuggerActor;
+deftype Debug <: /.at.lang.types.Message;
+
+def debuggerActorBhv := object: {
+  def actorList := jlobby.java.util.HashMap.new();
+  def breakPoints := /.at.support.debugger.localManager.breakpointsDS.new();
+  
+  def actorList.each: closure {
+	def valit := actorList.values().iterator();
+	while: { valit.hasNext() } do: {
+	  closure(valit.next());
+	};
+  };
+    
+  // Interface methods called from Eclipse plugin
+  def pauseActor(actorId){
+     def farRefToActorMirror := actorList.get(actorId);
+     if: (nil != actorId) then:{
+       farRefToActorMirror<-pause()@Debug;
+     };
+  };
+  
+  def resumeActor(actorId){
+     def farRefToActorMirror := actorList.get(actorId);
+     if: (nil != actorId) then:{
+       farRefToActorMirror<-resume()@Debug;
+     };
+  };
+  
+  def stepInto(actorId){
+    def farRefToActorMirror := actorList.get(actorId);
+    if: (nil != actorId) then:{
+      farRefToActorMirror<-stepInto()@Debug;
+    };
+  };
+  
+  def stepOver(actorId){
+    def farRefToActorMirror := actorList.get(actorId);
+    if: (nil != actorId) then:{
+      farRefToActorMirror<-stepOver()@Debug;
+    };
+  };
+  
+  def setBreakpoint(filename, lineNumber){
+    breakPoints.put(filename, lineNumber);
+    actorList.each: { |actorMirrorRef|
+      actorMirrorRef<-addBreakpoint(filename, lineNumber)@Debug;
+    };
+  };
+  
+  def clearBreakpoint(filename, lineNumber){
+    breakPoints.remove(filename, lineNumber);
+    actorList.each: { |actorMirrorRef|
+      actorMirrorRef<-removeBreakpoint(filename, lineNumber)@Debug;
+    };
+  }; 
+  // Interface methods called from Actors which need to be propagated to Eclipse
+  def actorStarted(actorId, frLocalManager){
+    actorList.put(actorId, frLocalManager);
+    frLocalManager<-start(breakPoints.toTable())@Debug;
+    jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, 0);
+    
+    whenever: frLocalManager disconnected: {
+      actorList.remove(actorId);
+      //THINK: if actor was "infected", you should remove it from GUI totally.
+      // if actor was "part of the gui", just grey out it?
+      jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_disconnectionActor(actorId);
+    }; 
+  };
+  
+  // Interface methods called from localManager 
+  def actorPaused(actorId,actorState){
+     // second argument is Map <String, Object> 
+     //system.println("Confirm actor paused : " + actorId);
+     jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_suspendActor(actorId, actorState);
+  };
+  
+  def actorResumed(actorId){
+    jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_resumeActor(actorId);
+  };
+  
+  def updateInbox(actorId, msg, addition := true) {  // TODO: it should be actorId, msg, rcv? 
+	//system.println("Updating inbox of: " + actorId + " " + msg ); 
+     if: addition then: {
+       jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_addMsgInfo(actorId, msg.selector, msg.arguments,msg);
+     } else: {
+       jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_removeMsgInfo(actorId, msg.selector, msg.arguments,msg);
+     };
+  };
+  
+  def updateMessageSent(actorId, msg) {
+    jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_newMsgSent(actorId, msg.selector, msg.arguments,msg);
+  };
+  
+};
+export: debuggerActorBhv as: DebuggerActor;
+
+//init.at needs to
+//at.support.debugger.enableDebugger();

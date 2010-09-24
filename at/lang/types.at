@@ -103,6 +103,7 @@ deftype ObjectOffline <: Exception;
 
 // misc
 deftype Required; // to tag methods that a trait requires
+deftype ExternalMessage; //to tag messages external to an actor issued by the interpreter such as jointEvent, farReferences listeners.
 
 // make all definitions in this file public
 self

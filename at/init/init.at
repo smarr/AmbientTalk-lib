@@ -288,3 +288,6 @@ def export: someObject {
 def try: closure catch: failClosure {
 	try: closure catch: /.at.lang.types.Exception using: { |e| failClosure(e) };
 };
+
+// to be able to switch back to the default actor mirror when applying custom mirrors.
+def defaultActorMirror := reflectOnActor();
