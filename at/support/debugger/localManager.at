@@ -29,7 +29,6 @@
  * More information about REME-D at AmbientTalk's google code site.
  * @author egonzale
 **/
-
 deftype DebuggerActor;
 deftype LocalManagerModule;
 deftype Debug <: /.at.lang.types.AsyncMessage;
@@ -43,28 +42,32 @@ def XDebuggerException := /.at.lang.exceptions.createException(DebuggerException
 line number get screwed up and we need it for breakpoints*/
 deftype Pause <: /.at.lang.types.AsyncMessage;
 def extendWithPauseBhv(msg, actorId) {
-  extend: msg with: { |actorId|
-    def process(rcv) {
-      def actor := reflectOnActor();
-      if: !(is: actor taggedAs: /.at.support.debugger.localManager.LocalManagerModule) then: {
-        if: !(reflect: actor).respondsTo(`behaviour) then:{
-              system.println("infecting somebody");
-	       /.at.support.debugger.localManager.enableLocalManager(true, false);
-	       rcv <+ super; //problem?
-		} else:{
-		   raise: XDebuggerException("you cannot infect an non-debuggeable actor");
-		};
-	  } else: {
-	    //already enabled.
-	    super^process(rcv);
+  if: (	is: msg taggedAs: Pause ) then:{
+    msg;  // do not wrap it again.
+  } else:{	
+    extend: msg with: { |actorId|
+      def alreadyPaused := false;
+      def process(rcv) {
+        def actor := reflectOnActor();
+        if: !(is: actor taggedAs: /.at.support.debugger.localManager.LocalManagerModule) then: {
+          if: ((reflect: actor).respondsTo(`debuggeable)) then:{
+	         /.at.support.debugger.localManager.enableLocalManager(true, false);
+	         rcv <+ super; 
+		  } else:{
+		     raise: /at.support.debugger.localManager.XDebuggerException("cannot infect an non-debuggeable actor");
+		  };
+	    } else: {
+	      //already enabled.
+	      super^process(rcv);
+	    };
 	  };
-	};
-	def getLocationLine(){super^getLocationLine() };
-	def getLocationFilename(){super^getLocationFilename()};
-	def getSenderActorId(){actorId}; 
-  } taggedAs: [Pause];
+	  def getLocationLine(){super^getLocationLine() };
+	  def getLocationFilename(){super^getLocationFilename()};
+	  def getSenderActorId(){actorId}; 
+    } taggedAs: [Pause];
+  };
 };
-
+def HashMap :=  jlobby.java.util.HashMap;
 def Vector := /.at.collections.vector.Vector;
 // local manager life cycle constants.
 // all messages arrived in INITIAL 
@@ -110,78 +113,81 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  def lineNumber := msg.getLocationLine();
 	  def filename := msg.getLocationFilename();
 	  if: ((nil != lineNumber).and: { nil != filename }) then:{
-	    (breakpoints.contains(filename, lineNumber).or:{ (is: msg taggedAs: Pause)});
+	    if: (is: msg taggedAs: Pause) then: {
+	       !(msg.alreadyPaused);
+	    } else:{
+	      breakpoints.contains(filename, lineNumber);
+	    };
 	  } else:{
-	   (is: msg taggedAs: Pause);
+	    (is: msg taggedAs: Pause).and:{ !(msg.alreadyPaused)};
 	  }
 	};
-	def pauseAndBuffer(rcv,msg, state := INITIAL){
+	def getActorState() {
+      def actorState := HashMap.new();
+      def fields := (reflect: self.behaviour).listFields(); 
+      fields.each: { |field| 
+        actorState.put(field.name.text(), (print: field.readField()));
+      };
+      actorState;
+    };
+	def pauseAndBuffer(rcv,msg, state := INITIAL){ 
       inbox := inbox + [[msg, rcv]];
       if: isStarted() then: {
-        debuggerActor<-actorPaused(getActorId(),actor)@Debug;
+        debuggerActor<-updateInbox(getActorId(),msg)@Debug; 
+        debuggerActor<-actorPaused(getActorId(),getActorState())@Debug;
       };
       debuggingState := PAUSED;
       pausedState := state;
 	};
 	def scheduleAllMessagesFromInbox(){
-	//system.println("SHECUDLING 1: ALL");
 	  inbox.each: { |letter|
 	    def msg := letter[1]; 
 	    def rcv := letter[2];
-		//rcv <+ msg;
+		if: (is: msg taggedAs: Pause) then:{
+		  // if the message to re-schedule was a pause one, it means this time it needs to be executed.
+		  msg.alreadyPaused := true;
+		};
         self.schedule(rcv,msg);
         debuggerActor<-updateInbox(actorId, msg, false)@Debug;
 	  };
 	  inbox := [];
 	};
+	// rememver you can re-schedule a message which is not breakpointed 
+    // but it is paused because of an explicit pause command!
 	def scheduleOneMessageFromInbox() {
 	  def msg := (inbox[1])[1]; //[msg,rcv]
       def rcv := (inbox[1])[2];
-      //system.println("SHECUDLING 1: " + msg);
+      if: (is: msg taggedAs: Pause) then:{ 
+        // if the message to re-schedule was a pause one, it means this time it needs to be executed.
+		 msg.alreadyPaused := true;
+	  };
       // check on the length of the inbox, maybe it was the last message.
       def length := inbox.length();
       if: (length > 1) then: {
-	    inbox := inbox.select(2, length+1); //HAHAHAHAHA 
+	    inbox := inbox.select(2, length); 
 	  } else:{ 
 	    inbox := [];
 	  };
-	  // removed if test because you can stepInto a message which is not breakpoint 
-      // but it is paused because of an explicit pause command!
-      //if: isBreakpointed(msg) then:{ 
       self.schedule(rcv,msg);
       debuggerActor<-updateInbox(actorId, msg, false)@Debug;
-	 //};
     };
-    
 	// interface with debuggerActor
 	def interfaceDebuggerActor := object: {
 	  def start(tableBreakpoints){
 	  	debuggingState := RUNNING;
 	   	tableBreakpoints.each: { |t| breakpoints.putAll(t[1], t[2])};
-	   	//system.println("ACTOR " + getActorId() + " START " + breakpoints.toTable + " already buffered? " + inbox.length);
 	   	scheduleAllMessagesFromInbox();
 	   	//update inbox with buffered messages.
 	    inbox.each:{ |letter| debuggerActor<-updateInbox(getActorId(),letter[1])@Debug};
 	  };
 	  
 	  def pause(){
-	  //system.println("ACTOR: " + actorId + "paused");
         debuggingState := PAUSED;
         pausedState := COMMAND;
-        
-        def actorState := jlobby.java.util.HashMap.new();
-        //I need to get a list of the fields of the actor....
-       /* def mirrorOnP := reflect: base; //I'm pretty sure this wrong
-        
-        def fields :=  mirrorOnP.listFields();
-        
-        fields.each: { |field| 
-             actorState.put(field.name(),field.read());};*/
-        debuggerActor<-actorPaused(getActorId(),actor)@Debug;
+        debuggerActor<-actorPaused(getActorId(),getActorState())@Debug;
 	  };
 	  
 	  def resume(){
-	  	//system.println("ACTOR: " + actorId + "resumed with inbox size " + inbox.length);
 	  	debuggingState := RUNNING;
 	    pausedState := INITIAL;
 	    scheduleAllMessagesFromInbox();
@@ -189,11 +195,9 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  };
 	  
 	  def stepInto(){
-	  	//system.println("ACTOR: " + actorId + "stepInto with state " + debuggingState + " paused as " + pausedState + "Inbox size: "+inbox.length);
 	  	if: isPaused() then:{
 	      pausedState := STEPINTO;
 	      scheduleOneMessageFromInbox();
-	      
         };
 	  };
 	  
@@ -213,10 +217,9 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  };
 	};
 	
-	
-	// meta actor protocol
+	// meta actor protocol methods
 	def schedule(rcv, msg){
-	//system.println("SCHEDULE " + actorId +" :msg: " + msg.selector + " for: " + rcv + " with state " + debuggingState + " paused as " + pausedState); 
+	//system.println("SCHEDULE " + actorId +" :msg: " + msg.selector + " for: " + rcv + " with state " + debuggingState + " paused as " + pausedState + " msg breakpoint? " + isBreakpointed(msg) + "isstarted " +isStarted()); 
 	  // is base-level or debug-level message?
 	  if: ((is: msg taggedAs: Debug).or:{(is: msg taggedAs: ExternalMessage)}) then: {
 	    // a debug-level message gets always execute
@@ -233,18 +236,16 @@ def makeLocalManagerMirror(actor, debuggingSession){
 		      inbox := inbox + [[msg, rcv]];
 		      // if is not paused by breakpoint, it is intial, and start with notify about the inbox status.
 		      //if: isPausedByBreakpoint() then: { debuggerActor<-updateInbox(getActorId(),msg)@Debug};
-			  debuggerActor<-updateInbox(getActorId(),msg)@Debug; //should always be done
+			  debuggerActor<-updateInbox(getActorId(),msg)@Debug; 
 		    };
 		  } else: {
 		    //running
 		    //check whether the msg has a breakpoint.
             if: isBreakpointed(msg) then:{
-              pauseAndBuffer(rcv,msg, BREAKPOINT);
+              pauseAndBuffer(rcv,extendWithPauseBhv(msg, actorId), BREAKPOINT);
             } else: {
-            //system.println("NORMAL MESSAGE RUNNING");
-		      def result := super^schedule(rcv,msg);
-		      //debuggerActor<-updateInbox(actorId, msg); --should only be done when paused
-		      result;
+              // while running it doesn't have to notify the debuggerActor.
+		      super^schedule(rcv,msg); 
 		    }; //if-isBreakpointed
 	      };//if-isPaused
         } else: { 
@@ -253,71 +254,46 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  }; //-ifDebug
 	};
 	
-	def serve() {
-	  def inboxLetters := self.listIncomingLetters();
-	  if: (inboxLetters.length() > 0) then: {
-	    def letter := inboxLetters[1];
-	    def msg := letter.message();
-//system.println("SERVE " + actorId + "  msg " + msg.selector + " with state " + debuggingState + " paused as " + pausedState); 
-	    // is base-level or debug-level message?
-	    if: (is: msg taggedAs: Debug) then: {
-	        // a debug-level message gets always executed.
-	       super^serve();
-	    } else: {
-	      //a base-level message
-	      // if we get here is either, actor is running or we got step into that schedule the breakpointed message 
-	      def result;
-	      if: (isInSteppingInto().or:{(isInSteppingOver())}) then: {
-	      //system.println("steppingThru");
-	        // if: isBreakpointed(msg) then:{
-	           result := super^serve(); 
-	          // debuggerActor<-updateMessageSent(actorId, msg)@Debug; //this is the message that we are currently stepping into, shouldn't be updated
- 			  // pausedState := INITIAL;
-	        // };
-	      } else: {
-            result := super^serve();    
-	      }; //if-stepping
-          //update debuggerActor of the process of this msg, only if they are not External Messages TODO!
-          if: !(is: msg taggedAs: ExternalMessage) then: {
-            //debuggerActor<-updateInbox(actorId, msg, false); //Shouldnt we update only if paused????
-          };
-	      result; 
-	    }//if-debug 
-	  };//if-length
-	};
 
 	// We cannot attach the Pause annotation with def createMessage(sel, args, types) and annotateMessage(msg)
     // because the lineNumbers get messed up. We intercept send where the msg is already well-formed.
 	def send(rcv, msg){
-	//system.println("SEND " + actorId + "  msg " + msg.selector + " with state " + debuggingState + " paused as " + pausedState); 
       def types := tagsOf: msg;
       if: (nil != (types.find: { |type| type.isSubtypeOf(Debug) })) then: {
-      	//system.println("SENT DEBUG MSG");
-      	super^send(rcv,msg);
+        //sending a debug-level message
+      	if: (disconnectedFromDebuggerActor) then: {
+  	      //while disconnected, @Debug messages toward the debuggerActor are thrown away.
+  		} else: {
+  		  //let the @Debug messages be sent to the debuggerActor even if the actor is paused.
+      	  super^send(rcv,msg);
+  		}
       } else: {
-      	if: ((nil == (types.find: { |type| type.isSubtypeOf(Pause) })).and: {isInSteppingInto()}) then: {
-	  		// the Pause annotation infects other actors if they were not part of the debugging session.
- 			def annotatedMsg := extendWithPauseBhv(msg, actorId);
- 			def result := super^send(rcv, annotatedMsg);
- 		 		  	    //system.println("SENT INFECTOR");
- 			debuggerActor<-updateMessageSent(actorId, msg)@Debug;
- 			pausedState := INITIAL;
- 			result;
-  		  } else:{
-	 	    if: ((nil != (types.find: { |type| type.isSubtypeOf(Debug) })).and: {disconnectedFromDebuggerActor}) then: {
-  	       	//while disconnected, @Debug messages toward the debuggerActor are thrown away.
-  		    } else:{
-  	    		//system.println("SENT");
-  	      		super^send(rcv,msg);
-  	    	};
-	  	  };
-		};
+        // sending an application-level message.
+      	if: (isBreakpointed(msg)) then: {
+	  	  // a breakpointed msg infects other actors if they were not part of the debugging session.
+          def result := super^send(rcv,extendWithPauseBhv(msg, actorId));
+ 		  debuggerActor<-updateMessageSent(actorId, msg)@Debug;
+ 		  if: isInSteppingInto() then: { pausedState := INITIAL };
+ 		  result;
+  		} else:{
+  	      super^send(rcv,msg);
+	  	};
+      };
 	};
-	
-	// start discovery of vmActor
+	//def startDiscoveryDebuggerActor() {
+	// start discovery of DebuggerActor
 	when: DebuggerActor discovered: { |da|
 	  debuggerActor := da;
-	  debuggerActor<-actorStarted(actorId, interfaceDebuggerActor)@Debug;
+	  def pos := -1; // So far, -1 means an actorId from an infected actor.
+	  if: debuggingSession then: {
+	    // ATTENTION: following line of code wouldn't work on devices not loaded with IAT_DEBUGGER, 
+        // i.e. devices not in the debuggingSession.
+        // unless we make getSourceLocation accessive to the reflective layer.
+        // To do so, good design for sourceLocation is required. 
+        // right now, only behaviour and (async) messages have it set.
+	    pos := jlobby.edu.vub.at.debug.IAT_DEBUGGER.getSourceLocation(self.behaviour);
+	  };
+	  debuggerActor<-actorStarted(actorId, pos, interfaceDebuggerActor)@Debug;
 	  disconnectedFromDebuggerActor := false;
 	  // when disconnected from debugger actor, message @Debug are lost 
       // so that we don't update him with old info upon reconnection.		
@@ -330,9 +306,9 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  };
 	  whenever: da reconnected: {
 	    disconnectedFromDebuggerActor := false;
-	    debuggerActor<-actorStarted(actorId, interfaceDebuggerActor)@Debug;
+	    debuggerActor<-actorStarted(actorId, pos, interfaceDebuggerActor)@Debug;
 	  };
-	};
+	};	
   } taggedAs: [ LocalManagerModule ];
 };
 
@@ -340,7 +316,7 @@ def breakpointsDSPrototype := object: {
   def breakPoints;
   
   def init(){
-   breakPoints := jlobby.java.util.HashMap.new();
+   breakPoints := HashMap.new();
   };
      
   def put(filename, number) {
@@ -404,6 +380,7 @@ def breakpointsDSPrototype := object: {
 
 object:{
   def LocalManagerModule := LocalManagerModule;
+  def XDebuggerException := &XDebuggerException;
   def enableLocalManager(enable, debuggingSession := true) { 
   // debuggingSession boolean denotes if an actor was part or not of the original debugging session, to be able to desinfect it if not.
 	def actor := reflectOnActor();
@@ -413,7 +390,7 @@ object:{
 	  	    def newProtocol := makeLocalManagerMirror(actor, debuggingSession);
 		    // the futures protocol by default extends the currently active protocol
 			actor.becomeMirroredBy: newProtocol;
-			//system.println("[localManager.at] enabling debugging support by default on actor " + actor + "with id: " + newProtocol.actorId);
+			system.println("[localManager.at] enabling debugging support by default on actor " + reflectOnActor() + "with id: " + newProtocol.actorId);
 			newProtocol;			
 		} else: {
 		  actor; // return the current actor protocol

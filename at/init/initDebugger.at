@@ -31,10 +31,9 @@
 */
 //Make an actor debugeable by installing a mirror which contains the behaviour field.
 let: { |dam := reflectOnActor()| 
-  // add the behaviour slot if not present
-  def bhv := self;
-  def newProtocol := extend: dam with:{
-   def behaviour := bhv;
+  // add the debuggeable slot if not present
+  def newDefaultMirror := extend: dam with:{
+   def debuggeable := true;
   };
-  dam.becomeMirroredBy: newProtocol;
+  dam.becomeMirroredBy: newDefaultMirror;
 }; 

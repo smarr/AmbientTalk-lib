@@ -86,23 +86,25 @@ def debuggerActorBhv := object: {
     };
   }; 
   // Interface methods called from Actors which need to be propagated to Eclipse
-  def actorStarted(actorId, frLocalManager){
-    actorList.put(actorId, frLocalManager);
-    frLocalManager<-start(breakPoints.toTable())@Debug;
-    jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, 0);
+  def actorStarted(actorId, sourceLocationLine, frLocalManager){
+    def localManager := actorList.get(actorId);
+	if: (nil == localManager) then: {
+      actorList.put(actorId, frLocalManager);
+      frLocalManager<-start(breakPoints.toTable())@Debug;
+      jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, sourceLocationLine);
     
-    whenever: frLocalManager disconnected: {
-      actorList.remove(actorId);
-      //THINK: if actor was "infected", you should remove it from GUI totally.
-      // if actor was "part of the gui", just grey out it?
-      jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_disconnectionActor(actorId);
-    }; 
+      whenever: frLocalManager disconnected: {
+        actorList.remove(actorId);
+        //THINK: if actor was "infected", you should remove it from GUI totally.
+        // if actor was "part of the gui", just grey out it?
+        jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_disconnectionActor(actorId);
+      }; 
+    };
   };
   
   // Interface methods called from localManager 
   def actorPaused(actorId,actorState){
      // second argument is Map <String, Object> 
-     //system.println("Confirm actor paused : " + actorId);
      jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_suspendActor(actorId, actorState);
   };
   
@@ -125,6 +127,4 @@ def debuggerActorBhv := object: {
   
 };
 export: debuggerActorBhv as: DebuggerActor;
-
-//init.at needs to
-//at.support.debugger.enableDebugger();
+network.online();
