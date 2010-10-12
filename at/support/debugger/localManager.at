@@ -286,15 +286,15 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	// start discovery of DebuggerActor
 	when: DebuggerActor discovered: { |da|
 	  debuggerActor := da;
-	  def pos := -1; // So far, -1 means an actorId from an infected actor.
-	  if: debuggingSession then: {
-	    // ATTENTION: following line of code wouldn't work on devices not loaded with IAT_DEBUGGER, 
-        // i.e. devices not in the debuggingSession.
-        // unless we make getSourceLocation accessive to the reflective layer.
-        // To do so, good design for sourceLocation is required. 
-        // right now, only behaviour and (async) messages have it set.
-	    pos := jlobby.edu.vub.at.debug.IAT_DEBUGGER.getSourceLocation(self.behaviour);
-	  };
+	  // TODO: Temporary code to get the sourceLocation of the behaviour 
+	  //  while it is not added to the reflective layer.
+	  def ATObject := jlobby.edu.vub.at.objects.ATObject;
+      def impl_getLocation := /.at.support.symbiosis.getClassInstanceMethod(ATObject, "impl_getLocation", []);
+      def sourceLocation := impl_getLocation.invoke(self.behaviour, []);
+      def pos := 0;
+      if: (nil != sourceLocation) then: { // nil only if behaviour of the default actor.
+        pos := sourceLocation.line;
+      };
 	  debuggerActor<-actorStarted(actorId, pos, interfaceDebuggerActor)@Debug;
 	  disconnectedFromDebuggerActor := false;
 	  // when disconnected from debugger actor, message @Debug are lost 
