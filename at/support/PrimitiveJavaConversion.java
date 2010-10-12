@@ -27,6 +27,11 @@
  */
 package at.support;
 
+import edu.vub.at.objects.grammar.ATSymbol;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+
 /**
  * Auxiliary class to enable less painful construction of Long, Byte, Char and Float
  * objects from within AmbientTalk.
@@ -144,6 +149,14 @@ public class PrimitiveJavaConversion {
 	 */
 	public static boolean opgtxLongs( Long number, Long other) throws IllegalArgumentException{
 		return ( number.longValue() > other.longValue());
+	}
+	
+	/**
+	 * Enables AmbientTalk code to invoke instance-level methods on java.lang.Class objects.
+	 * The symbiosis layer otherwise prevents this, because it only reifies static methods on class wrappers.
+	 */
+	public static Method getClassInstanceMethod(Class c, String name, Class[] paramTypes) throws NoSuchMethodException {
+		return c.getMethod(name, paramTypes);
 	}
 	
 }

@@ -75,5 +75,9 @@
 	def Long.inc() {
 		  PrimitiveJavaConversion.addLongs(self, PrimitiveJavaConversion.intToLong(1));
 	};
+	
+	def getClassInstanceMethod(class, name, paramtypes) {
+	    PrimitiveJavaConversion.getClassInstanceMethod(class, name, paramtypes);
+	};
 
 }
