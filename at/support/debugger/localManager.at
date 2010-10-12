@@ -139,15 +139,15 @@ def makeLocalManagerMirror(actor, debuggingSession){
       debuggingState := PAUSED;
       pausedState := state;
 	};
-	def scheduleAllMessagesFromInbox(){
+	def scheduleAllMessagesFromInbox(start := true){
 	  inbox.each: { |letter|
 	    def msg := letter[1]; 
 	    def rcv := letter[2];
-		if: (is: msg taggedAs: Pause) then:{
+		if: ( start.and: {is: msg taggedAs: Pause}) then:{
 		  // if the message to re-schedule was a pause one, it means this time it needs to be executed.
 		  msg.alreadyPaused := true;
 		};
-        self.schedule(rcv,msg);
+        self<-schedule(rcv,msg); //needs to be async to be evaluated in next turn!
         debuggerActor<-updateInbox(actorId, msg, false)@Debug;
 	  };
 	  inbox := [];
@@ -168,7 +168,7 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  } else:{ 
 	    inbox := [];
 	  };
-      self.schedule(rcv,msg);
+      self.schedule(rcv,msg); //TODO: needs to be async also?
       debuggerActor<-updateInbox(actorId, msg, false)@Debug;
     };
 	// interface with debuggerActor
@@ -176,9 +176,7 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  def start(tableBreakpoints){
 	  	debuggingState := RUNNING;
 	   	tableBreakpoints.each: { |t| breakpoints.putAll(t[1], t[2])};
-	   	scheduleAllMessagesFromInbox();
-	   	//update inbox with buffered messages.
-	    inbox.each:{ |letter| debuggerActor<-updateInbox(getActorId(),letter[1])@Debug};
+	   	scheduleAllMessagesFromInbox(false);
 	  };
 	  
 	  def pause(){
@@ -202,7 +200,6 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	  };
 	  
 	  def stepOver(){
-	  	//system.println("ACTOR: " + actorId + "stepOver with state " + debuggingState + " paused as " + pausedState + "Inbox size: "+inbox.length);
 	    if: isPaused() then:{
 	      pausedState := STEPOVER;
 	      scheduleOneMessageFromInbox();
@@ -229,14 +226,19 @@ def makeLocalManagerMirror(actor, debuggingSession){
 		if: isStarted() then:{
 		// Note that a @Pause message gets also buffered, so that it pauses later the actor!
 	      if: isPaused() then: { 
-	        if: (isInSteppingInto().or:{(isInSteppingOver())}) then:{
+	        if: (isInSteppingInto()) then:{
 	          // This means we got the message breakpointed that needs to be executed.
 	          super^schedule(rcv,msg);
 	        } else: {
-		      inbox := inbox + [[msg, rcv]];
-		      // if is not paused by breakpoint, it is intial, and start with notify about the inbox status.
-		      //if: isPausedByBreakpoint() then: { debuggerActor<-updateInbox(getActorId(),msg)@Debug};
-			  debuggerActor<-updateInbox(getActorId(),msg)@Debug; 
+	          if: isInSteppingOver() then: {
+	            def res := super^schedule(rcv,msg);
+	          	pausedState := INITIAL;
+	            debuggingState := RUNNING;
+	            debuggerActor<-actorResumed(getActorId())@Debug;	
+	            res;
+	          } else:{
+	            pauseAndBuffer(rcv, msg, pauseState); // TOCHECK when this case happens?
+              }
 		    };
 		  } else: {
 		    //running

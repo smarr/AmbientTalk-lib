@@ -29,9 +29,9 @@
  * More information about AmbientTalk's debugger called REME-D at AmbientTalk google code site.
  * @author egonzale
 */
-//Make an actor debugeable by installing a mirror which contains the behaviour field.
+//Make an actor debugeable by installing a mirror which contains a dedicated field.
 let: { |dam := reflectOnActor()| 
-  // add the debuggeable slot if not present
+  // add the debuggeable slot
   def newDefaultMirror := extend: dam with:{
    def debuggeable := true;
   };
