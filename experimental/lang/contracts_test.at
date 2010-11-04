@@ -32,15 +32,19 @@ import /.experimental.lang.contracts;
 
 network.online;
 
+deftype Spy;
+
 deftype Control;
 
-def phone_actor := actor: { |Control|
+def phone_actor := actor: { |Control,Spy|
 	import /.experimental.lang.contracts;
 	
+	def spy;
+	
 	def phone := service: {
-		def IncomingCall()@[Public] { system.println(name + " is ringing"); };
+		def IncomingCall()@[Public] { system.println(name + " is ringing"); if: (nil != spy) then: { spy<-spy() } };
 		def name := "Bob's phone";
-		def location := "study";		
+		def location := "study";
 	};
 	
 	def control := object: {
@@ -52,6 +56,10 @@ def phone_actor := actor: { |Control|
 	export: control as: Control;
 	
 	control.online();
+	
+	when: Spy discovered: { |spy_|
+		spy := spy_;
+	};
 };
 
 def spawn_audio_actor(loc := "test") {
@@ -78,6 +86,12 @@ def spawn_audio_actor(loc := "test") {
 };
 
 spawn_audio_actor();
+
+def spawn_spy() {
+	export: (object: { def spy() { system.println("************************\nim in ur phone, SPYING!\n************************"); } }) as: Spy;
+};
+
+spawn_spy();
 
 def Phone := protocol: {
 	def IncomingCall();
@@ -123,5 +137,7 @@ whenever: Control discovered: { |c|
 		if: (name == "phone") then: { phoneC := c } else: {audioC.add(c)};
 	};
 };
+
+def z() { c.phone<-IncomingCall(); };
 
 c.start();

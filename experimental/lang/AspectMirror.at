@@ -32,6 +32,7 @@ deftype Service;
 def filterMirror := /.at.lang.filterMirror;
 def XSelectorNotFound := /.at.lang.exceptions.XSelectorNotFound;
 def witnessSet := /.experimental.collections.witnessSet;
+def vector := /.at.collections.vector.Vector;
 
 import /.at.support.util;
 import /.at.lang.futures;
@@ -66,6 +67,8 @@ def AspectMirrorModule := object: {
 		extend: defaultMirror.new(base) with: {
 			def aspectBeforeSet := witnessSet.new();
 			def aspectAfterSet  := witnessSet.new();
+			def messages := vector.new();
+			def censoring := false;
 			
 			def afterCallBack(joinpoint, advice, caller) {
 			 	install(joinpoint, advice, caller, [Public, Modifiable], aspectAfterSet); 
@@ -131,6 +134,7 @@ def AspectMirrorModule := object: {
 			def invoke_async(delegate, invocation) {
 				when: (group: ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate,invocation); })) becomes: { |Idc| 	
 					def return := super^invoke(delegate, invocation);
+					censorMessages();
 					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate,invocation) };
 					when: (group: futures) becomes: { |Idc|
 						return;
@@ -148,6 +152,24 @@ def AspectMirrorModule := object: {
 					system.println("Meta fuuuuuucccccckkkkkk ... ");
 					super.receive(msg);//TODO ERROR !!!
 				}
+			};
+			
+			def send(rcv, msg) {
+				if: censoring then: {
+					messages.add([rcv,msg]);
+				} else: {
+					super^send(rcv, msg);
+				};
+			};
+			
+			def censorMessages() {
+				messages.each: { |m|
+					system.println("CENSORING MESSAGE " + m);
+					if: (!censoring) then: {
+						super^send(m[1],m[2]);
+					};
+				};
+				messages.clear();
 			};
 			
 			def receive(msg) {
