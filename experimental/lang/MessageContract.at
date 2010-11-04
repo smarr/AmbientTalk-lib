@@ -1,0 +1,89 @@
+def NormalVector := /.at.collections.vector.Vector;
+
+def MessageContractMirror := mirror: {
+	def interceptors := NormalVector.new();
+	def messages := NormalVector.new();
+	def mySuper := super;
+	
+	def addInterceptor(interceptor) {
+		interceptors.add(interceptor);
+	};
+	
+	
+	
+	def interceptor := object: {
+		def processInterceptors(name) {
+			interceptors.each: { |interceptor|
+				if: (interceptor[1] == name) then: {
+					 interceptor[2](messages,&sendMessage);
+				};
+			};
+		};
+	};
+	
+	def receive(message) {
+		def NewMessage := extend: message with: { |message,interceptor|
+			def process(receiver) {
+				super^process(receiver);
+				interceptor.processInterceptors(message.selector);
+			};
+		};
+		super.receive(NewMessage);
+	};
+	
+	def invoke(delegate, invocation) {
+		system.println();
+		super.invoke(delegate,invocation);
+	};
+
+	def send(rcv, msg) {
+		messages.add([rcv,msg]);
+	};
+	
+	def sendMessage(msg) {
+		super.send(msg[1],msg[2]);
+	};
+	
+};
+
+
+def barObject := object: {
+	def whow() {
+		system.println("Whow");
+	}
+};
+
+def myObject := object: {
+	def Foo() {
+		system.println("FooHow");
+		barObject<-whow();	
+		barObject<-whow();	
+		barObject<-whow();		
+		barObject<-whow();
+	}
+}mirroredBy:  MessageContractMirror;
+
+myObject<-Foo();
+
+def InterceptMessagesFromCalling: methodName on: Object with: block {
+		(reflect: Object).addInterceptor([methodName,block]);
+};
+
+def atMost: number outgoingMessagesFor: methodName on: Object else: block {
+	InterceptMessagesFromCalling: `Foo on: myObject with:{ |messages,execute|
+		if: (messages.length <= number) then: { 
+			messages.each: { |message|
+				execute(message);
+			};
+		} else: {
+			block();
+		}
+	};
+};
+
+def exactlyTheseMessages: Messages  for: methodName on: Object {
+
+};
+
+atMost: 3 outgoingMessagesFor: `Foo on: myObject else: { system.println("Outgoing messages failed!!"); };
+
