@@ -214,15 +214,33 @@ def makeContractField(maxAmount, role) {
 			}
 		};
 		
+		// Install a handler that is called on contract side before the participant(s) executes "msgName".
+		// The block receives three arguments:
+		// * methodName The name of the method called
+		// * args The arguments
+		// * cancel A canceler object (with a "cancel" method) that prevents the sending of messages.
 		// TODO: figure out proper way to undo arg bindings made by block.
 		def beforeCallBack: msgName  do: block {
 			def advice := advice: { |msgName, args, cancel| block.applyInScope([msgName, args, cancel], clone: contract); };
 			installCallback(`beforeCallBack, msgName, advice);
 		};
 		
+		// Install a handler that is called on contract side after the participant(s) has executed "msgName".
+		// The block receives five arguments:
+		// * methodName The name of the method called
+		// * args The arguments
+		// * cancel A canceler object (with a "cancel" method) that prevents the sending of messages.
+		// * sentMessages A table of [receiver, message] pairs sent by the method.
+		// * return The return value of the method.
 		def afterCallBack: msgName  do: block {
 			def advice := advice: { |msgName, args, cancel, sentMessages, return| block.applyInScope([msgName, args, cancel, sentMessages, return], clone: contract); };
 			installCallback(`afterCallBack, msgName, advice);
+		};
+		
+		// Convenience function that combines the above functions.
+		def onCallBack: msgName pre: pre post: post {
+			beforeCallBack: msgName do: pre;
+			afterCallBack:  msgName do: post;
 		};
 		
 		/* A state invariant. It works by hooking into calls like `field:= in participants of the contract.

@@ -120,18 +120,17 @@ def c := contract: {
 	stateInvariant: `location on: devices equals: "test";
 	
 	invariant: {
-		beforeCallBack: `IncomingCall  do: { |methodName, args, cancel|
+		onCallBack: `IncomingCall pre: { |methodName, args, cancel|
 			system.println("pausing all audio devices");
-			devices<-pause();
-		};
-		
-		afterCallBack: `IncomingCall  do: { |methodName, args, cancel, return, sentMessages|
+			devices<-pause()
+		} post: { |methodName, args, cancel, sentMessages, return|
 			system.println("unpausing all audio devices");
 			devices<-unpause();
 			if: (args[1] == 42) then: {
 				cancel<-cancel();
-			};
+			}
 		};
+
 	} on: phone;  
 };
 
