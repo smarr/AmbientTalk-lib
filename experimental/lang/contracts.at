@@ -75,7 +75,7 @@ def RebindStrategies := object: {
 		
 		def discover(field, contract, object) {
 			if: (disconnected.contains(object)) then: {
-				reconnected(field, contract, object);
+				reconnect(field, contract, object);
 			} else: {
 				field.addObj(object);
 			};
@@ -112,7 +112,7 @@ def RebindStrategies := object: {
 				field.addObj(object);
 			} else: {
 				if: (disconnected.contains(object)) then: {
-					reconnected(field, contract, object);
+					reconnect(field, contract, object);
 				}
 			}
 		};
@@ -155,9 +155,11 @@ def makeContractField(maxAmount, role) {
 		// Keep track of the amount of state invariants every potential role candidate satisifies. 
 		def stateMap :=  /.at.collections.java.hashmap.HashMap.new();
 		
-		
 		// The devices actually selected to take part in the contract
 		def selected :=  /.at.collections.java.hashset.HashSet.new();
+		
+		// The participants already added to the contract.
+		def joined := /.at.collections.java.hashset.HashSet.new();
 		
 		// Stopping the contract also halts all ongoing role subscriptions
 		// (when:discovered: returns a canceler object)
@@ -186,6 +188,12 @@ def makeContractField(maxAmount, role) {
 				contract.fieldSatisfied(self)
 			};
 			ret
+		};
+		
+		// Tell participants that all their base are belong to us.
+		def joinContract() {
+			def msg := <-joinContract(contract)@ContractMetaMessage;
+			selected.each: {|s| if: !(joined.contains(s)) then: { s <+ msg; joined.add(s); } };
 		};
 		
 		// Returns true if the contract is "full".
@@ -404,6 +412,7 @@ def contract: block {
 		def contractSatisfied() {
 			system.println("contract satisfied");
 			invariants.each:{|i| i[1].applyInvariants(i[2]) };
+			fields.each: {|f| f.joinContract() };
 		};
 		
 		def fieldSatisfied(f) {
@@ -413,6 +422,11 @@ def contract: block {
 				contractSatisfied();
 			};
 			
+		};
+		
+		def canExecute(receiver, sender, message) {
+			system.println("*** canExecute called: " + [receiver, sender, message]);
+			false;
 		};
 		
 	};

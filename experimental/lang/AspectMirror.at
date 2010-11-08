@@ -69,6 +69,7 @@ def AspectMirrorModule := object: {
 			def aspectAfterSet  := witnessSet.new();
 			def messages := vector.new();
 			def censoring := false;
+			def contracts := witnessSet.new();
 			
 			def afterCallBack(joinpoint, advice, caller) {
 			 	install(joinpoint, advice, caller, [Public, Modifiable], aspectAfterSet); 
@@ -120,6 +121,16 @@ def AspectMirrorModule := object: {
 				system.println("Installed aspect on " + base + " ("+aspectBeforeSet.size+"/"+aspectAfterSet.size+")");
 			};
 			
+			def joinContract(c) {
+				contracts.addRebind(c,c);
+				censoring := true;
+			};
+			
+			def leaveContract(c) {
+				contracts.remove(c);
+				censoring := contracts.notEmpty();
+			};
+			
 			def invokeField(slf, sel) { self.invoke(slf, `(.#sel())) };
 			
 			def invoke(delegate, invocation) {
@@ -134,7 +145,7 @@ def AspectMirrorModule := object: {
 			def invoke_async(delegate, invocation) {
 				when: (group: ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate,invocation); })) becomes: { |Idc| 	
 					def return := super^invoke(delegate, invocation);
-					censorMessages();
+					if: censoring then: { censorMessages() };
 					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate,invocation) };
 					when: (group: futures) becomes: { |Idc|
 						return;
@@ -164,9 +175,15 @@ def AspectMirrorModule := object: {
 			
 			def censorMessages() {
 				messages.each: { |m|
-					system.println("CENSORING MESSAGE " + m);
-					if: (!censoring) then: {
-						super^send(m[1],m[2]);
+					system.println("*** Censoring message " + m);
+					def futures := group: contracts.map: {|c| c<-canExecute(/*m[1]*/ 42, base, m[2])@[ContractMetaMessage,FutureMessage]};
+					when: futures becomes: { |answers|
+						system.println("*** Got answers: " + answers);
+						if: (answers.contains(true)) then: {
+							super^send(m[1],m[2]);
+						} else: {
+							system.println("*** Blocked message to " + m[1] + " contents: " + m[2]);
+						}
 					};
 				};
 				messages.clear();
@@ -174,7 +191,7 @@ def AspectMirrorModule := object: {
 			
 			def receive(msg) {
 				system.println("Receive Message... ");
-				if: (is: msg taggedAs: ContractMetaMessage) then: {					
+				if: (is: msg taggedAs: ContractMetaMessage) then: {	
 					self.metaIntercept(msg); 
 			  } else: {
 				  	super^receive(extend: msg with: {
