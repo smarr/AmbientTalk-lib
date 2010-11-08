@@ -214,12 +214,15 @@ def makeContractField(maxAmount, role) {
 			}
 		};
 		
+		// TODO: figure out proper way to undo arg bindings made by block.
 		def beforeCallBack: msgName  do: block {
-			installCallback(`beforeCallBack, msgName, block);
+			def advice := advice: { |msgName, args, cancel| block.applyInScope([msgName, args, cancel], clone: contract); };
+			installCallback(`beforeCallBack, msgName, advice);
 		};
 		
 		def afterCallBack: msgName  do: block {
-			installCallback(`afterCallBack, msgName, block);
+			def advice := advice: { |msgName, args, cancel, sentMessages, return| block.applyInScope([msgName, args, cancel, sentMessages, return], clone: contract); };
+			installCallback(`afterCallBack, msgName, advice);
 		};
 		
 		/* A state invariant. It works by hooking into calls like `field:= in participants of the contract.
@@ -254,7 +257,7 @@ def makeContractField(maxAmount, role) {
 				def installOn(obj) {
 					// TODO canceler
 					system.println("installing callback for state invariant on " + field);
-					on: obj before: {|methodName,arguments| methodName == setter } CallBack: { |m, args| callback(m, args, obj) };
+					on: obj before: {|methodName,arguments| methodName == setter } CallBack: { |m, args, cancel| callback(m, args, obj) };
 					
 					system.println("checking state invariant on " + field + " now");
 					check(obj);
@@ -267,10 +270,8 @@ def makeContractField(maxAmount, role) {
 			stateInvariants := stateInvariants + [stateInvariant];
 		};
 
-		def installCallback(selector, msgName, block) {
-			// TODO: figure out proper way to undo arg bindings made by block.
-			def advice := advice: { |msgName, args| block.applyInScope([msgName, args], clone: contract); };
-			def pointcut := script: {|mn,a| msgName.text == mn; };
+		def installCallback(selector, msgName, advice) {
+			def pointcut := script: {|mn, a| msgName.text == mn; };
 			
 			def msg := <-dummy( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage];
 			msg.selector := selector;
@@ -424,8 +425,10 @@ def contract: block {
 			
 		};
 		
-		def canExecute(receiver, sender, message) {
-			system.println("*** canExecute called: " + [receiver, sender, message]);
+		def canExecute(messages, sender) {
+			messages.each: {|m| m[1] := m[1].unpackUsingClassLoader(jlobby.edu.rit.m2mi.M2MI.getClassLoader()) };
+			system.println("*** canExecute called: " + [sender, messages]);
+			
 			false;
 		};
 		

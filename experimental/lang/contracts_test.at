@@ -44,7 +44,7 @@ def phone_actor := actor: { |Control,Spy|
 	def spy;
 	
 	def phone := service: {
-		def IncomingCall()@[Public] { system.println(name + " is ringing"); if: (nil != spy) then: { spy<-spy() } };
+		def IncomingCall(number := 0)@[Public] { system.println(name + " is ringing"); if: (nil != spy) then: { spy<-spy() } };
 		def name := "Bob's phone";
 		def location := "study";
 	};
@@ -90,7 +90,7 @@ def spawn_audio_actor(id, loc := "test") {
 };
 
 def i := 1;
-while: { i < 10 } do: {
+while: { i < 2 } do: {
 	spawn_audio_actor(i);
 	i := i + 1;
 };
@@ -120,14 +120,17 @@ def c := contract: {
 	stateInvariant: `location on: devices equals: "test";
 	
 	invariant: {
-		beforeCallBack: `IncomingCall  do: { |methodName,args|
+		beforeCallBack: `IncomingCall  do: { |methodName, args, cancel|
 			system.println("pausing all audio devices");
 			devices<-pause();
 		};
 		
-		afterCallBack: `IncomingCall  do: { |methodName,args|
+		afterCallBack: `IncomingCall  do: { |methodName, args, cancel, return, sentMessages|
 			system.println("unpausing all audio devices");
 			devices<-unpause();
+			if: (args[1] == 42) then: {
+				cancel<-cancel();
+			};
 		};
 	} on: phone;  
 };
@@ -147,7 +150,7 @@ whenever: Control discovered: { |c|
 	};
 };
 
-def z() { c.phone<-IncomingCall(); };
+def z(number := 0) { c.phone<-IncomingCall(number); };
 def Tracer;
 
 def killall() { Tracer.close(); phoneC<-offline(); audioC.to_array.each: {|d| d<-offline(); }; };
