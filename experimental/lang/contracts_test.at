@@ -55,7 +55,7 @@ def phone_actor := actor: { |Control,spy|
 	
 	def control := object: {
 		def name := "phone";
-		def offline() { /* takeOffline: phone; */ Tracer.close(); };
+		def offline() {  takeOffline: phone;  Tracer.close(); };
 		def online() { export: phone as: protocolOf: phone };
 	};
 	
@@ -116,7 +116,7 @@ def c := contract: {
 	stateInvariant: `location on: devices equals: "test";
 	
 	invariant: {
-		onCallBack: `IncomingCall pre: { |methodName, args, cancel|
+		onCallBack: "IncomingCall" pre: { |methodName, args, cancel|
 			system.println("pausing all audio devices");
 			devices<-pause()
 		} post: { |methodName, args, cancel, sentMessages, return|
@@ -127,8 +127,9 @@ def c := contract: {
 				cancel<-cancel();
 			}
 		};
-
 	} on: phone;  
+
+	fail: { system.println("*** contract is broken"); };
 };
 
 def phoneC := nil;

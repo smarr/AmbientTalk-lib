@@ -132,7 +132,9 @@ def AspectMirrorModule := object: {
 			
 			def joinContract(c) {
 				contracts.addRebind(c,c);
-				base.enteredContract(c);
+				if: (super^respondsTo(`enteredContract)) then: {
+					super^invoke(base, .enteredContract(c));
+				};
 				censoring := true;
 			};
 			
@@ -257,7 +259,7 @@ def AspectMirrorModule := object: {
 		obj<-beforeCallBack(
 			script: script, 
 			advice: advice, 
-			advice)@[ContractMetaMessage];
+			advice)@[FutureMessage,ContractMetaMessage];
 	};
 	
 	

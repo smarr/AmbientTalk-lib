@@ -310,6 +310,8 @@ def makeContractField(maxAmount, role) {
 		def applyInvariants(invariants) {
 			if: (invariantsToSend == []) then: {
 				invariants.applyInScope([], self);
+			} else: {
+				[]
 			};
 		};
 
@@ -330,7 +332,8 @@ def makeContractField(maxAmount, role) {
 						
 					def d := whenever: obj disconnected: {
 						found.remove(obj);
-						stateMap.get(obj).clear();
+						def m := stateMap.get(obj);
+						if: m != nil then: { m.clear(); };
 						rebind.disconnect(self, contract, obj);
 					};
 					
@@ -401,7 +404,9 @@ def contract: block {
 	
 		def contract := self;
 		def invariants := [];
-		def initialiseClosure := nil;
+		def initialiseClosure := {};
+		def failClosure := {};
+		def closeClosure := {};
 		
 		def invariant: block on: participant {
 			invariants := invariants + [[participant,block]];		
@@ -409,6 +414,14 @@ def contract: block {
 		
 		def initialise: block {
 			initialiseClosure := block;
+		};
+		
+		def fail: block {
+			failClosure := block;
+		};
+		
+		def close: block {
+			closeClosure := block;
 		};
 		
 		def stateInvariant: field on: participant equals: value {
@@ -430,10 +443,12 @@ def contract: block {
 		def stop() {
 			system.println("contract stopped");
 			fields.each: {|f| f.stopDiscovering() };
+			closeClosure();
 		};
 		
 		def fail() {
 			system.println("contract failed");
+			failClosure();
 			stop();
 		};
 		
@@ -447,9 +462,7 @@ def contract: block {
 			invariants.each:{|i| futures := futures + ( i[1].applyInvariants(i[2])) };
 			when: (group: futures) becomes: { |resolved|
 				fields.each: {|f| f.joinContract() };
-				if: (initialiseClosure != nil) then: {
-					initialiseClosure();
-				};
+				initialiseClosure();
 			};
 		};
 		
