@@ -29,8 +29,8 @@
 
 import /.at.lang.structuraltypes;
 import /.at.discovery.discovery;
-import /.experimental.lang.AspectMirror;
-import /.experimental.lang.DispatchingMirror;
+import /.experimental.lang.contracts.AspectMirror;
+import /.experimental.lang.contracts.DispatchingMirror;
 import /.at.lang.futures;
 enableFutures(false);
 

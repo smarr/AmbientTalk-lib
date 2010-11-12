@@ -27,7 +27,7 @@
  
  /* Simple test script for ambient contracts, see also /.experimental.lang.contracts */
 
-import /.experimental.lang.contracts;
+import /.experimental.lang.contracts.contracts;
 
 
 network.online;
@@ -37,13 +37,13 @@ deftype Spy;
 deftype Control;
 
 def spawn_spy() {
-	object: { def spy() { system.println("************************\nim in ur phone, SPYING!\n************************"); } }
+	object: { def spy() { system.println("************************\nim in your phone, SPYING!\n************************"); } }
 };
 
 def spy := spawn_spy();
 
 def phone_actor := actor: { |Control,spy|
-	import /.experimental.lang.contracts;
+	import /.experimental.lang.contracts.contracts;
 	def Tracer := /.at.support.tracer("phone", "/tmp");
 //	Tracer.traceOn();
 	
@@ -67,7 +67,7 @@ def phone_actor := actor: { |Control,spy|
 
 def spawn_audio_actor(id, loc := "test") {
 	actor: { |Control, id, loc|
-		import /.experimental.lang.contracts;
+		import /.experimental.lang.contracts.contracts;
 		def Tracer := /.at.support.tracer("audio_" + id, "/tmp");
 //		Tracer.traceOn();
 		
@@ -80,7 +80,7 @@ def spawn_audio_actor(id, loc := "test") {
 		def control := object: {
 			def move(loc) { audio.location := loc; };
 			def name := "audio";
-			def offline() { /* takeOffline: audio; */  Tracer.close(); };
+			def offline() {  takeOffline: audio;  Tracer.close(); };
 			def online() { export: audio as: protocolOf: audio };
 		};
 		
