@@ -1,0 +1,27 @@
+import /.at.lang.ambientcontracts;
+
+def c := contract: {
+	deftype Player;
+	deftype Referee;
+
+	system.println("Creating contract..");
+	need: Player named: `other timeout: 5;
+	need: Referee named: `referee;
+
+	when: contract fulfilled: {
+		system.println("okay, everyone is here");
+		system.println("player: " + other);
+		system.println("referee: " + referee);
+	};
+
+	when: contract broken: {
+		system.println("aww, contract is gone");
+	};
+
+	when: contract restored: {
+		system.println("... and we're back!");
+	};
+};
+
+network.online();
+c.goOnline()

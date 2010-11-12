@@ -1,0 +1,111 @@
+//Object relational objects
+def reflexModule := /.at.lang.values;
+def OOMatchModule := /.at.ambient.oomatching;
+
+def adoptField(a, b, fieldName) {
+	def mirrorB := reflect: b;
+	def mirrorA := reflect: a;
+	def value := mirrorB.grabField(fieldName).readField();
+	mirrorA.defineField(fieldName, value);
+};
+
+def setField(a, b, fieldName) {
+	def mirrorB := reflect: b;
+	def mirrorA := reflect: a;
+	def value := mirrorB.grabField(fieldName).readField();
+	mirrorA.grabField(fieldName).writeField(value);
+};
+
+def adoptMethod(a,b, methodName) {
+	def mirrorB := reflect: b;
+	def mirrorA := reflect: a;
+	def method := mirrorB.grabMethod(methodName);
+	mirrorA.addMethod((reflect: method).clone);
+};
+
+def Frame: block { 
+	def object := object: block;
+	def fields := (reflect: object).listFields;
+	system.println(fields);
+	system.println(fields.find: { |field| field == `create });
+	system.println(fields.find: { |field| field == `collapseTo });
+	object;
+};
+
+def copyFieldsFrame := object: {
+	def takeFrame(object) {
+		def fields := (reflect: object).listFields;
+		fields.each: {|field| if: (field.name != `super) then: { adoptField(self, object, field.name) } };
+		self;
+	};
+	
+	def collapseTo(object) {
+		def fields := (reflect: object).listFields;
+		fields.each: {|field| if: (field != `super) then: { setField(object, self, field.name) } };
+	};
+};
+
+
+def stmFrame := object: {
+	def changed := false;
+	
+	def takeFrame(object) {
+		def orginal := object;
+		def fields := (reflect: object).listFields;
+		fields.each: {|field| if: (field.name != `super) then: { adoptField(self, object, field.name) } };
+		(reflect: object).afterAssignmentdo: {
+			changed := true;
+		} ;
+		self;
+	};
+	
+	def collapseTo(object) {
+		if: !changed then: {
+			def fields := (reflect: object).listFields;
+			fields.each: {|field| if: (field != `super) then: { setField(object, self, field.name) } };
+			changed;
+		} else: {
+			changed;
+		}
+	};
+}
+
+def saveCopyFields
+
+def FrameTest := extend: /.at.unit.test.UnitTest.new("FramesTest", false) with: {
+	def myobjectA := 
+	object: {
+		def a := 5;
+	};
+	
+	def myobjectB := 
+	object: {
+		def b := 5;
+		def setA(x) {
+			a := x;
+		};
+	};
+	
+	def testAdoptField() {
+		adoptField(myobjectA,myobjectB,`b);	
+		self.assertTrue(myobjectA.b == myobjectB.b);
+	};
+	
+	def testAdoptMethod() {
+		adoptMethod(myobjectA, myobjectB,`setA);
+		myobjectA.setA(100);
+		self.assertTrue(myobjectA.a == 100);
+		self.assertTrue(myobjectA.b == 5);
+	};
+	
+	def testTakeFrame() {
+		def framedObject := copyFieldsFrame.takeFrame(myobjectA);
+		framedObject.a := 10;
+		self.assertTrue(myobjectA.a == 5);
+		self.assertTrue(framedObject.a == 10);
+		framedObject.collapseTo(myobjectA);
+		self.assertTrue(myobjectA.a == 10);
+	};
+};
+
+FrameTest.runTest();

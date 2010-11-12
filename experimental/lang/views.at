@@ -1,0 +1,28 @@
+deftype View;
+deftype ViewType;
+
+
+def server2 := object: {
+	def bar() { };
+};
+
+def server1 := object: {
+	def foo() { }
+};
+
+
+def View: block {
+	def a := object: block taggedAs: [View];
+	def mirrorA := reflect: a;
+	def importAs(method, name) {
+		mirrorA.addMethod((reflect: method).clone);
+	};
+	&importAs;
+};
+
+def view1 := View: {
+	importAs(server1.&foo,`viewFoo);
+};
+
+
+//export: Interface;

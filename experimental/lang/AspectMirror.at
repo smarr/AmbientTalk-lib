@@ -97,7 +97,7 @@ def AspectMirrorModule := object: {
 								extra[2] := invocation.arguments;
 								advice<-notify(@extra)@FutureMessage;
 						} else: {
-							theResolvedFuture;
+								theResolvedFuture;
 						};
 					};
 				
@@ -127,6 +127,7 @@ def AspectMirrorModule := object: {
 			
 			def joinContract(c) {
 				contracts.addRebind(c,c);
+				base.enteredContract(c);
 				censoring := true;
 			};
 			
@@ -208,8 +209,11 @@ def AspectMirrorModule := object: {
 			def receive(msg) {
 				system.println("Receive Message... ");
 				if: (is: msg taggedAs: ContractMetaMessage) then: {	
+					system.println("Meta Message... ");
 					self.metaIntercept(msg); 
 			  } else: {
+			  		system.println("Base Message... ");
+			  		
 				  	super^receive(extend: msg with: {
 				  		def process(receiver) {
 				  			// If the message was tagged with FutureMessage, we need to pipeline the future to the future returned by invoke_async.
@@ -269,12 +273,13 @@ def TestModule := object: {
 				
 		export: Television as: Service;
 			 
+			 
 		def jos := actor: {
 			deftype ContractMetaMessage;
 			import /.at.lang.futures;
 			enableFutures(false);
 			def publication;
-			
+				
 			def advice := object:{
 				def notify(methodName,arguments) {
 					system.println("notified");

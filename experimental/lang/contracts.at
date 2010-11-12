@@ -289,14 +289,16 @@ def makeContractField(maxAmount, role) {
 		};
 
 		def installCallback(selector, msgName, advice) {
-			def pointcut := script: {|mn, a| msgName.text == mn; };
+			def pointcut := script: {|mn, a| mn ~= msgName; };
 			
 			def msg := <-dummy( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage];
 			msg.selector := selector;
 			
 			system.println("Installing callback");
-			selected.each:{ |service| service <+ msg };
 			invariantsToSend := invariantsToSend + [msg];
+			def futures := [];
+			selected.each:{ |service| futures := futures + [service <+ msg] };
+			futures;
 		};
 		
 		def applyInvariants(invariants) {
@@ -393,9 +395,14 @@ def contract: block {
 	
 		def contract := self;
 		def invariants := [];
+		def initialiseClosure := nil;
 		
 		def invariant: block on: participant {
 			invariants := invariants + [[participant,block]];		
+		};
+		
+		def initialise: block {
+			initialiseClosure := block;
 		};
 		
 		def stateInvariant: field on: participant equals: value {
@@ -430,8 +437,14 @@ def contract: block {
 		
 		def contractSatisfied() {
 			system.println("contract satisfied");
-			invariants.each:{|i| i[1].applyInvariants(i[2]) };
-			fields.each: {|f| f.joinContract() };
+			def futures := [];
+			invariants.each:{|i| futures := futures + ( i[1].applyInvariants(i[2])) };
+			when: (group: futures) becomes: { |resolved|
+				fields.each: {|f| f.joinContract() };
+				if: (initialiseClosure != nil) then: {
+					initialiseClosure();
+				};
+			};
 		};
 		
 		def fieldSatisfied(f) {
@@ -446,7 +459,6 @@ def contract: block {
 		def canExecute(messages, sender) {
 			messages.each: {|m| m[1] := m[1].unpackUsingClassLoader(jlobby.edu.rit.m2mi.M2MI.getClassLoader()) };
 			system.println("*** canExecute called: " + [sender, messages]);
-			
 			false;
 		};
 		

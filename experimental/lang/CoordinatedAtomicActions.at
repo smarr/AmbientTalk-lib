@@ -1,0 +1,79 @@
+/*
+*	Coordinated Atomic Actions
+*/
+
+import /.experimental.lang.contracts;
+network.online;
+
+def otherActor :=  actor: {
+	import /.experimental.lang.contracts;
+	network.online;
+	
+	def LeakObject := object: {
+		def leak() {
+			system.println("Leaking Messages... ");	
+		};
+	};
+
+	def MyAtomicActionParticipant := service: {
+		
+		def startAtomicAction()@[Public] {
+			system.println("Atomic Action Started");
+		};
+	
+		def endAtomicAction()@[Public] {
+			system.out.println("Atomic Action Ended");	
+		};
+	
+		def doActions()@[Public] {
+			LeakObject<-leak();
+		};
+	
+		def enteredContract(c) {
+			system.println("Contract Started (participant added)");
+		};
+	
+		def fail(c) {
+			system.println("Contract Failed");
+		};
+	};
+	
+	def cool() {
+		MyAtomicActionParticipant<-startAtomicAction();
+	};
+	
+	export: MyAtomicActionParticipant as: protocolOf: MyAtomicActionParticipant;
+};
+
+
+def AtomicActionParticipantRole := role: {
+	def startAtomicAction();
+	def endAtomicAction();
+	def doActions();
+};
+
+def CoordinatedAtomicActionsContract := contract: {
+	def participants := Frail: exactly(1, AtomicActionParticipantRole);
+	
+	invariant: {
+		onCallBack: ".*" pre: { |methodName, args, cancel|
+		
+			system.println("Invoking Method " + methodName);
+			
+		} post: { |methodName, args, cancel, sentMessages, return|
+			system.println("From " + methodName + "Sending out messages to " + sentMessages);
+			if: ( sentMessages.receivers() ) then: {
+				cancel<-cancel();
+			};
+		};
+	} on: participants;  
+	
+	initialise: {
+		participants<-startAtomicAction();
+		participants<-doActions();
+	};
+	
+};
+
+
+CoordinatedAtomicActionsContract.start();

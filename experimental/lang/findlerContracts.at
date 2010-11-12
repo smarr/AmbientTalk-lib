@@ -1,0 +1,95 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2010
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/** 
+ * Implementation of contracts as defined by Robert Bruce Findler for AmbientTalk.\
+  protocol
+ * @author cfscholl
+ **/
+
+
+def blame(text) {
+	system.println("The blame is on " + text);
+	system.exit();
+};
+
+
+def flat( pred ) {
+	{ |pos, neg|
+		{ |val| 
+			if: ( pred(val) ) then: {
+				val
+			} else: {
+				blame(pos);
+			}
+		}; 
+	};
+};
+
+
+def contract(dom, rng) {
+ 	{ |pos,neg| 
+ 		def domp := dom(neg, pos);
+ 		def rngp := rng(pos, neg);
+ 		{ |val|
+ 			//omitted a test here we assume that its always a function...
+ 			{ |x|
+ 				rngp(val(domp(x)));
+ 			}
+ 		}
+ 	}
+};
+
+
+def guard(ctc, val, pos, neg) {
+	ctc(pos,neg)(val);
+};
+
+def neg(x) {
+	-x;
+};
+
+def negWRONG(x) {
+	x;
+};
+
+def pre(x) {
+	x >= 0;
+};
+
+def post(ret) {
+	ret <= 0;
+};
+
+def flatPre := flat(&pre);
+def flatPost := flat(&post);
+def ctc := contract(flatPre,flatPost);
+def guarded := guard(ctc,&neg," the callee"," the caller");
+def guardedCalleeBlame := guard(ctc,&negWRONG," the callee"," the caller");
+
+
+guardedCalleeBlame(34);
+guarded(-34);
