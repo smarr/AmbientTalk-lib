@@ -43,16 +43,20 @@ def makeDispatchingMirror(base, group, protocol) {
 		};
 		
 		def receive(msg) {
-			system.println("receive: " + msg + " prot: " + protocol.selectors);
+			//system.println("receive: " + msg + " prot: " + protocol.selectors);
 			if: (protocol.includes(msg.selector)) then: {
 					group().each: {|object| 
-						system.println("sending to "+ base.selected.to_array);
+						//system.println("sending to "+ super^invoke(base, .selected()).to_array());
 						object<+msg;
 					}
 				} else: {
 					super^receive(msg);
 				}
-		}
+		};
+		
+		def print() {
+			"<dispatchField:" + super^invoke(base, .selected()).to_array() + ">";
+		};
 	} 
 };
 

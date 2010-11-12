@@ -233,7 +233,9 @@ def makeContractField(maxAmount, role) {
 		// * sentMessages A table of [receiver, message] pairs sent by the method.
 		// * return The return value of the method.
 		def afterCallBack: msgName  do: block {
-			def advice := advice: { |msgName, args, cancel, sentMessages, return| block.applyInScope([msgName, args, cancel, sentMessages, return], clone: contract); };
+			def advice := advice: { |msgName, args, cancel, sentMessages, return|
+				sentMessages.each: {|m| m[1] := m[1].unpackUsingClassLoader(jlobby.edu.rit.m2mi.M2MI.getClassLoader()) };
+				block.applyInScope([msgName, args, cancel, sentMessages, return], clone: contract); };
 			installCallback(`afterCallBack, msgName, advice);
 		};
 		
@@ -273,9 +275,9 @@ def makeContractField(maxAmount, role) {
 				def setter := (field.text+":=");
 				
 				def installOn(obj) {
-					// TODO canceler
 					system.println("installing callback for state invariant on " + field);
-					on: obj before: {|methodName,arguments| methodName == setter } CallBack: { |m, args, cancel| callback(m, args, obj) };
+					def fut := on: obj before: {|methodName,arguments| methodName == setter } CallBack: { |m, args, cancel| callback(m, args, obj) };
+					when: fut becomes: { |c| cancelers := cancelers + [c]; };
 					
 					system.println("checking state invariant on " + field + " now");
 					check(obj);
@@ -295,6 +297,10 @@ def makeContractField(maxAmount, role) {
 			msg.selector := selector;
 			
 			system.println("Installing callback");
+			selected.each:{ |service| 
+				def fut := service <+ msg;
+				when: fut becomes: {|c| cancelers := cancelers + [c]};
+			};
 			invariantsToSend := invariantsToSend + [msg];
 			def futures := [];
 			selected.each:{ |service| futures := futures + [service <+ msg] };
@@ -341,7 +347,7 @@ def makeContractField(maxAmount, role) {
 		};
 		
 		def stopDiscovering() {
-			cancelers.each: {|c| c.cancel() };
+			cancelers.each: {|c| c<-cancel() };
 			cancelers := [];
 			invariantsToSend := [];
 		};

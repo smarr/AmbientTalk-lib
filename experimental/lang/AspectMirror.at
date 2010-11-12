@@ -123,6 +123,11 @@ def AspectMirrorModule := object: {
 				};
 				set.addRebind(aspect,caller);
 				system.println("Installed aspect on " + base + " ("+aspectBeforeSet.size+"/"+aspectAfterSet.size+")");
+				
+				def canceler := object: {
+					def cancel() { set.remove(aspect); }
+				};
+				canceler
 			};
 			
 			def joinContract(c) {
@@ -159,7 +164,8 @@ def AspectMirrorModule := object: {
 				def futures := ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate, invocation, cancel); });
 				when: (group: futures) becomes: { |Idc| 	
 					def return := super^invoke(delegate, invocation);
-					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate, invocation, cancel, return, messages) };
+					def messages2 := (messages.map: { |m| [ jlobby.edu.vub.at.actors.natives.Packet.new(m[1]), m[2] ] }).asTable();
+					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate, invocation, cancel, messages2, return) };
 					when: (group: futures) becomes: { |Idc|
 						if: cancel.sendTheMessages then: {
 							messages.each: { |m| m[1] <+ m[2] };
@@ -207,7 +213,6 @@ def AspectMirrorModule := object: {
 			};
 			
 			def receive(msg) {
-				system.println("Receive Message... ");
 				if: (is: msg taggedAs: ContractMetaMessage) then: {	
 					system.println("Meta Message... ");
 					self.metaIntercept(msg); 

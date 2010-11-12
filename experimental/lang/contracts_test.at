@@ -36,15 +36,19 @@ deftype Spy;
 
 deftype Control;
 
-def phone_actor := actor: { |Control,Spy|
+def spawn_spy() {
+	object: { def spy() { system.println("************************\nim in ur phone, SPYING!\n************************"); } }
+};
+
+def spy := spawn_spy();
+
+def phone_actor := actor: { |Control,spy|
 	import /.experimental.lang.contracts;
 	def Tracer := /.at.support.tracer("phone", "/tmp");
-	Tracer.traceOn();
-	
-	def spy;
+//	Tracer.traceOn();
 	
 	def phone := service: {
-		def IncomingCall(number := 0)@[Public] { system.println(name + " is ringing"); if: (nil != spy) then: { spy<-spy() } };
+		def IncomingCall(number := 0)@[Public] { system.println(name + " is ringing"); spy<-spy() };
 		def name := "Bob's phone";
 		def location := "study";
 	};
@@ -58,17 +62,14 @@ def phone_actor := actor: { |Control,Spy|
 	export: control as: Control;
 	
 	control.online();
-	
-	when: Spy discovered: { |spy_|
-		spy := spy_;
-	};
+
 };
 
 def spawn_audio_actor(id, loc := "test") {
 	actor: { |Control, id, loc|
 		import /.experimental.lang.contracts;
 		def Tracer := /.at.support.tracer("audio_" + id, "/tmp");
-		Tracer.traceOn();
+//		Tracer.traceOn();
 		
 		def audio := service: {
 			def pause() { system.println("audio device is pausing") };
@@ -89,17 +90,12 @@ def spawn_audio_actor(id, loc := "test") {
 	}
 };
 
-def i := 1;
-while: { i < 2 } do: {
+def num_audio := 10;
+
+1.to: num_audio do: { |i|
 	spawn_audio_actor(i);
-	i := i + 1;
 };
 
-def spawn_spy() {
-	export: (object: { def spy() { system.println("************************\nim in ur phone, SPYING!\n************************"); } }) as: Spy;
-};
-
-spawn_spy();
 
 def Phone := protocol: {
 	def IncomingCall();
@@ -126,7 +122,8 @@ def c := contract: {
 		} post: { |methodName, args, cancel, sentMessages, return|
 			system.println("unpausing all audio devices");
 			devices<-unpause();
-			if: (args[1] == 42) then: {
+			if: (sentMessages != []) then: {
+				system.println("*** tis kapot: " + sentMessages);
 				cancel<-cancel();
 			}
 		};
@@ -155,6 +152,6 @@ def Tracer;
 def killall() { Tracer.close(); phoneC<-offline(); audioC.to_array.each: {|d| d<-offline(); }; };
 
 Tracer := /.at.support.tracer("main", "/tmp");
-Tracer.traceOn();
+//Tracer.traceOn();
 
 c.start();
