@@ -25,10 +25,18 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
  
-/* Coordinated Atomic Actions, as written in the journal paper. */
+/* Coordinated Atomic Actions, as written in the journal paper. 
+   This example consists of two services:
+ 	One service is a "kind service" and will not send out messages to untrusted objects.
+	The second service is an "evil service" as it sends out a message to a leaking object.
+	The contract will detect the outgoing messages and stop the message.
+	Both services will be reverted upon failure.
+*/
 
 import /.experimental.lang.contracts.contracts;
 network.online;
+
+
 
 def otherActor :=  actor: {
 	import /.experimental.lang.contracts.contracts;
@@ -39,32 +47,45 @@ def otherActor :=  actor: {
 			system.println("Leaking Messages... ");	
 		};
 	};
-
-	def MyAtomicActionParticipant := service: {
+	
+	
+	def MyAtomicActionParticipantKind := service: {
+		def RollBack()@[Public] {
+			system.println("Kind Service Reverted");	
+		};
 		
 		def startAtomicAction()@[Public] {
 			system.println("Atomic Action Started");
 		};
 	
 		def endAtomicAction()@[Public] {
-			system.out.println("Atomic Action Ended");	
+			system.println("Atomic Action Ended");	
 		};
 	
 		def doActions()@[Public] {
-			LeakObject<-leak();
-		};
-	
-		def enteredContract(c) {
-			system.println("Contract Started (participant added)");
-		};
-	
-		def fail(c) {
-			system.println("Contract Failed");
+			system.println("I am a kind service ...");
 		};
 	};
 	
-	def cool() {
-		MyAtomicActionParticipant<-startAtomicAction();
+	export: MyAtomicActionParticipantKind as: protocolOf: MyAtomicActionParticipantKind;
+
+	def MyAtomicActionParticipant := service: {
+		def RollBack()@[Public] {
+			system.println("Evil Service Reverted");	
+		};
+		
+		def startAtomicAction()@[Public] {
+			system.println("Atomic Action Started");
+		};
+	
+		def endAtomicAction()@[Public] {
+			system.println("Atomic Action Ended");	
+		};
+	
+		def doActions()@[Public] {
+			system.println("I am an evil service ...");
+			LeakObject<-leak();
+		};
 	};
 	
 	export: MyAtomicActionParticipant as: protocolOf: MyAtomicActionParticipant;
@@ -75,30 +96,37 @@ def AtomicActionParticipantRole := role: {
 	def startAtomicAction();
 	def endAtomicAction();
 	def doActions();
+	def RollBack();
 };
 
-def CoordinatedAtomicActionsContract := contract: {
-	def participants := Frail: exactly(1, AtomicActionParticipantRole);
-	
-	invariant: {
-		onCallBack: ".*" pre: { |methodName, args, cancel|
+
+def makeCAA(numberOfParticiants, Role) { 
+	contract: {
+		def participants := Frail: exactly(numberOfParticiants, Role);
 		
-			system.println("Invoking Method " + methodName);
-			
-		} post: { |methodName, args, cancel, sentMessages, return|
-			system.println("From " + methodName + "Sending out messages to " + sentMessages);
-			if: ( sentMessages.receivers() ) then: {
-				cancel<-cancel();
+		invariant: {
+			onCallBack: ".*" pre: { |methodName, args, cancel, caller|		
+			} post: { |methodName, args, cancel, sentMessages, return|		
+				//we know that the good service will not send any messages	
+				if: ( sentMessages.length > 0 ) then: {
+					cancel<-cancel();
+				};
 			};
+		} on: participants;  
+		
+		initialise: {
+			participants<-startAtomicAction();
+			participants<-doActions();
 		};
-	} on: participants;  
-	
-	initialise: {
-		participants<-startAtomicAction();
-		participants<-doActions();
-	};
-	
+		
+		fail: {
+			participants<-RollBack();
+			system.println("The contract was violated !! ");
+		};
+		
+	}; 
 };
 
 
-CoordinatedAtomicActionsContract.start();
+def contractCAA := makeCAA(2, AtomicActionParticipantRole);
+contractCAA.start();

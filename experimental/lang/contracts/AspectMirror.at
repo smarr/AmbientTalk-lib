@@ -125,17 +125,20 @@ def AspectMirrorModule := object: {
 				system.println("Installed aspect on " + base + " ("+aspectBeforeSet.size+"/"+aspectAfterSet.size+")");
 				
 				def canceler := object: {
-					def cancel() { set.remove(aspect); }
+					def cancel() { 
+						system.println("Removed aspect on " + base + " ("+aspectBeforeSet.size+"/"+aspectAfterSet.size+")");
+						set.remove(aspect); 
+					}
 				};
 				canceler
 			};
 			
 			def joinContract(c) {
+				censoring := true;
 				contracts.addRebind(c,c);
 				if: (super^respondsTo(`enteredContract)) then: {
 					super^invoke(base, .enteredContract(c));
 				};
-				censoring := true;
 			};
 			
 			def leaveContract(c) {
@@ -149,7 +152,7 @@ def AspectMirrorModule := object: {
 			   	system.println("invoke Message... "+ invocation.selector);
 			   
 			   	def cancel := object: {
-			   		def cancel() { system.println("halp! cancel called!"); };
+			   		def cancel() { system.println("halp! sync cancel called!"); };
 			   	};
 				aspectBeforeSet.each: { |aspect| aspect.apply(delegate,invocation, cancel); };			
 				def return := super^invoke(delegate, invocation);
@@ -158,21 +161,27 @@ def AspectMirrorModule := object: {
 			};
 			
 			// TODO If one of the aspects returns a future, the method is not invoked until the future is resolved (potentially never!). Fix with @Due :)
-			def invoke_async(delegate, invocation) {
+			def invoke_async(delegate, invocation) {			
 				def cancel := object: {
 					def sendTheMessages := true;
-			   		def cancel() { system.println("*** halp! cancel called!"); sendTheMessages := false; };
-			   	};
-				def futures := ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate, invocation, cancel); });
-				when: (group: futures) becomes: { |Idc| 	
+			   		def cancel() { 
+			   			sendTheMessages := false; 
+			   		};
+			   	};			   	
+			   	
+				def futures := ([theResolvedFuture] + aspectBeforeSet.map: { |aspect| aspect.apply(delegate, invocation, cancel, invocation); });
+				when: (group: futures) becomes: { |Idc|
 					def return := super^invoke(delegate, invocation);
 					def messages2 := (messages.map: { |m| [ jlobby.edu.vub.at.actors.natives.Packet.new(m[1]), m[2] ] }).asTable();
+					messages.clear();
 					def futures := [theResolvedFuture] + aspectAfterSet.map: { |aspect| aspect.apply(delegate, invocation, cancel, messages2, return) };
 					when: (group: futures) becomes: { |Idc|
 						if: cancel.sendTheMessages then: {
-							messages.each: { |m| m[1] <+ m[2] };
+							messages2.each: { |m| system.println(m); m[1] <+ m[2] };
+						} else: {
+							messages2.each: { |m| system.println(m);};
+							contracts.each: {|c| leaveContract(c); c<-fail(); }
 						};
-						messages.clear();
 						return;
 					};
 				};
@@ -185,8 +194,7 @@ def AspectMirrorModule := object: {
 				if: ((reflect: self).respondsTo(msg.selector)) then: {
 					self <+ msg; // process meta-message myself
 				} else: {
-					system.println("Meta fuuuuuucccccckkkkkk ... ");
-					super.receive(msg);//TODO ERROR !!!
+					super.receive(msg);
 				}
 			};
 			
@@ -197,23 +205,7 @@ def AspectMirrorModule := object: {
 					super^send(rcv, msg);
 				};
 			};
-			
-			def censorMessages() {
-				system.println("*** Censoring message " + messages);
-				def messages2 := messages.map: { |m| [ jlobby.edu.vub.at.actors.natives.Packet.new(m[1]), m[2] ] };
-				system.println("messages2: " + messages2.asTable());
-				def futures := group: contracts.map: {|c| c<-canExecute(messages2.asTable(), base)@[ContractMetaMessage,FutureMessage]};
-				when: futures becomes: { |answers|
-					system.println("*** Got answers: " + answers);
-					if: (answers.contains(true)) then: {
-						messages.each: { |m| super^send(m[1],m[2]) };
-					} else: {
-						system.println("*** Blocked messages:" + messages);
-					}
-				};
-				messages.clear();
-			};
-			
+		
 			def receive(msg) {
 				if: (is: msg taggedAs: ContractMetaMessage) then: {	
 					system.println("Meta Message... ");

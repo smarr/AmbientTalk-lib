@@ -116,7 +116,7 @@ def c := contract: {
 	stateInvariant: `location on: devices equals: "test";
 	
 	invariant: {
-		onCallBack: "IncomingCall" pre: { |methodName, args, cancel|
+		onCallBack: "IncomingCall" pre: { |methodName, args, cancel, caller|
 			system.println("pausing all audio devices");
 			devices<-pause()
 		} post: { |methodName, args, cancel, sentMessages, return|

@@ -107,7 +107,7 @@ def invTestActor := actor: {
 			def participant := Frail: one(Participant);
 			
 			invariant: {
-				onCallBack: `message pre: { |methodName, args, cancel|
+				onCallBack: `message pre: { |methodName, args, cancel,caller|
 					if: (args[1] < 200) then: {
 						cancel<-cancel();
 					};
@@ -171,4 +171,4 @@ def inputs := [10,10,10,10,10,10,10,10,10,10,
   
 // *** Uncomment ONE of these lines and run this script. ***
 // sendNext(inputs, normalTestActor, 1);
-// sendNext(inputs, invTestActor, 1);
+ sendNext(inputs, invTestActor, 1);

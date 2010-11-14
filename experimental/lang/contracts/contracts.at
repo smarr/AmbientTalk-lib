@@ -221,7 +221,7 @@ def makeContractField(maxAmount, role) {
 		// * cancel A canceler object (with a "cancel" method) that prevents the sending of messages.
 		// TODO: figure out proper way to undo arg bindings made by block.
 		def beforeCallBack: msgName  do: block {
-			def advice := advice: { |msgName, args, cancel| block.applyInScope([msgName, args, cancel], clone: contract); };
+			def advice := advice: { |msgName, args, cancel, caller| block.applyInScope([msgName, args, cancel, caller], clone: contract); };
 			installCallback(`beforeCallBack, msgName, advice);
 		};
 		
@@ -292,20 +292,24 @@ def makeContractField(maxAmount, role) {
 
 		def installCallback(selector, msgName, advice) {
 			def pointcut := script: {|mn, a| mn ~= msgName; };
-			
 			def msg := <-dummy( pointcut, advice, contract)@[ContractMetaMessage,/.at.lang.futures.FutureMessage];
 			msg.selector := selector;
-			
 			system.println("Installing callback");
-			selected.each:{ |service| 
-				def fut := service <+ msg;
-				when: fut becomes: {|c| cancelers := cancelers + [c]};
-			};
 			invariantsToSend := invariantsToSend + [msg];
 			def futures := [];
-			selected.each:{ |service| futures := futures + [service <+ msg] };
+			selected.each:{ |service| 
+				def fut := service <+ msg;
+				futures := futures + [fut];
+				when: fut becomes: {|c| cancelers := cancelers + [c]};
+			};			
 			futures;
 		};
+		
+		
+		def each: block {
+			selected.each: block;
+		};
+		
 		
 		def applyInvariants(invariants) {
 			if: (invariantsToSend == []) then: {
@@ -355,6 +359,8 @@ def makeContractField(maxAmount, role) {
 			invariantsToSend := [];
 		};
 		
+		
+		
 	}  taggedAs: [ ContractField ] mirroredBy: { |base| makeDispatchingMirror(base, {base.selected}, role); };
 };
 
@@ -387,13 +393,6 @@ def SturdyRebind: participant {
 	participant.rebind := RebindStrategies.SturdyRebind.new;
 	participant;
 };
-
-// INVARIANTS
-def stateInvariant: block on: participant {
-
-};
-
-
 
 def contract: block {
 
@@ -471,8 +470,7 @@ def contract: block {
 			system.println("field " + f.name + " satisfied");
 			if: (fields.length() == satisfied.size() ) then: {
 				contractSatisfied();
-			};
-			
+			};	
 		};
 		
 		def canExecute(messages, sender) {
