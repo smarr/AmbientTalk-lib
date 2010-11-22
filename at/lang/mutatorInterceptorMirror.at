@@ -58,7 +58,7 @@ def makeMutatorInterceptor(interceptor) {
 			def returnValue := super^invokeField(slf, invocation);
 			try: {
 				def methodName := invocation;
-				if: (is: methodName mutatorOf: slf) then: {
+				if: ((is: methodName mutatorOf: slf).or: {is: methodName mutatorOf: slf.super}) then: {
 					interceptor(self.base(), methodName);
 				};
 			} catch: /.at.lang.types.SelectorNotFound using: {|e| 
@@ -73,7 +73,7 @@ def makeMutatorInterceptor(interceptor) {
 			def returnValue := super^invoke(slf, invocation);
 			try: {
 				def methodName := invocation.selector;
-				if: (is: methodName mutatorOf: slf) then: {
+				if: ((is: methodName mutatorOf: slf).or: {is: methodName mutatorOf: slf.super}) then: {
 					interceptor(self.base(), methodName);
 				} else: {
 					if: ((print: methodName) ~= ".*:=$") then: {

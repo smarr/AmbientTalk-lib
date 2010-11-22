@@ -44,11 +44,13 @@ import /.at.lang.propertyReferences;
 
 // globals
 def POLLING_INTERVAL := millisec(500);
+POLLING_INTERVAL := 20.seconds; // XXX
 def OFFLINE_TIMEOUT  := 240.seconds();
 
 // toggle debug output
-def DEBUG := false;
+def DEBUG := true;
 def INFO := true;
+def ERR := true;
 
 def debug(@args) {
 	if: (DEBUG) then: {
@@ -62,6 +64,11 @@ def info(@args) {
 	};
 };
 
+def err(@args) {
+	if: (ERR) then: {
+		system.println("[ERR][!] " + args);
+	};
+};
 
 // generic RFID type tags
 deftype RFIDTag;
@@ -76,8 +83,11 @@ def XAlreadyIsolate := lobby.at.lang.exceptions.createException(AlreadyIsolate);
 def RFIDService := object: {
 	
 	// Java Reader & Tag classes
-	def tagWrapper := jlobby.bridges.rfid.TagWrapper;
-	def JavaRFIDDevice := jlobby.bridges.rfid.ReaderWrapper;
+	// classes to use:
+	//   - ReaderFromDisk to store data locally on disk
+	//   - Reader to store data in tag memory
+	//def JavaRFIDDevice := jlobby.bridges.rfid.ReaderFromDisk;
+	def JavaRFIDDevice := jlobby.bridges.rfid.Reader;
 	
 	// the RFID reader device
 	def device := nil;
@@ -104,15 +114,17 @@ def RFIDService := object: {
 	
 	def exportWithSerial(someObject, tagSerial) {
 		system.println("export with serial: " + someObject + " with " + tagSerial);
+		def tagsSS := tagsOf: someObject.super.super;
 		//(tagsOf: someObject).each: {|tt|
-		(tagsOf: someObject.super).each: {|tt| // XXX
+		(tagsSS).each: {|tt| // XXX
+			system.println("  " + tt);
 			export: someObject as: tt with: { def serial := tagSerial };
 		};
 	};
 	
 	// create and remove mapping between tag and object
 	def updateMapping(aTag, someObject) {
-		def serial := aTag.getSerial();
+		def serial := aTag.getSerial().toString();
 		info("update mapping: " + serial + " <-> " + someObject);
 		tagToObject.put(serial, someObject);
 		objectToTag.put(someObject, serial);
@@ -124,13 +136,14 @@ def RFIDService := object: {
 	};
 	
 	def removeMapping(aTag, someObject) {
-		def serial := aTag.getSerial();
+		def serial := aTag.getSerial().toString();
 		tagToObject.remove(serial);
 		objectToTag.remove(someObject);
 		serialToTag.remove(serial);
 	};
 	
-	// intercept mutators
+	// Intercept mutators
+	
 	def tagMutatorInterceptor := { |base, method| 
 		try: {
 			saveToTag(base);
@@ -143,31 +156,28 @@ def RFIDService := object: {
 		makeMutatorInterceptor(tagMutatorInterceptor);
 	};
 	
+	def wrapAndPlaceMirror(obj) {
+		extend: obj with: {} mirroredBy: makeTagMutatorInterceptorMirror();
+	};
+	
+	// Serialization and Deserialization
 	
 	// dump and load objects to and from a tag
-	def loadFromSource(tag){
-		def definition := tag.loadToString();
+	def loadFromCode(tag){
+		def definition := tag.read();
+		debug("definition: " + definition);
 		if: ((definition == nil).or: {definition == ""}) then: {
 			nil;
 		} else: {
 			try: {
-				definition := definition + "mirroredBy: makeTagMutatorInterceptorMirror()";
-				def obj := eval: (read: definition) in: (object:{});
-				obj;
+				def obj := fromCode: definition in: (object:{});
+				def wrappedObj := wrapAndPlaceMirror(obj);
+				wrappedObj;
 			} catch: /.at.lang.types.Exception using: { |e|
-				info("could not read and eval: " + definition);
+				info("could not reify from code: " + definition);
 				info("exeption was: " + e.message);
 				nil;
 			};
-		};
-	};
-	
-	def loadFromIsolate(tag) {
-		def isolate := tag.load();
-		if: (isolate == nil) then: {
-			nil;
-		} else: {
-			isolateToObject(isolate);
 		};
 	};
 	
@@ -175,24 +185,22 @@ def RFIDService := object: {
 		tag.load();
 	};
 	
+	// default is to deserialize using from
 	def load(tag) {
-		loadFromSource(tag);
+		loadFromCode(tag);
 	};
 	
-	def dumpToSource(tag, obj) {
-		tag.dumpAsCode(obj);
+	def dumpAsCode(tag, obj) {
+		tag.write(asCode: obj.super);
 	};
 	
-	def dumpToIsolate(tag, obj) {
-		tag.dump(objectToIsolate(obj));
-	};
-	
-	def dumpToJava(tag, obj) {
+	def dumpAsJava(tag, obj) {
 		tag.dump(obj);
 	};
 	
+	// default is to serialize using asCode
 	def dump(tag, obj) {
-		dumpToSource(tag, obj);
+		dumpAsCode(tag, obj);
 	};
 	
 	def saveToTag(someObject) {
@@ -201,6 +209,7 @@ def RFIDService := object: {
 		dump(tag, someObject);
 	};
 	
+	// Conversion from and to isolate
 	
 	// copy an isolate to a "normal" object	
 	def isolateToObject(someIsolate) {
@@ -212,7 +221,7 @@ def RFIDService := object: {
 		info("obj is an isolate");
 		def tags := (tagsOf: someIsolate).filter: {|e| e != /.at.lang.types.Isolate};
 		info("tags: " + tags);
-		def someObject := object: {} taggedAs: tags mirroredBy: makeTagMutatorInterceptorMirror();
+		def someObject := object: {} taggedAs: tags;
 		info("new object: " + someObject);
 		def ir := reflect: someIsolate;
 		def or := reflect: someObject;
@@ -224,7 +233,8 @@ def RFIDService := object: {
 		ir.listMethods.each: {|m|
 			or.addMethod(m);
 		};
-		someObject;
+		def newObject := wrapAndPlaceMirror(someObject);
+		newObject;
 	};
 	
 	// copy an object to an isolate
@@ -248,13 +258,14 @@ def RFIDService := object: {
 		someIsolate;
 	};
 	
-	// generic "empty" tag object
+	// Generic tag (empty or unrecognized)
+	
 	def GenericTag := object: {
 
 		def tag := nil;
 		
 		def getSerial() { 
-			tag.getSerial();
+			tag.getSerial().toString();
 		};
 
 		def initialize(someObject) {
@@ -277,7 +288,8 @@ def RFIDService := object: {
 	} taggedAs: [RFIDTag, GenericTag];
 	
 	
-	// cases to handle RFID inventory
+	// Different cases to handle RFID inventory
+	
 	// case 1: a tag that was already available
 	//         - check if there is a disconnection object
 	// !!! semantic subtlety: FIRST reconnect the object, THEN replace it
@@ -351,12 +363,12 @@ def RFIDService := object: {
 			debug("avail tags: " + serialToTag.size());
 			debug("disco tags: " + discoTags.size());
 		
-			def tags := Vector.new(device.readTransponders(true));
+			def tags := Vector.new(device.inventory(true));
 			debug("in range: " + tags.size());
 			def unseen := serialToTag.clone();
 
 			tags.each: { |tag|
-				def serial := tag.getSerial();
+				def serial := tag.getSerial().toString();
 				unseen.remove(serial);
 				if: (serialToTag.contains(serial)) then: {
 					// case 1
@@ -376,7 +388,7 @@ def RFIDService := object: {
 				// disappearing tags
 				unseeTag(serial, tag);
 			};
-			self<-inventory();
+			when: POLLING_INTERVAL elapsed: { self<-inventory() };
 		};
 	};
 	
@@ -392,7 +404,8 @@ def RFIDService := object: {
 	};
 	
 	
-	// create a facade with functions visible to the outside
+	// Create a facade with functions visible to the outside
+	
 	def createFacade() {
 		if: (facade == nil) then: {
 			facade := object: {
