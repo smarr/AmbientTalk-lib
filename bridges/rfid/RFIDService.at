@@ -27,6 +27,7 @@
 /**
  * This file contains the RFID service
  * it detects RFID tags, creates proxy objects and publishes them as services
+ *
 **/
 
 // imports
@@ -44,11 +45,10 @@ import /.at.lang.propertyReferences;
 
 // globals
 def POLLING_INTERVAL := millisec(500);
-POLLING_INTERVAL := 20.seconds; // XXX
 def OFFLINE_TIMEOUT  := 240.seconds();
 
 // toggle debug output
-def DEBUG := true;
+def DEBUG := false;
 def INFO := true;
 def ERR := true;
 
@@ -79,6 +79,26 @@ deftype NotAnIsolate <: lobby.at.lang.types.Exception;
 def XNotAnIsolate := lobby.at.lang.exceptions.createException(NotAnIsolate);
 deftype AlreadyIsolate <: lobby.at.lang.types.Exception;
 def XAlreadyIsolate := lobby.at.lang.exceptions.createException(AlreadyIsolate);
+
+/**
+ * 
+ * the object stored on an RFID tag is wrapped in two layers:
+ * 	- outer layer: an object to which the far references will point
+ * 	- inner layer: an object on which the mutatorInterceptorMirror is placed
+ * 
+ * this allows us to swap the core object when the corresponding tags reappears
+ * the mirror and the far references remain unchanged
+ *  
+ *             +--outer-layer--------------+
+ *  far refs   |                           |
+ * ----------> |  +--inner-layer--------+  |
+ *             |  |                     |<-+------ mutatorInterceptorMirror
+ *             |  |  +--core-object--+  |  |
+ *             |  |  |  (from tag)   |  |  |
+ *             |  |  +---------------+  |  |
+ *             |  +---------------------+  |
+ *             +---------------------------+
+**/
 
 def RFIDService := object: {
 	
@@ -113,10 +133,10 @@ def RFIDService := object: {
 	def loop := false;
 	
 	def exportWithSerial(someObject, tagSerial) {
-		system.println("export with serial: " + someObject + " with " + tagSerial);
+		debug("export with serial: " + someObject + " with " + tagSerial);
 		def tagsSS := tagsOf: someObject.super.super;
-		//(tagsOf: someObject).each: {|tt|
-		(tagsSS).each: {|tt| // XXX
+		// the object is double wrapped
+		(tagsSS).each: {|tt|
 			system.println("  " + tt);
 			export: someObject as: tt with: { def serial := tagSerial };
 		};
@@ -239,7 +259,7 @@ def RFIDService := object: {
 	
 	// copy an object to an isolate
 	def objectToIsolate(someObject) {
-		info("convert object to isolate: " + someObject);
+		debug("convert object to isolate: " + someObject);
 		if: (is: someObject taggedAs: /.at.lang.types.Isolate) then: {
 			raise: XAlreadyIsolate.new("argument is already an isolate: " + someObject);
 		};
@@ -272,7 +292,7 @@ def RFIDService := object: {
 			if: !(is: someObject taggedAs: /.at.lang.types.Isolate) then: {
 				raise: XNotAnIsolate.new("object must be isolate");
 			};
-			info("before convert isolate to object");
+			debug("before convert isolate to object");
 			info(someObject);
 			def newObject := isolateToObject(someObject);
 			updateMapping(tag, newObject);
@@ -388,7 +408,7 @@ def RFIDService := object: {
 				// disappearing tags
 				unseeTag(serial, tag);
 			};
-			when: POLLING_INTERVAL elapsed: { self<-inventory() };
+			when: pollingInterval elapsed: { self<-inventory() };
 		};
 	};
 	

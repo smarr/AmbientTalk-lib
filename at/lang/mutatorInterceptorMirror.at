@@ -27,6 +27,15 @@
 /**
  * This file defines a mirror to intercept
  * invocations of methods annotated as Mutator
+ * 
+ * Example:
+ * def o := object: {
+ *   def x := 42;
+ *   def inc(n)@Mutator { x := x + n }
+ * } mirroredBy: makeMutatorInterceptor({|baseObj, invocation|
+ *   system.println((print: invocation) + " is a mutator for " + (print: baseObj));
+ * })
+}
 **/
 
 // check if methods is annotated with a given typetag
@@ -43,9 +52,17 @@ def mutatorsOf: someObject {
 	};
 };
 
-def is: methodName mutatorOf: someObject {
+def is: methodName mutatorOfOnly: someObject {
 	try: {
 		is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator;
+	} catch: /.at.lang.types.SelectorNotFound using: {|e| false };
+};
+
+def is: methodName mutatorOf: someObject {
+	try: {
+		(is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator).or: {
+			is: methodName mutatorOf: someObject.super;
+		};
 	} catch: /.at.lang.types.SelectorNotFound using: {|e| false };
 };
 
@@ -58,7 +75,7 @@ def makeMutatorInterceptor(interceptor) {
 			def returnValue := super^invokeField(slf, invocation);
 			try: {
 				def methodName := invocation;
-				if: ((is: methodName mutatorOf: slf).or: {is: methodName mutatorOf: slf.super}) then: {
+				if: (is: methodName mutatorOf: slf) then: {
 					interceptor(self.base(), methodName);
 				};
 			} catch: /.at.lang.types.SelectorNotFound using: {|e| 
@@ -73,7 +90,7 @@ def makeMutatorInterceptor(interceptor) {
 			def returnValue := super^invoke(slf, invocation);
 			try: {
 				def methodName := invocation.selector;
-				if: ((is: methodName mutatorOf: slf).or: {is: methodName mutatorOf: slf.super}) then: {
+				if: (is: methodName mutatorOf: slf) then: {
 					interceptor(self.base(), methodName);
 				} else: {
 					if: ((print: methodName) ~= ".*:=$") then: {
@@ -100,5 +117,7 @@ def MutatorInterceptorModule := object: {
 	def mutatorsOf: x { (&mutatorsOf:)(x) } ;
 
 	def is:mutatorOf: := &is:mutatorOf: ;
+	
+	def is:mutatorOfOnly: := &is:mutatorOfOnly: ;
 	
 };
