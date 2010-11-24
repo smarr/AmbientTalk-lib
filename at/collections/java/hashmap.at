@@ -31,7 +31,21 @@
  * and when the hashmap is overwritten
  * the .each method is gone
  * this wrapper does away with that problem
+ * And it is serializable using asCode:
  */
+
+def HashMapMirror := mirror: {
+
+	def asCode() {
+		def elements := asCode: (self.base.toTable());
+		def source := "{ def hm := HashMap.new() ; ";
+		source := source + "def elements := " + elements + "; ";
+		source := source + "hm.addFromTable(elements); hm }()";
+		source;
+	};
+
+};
+
 def HashMap := object: {
 
 	def hm := nil;
@@ -91,6 +105,22 @@ def HashMap := object: {
 	def init(ihm := jlobby.java.util.HashMap.new()) {
 		hm := ihm;
 	};
-};
+	
+	def addFromTable(t) {
+		t.each: { |e|
+			def key := e[1];
+			def val := e[2];
+			self.put(key, val);
+		};
+	};
+	
+	def toTable() {
+		def t := [];
+		self.each: {|k,v|
+			t := t + [[k,v]];
+		};
+		t;
+	};
+} mirroredBy: HashMapMirror;
 
 self;

@@ -25,6 +25,19 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+def HashSetMirror := mirror: {
+
+	def asCode() {
+		def elements := asCode: (self.base.toTable());
+		def source := "{ def hs := HashSet.new() ; ";
+		source := source + "def elements := " + elements + "; ";
+		source := source + "hs.addFromTable(elements); hs }()";
+		source;
+	};
+
+};
+
+
 def HashSet := object: {
 
 	def hs := nil;
@@ -97,6 +110,22 @@ def HashSet := object: {
 	def init(ihs := jlobby.java.util.HashSet.new()) {
 		hs := ihs;
 	};
-};
+	
+	def addFromTable(t) {
+		t.each: { |e|
+			self.add(e);
+		};
+	};
+	
+	def toTable() {
+		def t := [];
+		self.each: {|e|
+			t := t + [e];
+		};
+		t;
+	};
+	
+	
+} mirroredBy: HashSetMirror;
 
 self;
