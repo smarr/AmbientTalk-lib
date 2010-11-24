@@ -291,3 +291,13 @@ def try: closure catch: failClosure {
 
 // to be able to switch back to the default actor mirror when applying custom mirrors.
 def defaultActorMirror := reflectOnActor();
+
+
+// de-serialization
+def fromCode: code in: scope {
+	eval: (read: code) in: scope;
+};
+
+def fromCode: code {
+	eval: (read: code) in: {};
+};
