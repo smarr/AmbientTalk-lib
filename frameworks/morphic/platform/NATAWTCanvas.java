@@ -57,6 +57,7 @@ import java.awt.Shape;
 import java.awt.Stroke;
 import java.awt.geom.AffineTransform;
 import java.util.LinkedList;
+import java.util.Set;
 import java.util.Vector;
 
 /**
@@ -79,7 +80,7 @@ public class NATAWTCanvas extends NATObject {
 	
 	private NATAWTCanvas(FieldMap map, Vector state, LinkedList customFields,
 			MethodDictionary methodDict, ATObject dynamicParent,
-			ATObject lexicalParent, byte flags, ATTypeTag[] types, Graphics2D g) throws InterpreterException {
+			ATObject lexicalParent, byte flags, ATTypeTag[] types, Set freeVars, Graphics2D g) throws InterpreterException {
 		super(map, state, customFields, methodDict, dynamicParent, lexicalParent, flags, types);
 		graphics_ = g;
 		addNativeMethods();
@@ -91,7 +92,8 @@ public class NATAWTCanvas extends NATObject {
 			  MethodDictionary methodDict,
 			  ATObject dynamicParent,
 			  ATObject lexicalParent,
-			  byte flags, ATTypeTag[] types) throws InterpreterException {
+			  byte flags, ATTypeTag[] types,
+			  Set freeVars) throws InterpreterException {
       return new NATAWTCanvas(map,
   		  				    state,
   		  				    customFields,
@@ -100,6 +102,7 @@ public class NATAWTCanvas extends NATObject {
   		  				    lexicalParent,
   		  				    flags,
   		  				    types,
+  		  				    freeVars,
   		  				    (Graphics2D) graphics_.create());
 	}
 	
