@@ -64,35 +64,53 @@ def makeLocationServer(sid) {
 	service
 };
 
-def makeClient(pid, updatePeriod) {
+def makeClient(pid, updatePeriod, sensor) {
 	def conn := ambient: LocationService;
 	whenever: updatePeriod elapsed: {
-		def loc := detectCurrentLocation();
-		conn<-submitLocation(pid, loc)@[One,Sustain,Oneway]
+		def loc := sensor.detectCurrentLocation();
+		if: (nil != loc) then: {
+		  conn<-submitLocation(pid, loc)@[One,Sustain,Oneway]
+		}
 	};
 };
 
-def [prevX,prevY] := [0,0];
-def detectCurrentLocation() {
-	prevX := prevX + 1;
-	prevY := prevY + 1;
-	[prevX,prevY];
-};
 
 def LocationTrackerTest() {
  extend: /.at.unit.test.UnitTest.new("LocationTracker test") with: {
 
+      // returns locations [1,1], [2,2], ..., [n,n], nil, nil, ...
+      def makeDummyLimitedLocationSensor(n) {
+        def [prevX,prevY] := [0,0];
+        def tries := 0;
+        object: {
+          def detectCurrentLocation() {
+	        tries := tries + 1;
+	        if: (tries <= n) then: {
+	          prevX := prevX + 1;
+	          prevY := prevY + 1;
+	          [prevX,prevY];
+	        } else: {
+	          nil;
+	        }
+          };
+        };
+      };
+
 	  def testAsyncTrack() {
 		  def [fut,res] := makeFuture();
 			def server := makeLocationServer("Enigma");
-			def client1 := makeClient("Alan Turing", seconds(2));
-			// def client2 := makeClient("Alonzo Church", seconds(3));
-			when: seconds(5) elapsed: {
+			def sensor := makeDummyLimitedLocationSensor(2);
+			
+			def client1 := makeClient("Alan Turing", seconds(1), sensor);
+			// def client2 := makeClient("Alonzo Church", seconds(3), sensor);
+
+            when: 4.seconds elapsed: {
+              client1.cancel();
 			  res.resolve(when: server<-queryPath("Alan Turing")@FutureMessage becomes: { |v|
-			    client1.cancel();
 			    self.assertEquals("[[1, 1], [2, 2]]", print: v);
-			  })
-			};
+			  });
+            };
+
 			fut;
 	  };
   }; 

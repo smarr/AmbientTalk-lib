@@ -195,10 +195,10 @@ def DiscoveryCompositionModule := object: {
 				  };
 				};
 				
-				def snapshotF := snapshotFor: Bird after: seconds(5);
+				def snapshotF := snapshotFor: Bird after: 10.seconds;
 				
-				TimerModule.when: seconds(1) elapsed: { makePeer("tweety") };
-				TimerModule.when: millisec(1500) elapsed: { makePeer("woody") };
+				TimerModule.when: millisec(500) elapsed: { makePeer("tweety") };
+				TimerModule.when: seconds(1) elapsed: { makePeer("woody") };
 				
 				when: snapshotF becomes: { |birds|
 					self.assertEquals(2, birds.length);
