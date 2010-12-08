@@ -237,7 +237,7 @@ def makeLocalManagerMirror(actor, debuggingSession){
 	            debuggerActor<-actorResumed(getActorId())@Debug;	
 	            res;
 	          } else:{
-	            pauseAndBuffer(rcv, msg, pauseState); // TOCHECK when this case happens?
+	            pauseAndBuffer(rcv, msg, pausedState); // TOCHECK when this case happens?
               }
 		    };
 		  } else: {
