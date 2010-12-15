@@ -86,13 +86,20 @@ def debuggerActorBhv := object: {
     };
   }; 
   // Interface methods called from Actors which need to be propagated to Eclipse
-  def actorStarted(actorId, sourceLocationLine, frLocalManager){
+  def actorStarted(actorId, sourceLocation, frLocalManager){
     def localManager := actorList.get(actorId);
 	if: (nil == localManager) then: {
       actorList.put(actorId, frLocalManager);
       frLocalManager<-start(breakPoints.toTable())@Debug;
-      jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, sourceLocationLine);
-    
+      def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
+      def impl_getObjectId := /.at.support.symbiosis.getClassInstanceMethod(ATFarReference, "impl_getObjectId", []);
+      def objectId := impl_getObjectId.invoke(frLocalManager, []);
+      def vmId := objectId.getVirtualMachineId().getID(); 
+      if: (nil == sourceLocation) then: { // nil only if behaviour of the default actor.
+        jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, vmId, "default", 0);
+      } else: {
+       jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, vmId, sourceLocation.fileName, sourceLocation.line);
+      };
       whenever: frLocalManager disconnected: {
         actorList.remove(actorId);
         //THINK: if actor was "infected", you should remove it from GUI totally.
