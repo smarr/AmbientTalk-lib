@@ -52,6 +52,7 @@ def extendWithPauseBhv(msg, actorId, debuggerActor) {
         if: !(is: actor taggedAs: /.at.support.debugger.localManager.LocalManagerModule) then: {
           if: ((reflect: actor).respondsTo(`debuggeable)) then:{
  	         def am := /.at.support.debugger.localManager.enableLocalManager(true, false, debuggerActor);
+ 	        // system.println("infected and receiving message " + self.selector + " in  " + am.getActorId());
 	         rcv <+ self;
 		  } else:{
 		     raise: /at.support.debugger.localManager.XDebuggerException("cannot infect an non-debuggeable actor");
@@ -155,22 +156,24 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	// rememver you can re-schedule a message which is not breakpointed 
     // but it is paused because of an explicit pause command!
 	def scheduleOneMessageFromInbox() {
-	  def msg := (inbox[1])[1]; //[msg,rcv]
-      def rcv := (inbox[1])[2];
-      if: (is: msg taggedAs: Pause) then:{ 
-        // if the message to re-schedule was a pause one, it means this time it needs to be executed.
-		 msg.alreadyPaused := true;
-	  };
-      // check on the length of the inbox, maybe it was the last message.
-      def length := inbox.length();
-      if: (length > 1) then: {
-	    inbox := inbox.select(2, length); 
-	  } else:{ 
-	    inbox := [];
-	  };
-      self<-schedule(rcv,msg); 
+	  def length := inbox.length();
+	  if: (length > 0 ) then:{
+	    def msg := (inbox[1])[1]; //[msg,rcv]
+        def rcv := (inbox[1])[2];
+        if: (is: msg taggedAs: Pause) then:{ 
+          // if the message to re-schedule was a pause one, it means this time it needs to be executed.
+		   msg.alreadyPaused := true;
+	    };
+        // check on the length of the inbox, maybe it was the last message.
+        if: (length > 1) then: {
+	      inbox := inbox.select(2, length); 
+	    } else:{ 
+	      inbox := [];
+	    };
+        self.schedule(rcv,msg); 
    	  // TODO: This message needs to be sent if we would like the UI to build the causal links.
       //  debuggerActor<-updateInbox(actorId, msg, false)@Debug;
+      };
     };
 	// interface with debuggerActor
 	def interfaceDebuggerActor := object: {
@@ -240,7 +243,7 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	
 	// meta actor protocol methods
 	def schedule(rcv, msg){
-//	system.println("SCHEDULE " + msg.selector + " with state " + debuggingState + " and pauseState " + pausedState + " in " + actorId);
+	//system.println("SCHEDULE " + msg.selector + " with state " + debuggingState + " and pauseState " + pausedState + " in " + actorId);
 	  // is base-level or debug-level message?
 	 if: (is: msg taggedAs: Debug) then:{
 		super^schedule(rcv,msg);			
@@ -291,7 +294,7 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	// We cannot attach the Pause annotation with def createMessage(sel, args, types) and annotateMessage(msg)
     // because the lineNumbers get messed up. We intercept send where the msg is already well-formed.
 	def send(rcv, msg){
-//	system.println(" SEND: " + msg.selector + " with state " + debuggingState + " and pauseState " + pausedState + " in " + actorId);
+	//system.println(" SEND: " + msg.selector + " with state " + debuggingState + " and pauseState " + pausedState + " in " + actorId);
       def types := tagsOf: msg;
       if: (nil != (types.find: { |type| type.isSubtypeOf(Debug) })) then: {
         //sending a debug-level message
