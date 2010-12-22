@@ -31,18 +31,64 @@
 **/
 deftype DebuggerActor;
 deftype Debug <: /.at.lang.types.Message;
+def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
+def Hashset := /.at.collections.java.hashset.HashSet;
+
+def getVMIDFromFarReference(farReference) {
+  def impl_getObjectId := /.at.support.symbiosis.getClassInstanceMethod(ATFarReference, "impl_getObjectId", []);
+  def objectId := impl_getObjectId.invoke(farReference, []);
+  objectId.getVirtualMachineId().getID(); 
+};
 
 def debuggerActorBhv := object: {
   def actorList := jlobby.java.util.HashMap.new();
   def breakPoints := /.at.support.debugger.localManager.breakpointsDS.new();
+  def vmIdToActorIdMap := /.at.collections.java.hashMap.HashMap.new();
   
+  // helper methods.
   def actorList.each: closure {
 	def valit := actorList.values().iterator();
 	while: { valit.hasNext() } do: {
 	  closure(valit.next());
 	};
   };
+  
+  def removeActorFromDataStructures(vmId, actorId,frLocalManager){
+     actorList.remove(actorId);
+     def actorIdsSet := vmIdToActorIdMap.get(vmId);
+     if: (nil != actorIdsSet) then:{
+       actorIdsSet.remove(frLocalManager);
+     }
+  };
+  
+  def addActorToDataStructures(vmId, actorId, frLocalManager){
+  	// add it to actor hashmap
+    actorList.put(actorId, frLocalManager);
+    // add it to vmIdToActorIdMap
+    def actorIdsSet := vmIdToActorIdMap.get(vmId);
+    if: (nil == actorIdsSet ) then:{
+      def newSet := Hashset.new();
+      newSet.add(frLocalManager);
+      vmIdToActorIdMap.put(vmId, newSet); 
+    } else:{
+      if: (!actorIdsSet.contains(frLocalManager)) then: {
+        actorIdsSet.add(frLocalManager);
+      }
+    }
+  };
     
+  def notifyBreakpoint(breakpoint, actorIdsSet, isAddition) {
+  	if: (nil != actorIdsSet) then:{
+	  actorIdsSet.each:{ |actorMirrorRef|
+	    if: (isAddition) then: {
+	      actorMirrorRef<-addBreakpoint(breakpoint[1], breakpoint[2])@Debug;
+	    } else: {
+	      actorMirrorRef<-removeBreakpoint(breakpoint[1], breakpoint[2])@Debug;
+	    }
+	  }
+	}
+  };
+  
   // Interface methods called from Eclipse plugin
   def pauseActor(actorId){
      def farRefToActorMirror := actorList.get(actorId);
@@ -85,23 +131,34 @@ def debuggerActorBhv := object: {
       actorMirrorRef<-removeBreakpoint(filename, lineNumber)@Debug;
     };
   }; 
+   
+  def breakpointActiveOn(filename, lineNumber, listVMIds){
+    vmIdToActorIdMap.each: { | vmId, actorIdsSet | 
+      if: ( listVMIds.contains(vmId)) then:{
+        // the breakpoint should be active in this VM
+		notifyBreakpoint([filename, lineNumber],actorIdsSet, true);
+      } else: {
+        // the breakpoint should not be active in this VM
+	    notifyBreakpoint([filename, lineNumber],actorIdsSet, false);
+      }
+    };
+  };
+
   // Interface methods called from Actors which need to be propagated to Eclipse
   def actorStarted(actorId, sourceLocation, frLocalManager){
     def localManager := actorList.get(actorId);
 	if: (nil == localManager) then: {
-      actorList.put(actorId, frLocalManager);
+	  def vmId := getVMIDFromFarReference(frLocalManager);
+	  addActorToDataStructures(vmId, actorId, frLocalManager);
       frLocalManager<-start(breakPoints.toTable())@Debug;
-      def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
-      def impl_getObjectId := /.at.support.symbiosis.getClassInstanceMethod(ATFarReference, "impl_getObjectId", []);
-      def objectId := impl_getObjectId.invoke(frLocalManager, []);
-      def vmId := objectId.getVirtualMachineId().getID(); 
       if: (nil == sourceLocation) then: { // nil only if behaviour of the default actor.
         jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, vmId, "default", 0);
       } else: {
        jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, vmId, sourceLocation.fileName, sourceLocation.line);
       };
+      
       whenever: frLocalManager disconnected: {
-        actorList.remove(actorId);
+        removeActorFromDataStructures(vmId,actorId, frLocalManager);
         //THINK: if actor was "infected", you should remove it from GUI totally.
         // if actor was "part of the gui", just grey out it?
         jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_disconnectionActor(actorId);
@@ -120,7 +177,6 @@ def debuggerActorBhv := object: {
   };
   
   def updateInbox(actorId, msg, addition := true) {  // TODO: it should be actorId, msg, rcv? 
-	//system.println("Updating inbox of: " + actorId + " " + msg ); 
      if: addition then: {
        jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_addMsgInfo(actorId, msg.selector, msg.arguments,msg);
      } else: {
@@ -135,3 +191,4 @@ def debuggerActorBhv := object: {
 };
 export: debuggerActorBhv as: DebuggerActor;
 network.online();
+

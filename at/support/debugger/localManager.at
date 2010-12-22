@@ -51,9 +51,8 @@ def extendWithPauseBhv(msg, actorId, debuggerActor) {
         def actor := reflectOnActor();
         if: !(is: actor taggedAs: /.at.support.debugger.localManager.LocalManagerModule) then: {
           if: ((reflect: actor).respondsTo(`debuggeable)) then:{
- 	         def am := /.at.support.debugger.localManager.enableLocalManager(true, false, debuggerActor);
- 	        // system.println("infected and receiving message " + self.selector + " in  " + am.getActorId());
-	         rcv <+ self;
+ 	         /.at.support.debugger.localManager.enableLocalManager(true, false, debuggerActor);
+ 	         rcv <+ self;
 		  } else:{
 		     raise: /at.support.debugger.localManager.XDebuggerException("cannot infect an non-debuggeable actor");
 		  };
@@ -243,7 +242,6 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	
 	// meta actor protocol methods
 	def schedule(rcv, msg){
-	//system.println("SCHEDULE " + msg.selector + " with state " + debuggingState + " and pauseState " + pausedState + " in " + actorId);
 	  // is base-level or debug-level message?
 	 if: (is: msg taggedAs: Debug) then:{
 		super^schedule(rcv,msg);			
@@ -294,7 +292,6 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	// We cannot attach the Pause annotation with def createMessage(sel, args, types) and annotateMessage(msg)
     // because the lineNumbers get messed up. We intercept send where the msg is already well-formed.
 	def send(rcv, msg){
-	//system.println(" SEND: " + msg.selector + " with state " + debuggingState + " and pauseState " + pausedState + " in " + actorId);
       def types := tagsOf: msg;
       if: (nil != (types.find: { |type| type.isSubtypeOf(Debug) })) then: {
         //sending a debug-level message
@@ -371,7 +368,7 @@ def breakpointsDSPrototype := object: {
       if: (nil == value) then:{
         breakPoints.put(filename, [number]);
       } else:{
-        if: !value.contains(number) then:{
+        if: (!value.contains(number)) then:{
           breakPoints.put(filename, value + [number])
         };
       };
