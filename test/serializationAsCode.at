@@ -133,7 +133,7 @@ def AsCodeTest := extend: /.at.unit.test.UnitTest.new("AsCodeTest") with: {
 	};
 	
 	def testMirrors() {
-		
+				
 		def so := object: {
 			def id := 43;
 		};
@@ -168,11 +168,11 @@ def AsCodeTest := extend: /.at.unit.test.UnitTest.new("AsCodeTest") with: {
 			def a := o2;
 			def b := o3;
 		};
-
+		
 		def do2 := fromCodeAsCode(o2);
 		def do3 := fromCodeAsCode(o3);
 		def do4 := fromCodeAsCode(o4);
-
+		
 		self.assertEquals(do2.e, (reflect: do2).b);
 		self.assertEquals(do2, (reflect: do2).getBase());
 		self.assertEquals(do3.f, (reflect: do3).d);
