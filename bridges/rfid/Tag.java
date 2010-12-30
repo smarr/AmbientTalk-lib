@@ -30,6 +30,10 @@ public class Tag {
 			return transponder_.getString();
 		}
 		
+		public Transponder getTransponder() {
+			return transponder_;
+		}
+		
 		public void dump(Object o) throws Exception {
 			byte[] data = Tag.serialize(o);
 			this.write(new String(data));

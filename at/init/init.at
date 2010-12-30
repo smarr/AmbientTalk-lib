@@ -285,7 +285,7 @@ def export: someObject {
 };
 
 // a try:catch: method that catches any exception
-def try: closure catch: failClosure {
+def try: closure catch: failClosure { 
 	try: closure catch: /.at.lang.types.Exception using: { |e| failClosure(e) };
 };
 

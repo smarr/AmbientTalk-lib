@@ -38,9 +38,39 @@
 }
 **/
 
+def DEBUG := false;
+def INFO := true;
+def ERR := true;
+
+def debug(@args) {
+	if: (DEBUG) then: {
+		system.println("[DEBUG] " + args);
+	};
+};
+
+def info(@args) {
+	if: (INFO) then: {
+		system.println("[INFO] " + args);
+	};
+};
+
+def err(@args) {
+	if: (ERR) then: {
+		system.println("[ERR][!] " + args);
+	};
+};
+
 // check if methods is annotated with a given typetag
 def is: someMethod annotatedAs: someAnnotation {
 	someMethod.annotations.contains(someAnnotation);
+};
+
+def IGNORE_INVOCATIONS := [`super, `==, `!=];
+
+def ignore(invocation) {
+	def res := IGNORE_INVOCATIONS.contains(invocation);
+	debug("ignore: " + invocation + ": " + res);
+	res;
 };
 
 // support for mutator methods
@@ -61,9 +91,15 @@ def is: methodName mutatorOfOnly: someObject {
 def is: methodName mutatorOf: someObject {
 	try: {
 		(is: (reflect: someObject).grabMethod(methodName) annotatedAs: Mutator).or: {
+			debug((print: methodName) + " not a mutator of " + someObject + ", checking super: " + someObject.super);
 			is: methodName mutatorOf: someObject.super;
 		};
-	} catch: /.at.lang.types.SelectorNotFound using: {|e| false };
+	} catch: /.at.lang.types.SelectorNotFound using: {|e| 
+		try: {
+			debug((print: methodName) + " not a selector of " + someObject + ", checking super: " + someObject.super);
+			is: methodName mutatorOf: someObject.super;
+		} catch: /.at.lang.types.SelectorNotFound using: {|e|  false }
+  };
 };
 
 // intercepts methods annotated as mutator and := invocations
@@ -72,11 +108,14 @@ def is: methodName mutatorOf: someObject {
 def makeMutatorInterceptor(interceptor) {
 	mirror: {
 		def invokeField(slf, invocation) {
+			debug("invokeField " + invocation + " on " + slf);
 			def returnValue := super^invokeField(slf, invocation);
 			try: {
 				def methodName := invocation;
-				if: (is: methodName mutatorOf: slf) then: {
-					interceptor(self.base(), methodName);
+				if: (!ignore(invocation)) then: {
+					if: (is: methodName mutatorOf: slf) then: {
+						interceptor(self.base(), methodName);
+					};
 				};
 			} catch: /.at.lang.types.SelectorNotFound using: {|e| 
 				// do nothing
@@ -87,14 +126,17 @@ def makeMutatorInterceptor(interceptor) {
 		
 		
 		def invoke(slf, invocation) {
+			debug("invoke " + invocation.selector + " on " + slf);
 			def returnValue := super^invoke(slf, invocation);
 			try: {
 				def methodName := invocation.selector;
-				if: (is: methodName mutatorOf: slf) then: {
-					interceptor(self.base(), methodName);
-				} else: {
-					if: ((print: methodName) ~= ".*:=$") then: {
+				if: (!ignore(invocation)) then: {
+					if: (is: methodName mutatorOf: slf) then: {
 						interceptor(self.base(), methodName);
+					} else: {
+						if: ((print: methodName) ~= ".*:=$") then: {
+							interceptor(self.base(), methodName);
+						};
 					};
 				};
 			} catch: /.at.lang.types.SelectorNotFound using: {|e| 

@@ -39,6 +39,7 @@ import /.bridges.rfid.RFIDService;
 
 def service := createRFIDService();
 network.online();
+service.setAntennaOnRequest();
 service.run();
 service;
 

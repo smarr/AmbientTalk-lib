@@ -20,6 +20,18 @@ public class Reader {
 		device_ = new Device();
 	}
 	
+	public Device getDevice() {
+		return device_;
+	}
+	
+	public void setAntennaAlwaysOn() throws RFIDException {
+		device_.setAntennaAlwaysOn();
+	}
+	
+	public void setAntennaOnRequest() throws RFIDException {
+		device_.setAntennaOnRequest();
+	}
+	
 	public Vector<Tag> inventory(boolean withReset) throws RFIDException, IOException {
 		Vector<librfid.rfid.Transponder> transponders = device_.readTransponders(withReset);
 		Vector<bridges.rfid.Tag> wrapped = new Vector<Tag>(transponders.size());
@@ -29,6 +41,10 @@ public class Reader {
 			wrapped.add(new Tag(tag));
 		}
 		return wrapped;
+	}
+	
+	public Vector<Tag> inventory() throws RFIDException, IOException {
+		return this.inventory(true);
 	}
 	
 	public Vector<Tag> readTransponders() throws RFIDException, IOException {

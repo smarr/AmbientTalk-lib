@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.Iterator;
 import java.util.Vector;
 
-import librfid.file.TagWrapper;
 import librfid.exceptions.RFIDException;
 import librfid.rfid.*;
 

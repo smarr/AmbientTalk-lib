@@ -1,0 +1,16 @@
+import /.at.collections.java.vector;
+
+def JavaRFIDDevice := jlobby.bridges.rfid.Reader;
+
+def reader := JavaRFIDDevice.new();
+
+system.println("rx size: " + reader.getDevice().rx_buf);
+system.println("tx size: " + reader.getDevice().tx_buf);
+
+def tags := Vector.new(reader.inventory(true));
+
+tags.each: {|t|
+	def ok := t.getTransponder().putString("kapot!");
+	system.println("wiping: " + (print: ok));
+};
+	
