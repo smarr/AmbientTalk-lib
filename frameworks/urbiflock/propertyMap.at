@@ -25,17 +25,44 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/*
- * Unit test suite that tests the Urbiflock framework
- */
- def IFTestSuite := /.at.unit.test.TestSuite.new("urbiflock testsuite", [
-   ///.frameworks.urbiflock.flock.FlockTest(),
-   /.frameworks.urbiflock.flockr.FlockrTest()
-  // /.frameworks.urbiflock.buddylist.BuddylistTest(),
-   ///.frameworks.urbiflock.profile.ProfileTest()
-  // /.frameworks.urbiflock.application.ApplicationTest(),
-   ///.frameworks.urbiflock.rete.ReteTest(),
-   ///.frameworks.urbiflock.proximity.ProximityTest(),
-   ///.at.lang.totam.TotamTest(),
-   ///.frameworks.urbiflock.guanotes.GuanotesTest()
- ]).runTest;
+
+
+
+/** 
+/* operation mayhem 
+ * The property list, but it's implemented as an isolate object.
+ */ 
+def makePropertyMap() {
+	def thePropertyMap := isolate: {
+		/** 
+		 * Add a field to the profile. If the slot with name propName
+		 * already exists, there is already such a profile property.
+		 * If this is the case, raise a XDuplicateField exception.
+		 */
+		def addField(propName, propVal := nil ) {
+			if: (reflect: self).respondsTo(propName) then: {
+				raise: XDuplicateField.new("PropertyMap already has property: " + propName);
+			} else: {
+				(reflect: self).defineField(propName, propVal);
+			}
+		};
+		
+		
+		/** 
+		 * Remove a field from the profile. If the property with name propName
+		 * is a mandatory field, raise a XMandatoryFieldRemoval exception.
+		 */
+		def removeField(propName) {
+			(reflect: self).removeSlot(propName);
+		};
+		
+	};
+	
+	thePropertyMap;
+};
+
+
+// the module object of this file
+object: {
+	def makePropertyMap := &makePropertyMap;
+};
