@@ -72,7 +72,7 @@ def makeFlockr(profile) {
 	// map UID -> Far ref to flockr
 	def uidFlockrMap := jlobby.java.util.HashMap.new();
 	
-	def profileChangedListeners := Vector.new();
+	//def profileChangedListeners := Vector.new();
 	/** operation mayhem  **/
 	def propertiesChangedListeners := Vector.new();
 
@@ -109,8 +109,14 @@ def makeFlockr(profile) {
 		     notifyProfileChanged(flockr : farref, newProfile : profile)
 		       invoked whenever a nearby flockr's profile has changed
 		*/
-		def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
-		def removeProfileChangedListener(l) { profileChangedListeners.remove(l) };
+		//def registerProfileChangedListener(l) { profileChangedListeners.add(l) };
+		//def removeProfileChangedListener(l) { profileChangedListeners.remove(l) };
+		
+		/** operation mayhem  **/
+		def registerPropertiesChangedListener(l) { propertiesChangedListeners.add(l) };
+		def removePropertiesChangedListener(l) { propertiesChangedListeners.remove(l) };
+		
+		
 		/* l should understand:
 		     notifyJoined(profile : profile)
 		       invoked whenever a new flockr has joined the ad hoc network
@@ -170,12 +176,11 @@ def makeFlockr(profile) {
 		def updateProfile() {
 			system.println("UPdate profile !!!");
 		
-			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(remoteInterface, myProfile);
+			notifyListeners: propertiesChangedListeners with: <-notifyChangedProperty(remoteInterface, `profile , myPropertyMap);
 			
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
 			while: { connectedFlockrsIterator.hasNext() } do: {
 				system.println("Sending profile !!!");
-			
 				/** operation mayhem  **/	
 				connectedFlockrsIterator.next()<-notifyChangedProperty(remoteInterface,`profile, myPropertyMap);
 			};
@@ -308,7 +313,9 @@ def makeFlockr(profile) {
 		 * invoked by other flockrs on this Flockr.
 		 */
 		def remoteInterface := object: {
-			def getProfile() { profile };
+			//def getProfile() { profile };
+			/** operation mayhem  **/
+			def getProperties() { myPropertyMap };
 			
 			/** operation mayhem  **/
 			//def profileChanged(flockr, newProfile) {
@@ -320,12 +327,12 @@ def makeFlockr(profile) {
 				system.println("Cool property changed !!!");
 				notifyListeners: propertiesChangedListeners with: <-notifyChangedProperty(flockr,key,newPropertyMap);
 				
-				if: (key == `profile) then: {
+				/*if: (key == `profile) then: {
 					system.println("it was a profile change !!!");
 					notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newPropertyMap.profile);
 				}else: {
 					notifyListeners: propertiesChangedListeners with: <-notifyChangedProperty(flockr,key,newPropertyMap);
-				};
+				};*/
 			};
 			
 		} taggedAs: [ extend: FlockrT with: { |username| }];
@@ -422,12 +429,12 @@ def makeFlockr(profile) {
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
 			while: { connectedFlockrsIterator.hasNext() } do: {
 				def flockrRef := connectedFlockrsIterator.next();
-				when: flockrRef<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
+				when: flockrRef<-getProperties()@Due(seconds(10)) becomes: { |newProperties|
 					if: (nil != isNearbyProximity) then: {
-						isNearbyProximity<-notifyJoined(newProfile);
+						isNearbyProximity<-notifyJoined( newProperties.profile );
 					};
 					simpleProximities.each: { |proximity| 
-						proximity<-notifyProfileChanged(flockrRef, newProfile);
+						proximity<-notifyChangedProperty(flockrRef, `* ,newProperties);
 					};
 				} catch: TimeoutException using: { |e|
 				};
@@ -436,7 +443,7 @@ def makeFlockr(profile) {
 	};
 	
 	// BuddyList is interested in Profile changes (update cached profiles)
-	localInterface.registerProfileChangedListener(buddyList);
+	localInterface.registerPropertiesChangedListener(buddyList);
 	
 	// Adding predefined flocks
 	def isFriendProximity := ProximityModule.makeIsFriendProximity(localInterface);
@@ -463,14 +470,15 @@ def makeFlockr(profile) {
 	// 2) all profile changed listeners get a notifyProfileChanged event
 	discSubscription := whenever: FlockrT discovered: { |flockr|
 		
-		when: flockr<-getProfile()@Due(seconds(10)) becomes: { |newProfile|
-			system.println("DEBUG: Flockr: " + username + "added to his/her map " + newProfile.username);
+		when: flockr<-getProperties()@Due(seconds(10)) becomes: { |newProperties|
+			system.println("DEBUG: Flockr: " + username + "added to his/her map " + newProperties.profile.username);
 
       		// keep track of the flockr far reference via its UID
 			uidFlockrMap.put(uidOf(flockr), flockr);
 			
-			notifyListeners: discoveryListeners with: <-notifyJoined(newProfile);
-			notifyListeners: profileChangedListeners with: <-notifyProfileChanged(flockr, newProfile);
+			notifyListeners: discoveryListeners with: <-notifyJoined(newProperties.profile);
+			
+			notifyListeners: propertiesChangedListeners with: <-notifyChangedProperty(flockr, `* , newProperties);
 			
 			/* FIXME: What if a flockr disconnects, then reconnects and the addFlockr event
 			   is signalled before the removeFlockr event. Can this ever happen?
@@ -480,7 +488,7 @@ def makeFlockr(profile) {
 				uidFlockrMap.remove(uidOf(flockr));
 				// Note: the 'newProfile' profile may be outdated by now, but it only serves
 				// to remove all profiles with the same username from the RETE network
-				notifyListeners: discoveryListeners with: <-notifyLeft(newProfile);
+				notifyListeners: discoveryListeners with: <-notifyLeft(newProperties.profile);
 			};
 			
 		} catch: TimeoutException using: { |e|
@@ -550,9 +558,9 @@ object: {
 		def testAsyncProfileExchange() {
 			def [fut,res] := makeFuture(seconds(10));
 			
-			flockr1.registerProfileChangedListener(object: {
-				def notifyProfileChanged(flockr, newProfile) {
-					res.resolve(newProfile.username);
+			flockr1.registerPropertiesChangedListener(object: {
+				def notifyChangedProperty(flockr, key ,newProperties) {
+					res.resolve(newProperties.profile.username);
 				};
 			});
 
@@ -586,17 +594,16 @@ object: {
 			
 			/.at.support.timer.when: seconds(5) elapsedWithFuture: {
 			
-			flockr1.registerProfileChangedListener(object: {
-				def notifyProfileChanged(flockr, newProfile) {
-					system.println(newProfile.firstname);
-					res.resolve(newProfile.firstname);
+			flockr1.registerPropertiesChangedListener(object: {
+				def notifyChangedProperty(flockr, key ,newProperties) {
+					system.println(newProperties.profile.firstname);
+					res.resolve(newProperties.profile.firstname);
 				};
 			});
 			
 			};
 			
 			when: fut becomes: { |uname|
-				system.println("haaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
 				self.assertEquals("bleh", uname);
 			};
 			

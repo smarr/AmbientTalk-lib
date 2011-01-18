@@ -10,8 +10,8 @@ public interface Flockr {
 	public Profile getBuddy(String uid);
 	public Flock[] getFlocks();
 	public void removeFlock(Flock f);
-	public void registerProfileChangedListener(Object l);
-	public void removeProfileChangedListener(Object l);
+	public void registerPropertiesChangedListener(Object l);
+	public void removePropertiesChangedListener(Object l);
 	public void registerBuddyListListener(Object l);
 	public void removeBuddyListListener(Object l);
 	public void registerDiscoveryListener(Object l);

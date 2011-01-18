@@ -98,10 +98,10 @@ def makeIsNearbyProximity(flockr) {
 		def notifyJoined(profile) {
 			super^getReteNode().insert(profile);
 		};
-    //invoked whenever a flockr comes nearby
-    def notifyLeft(profile) {
+   	 	//invoked whenever a flockr comes nearby
+    	def notifyLeft(profile) {
 			super^getReteNode().remove(profile);
-	  };		
+	  	};		
 	};
 	flockr.registerDiscoveryListener(isNearbyProximity);
 	isNearbyProximity;
@@ -109,15 +109,15 @@ def makeIsNearbyProximity(flockr) {
 
 // encodes a proximity function that test an attribute of a flockr profile. 
 def makeDoesProfileMatchProximity(flockr, block) {
-	  // profileChangedProximity registers itsels as listener to track changes on the profile.
+	  	// profileChangedProximity registers itsels as listener to track changes on the profile.
 		def profileChangedProximity := extend: makeProximity(Rete.makeChangeNode( Rete.makeFilter( block ) )) with: {
 			//invoked whenever the profile of the flockr changes.
-			def notifyProfileChanged(farref, profile) {
-				super^getReteNode().changeEvent(profile);
+			def notifyChangedProperty(farref, key ,properties) {
+				super^getReteNode().changeEvent(properties.profile);
 			};		
 			super^connect();
 		};
-		flockr.registerProfileChangedListener(profileChangedProximity);
+		flockr.registerPropertiesChangedListener(profileChangedProximity);
 		profileChangedProximity;
 };
 // encodes a proximity function implementing the and operator on two given proximities.

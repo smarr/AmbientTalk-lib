@@ -123,14 +123,14 @@ public interface GuanotesApp extends Application {
 				public void openFlockEditorOnNewFlock() {}
 				public void registerBuddyListListener(Object l) {}
 				public void registerDiscoveryListener(Object l) {}
-				public void registerProfileChangedListener(Object l) {}
+				public void registerPropertiesChangedListener(Object l) {}
 				public void removeBuddy(Profile profile) {}
 				public void removeBuddyListListener(Object l) {}
 				public void removeDiscoveryListener(Object l) {}
 				public void registerFlocksListener(Object l) {}
 				public void removeFlocksListener(Object l) {}
 				public void removeFlock(Flock f) {}
-				public void removeProfileChangedListener(Object l) {}
+				public void removePropertiesChangedListener(Object l) {}
 				public void updateMatchingProfile(Profile p) {}
 				public void updateProfile() {}
 				public void setHasOpenFlockEditor(boolean b) {}

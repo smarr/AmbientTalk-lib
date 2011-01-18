@@ -29,13 +29,13 @@
  * Unit test suite that tests the Urbiflock framework
  */
  def IFTestSuite := /.at.unit.test.TestSuite.new("urbiflock testsuite", [
-   ///.frameworks.urbiflock.flock.FlockTest(),
-   /.frameworks.urbiflock.flockr.FlockrTest()
-  // /.frameworks.urbiflock.buddylist.BuddylistTest(),
-   ///.frameworks.urbiflock.profile.ProfileTest()
-  // /.frameworks.urbiflock.application.ApplicationTest(),
-   ///.frameworks.urbiflock.rete.ReteTest(),
-   ///.frameworks.urbiflock.proximity.ProximityTest(),
-   ///.at.lang.totam.TotamTest(),
-   ///.frameworks.urbiflock.guanotes.GuanotesTest()
+   /.frameworks.urbiflock.flock.FlockTest(),
+   /.frameworks.urbiflock.flockr.FlockrTest(),
+   /.frameworks.urbiflock.buddylist.BuddylistTest(),
+   /.frameworks.urbiflock.profile.ProfileTest(),
+   /.frameworks.urbiflock.application.ApplicationTest(),
+   /.frameworks.urbiflock.rete.ReteTest(),
+   /.frameworks.urbiflock.proximity.ProximityTest(),
+   /.at.lang.totam.TotamTest(),
+   /.frameworks.urbiflock.guanotes.GuanotesTest()
  ]).runTest;

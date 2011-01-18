@@ -98,11 +98,11 @@ public class ProfileViewer extends Frame implements ActionListener {
 		    }
 		});
 		
-		localFlockr_.registerProfileChangedListener(this);
+		localFlockr_.registerPropertiesChangedListener(this);
 	}
 	
 	public void dispose() {
-		localFlockr_.removeProfileChangedListener(this);
+		localFlockr_.registerPropertiesChangedListener(this);
 		super.dispose();
 	}
 	
@@ -528,11 +528,14 @@ public class ProfileViewer extends Frame implements ActionListener {
 	 * This event should only be signaled when viewing another (remote) flockr's profile,
 	 * since changes to a local flockr's own profile only happen by the use of this GUI.
 	 */
-	public void notifyProfileChanged(Object remoteFlockr, Profile profile) {
-		if (profile_.username().equals(profile.username())) {
-			updateGUIWithProfile(profile);
+	public void notifyChangedProperty(Object remoteFlockr,String key,Profile profile) {
+		if (key.equals("profile")) {
+			if (profile_.username().equals(profile.username())) {
+				updateGUIWithProfile(profile);
+			}
 		}
 	}
+		
 	
 	private void updateGUIWithProfile(Profile profile) {
 		fieldsPanel_.removeAll();

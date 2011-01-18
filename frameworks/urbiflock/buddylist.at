@@ -58,11 +58,11 @@ def makeBuddyList() {
 			};
 			theList;
 		};
-		def notifyProfileChanged(flockr, newProfile) {
-			if: contains(newProfile.username) then: {
-				setProfile(newProfile);
+		def notifyChangedProperty(flockr, key, newProperties) {
+				if: contains(newProperties.profile.username) then: {
+					setProfile(newProperties.profile);
+				};
 			};
-		};
 	}
 };
 

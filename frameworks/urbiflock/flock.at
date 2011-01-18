@@ -104,7 +104,7 @@ def makeFlock(theName, theProximity, owner) {
 			oldFlockList.each: { |profile| 
 				// passing nil as far reference. 
 				// Save because the rete engine doesn't use flockr but profiles.
-				proximity<-notifyProfileChanged(nil, profile);
+				proximity<-notifyChangedProperty(nil, profile);
 			};
 		};
 		//sets the flock as default one.
@@ -120,11 +120,11 @@ def makeFlock(theName, theProximity, owner) {
 		
 	def subscription := proximity.register(proximityListener);
 	
-	owner.registerProfileChangedListener( object: {
-		def notifyProfileChanged(flockr, newProfile) {
-			def indexOfProfileToReplace := flockrList.indexOf(newProfile);
+	owner.registerPropertiesChangedListener( object: {
+		def notifyChangedProperty(flockr, key ,newProperties) {
+			def indexOfProfileToReplace := flockrList.indexOf(newProperties.profile);
 			if: (nil != indexOfProfileToReplace) then: {
-				flockrList.atPut(indexOfProfileToReplace, newProfile);
+				flockrList.atPut(indexOfProfileToReplace, newProperties.profile);
 			};
 		};	
 	});
