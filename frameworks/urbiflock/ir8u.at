@@ -47,7 +47,7 @@ def makeIR8U(aFlockr) {
 	def subscription; // stores our discovery subscription with the UF framework
 	def ui; // a reference to the GUI of this application
 	
-	def connectedRaters; // a table of references to remote interfaces of IR8U applications
+	def connectedRaters := Vector.new(); // a table of references to remote interfaces of IR8U applications
 	
 	// a map storing Subject : String -> [ [flockrWhoRated : FarRef<Flockr>, rate : int]* ]
 	def ratingSubjects := HashMap.new();
@@ -92,15 +92,17 @@ def makeIR8U(aFlockr) {
 			self.export(IR8U);
 			
 			// allocate a vector to store discovered nearby apps
-			connectedRaters := Vector.new();
+			//connectedRaters := Vector.new();
+  			// Moved to creating time because otherwise sometimes an applicationleft event is processed before applicationJoined event and 
+			// ir8u raises an exception saying selector remove cannot be found in nil.
 		
 		  // start service discovery to discover nearby IR8U applications
 		  subscription := self.registerApplicationListener(IR8U, object:{
 			  def notifyApplicationJoined(flockr, profile, ir8uApp){
-				  connectedRaters.add(ir8uApp);
+				 connectedRaters.add(ir8uApp);
 			  };
 			  def notifyApplicationLeft(flockr, profile, ir8uApp){
-					connectedRaters.remove(ir8uApp);
+				 connectedRaters.remove(ir8uApp);
 			  };
 		  });
 		};
@@ -129,9 +131,9 @@ def makeIR8U(aFlockr) {
 		  def prevRatings := ratingSubjects.get(subject);
 		  if: (prevRatings != nil) then: {
 			  // the subject was found
-			  if: (nil == prevRatings.find: { |tuple| tuple[1] == ratingFlockr }) then: {
+			  if: (nil == prevRatings.find: { |tuple| tuple[1] == ratingFlockrName }) then: {
 				  // and ratingFlockr has not given a rating on this subject before
-					ratingSubjects.put(subject, prevRatings + [[ratingFlockr, rating]]);
+					ratingSubjects.put(subject, prevRatings + [[ratingFlockrName, rating]]);
 					ui.updateRating(ratingFlockrName, subject, rating);
 			  }
 		  }
