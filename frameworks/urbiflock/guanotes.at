@@ -62,13 +62,12 @@ def makeGuanotes(aFlockr) {
 	    def guanotesProtocol := propagationProtocol: { |totam|
 		    def receivingTS := totam;
 		    def doAction(ts) { receivingTS := ts};
-        def inScope(descriptor) { 
+        def inScope(senderDescriptor, descriptor) { 
 	        def flockrTuple := receivingTS.rdp(/.at.lang.totam.tuple: ["Flockr", /.at.lang.totam.var: `flock]);
 					if: (flockrTuple != nil) then:{
 						def receiver := self.getField(3);
 	          receiver.shouldReceive( flockrTuple.getField(2), descriptor);
 	        } else: {//this should never happen!
-		        system.println("This should never happen!");
 		        false
 		      };	
 	      };
@@ -90,7 +89,8 @@ def makeGuanotes(aFlockr) {
 						flocks.inject: false into: { |result, flockName|
 							 result.or: { 
 							   def flock := receiverFlockr.getFlock(flockName);
-								 if: (flock != nil) then: { flock.getFlockrList().contains(receiverFlockrId)}
+								 if: (flock != nil) then: { 
+								   flock.getFlockrList().contains(receiverFlockrId)}
 								 else: {	false } 
 							 }
 						}
@@ -138,7 +138,7 @@ def makeGuanotes(aFlockr) {
 			  def notifyApplicationLeft(flockr, profile, remoteGuanotesTs){
 				  //To think, remove from seenTS??
 			  };
-		  });
+		  }); 
 		  //adding the private flockrTuple used to calculate who should receive the guanote
 		  totam.out(tuple:["Flockr", aFlockr]);
 		};
