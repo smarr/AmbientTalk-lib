@@ -25,6 +25,16 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+def initModule := lobby.frameworks.workflow.WFinit;
+def environmentModule := lobby.frameworks.workflow.environment;
+def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
+import initModule;
+import environmentModule;
+import workflowPatternModule;
+import /.at.lang.values;
+import /.at.lang.futures;
+import /.at.lang.multifutures;
+
 
 deftype Compensation;
 deftype RetryType <: Compensation;
@@ -124,7 +134,7 @@ def Rediscover(t, a := nil) {
         def maxTimes := t;
         def triedTimes := 0;
         def action := a; 
-        def [result, resolver] := makeFuture;
+        def [result, resolver] := makeFuture();
     
         def try() {
             triedTimes := triedTimes + 1;

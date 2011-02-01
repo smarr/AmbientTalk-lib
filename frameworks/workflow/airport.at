@@ -1,13 +1,13 @@
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
 def activityModule := lobby.frameworks.workflow.activity;
-def workflowPatternModule := lobby..workflowPattern;
+def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
 def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
 def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
 //def groupInteractionsModule := lobby.frameworks.workflow.groupInteractions;
 def crimeModule := lobby.bridges.crime.CrimeConnection;
 def intensionalModule := lobby.frameworks.workflow.intensional;
-def CRIframeworks.workflowgroupInteractionsModule := lobby.frameworks.workflow.CRIframeworks.workflowgroupInteractions;
+def CRIMEgroupInteractionsModule := lobby.frameworks.workflow.CRIMEgroupInteractions;
 
 import initModule;
 import environmentModule;
@@ -18,7 +18,7 @@ import compensatingActionsModule;
 //import groupInteractionsModule;
 import crimeModule;
 import intensionalModule;
-import CRIframeworks.workflowgroupInteractionsModule;
+import CRIMEgroupInteractionsModule;
 
 
 def WFenv := Environment.new();
