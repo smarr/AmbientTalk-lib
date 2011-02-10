@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Programming Technology Lab, 2006 - 2008
- * Authors: PROG Ambient Group
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,7 +25,8 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 def Vector := /.at.collections.vector.Vector;
-
+def urbiTotamModule := /.frameworks.urbiflock.urbiflockTotam;
+def totamModule := /.at.lang.totam;
 //helper function to make a flockr list as a vector which comparator is based on flockr's usernanems.
 def makeFlockrList(){
 	Vector.new(10, { |prof1, prof2| prof1.username == prof2.username });
@@ -56,7 +57,7 @@ def makeFlock(theName, theProximity, owner) {
 		  listeners.each: { |listener| listener<-notifyFlockrRemoved(profile) }; 
 	  };
 	};
-	
+	def totam := owner.getTotam();
 	// public interface of flock.
 	def theFlock := object: {
 		/* register a listener with a flock that gets notified when a 
@@ -115,6 +116,56 @@ def makeFlock(theName, theProximity, owner) {
 		def isDefaultFlock() {
 			defaultFlock
 		};
+
+		// interaction protocol
+        def sendToAll(msg, applTypeTag := urbiTotamModule.FlockMessageT) {
+          def target := urbiTotamModule.makeMessageTarget(true, [theName]);
+          def tuple := totamModule.tuple: [applTypeTag, owner, target, msg] withPropagationProtocol: urbiTotamModule.flockProtocol(); 
+         //flockProtocol is similar than the one in guanotes: 
+         // inScope checks the devices is part of the flock + it installs a listener to be called when tuple dies by retraction.
+         totam.inject: tuple; // returns an object with cancel() and retract() to unexport and remove the tuple respectively.
+       };
+
+       def sendToCurrent(msg, applTypeTag := urbiTotamModule.FlockMessageT) {
+         def target := urbiTotamModule.makeMessageTarget(false, @(self.getFlockrList()));
+         def tuple :=  totamModule.tuple: [applTypeTag, owner, target, msg] withPropagationProtocol: urbiTotamModule.currentContentsProtocol(); 
+         // currentContentsProtocol is similar than the one in guanotes: 
+         // propagation where inScope checks the devices is part of the flock + it is only send to flockrs NOW connected (i.e. not stored in the ambient TS)
+         totam.inject: tuple; // returns an object with cancel() and retract() to unexport and remove the tuple respectively.
+       }; 
+       
+       // additional helper functions to send tuples with custom protocols
+       def sendTupleToCurrent( tuple, propagationProtocol) {
+          //set the default protocol + add the new one in the tuple & inject it.
+          // TO CHANGE!
+          propagationProtocol.super := urbiTotamModule.currentContentsProtocol();
+          tuple.setPropagationStrategy(propagationProtocol);
+          totam.inject: tuple;
+       };
+
+       // additional helper functions to send more complex data with custom protocols
+       def sendTupleToAll( tuple, propagationProtocol) {
+          //set the default protocol + add the new one in the tuple & inject it.
+         propagationProtocol.super := urbiTotamModule.flockProtocol();
+         tuple.setPropagationStrategy(propagationProtocol);
+         totam.inject: tuple;
+       };
+ 
+       /* register a listener with a flock that gets notified when a 
+		  message for the flock is received. The listener should understand:
+		  def receiveMessage(owner, content);
+		    invoked whenever a new message for this flock is received.
+	      def messageRetracted(flockr, content) ;
+	        invoked whenever a new flockr does not belong to a flock anymore.
+	  */
+       def receiveFromFlock(listener, applTypeTag := urbiTotamModule.FlockMessageT) {
+         def template := totamModule.tuple: [applTypeTag, totamModule.var: `owner, totamModule.var: `target, totamModule.var: `content];
+          // TO FURTHER THINK: I think it is find just to register to the type without caring about the target, 
+          // because the propagation strategies ensure that a flock won't get the message unless it was really targetted.
+         totam.whenever: template read: { 
+           listener.receiveMessage(owner, content);
+         };
+       };
 		
 	};
 		
@@ -147,42 +198,64 @@ object: {
 		def actorF2;
 		def flockr1;
 		def profile2;
+		def test := self;
+		def actors := [];
 		
+		// makes a flockr which resolves a future when receives a hallo message.
+		def makeFlockr(username, res) {
+		   actor: { |res, test, username|
+			def active := true; 
+			def profile2 := /.frameworks.urbiflock.profile.makeProfile();
+			profile2.username := username;
+			profile2.sex := "MALE"; 
+			def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
+			def maleProximity := /.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(flockr2 , { |profile| profile.sex == "MALE" });
+			def maleFlock := /.frameworks.urbiflock.flock.makeFlock("MaleFlock", maleProximity, flockr2);
+			flockr2.addFlock(maleFlock);
+			maleFlock.receiveFromFlock( object:{
+			  def receiveMessage(owner, content){
+			    test<-assertEquals("hallo", content);
+			    res<-resolve(`ok);
+			  };
+			});
+			def goOffline() { if: (active) then: {flockr2.goOffline(); active := false}; `ok };
+			// adding this method for testAsyncFriendsFlock
+			def stop() { active := false };  
+		  };
+		};
+
 		def setUp(){
-			def profile1 := /.frameworks.urbiflock.profile.makeProfile();
-			profile1.username := "flockr1";
-			profile1.sex := "MALE";
-		  	flockr1 := /.frameworks.urbiflock.flockr.makeFlockr(profile1);
-			profile2 := /.frameworks.urbiflock.profile.makeProfile();
-			profile2.username := "flockr2";
-			
-			actorF2 := actor: {
-				def active := true; 
-				def profile2 := /.frameworks.urbiflock.profile.makeProfile();
-				profile2.username := "flockr2";
-				profile2.sex := "MALE"; 
-			  def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
-			  def goOffline() { if: (active) then: {flockr2.goOffline(); active := false}; `ok };
-			  // adding this method for testAsyncFriendsFlock
-			  def stop() { active := false };
-		  }
+		  def profile1 := /.frameworks.urbiflock.profile.makeProfile();
+		  profile1.username := "flockr1";
+		  profile1.sex := "MALE";
+		  flockr1 := /.frameworks.urbiflock.flockr.makeFlockr(profile1);
+		  profile2 := /.frameworks.urbiflock.profile.makeProfile();
+		  profile2.username := "flockr2";
+		  actors := [];
 		};
 		
 		def tearDown() {
 			// clean up the flockrs created for each test
 			flockr1.goOffline();
-			actorF2<-goOffline()@FutureMessage;
+			actors.each: { |actor| 
+  			  actor<-goOffline()@FutureMessage;
+  			};
 		};
 		
 		
 		def testAsyncMaleFlock(){
+		    def [fut, res] := makeFuture();
+			def flockr2 := makeFlockr("flockr2", res);
+			actors := actors + [flockr2];
 			def maleProximity := /.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
 			flockr1.addFlock(makeFlock("MaleFlock", maleProximity, flockr1));
 			flockr1.addBuddy(profile2);
 			def maleFlock := flockr1.getFlock("MaleFlock");
 			when: seconds(waitTime) elapsedWithFuture: {
 			  self.assertEquals(1, maleFlock.getFlockrList.length);	
-			};		
+			  maleFlock.sendToAll("hallo");
+			};
+			fut;		
 		};
 		// more tests in proximities.at.
 	};

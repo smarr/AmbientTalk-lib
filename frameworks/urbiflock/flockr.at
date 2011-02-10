@@ -59,13 +59,13 @@ def uidOf(flockr) {
 
 
 def makeFlockr(profile) {
+
 	def myProfile := profile;
+	def username := profile.username;
 		/** operation mayhem  **/
 	def myPropertyMap := makePropertyMap();
-	
 	myPropertyMap.addField(`profile, profile);
-	
-	def username := profile.username;
+
 	def publication; // the pub object by which I am exported
 	def discSubscription; // the sub object by which I discover the rest of flockrs.
 	
@@ -102,8 +102,9 @@ def makeFlockr(profile) {
 	};
 	
 	def localInterface := object: {
-	
-		
+	    
+	    def getTotam() { totam };
+	    def getUserPropertyMap() {myPropertyMap};
 	
 		/* l should understand:
 		     notifyProfileChanged(flockr : farref, newProfile : profile)
@@ -154,17 +155,17 @@ def makeFlockr(profile) {
 		 *  return the Flockr object for the flockr with the given uid,
 		 *  or nil of the uid was not found
 		 */
-		def getFlockrWithUid(uid) {
+		/*DEADCODE-flockrWithId def getFlockrWithUid(uid) {
 			uidFlockrMap.get(uid);
-		};
+		};*/
 		
 		/**
 		 * updateFlockrWithUid(flockr: farref<Flockr>, uid : int) -> nil
 		 *  update the flockr with the given uid
 		 */
-		def updateFlockrWithUid(flockr, uid) {
+		/*DEADCODE-flockrWithId def updateFlockrWithUid(flockr, uid) {
 			uidFlockrMap.put(uid, flockr);
-		};
+		};*/
 		def getProfile() { myProfile };
 		// DEADCODE-prof def getMatchingProfile() { matchingProfile };
 		def getUsername(){ username };
@@ -442,6 +443,8 @@ def makeFlockr(profile) {
 		};
 	};
 	
+    def totam := /.frameworks.urbiflock.urbiflockTotam.makeTotam(localInterface);
+		
 	// BuddyList is interested in Profile changes (update cached profiles)
 	localInterface.registerPropertiesChangedListener(buddyList);
 	
@@ -469,9 +472,7 @@ def makeFlockr(profile) {
 	// 1) all discovery listeners get a notifyJoined event
 	// 2) all profile changed listeners get a notifyProfileChanged event
 	discSubscription := whenever: FlockrT discovered: { |flockr|
-		
-		when: flockr<-getProperties()@Due(seconds(10)) becomes: { |newProperties|
-			system.println("DEBUG: Flockr: " + username + "added to his/her map " + newProperties.profile.username);
+			when: flockr<-getProperties()@Due(seconds(10)) becomes: { |newProperties|
 
       		// keep track of the flockr far reference via its UID
 			uidFlockrMap.put(uidOf(flockr), flockr);
@@ -484,7 +485,6 @@ def makeFlockr(profile) {
 			   is signalled before the removeFlockr event. Can this ever happen?
 			*/
 			when: flockr disconnected: {
-				system.println("DEBUG: Flockr:" + username + "removed from his/her map" + uidOf(flockr));
 				uidFlockrMap.remove(uidOf(flockr));
 				// Note: the 'newProfile' profile may be outdated by now, but it only serves
 				// to remove all profiles with the same username from the RETE network

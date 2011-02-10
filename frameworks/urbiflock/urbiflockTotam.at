@@ -1,0 +1,134 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ */
+ 
+ /**
+ *  Module wrapping TOTAM in Urbiflock. 
+ *  It basically contains some facilities for flock communication
+ *  used by the flock abstraction but, also to be used by Urbiflock programers. 
+ */
+ 
+ 
+import /.at.lang.totam;
+
+
+def urbiflockTotamModule := object:{
+
+  deftype FlockMessageT;
+       
+  def makeTotam(aFlockr) {
+     def ts := makeTupleSpace(aFlockr.getUsername());
+     ts.goOnline();
+     //adding the private flockrTuple used to calculate who should receive the guanote
+	 ts.out(tuple:["Flockr", aFlockr]);
+	 ts;
+  };
+  
+  def flockProtocol() {
+    propagationProtocol: { 
+	  def localTS;
+	  def decideDie(ts) { localTS := ts; false};
+      def inScope(senderDescriptor, receiverDescriptor) { 
+        def isInScope := false;
+        // this Flockr tuple wouldn't it be necessary if totam will have access to flockr.
+	    def localFlockrTuple := localTS.rdp(/.at.lang.totam.tuple: ["Flockr", /.at.lang.totam.var: `flockr]);
+	    if: (localFlockrTuple != nil) then:{
+	      def target := self.getField(3);
+	      if: (target.isFlock()) then:{ // this should be always the case for flockProtocol
+	        def localFlockr := localFlockrTuple.getField(2);
+	        def targetFlock := localFlockr.getFlock(@target.getTargetFlockrs());
+	        if: (targetFlock != nil) then:{ 
+	          isInScope := targetFlock.getFlockrList().contains(receiverDescriptor);
+	        }; 
+	      };
+	    };
+	    system.println("flockProtocol:InScope:from: " +senderDescriptor+ " to " + receiverDescriptor + " : " + isInScope);
+	    isInScope;
+	  }; //end-inScope
+	};
+  };
+  
+  def currentContentsProtocol(){
+    propagationProtocol: { 
+       def hops := 0;
+       def localTS;
+       def die := false;
+	   def inScope(senderDescriptor, receiverDescriptor) {
+	     def isInScope := false;
+	     // check similar to flockProtocol BUT it only sends to currenlty connected flocks.
+	     // this Flockr tuple wouldn't it be necessary if totam will have access to flockr.
+	     def localFlockrTuple := localTS.rdp(/.at.lang.totam.tuple: ["Flockr", /.at.lang.totam.var: `flockr]);
+	     if: (localFlockrTuple != nil) then: {
+	       def target := self.getField(3);
+	       if: (!target.isFlock()) then: { // this should be always the case for currentContentsProtocol
+	         def connectedFlockrs := localFlockr.getFlock("NearbyFlock").getFlockrList();
+	         def localFlockr := localFlockrTuple.getField(2);
+	         def targetFlockrs := target.getTargetFlockrs();
+             if: (targetFlockrs != nil) then:{ 
+	           // TODO: to check if the flockrs are connected we should maybe use the property map.
+	           isInScope := (targetFlockrs.contains(receiverDescriptor)).and: { connectedFlockrs.contains(receiverDescriptor)};
+	           if: isInScope then: { 
+	             targetObject.removeTarget(receiverDescriptor); 
+	             if: (target.getTargetFlockrs().size() <1) then: {
+	               die := true;
+	             };
+	           };
+	         };
+	       };
+	     };
+         system.println("currentContentsProtocol:InScope:from: " +senderDescriptor+ " to " + receiverDescriptor + " : " + isInScope);
+	     isInScope;
+	   };
+	   def changeTupleContent(ts) { hops := hops + 1; self};
+	   // Tuple dies after one hop because you only send it to current contents of the flock.
+	   def decideDie(ts) {
+	     localTS := ts; 
+	     (hops > 0).and:{die};
+	   }; 
+    }; 
+  };
+      
+ def makeMessageTarget(isFlockReceiver, idList) {
+   isolate: { |isFlockReceiver, idList|
+    def isFlock() { isFlockReceiver};
+    def getTargetFlockrs() {idList};
+    def removeTarget(id) { idList := idList.filter: { |el| el != id }};
+   };					
+ };
+     
+  // ADDITIONS TO Urbiflock's Totam to make a message for a flock scoped to the application.
+  def makeMessageForFlock(content, applTypeTag := FlockMessageT) {
+    def aTuple := tuple: [applTypeTag, owner, theName, content];
+    extend: aTuple with: { 
+      def getContent() {self.getField(4)};
+      def setContent() {self.setField(4,c)};
+      def setPropagationProtocol(protocol) {
+        // switch the tuple protocol to the given
+        super.super := protocol;
+      };
+    } taggedAs: [/.at.lang.types.Isolate];
+  };  
+}; //end-urbiflockTotamModule
