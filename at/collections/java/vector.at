@@ -86,6 +86,18 @@ def Vector := object: {
 		vc.indexOf(o);
 	};
 	
+	def isEmpty() {
+		vc.isEmpty();
+	};
+	
+	def notEmpty() {
+		!vc.isEmpty();
+	};
+	
+	def first() {
+		vc.firstElement() ;
+	};
+	
 	def remove(o) {
 		vc.removeElement(o);
 	};
@@ -95,7 +107,7 @@ def Vector := object: {
 	};
 	
 	def clone() {
-		/.at.collections.java.Vector.new(vc.clone());
+		Vector.new(vc.clone());
 	};
 	
 	def remove_all(coll) {
