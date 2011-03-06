@@ -33,6 +33,8 @@ deftype DebuggerActor;
 deftype Debug <: /.at.lang.types.Message;
 def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
 def Hashset := /.at.collections.java.hashset.HashSet;
+def HashMap := /.at.collections.java.hashMap.HashMap;
+def  breakpointsDS := /.at.support.debugger.localManager.breakpointsDS;
 
 def getVMIDFromFarReference(farReference) {
   def impl_getObjectId := /.at.support.symbiosis.getClassInstanceMethod(ATFarReference, "impl_getObjectId", []);
@@ -41,18 +43,18 @@ def getVMIDFromFarReference(farReference) {
 };
 
 def debuggerActorBhv := object: {
-  def actorList := jlobby.java.util.HashMap.new();
-  def breakPoints := /.at.support.debugger.localManager.breakpointsDS.new();
-  def vmIdToActorIdMap := /.at.collections.java.hashMap.HashMap.new();
+  // actorId -> far reference to local manager.
+  def actorList := HashMap.new();  
+  // stores breakpoints active on all VMs
+  def breakpointsInAllVM :=  breakpointsDS.new(); 
+  // stores breakpoints active only on some VMs.
+  //  VMID -> (HashMap of filenames -> lineNumbers)
+  def breakpointsInVM := HashMap.new(); 
+  // stores the actorsId within a VM. 
+  // VMID -> (HashSet of actorIds)
+  def vmIdToActorIdMap := HashMap.new(); 
   
-  // helper methods.
-  def actorList.each: closure {
-	def valit := actorList.values().iterator();
-	while: { valit.hasNext() } do: {
-	  closure(valit.next());
-	};
-  };
-  
+  //helper functions
   def removeActorFromDataStructures(vmId, actorId,frLocalManager){
      actorList.remove(actorId);
      def actorIdsSet := vmIdToActorIdMap.get(vmId);
@@ -79,11 +81,11 @@ def debuggerActorBhv := object: {
     
   def notifyBreakpoint(breakpoint, actorIdsSet, isAddition) {
   	if: (nil != actorIdsSet) then:{
-	  actorIdsSet.each:{ |actorMirrorRef|
+	  actorIdsSet.each:{ |frLocalManager|
 	    if: (isAddition) then: {
-	      actorMirrorRef<-addBreakpoint(breakpoint[1], breakpoint[2])@Debug;
+	      frLocalManager<-addBreakpoint(breakpoint[1], breakpoint[2])@Debug;
 	    } else: {
-	      actorMirrorRef<-removeBreakpoint(breakpoint[1], breakpoint[2])@Debug;
+	      frLocalManager<-removeBreakpoint(breakpoint[1], breakpoint[2])@Debug;
 	    }
 	  }
 	}
@@ -91,57 +93,85 @@ def debuggerActorBhv := object: {
   
   // Interface methods called from Eclipse plugin
   def pauseActor(actorId){
-     def farRefToActorMirror := actorList.get(actorId);
-     if: (nil != actorId) then:{
-       farRefToActorMirror<-pause()@Debug;
+     def frLocalManager := actorList.get(actorId);
+     if: (nil != frLocalManager) then:{
+       frLocalManager<-pause()@Debug;
      };
   };
   
   def resumeActor(actorId){
-     def farRefToActorMirror := actorList.get(actorId);
-     if: (nil != actorId) then:{
-       farRefToActorMirror<-resume()@Debug;
+     def frLocalManager := actorList.get(actorId);
+     if: (nil != frLocalManager) then:{
+       frLocalManager<-resume()@Debug;
      };
   };
   
   def stepInto(actorId){
-    def farRefToActorMirror := actorList.get(actorId);
-    if: (nil != actorId) then:{
-      farRefToActorMirror<-stepInto()@Debug;
+    def frLocalManager := actorList.get(actorId);
+    if: (nil != frLocalManager) then:{
+      frLocalManager<-stepInto()@Debug;
     };
   };
   
   def stepOver(actorId){
-    def farRefToActorMirror := actorList.get(actorId);
-    if: (nil != actorId) then:{
-      farRefToActorMirror<-stepOver()@Debug;
+    def frLocalManager := actorList.get(actorId);
+    if: (nil != frLocalManager) then:{
+      frLocalManager<-stepOver()@Debug;
     };
   };
   
   def setBreakpoint(filename, lineNumber){
-    breakPoints.put(filename, lineNumber);
-    actorList.each: { |actorMirrorRef|
-      actorMirrorRef<-addBreakpoint(filename, lineNumber)@Debug;
+    breakpointsInAllVM.put(filename,lineNumber);
+    actorList.each: { |actorId, frLocalManager|
+      frLocalManager<-addBreakpoint(filename, lineNumber)@Debug;
     };
   };
   
   def clearBreakpoint(filename, lineNumber){
-    breakPoints.remove(filename, lineNumber);
-    actorList.each: { |actorMirrorRef|
-      actorMirrorRef<-removeBreakpoint(filename, lineNumber)@Debug;
+    breakpointsInAllVM.put(filename,lineNumber);
+    actorList.each: { |actorId, frLocalManager|
+      frLocalManager<-removeBreakpoint(filename, lineNumber)@Debug;
     };
   }; 
    
   def breakpointActiveOn(filename, lineNumber, listVMIds){
+    // notify the local managers already discovered.
     vmIdToActorIdMap.each: { | vmId, actorIdsSet | 
-      if: ( listVMIds.contains(vmId)) then:{
-        // the breakpoint should be active in this VM
-		notifyBreakpoint([filename, lineNumber],actorIdsSet, true);
-      } else: {
+      def bkpDS := breakpointsInVM.get(vmId);
+      if: (bkpDS != nil) then: {
+        if: ( listVMIds.contains(vmId)) then:{
+          if: (! bkpDS.contains(filename, lineNumber)) then:{
+		    notifyBreakpoint([filename, lineNumber],actorIdsSet, true);
+		  };
+        } else: {
         // the breakpoint should not be active in this VM
-	    notifyBreakpoint([filename, lineNumber],actorIdsSet, false);
-      }
+        if: ( bkpDS.contains(filename, lineNumber)) then:{
+	      notifyBreakpoint([filename, lineNumber],actorIdsSet, false);
+		  }
+        }
+      } else:{
+        // if the VMID is not in the data structures means that a local manager didn't
+        // have time to announce his presence to the debuggerActor. 
+        // Do not do anything, it will get the breakpoint in the actorStarted method.
+      };
     };
+     // remove from breakpointsInAllVM table if it was there.
+     // since now it only belongs to a subset of VMIDs.
+    def res := breakpointsInAllVM.remove(filename,lineNumber);
+    // add the breakpoints to the breakpoint per VM data structure.
+    // you need this data structure for new discovered local managers,
+    // so that they don't think a disabled breakpoint is active on their VM.
+    def it := listVMIds.iterator();
+    while: {it.hasNext()} do:{
+      def vmId := it.next();
+      def bkpDS := breakpointsInVM.get(vmId) ;
+      if: (bkpDS == nil) then:{
+        bkpDS := breakpointsDS.new();
+      }; 
+      bkpDS.put(filename, lineNumber);
+      breakpointsInVM.put(vmId, bkpDS);
+    }
+    
   };
 
   // Interface methods called from Actors which need to be propagated to Eclipse
@@ -150,13 +180,22 @@ def debuggerActorBhv := object: {
 	if: (nil == localManager) then: {
 	  def vmId := getVMIDFromFarReference(frLocalManager);
 	  addActorToDataStructures(vmId, actorId, frLocalManager);
-      frLocalManager<-start(breakPoints.toTable())@Debug;
+	  // send active breakpoints
+	  // first, get breakpoints active in all VMs
+	  def breakpoints := breakpointsInAllVM.toTable(); 
+	  // secondly, add breakpoints active in this VM if any.
+	  def bkpDS := breakpointsInVM.get(vmId); 
+	  if: (bkpDS != nil) then: {
+	    breakpoints := breakpoints + bkpDS.toTable();
+      };
+     
+      frLocalManager<-start(breakpoints)@Debug;
+      // inform GUI
       if: (nil == sourceLocation) then: { // nil only if behaviour of the default actor.
         jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, vmId, "default", 0);
       } else: {
        jlobby.edu.vub.at.debug.IAT_DEBUGGER.event_confirm_startActor(actorId, vmId, sourceLocation.fileName, sourceLocation.line);
       };
-      
       whenever: frLocalManager disconnected: {
         removeActorFromDataStructures(vmId,actorId, frLocalManager);
         //THINK: if actor was "infected", you should remove it from GUI totally.

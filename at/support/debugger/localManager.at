@@ -37,7 +37,8 @@ def ExternalMessage := /.at.lang.types.ExternalMessage;
 //create DebuggerException used to notify cases which shouldn't not happen.
 deftype DebuggerException <: /.at.lang.types.Exception;
 def XDebuggerException := /.at.lang.exceptions.createException(DebuggerException);
-	
+
+ 	
 /* Not possible to use annotateMessage //system because 
 line number get screwed up and we need it for breakpoints*/
 deftype Pause <: /.at.lang.types.AsyncMessage;
@@ -54,7 +55,7 @@ def extendWithPauseBhv(msg, actorId, debuggerActor) {
  	         /.at.support.debugger.localManager.enableLocalManager(true, false, debuggerActor);
  	         rcv <+ self;
 		  } else:{
-		     raise: /at.support.debugger.localManager.XDebuggerException("cannot infect an non-debuggeable actor");
+		     raise: /.at.support.debugger.localManager.XDebuggerException("cannot infect an non-debuggeable actor");
 		  };
 	    } else: {
 	      //already enabled.
@@ -114,13 +115,13 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	  def filename := msg.getLocationFilename();
 	  if: ((nil != lineNumber).and: { nil != filename }) then:{
 	    if: (is: msg taggedAs: Pause) then: {
-	     !(msg.alreadyPaused); 
+	      !(msg.alreadyPaused); 
 	    } else:{
 	      breakpoints.contains(filename, lineNumber);
 	    };
 	  } else:{
 	    (is: msg taggedAs: Pause).and:{ !(msg.alreadyPaused)};
-	  }
+	  };
 	};
 	def getActorState() {
       def actorState := HashMap.new();
@@ -322,9 +323,7 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	def whenDiscoveryActorDiscovered(da) {
 	  // TODO: 'Temporary' code to get the sourceLocation of the behaviour 
 	  //  while it is not added to the reflective layer.
-	  def ATObject := jlobby.edu.vub.at.objects.ATObject;
-      def impl_getLocation := /.at.support.symbiosis.getClassInstanceMethod(ATObject, "impl_getLocation", []);
-      def sourceLocation := impl_getLocation.invoke(self.behaviour, []);
+	  def sourceLocation := /.at.support.util.getSourceLocation(self.behaviour);
       debuggerActor<-actorStarted(actorId, sourceLocation, interfaceDebuggerActor)@Debug;
 	  disconnectedFromDebuggerActor := false;
 	  // when disconnected from debugger actor, message @Debug are lost 
@@ -390,7 +389,7 @@ def breakpointsDSPrototype := object: {
   def remove(filename, number) {
     def value := breakPoints.get(filename);
     if: (nil != value) then:{
-      value := value.filter: { |e| e == number};
+      value := value.filter: { |e| e != number};
       if: (nil != value) then: {
         breakPoints.put(filename, value);
       } else:{
