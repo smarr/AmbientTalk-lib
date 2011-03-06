@@ -147,6 +147,13 @@ def makeSetUnion(t1, t2){
 	ti; 
 };
 
+// adding support for getting/setting an AT object's source location
+def ATObject := jlobby.edu.vub.at.objects.ATObject;
+def getSourceLocation(obj){
+  def impl_getLocation := /.at.support.symbiosis.getClassInstanceMethod(ATObject, "impl_getLocation", []);
+  impl_getLocation.invoke(obj, []);
+}; 
+
 def UtilTest() {
   extend: /.at.unit.test.UnitTest.new("UtilTest") with: {
     import /.at.lang.futures; enableFutures(false);
@@ -203,18 +210,24 @@ def UtilTest() {
 		  };
     };
 
-		def testConcatenationToSet() {
-			self.assertEquals("[]", print: (makeSetUnion([],[])));
-			def t := makeSetUnion([], [1,2]);
-			self.assertEquals("[1, 2]", print: t);
-			def t2 := [2,3];
-			def t3 := makeSetUnion(t,t2);
-			self.assertEquals("[1, 2, 3]", print: t3);
-			self.assertEquals("[1, 2]", print: t);
-			self.assertEquals("[2, 3]", print: t2);
-		  self.assertEquals("[1, 2, 3, 3]", print: (t3 + ([3])));
-		  self.assertEquals("[1, 2, 3]", print: makeSetUnion(t, [3]));
-		};
+	def testConcatenationToSet() {
+		self.assertEquals("[]", print: (makeSetUnion([],[])));
+		def t := makeSetUnion([], [1,2]);
+		self.assertEquals("[1, 2]", print: t);
+		def t2 := [2,3];
+		def t3 := makeSetUnion(t,t2);
+		self.assertEquals("[1, 2, 3]", print: t3);
+		self.assertEquals("[1, 2]", print: t);
+		self.assertEquals("[2, 3]", print: t2);
+	    self.assertEquals("[1, 2, 3, 3]", print: (t3 + ([3])));
+		self.assertEquals("[1, 2, 3]", print: makeSetUnion(t, [3]));
+	};
+		
+	def testSourceLocation(){
+      def msg := <-assertTrue(true)@FutureMessage;
+      def loc := getSourceLocation(msg); 
+      self.assertEquals( msg.getLocationLine(), loc.line);
+	};
     
   };
 };
