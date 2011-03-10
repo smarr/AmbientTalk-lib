@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,11 +23,87 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
  */
 
 
 def initModule := lobby.frameworks.workflow.WFinit;
 import initModule;
+import /.at.lang.values;
+import /.at.lang.futures;
+
+
+
+def Activity := object: {
+
+	// Create an asynchronous message.
+    def createAsyncMsg(selector, args) {
+        reflectOnActor().createMessage(selector, args, [FutureMessage]);
+    };
+    
+    // Create an asynchronous message with a due time.
+    def createTimeoutMsg(selector, args, timeout) {
+        reflectOnActor().createMessage(selector, args, [Due(seconds(timeout))]);
+    };
+    
+    // Invocation of a service.
+	def invokeService(service, activity, env) {
+		def [result, resolver] := makeFuture();
+		def arguments := activity.parameters;
+		def output := activity.output;  
+		def msg := createAsyncMsg(activity.selector, env.bind(arguments));
+		def timeout := if: (env.find(`timeout) == nil) then: { nil; } else: { env.find(`timeout); };
+		if:  ((! (timeout == nil)).and: { is: timeout.failureEvent taggedAs: TimeoutType } ) then: {
+			msg := createTimeoutMsg(activity.selector, env.bind(arguments), timeout.failureEvent.duration);
+		};
+		// In order to cancel TimeoutException in case of a disconnection error.
+		def disconnection := false;
+		when: service <+ msg becomes: { |reply|
+			if: !disconnection then: {
+				// When a disconnection failure is not being handled
+           		if: (is: reply taggedAs: Table) then: {
+               		def idx := 1;
+               		reply.each: { |val| env.insert(output[idx].variable, val); idx := idx + 1; }; 
+           		};
+           		resolver.resolve(env);
+           	};
+        } catch: lobby.at.lang.types.Exception using: { |e|
+        	if: (is: e taggedAs: TimeoutException) then: { 
+        		if: (( (! (timeout == nil)).and: { ! disconnection} ).and: { ! (timeout.compensation == nil)}) then: {
+        			def compensation := timeout.compensation;
+        			compensate(compensation, service, activity, timeout, env);
+        		};
+        	} else: {
+        		if: (is: e taggedAs: ServiceException) then: {
+       				def exception := if: (env.find(`exception) == nil) then: { nil; } else: { env.find(`exception); };
+        			if: ( (! (exception == nil)).and: { ! (exception.compensation == nil) } ) then: {
+        				def compensation := exception.compensation;
+        				compensate(compensation, service, activity, exception, env);
+        			};
+        		};
+        	};
+        };
+        when: service disconnected: {
+        	// In order to cancel TimeoutException in case of a disconnection error.
+        	disconnection := true;
+        	def d := if: (env.find(`disconnection) == nil) then: { nil; } else: { env.find(`disconnection); };
+        	if: ( (! (d == nil)).and: { ! (d.compensation == nil) } ) then: {
+        		def compensation := d.compensation;
+        		compensate(compensation, service, activity, d, env);
+        	};
+        };
+        result;
+	};
+	
+	def compensate(compensation, service, activity, conditionAction, env) {
+		try: {
+			compensation.start(env, activity, conditionAction);
+		} catch: WrongCompensation using: { |e|
+			system.println("Wrong compensating action specified : " + e);
+		};
+	};
+};
 
 
 def ServiceActivity := object: {
@@ -35,6 +111,8 @@ def ServiceActivity := object: {
     def selector;
     def parameters;
     def output;
+    def futures := [];
+    def services := [];
     
     def init(sw, sel, pars, outputVars) {  
         service    := sw;
@@ -42,7 +120,77 @@ def ServiceActivity := object: {
         parameters := pars;
         output     := outputVars;
     };  
-} taggedAs: [Activity];
+    
+    def cancel(env) {
+    	def resolver;
+        futures.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2][2]; }; };
+        if: ! (resolver == nil) then: {
+        	resolver.ruin(/.at.lang.types.Exception);
+        };
+    };
+    
+    def start(env) {
+    	def [result, resolver] := makeFuture();
+    	futures := futures + [[env.id, [result, resolver]]];   
+    	execute(env, resolver);
+    	result;
+    };
+    	
+    
+    def execute(env, resolver) {      
+    	def notFoundTriggered := false;
+    	def discovered := false;
+    	when: service.tag discovered: { |s|
+    		def idx;
+    		services.find: { |p| p[1] == env.id };
+    		if: (idx == nil) then: { services := services + [[env.id, s]]; } else: { services[idx] := [ services[idx][1], s ]; };
+    		discovered := true;
+    		if: !notFoundTriggered then: {
+				when: Activity^invokeService(s, self, env)  becomes: { |nEnv|
+    				resolver.resolve(nEnv);
+    			};
+    		};
+    	};
+    	def ca := env.find(`notFound);
+    	def duration := if: (! (ca == nil) ) then: { ca.failureEvent.duration; } else: { 10; };
+    	/.at.support.timer.when: /.at.support.timer.seconds(duration) elapsed: {      
+    		// The service 's not found.
+        	if: !discovered then: {
+        		// In order to deactivate the when: discovered: event handler.
+            	notFoundTriggered := true;  
+                if: ( (! (ca == nil)).and: {is: ca.failureEvent taggedAs: NotFoundType} ) then: {
+                	Activity^compensate(ca.compensation, nil, self, ca, env);
+                };
+          	};
+       	};
+    };
+      
+    def retry(env) {
+    	def [result, resolver];
+    	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+    	def service;
+    	services.each: { |p| if: ( p[1] == env.id) then: { service := p[2]; }; };	
+    	if: ! (service == nil) then: {
+    	when: Activity^invokeService(service, self, env) becomes: { |nEnv|
+         		resolver.resolve(nEnv);
+        	};
+        }; //TODO else error
+		result;
+    };
+    
+    def restart(env) {
+    	def [result, resolver];
+    	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+    	execute(env, resolver);
+    	result;
+    };
+    
+    def skip(env) {
+    	def resolver;
+    	futures.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2][2]; }; };
+    	resolver.resolve(env);
+    };
+};
 
 
 
@@ -86,12 +234,14 @@ def makeServiceWrapper(aTag) {
 };
 
 
-
+// TODO NotFound failure
 def VariableActivity := object: {
     def variableName;
     def selector;
     def parameters;
     def output;
+    def futures := [];
+    def services := [];
     
     def init(var, sel, pars, outputVars) {  
         variableName   := var;
@@ -99,7 +249,48 @@ def VariableActivity := object: {
         parameters     := pars;
         output         := outputVars;
     };  
-} taggedAs: [VarActivity];
+    
+    // Execute a VarActivity (activity execute by a service that is bound to a variable name in the environment).
+    def start(env) {
+    	def [result, resolver] := makeFuture();
+    	futures :=futures + [[env.id, [result, resolver]]];
+		// We look up the service in the environment and invoke that service.
+    	def service := env.find(variableName);
+    	services :=  services + [[env.id, service]];
+    	when: Activity^invokeService(service, self, env)  becomes: { |nEnv|
+    		resolver.resolve(nEnv);
+    	};
+    	result;
+    };
+    
+    def cancel(env) {
+    	def resolver;
+        futures.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2][2]; }; };
+        if: ! (resolver == nil) then: {
+        	resolver.ruin(/.at.lang.types.Exception);
+        };
+    };
+    
+    def retry(env) {
+    	def [result, resolver];
+    	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+    	def service;
+    	services.each: { |p| if: ( p[1] == env.id) then: { service := p[2]; }; };	
+    	if: ! (service == nil) then: {
+    		when: Activity^invokeService(service, self, env) becomes: { |nEnv|
+         		resolver.resolve(nEnv);
+        	};
+        }; //TODO else error
+		result;
+    };
+    
+    def restart(env) {
+    	def [result, resolver];
+    	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+    	execute(env, resolver);
+    	result;
+    };
+};
 
 
 def createVariableWrapper(selector) {
@@ -131,6 +322,7 @@ def createVariableWrapper(selector) {
 };
 
 
+
 def Env := object: {
 
     } mirroredBy: {|emptyBase| 
@@ -144,6 +336,7 @@ def Env := object: {
         }
     };
 };
+
 
 
 def ActivityModule := object: {

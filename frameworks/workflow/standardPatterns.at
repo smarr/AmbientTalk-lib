@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,39 +23,47 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
  */
+ 
 
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
-def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
 import initModule;
 import environmentModule;
-import workflowPatternModule;
 import /.at.lang.values;
 import /.at.lang.futures;
-import /.at.lang.multifutures;
 
 
 def Sequence(@args) {
     object: {
         def components := args;
-    
-        def restart() {
-            started := started - 1;
-        };
+        def resolvers := [];
     
         def start(env) {
-            def [result, resolver] := makeFuture();         
+            def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];         
             execute(1, env, resolver);
             result;
         };
         
-        def execute(idx, env, resolver) {   
-            def component := components[idx];
-            if: (idx < components.length()) then: {
-                WorkflowPattern^run(component, env, { | _ | self.execute(idx+1, env, resolver) });
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	components.each: { |c| c.cancel(env); };
+        };
+        
+        def execute(idx, env, resolver) { 
+            if: (idx <= components.length()) then: {
+                when: components[idx].start(env) becomes: { |nEnv|
+                    execute(idx + 1, nEnv, resolver);
+                };
             } else: {
-                WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
+                resolver.resolve(env);
             };
         };
     } taggedAs: [Pattern];
@@ -66,18 +74,31 @@ def Sequence(@args) {
 def ParallelSplit(@args) {
     object: {
         def components := args;
+        def resolvers := [];
   
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];         
             execute(env, resolver);
             result;  
         };  
+        
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	components.each: { |c| c.cancel(env); };
+        };
         
         def execute(env, resolver) {
             1.to: components.length+1 do: { | idx |
                 def clonedEnv := Environment.new(env);
                 clonedEnv.id := env.id;
-                WorkflowPattern^run(components[idx], clonedEnv, { | _ | resolver.resolve(_) });
+                when: components[idx].start(clonedEnv) becomes: { |nEnv|
+                	resolver.resolve(nEnv);
+                };
             };
         };
     } taggedAs: [Pattern];
@@ -89,18 +110,27 @@ def Connection(cmp) {
     object: {
         def component :=  cmp;
         if: (is: cmp taggedAs: SyncPattern) then: { cmp.addSync(); };
+        def resolvers := [];
  
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             execute(env, resolver);
             result;
         };  
  
+ 		def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	cmp.cancel(env);
+        };
         def execute(env, resolver) {
             if: (is: component taggedAs: Pattern) then: {
-                // start the component and resolve with its reply as usual
-                when: component.start(env) becomes: { |reply|
-                    resolver.resolve(reply);
+                when: component.start(env) becomes: { |nEnv|
+                    resolver.resolve(nEnv);
                 };                       
             } else: {
                 system.println("error: Connection made to non-pattern component.");
@@ -111,12 +141,13 @@ def Connection(cmp) {
 
 
 
-// also Structured Synchronizing Merge
+// Also Structured Synchronizing Merge.
 def Synchronize(cmp) {
     object: {
         def incomingBranches := 0;
         def nextComponent := cmp;
         def environments := [];    
+        def resolvers := [];
 
         def addSync() {
             incomingBranches := incomingBranches + 1;
@@ -124,26 +155,31 @@ def Synchronize(cmp) {
 
         def start(env) {
             def [result, resolver] := makeFuture();
-            environments := environments + [env];
-			//def idx := environments.find: { |e| e.id == env.id; };
-			//if: ! (idx == nil) then: {
-			//	environments.atPut(idx, env);
-			//} else: {
-			//	environments := environments + [env];
-			//};			
+            resolvers := resolvers + [[env.id, resolver]];
+            environments := environments + [env];			
             execute(env.id, resolver);
             result;
+        };
+        
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	environments := environments.filter: { |e| ! (e.id == env.id) };
+        	nextComponent.cancel(env);
         };
     
         def execute(idValue, resolver) {
             def envsOfId := environments.filter: { |env| env.id == idValue; };
             if: (envsOfId.length() == incomingBranches) then: {
-                //def envs := environments.map: { |env| if: ! (env.id == idValue) then: { env };};
-                //environments := envs.filter: { |env| ! (env == nil) };
                 def nEnv := Environment.new();
                 nEnv.id := idValue;
                 nEnv.merge(envsOfId);
-                WorkflowPattern^run(nextComponent, nEnv, { | _ | resolver.resolve(_) });
+               	when: nextComponent.start(nEnv) becomes: { |newEnv|
+               		resolver.resolve(newEnv);
+               	};
             };
         };
     } taggedAs: [SyncPattern];
@@ -156,20 +192,32 @@ def ExclusiveChoice(block, then, else) {
         def test := block;
         def consequence := then;
         def alternative := else;
+ 		def resolvers := [];
  
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             execute(env, resolver);
             result;
+        };
+ 
+ 		def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	consequence.cancel(env);
+        	alternative.cancel(env);
         };
  
         def execute(env, resolver) {
             def method := test.method();
             def bindings := env.bind(method.parameters()); 
-            if: (test.apply(bindings)) then: {
-                WorkflowPattern^run(consequence, env, { | _ | resolver.resolve(_) });
-            } else: {
-                WorkflowPattern^run(alternative, env, { | _ | resolver.resolve(_) });
+            def component;
+            if: (test.apply(bindings)) then: { component := consequence; } else: { component := alternative; };
+            when: component.start(env) becomes: { |nEnv|
+            	resolver.resolve(nEnv);
             };
         };
     } taggedAs: [Pattern];
@@ -180,18 +228,31 @@ def ExclusiveChoice(block, then, else) {
 def SimpleMerge(cmp) {
     object: {
         def component := cmp;
+        def resolvers := [];
 
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             execute(env, resolver);
             result;
+        };
+        
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	component.cancel(env);
         };
     
         def execute(env, resolver) {
             id := id  + 1;
             def clonedEnv := Environment.new(env);
             clonedEnv.id := id;
-            WorkflowPattern^run(component, clonedEnv, { | _ | resolver.resolve(_) });
+            when: component.start(clonedEnv) becomes: { |nEnv|
+            	resolver.resolve(nEnv);
+            };
         };
     } taggedAs: [Pattern];
 };
@@ -202,9 +263,11 @@ def MultiChoice(@cmps) {
     object: {
         def components := cmps;
         def conditionActions;
+        def resolvers := [];
   
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             conditionActions := components.filter: { |car| 
                                                      def rule := car[1];
                                                      def method := rule.method();
@@ -218,10 +281,21 @@ def MultiChoice(@cmps) {
             result;
         };  
         
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	components.each: { |c| c.cancel(env); };
+        };
+        
         def execute(env, resolver) {
             def clonedEnv := clone: env;
-            1.to: conditionActions.length+1 do: { | idx |
-                WorkflowPattern^run(conditionActions[idx][2], clonedEnv, { | _ | resolver.resolve(_) });
+            1.to: conditionActions.length+1 do: { |idx|
+            	when: conditionActions[idx][2].start(clonedEnv) becomes: { |nEnv|
+            		resolver.resolve(nEnv);
+            	};
             };
         };
     } taggedAs: [Pattern];
@@ -234,18 +308,32 @@ def StructuredDiscriminator(cmp) {
         def nextComponent := cmp;
         def started := false;
         def environments := [];
+        def resolvers := [];
 
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             environments := environments + [env];
             execute(env, resolver);
             result;
         };
         
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	environments := environments.filter: { |e| ! (e.id == env.id) };
+        	nextComponent.cancel(env);
+        };
+        
         def execute(env, resolver) {
             def envs := environments.filter: { |e| e.id == env.id };
             if: (envs.length() == 1) then: {
-                WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
+            	when: nextComponent.start(env) becomes: { |nEnv|
+            		resolver.resolve(nEnv);
+            	};
             };
         };
     } taggedAs: [Pattern];
@@ -259,23 +347,37 @@ def StructuredPartialJoin(cmp, nbr) {
         def necessaryEnablements := nbr; //TODO check that nbr < incoming branches
         def environments := [];
         def incomingBranches := 0;
+        def resolvers := [];
 
         def addSync() {
             incomingBranches := incomingBranches + 1;
         };
 
         def start(env) {
-            environments := environments + [env];
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
+            environments := environments + [env];
             execute(env, resolver);
             result;
         };
+        
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	environments := environments.filter: { |e| ! (e.id == env.id) };
+        	nextComponent.cancel(env);
+      	};
         
         def execute(env, resolver) {
             def envs := [];
             environments.each: { |e| if: (env.id == e.id) then: { envs := envs + [e]; }; }; 
             if: (environments.length == necessaryEnablements) then: {
-                WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
+            	when: nextComponent.start(env) becomes: { |nEnv|
+            		resolver.resolve(nEnv);
+            	};
             };
         };
     } taggedAs: [SyncPattern];
@@ -287,12 +389,23 @@ def MultipleInstancesWithoutSynchronization(cmp) {
     object: {
         def number := 0;
         def component := cmp;
+        def resolvers := [];
 
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             number := number + 1;
             execute(env, resolver);
             result;
+        };
+    	
+    	def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	//TODO cmp.cancel(env) (for which env ids?)
         };
     
         def execute(env, resolver) {
@@ -300,8 +413,11 @@ def MultipleInstancesWithoutSynchronization(cmp) {
                 id := id + 1;
                 def clonedEnv := Environment.new(env);
                 clonedEnv.id := id;
-                WorkflowPattern^run(component, clonedEnv, { | _ | _ }); };
-            resolver.resolve(0);    
+                when: component.start(clonedEnv) becomes: { |nEnv|
+                	`done;										//TODO continue was { | _ | _ }
+				};
+			}; 
+            resolver.resolve(0);    //TODO future should be resolved with an environment
         };
     } taggedAs: [Pattern];
 };
@@ -315,11 +431,22 @@ def StructuredLoop(cmp, nextCmp, repeatCmp := nil, preT := { |  | true }, postT 
         def component := cmp;
         def repeatComponent := repeatCmp;
         def nextComponent := nextCmp;
+        def resolvers := [];
     
         def start(env) {
             def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];
             execute(env, resolver);
             result;
+        };
+        
+        def cancel(env) { 
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        	//TODO cancel cmp (all 3?)
         };
     
         def repeat(env, resolver) {
@@ -327,12 +454,16 @@ def StructuredLoop(cmp, nextCmp, repeatCmp := nil, preT := { |  | true }, postT 
             def bindings := env.bind(method.parameters()); 
             if: (postTest.apply(bindings)) then: {  
                 if: ! (repeatComponent == nil) then: {
-                    WorkflowPattern^run(repeatComponent, env, { | _ | self.execute(env, resolver) });
+                	when: repeatComponent.start(env) becomes: { |nEnv|
+                		execute(env, resolver);
+                	};
                 } else: {
                     execute(env, resolver);
                 };
             } else: {
-                WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
+            	when: nextComponent.start(env) becomes: { |nEnv|
+            		resolver.resolve(nEnv);
+            	};
             }; 
         };
 
@@ -340,9 +471,13 @@ def StructuredLoop(cmp, nextCmp, repeatCmp := nil, preT := { |  | true }, postT 
             def method := preTest.method();     
             def bindings := env.bind(method.parameters());
             if: (preTest.apply(bindings)) then: {   
-                WorkflowPattern^run(component, env, { | _ | self.repeat(env, resolver) });
+            	when: component.start(env) becomes: { |nEnv|
+            		repeat(env, resolver);
+            	};
             } else: {
-                WorkflowPattern^run(nextComponent, env, { | _ | resolver.resolve(_) });
+            	when: nextComponent.start(env) becomes: { |nEnv|
+            		resolver.resolve(nEnv);
+            	};
             };
         };
     } taggedAs: [Pattern];

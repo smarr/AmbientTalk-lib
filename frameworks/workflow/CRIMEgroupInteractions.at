@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,22 +23,23 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
  */
-
+ 
 
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
-def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
 def intensionalModule := lobby.frameworks.workflow.intensional;
 def crimeModule := lobby.bridges.crime.CrimeConnection;
+def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
 import crimeModule;
 import initModule;
 import environmentModule;
-import workflowPatternModule;
 import intensionalModule;
+import standardPatternsModule;
 import /.at.lang.values;
 import /.at.lang.futures;
-import /.at.lang.multifutures;
 enableFutures(false);
 
 deftype Service;
@@ -57,7 +58,7 @@ def ServiceDatabase := object: {
     
     def find(id) {
     	def idx := servicesMapping.find: { |pair| pair[1] == id }; 
-    	def bla := if: (idx == nil) then: { "nil"; } else: { servicesMapping[idx][2]; };
+    	def bla := if: (idx == nil) then: { "nil"; } else: { servicesMapping[idx][2]; };  //TODO
     	if: (idx == nil) then: { nil; } else: { servicesMapping[idx][2]; };
     };
     
@@ -88,15 +89,16 @@ def ServiceDatabase := object: {
 
 
 
-
-def SnapshotGroup(tag, var, cmp) {
+def SnapshotGroup(d, var, cmp, syncBarrier := SynchronizingBarrier(percentage(100))) { 
     object: {
-        def groupTag := tag;
+        def description := d;
         def varName := var;
-        def component := cmp;
+        def component := Sequence(cmp, syncBarrier);
         def started := false;
+        def numberOfParticipants := 0;
     
         def start(env) {
+        	env.insert(`groupInfo, self);
             def [result, resolver] := makeFuture();
             execute(env, resolver);
             result;
@@ -105,10 +107,11 @@ def SnapshotGroup(tag, var, cmp) {
         def execute(env, resolver) {
         	def ServiceDB := env.find(`serviceDB);
             def services := [];
-            if: (is: tag taggedAs: Rule) then: {
-            	tag.findall( { |varMaps| varMaps.each: { |v|
+            if: (is: description taggedAs: Rule) then: {
+            	description.findall( { |varMaps| varMaps.each: { |v|
             											def s := ServiceDB.find(v.get(`id));
-            											services := services + [s]; };  
+            											services := services + [s]; };
+            							 numberOfParticipants := services.length();  
             							 executeServices(env, resolver, services) ;});
             } else: {
             	services := ServiceDB.findAll(groupTag);
@@ -118,72 +121,119 @@ def SnapshotGroup(tag, var, cmp) {
 		
 		def executeServices(env, resolver, services) {
             groupId := groupId + 1;
+            def envs := [];
             services.each: { |s| def clonedEnv := Environment.new(env); 
-                                clonedEnv.insert(varName, s); 
-                                def groupInfo := env.find(`groupInfo);
-                                clonedEnv.replace(`groupInfo, [groupId, services.length(), groupInfo]);
-                                WorkflowPattern^run(component, clonedEnv, { | _ | resolver.resolve(_) }); }; 
-        };
+                                 clonedEnv.insert(varName, s); 
+                                 when: component.start(clonedEnv) becomes: { |nEnv|
+                                 	nEnv.delete(`groupInfo); 
+                                 	nEnv.delete(varName); 
+                                 	resolver.resolve(nEnv); };
+                           }; 
+    	};
     } taggedAs: [Pattern];
 };
 
 
 
-def Barrier(c, cmp) {
-    object: {
-        def condition := c;
-        def component := cmp;
-        def passedEnv := Environment.new();
-    
-        def start(env) { 
-            def [result, resolver] := makeFuture();
-            execute(env, resolver);
-            result;
-        };
-    
-        def execute(env, resolver) {
-            def groupInfo := env.find(`groupInfo);
-            if: (check(env)) then: {
-                def passed := passedEnv.find(groupInfo[1]);
-                def nrPassed := if: (passed == false) then: { 0; } else: {passed[2]};
-                passedEnv.replace(groupInfo[1], nrPassed+1);
-                WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
-            } else: {
-                system.println("Condition of barrier no langer holds.");
-            };
-        };
-    
-        def check(env) {
-            def groupInfo := env.find(`groupInfo);
-            def passed := passedEnv.find(groupInfo[1]);
-            def nrPassed := if: (passed == false) then: { 0; } else: {passed[2]};
-            condition.check(groupInfo[2], nrPassed);
-        };
-    } taggedAs: [Pattern];
+def Barrier(c) {
+	object: {
+		def condition := c;
+		def resultEnvs := [];
+		def futures := [];
+		def check := false;
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			resultEnvs := resultEnvs + [env];
+			execute(env, resolver);
+			result;
+		};
+
+		def execute(env, resolver) {
+			def group := env.find(`groupInfo);
+			if: check then: {
+				system.println("barrier checked");
+				resolver.resolve(env);
+			} else: {
+				if: condition(self, group) then: {
+					system.println("barrier passed");
+					check := true;
+					futures := futures + [resolver];
+					def idx := 0;
+					futures.each: { |r| idx := idx+1; r.resolve(resultEnvs[idx]); };
+				} else: {
+					system.println("barrier not yet ok");
+					futures := futures + [resolver];
+				};
+			};
+		};
+	} taggedAs: [Pattern];
 };
 
 
 
-def Percentage(p) {
-    object: {
-        def pct := p;
-    
-        def check(total, nbr) {
-            nbr/total <= pct;
-        };
-    } taggedAs: [Pattern];
+def SynchronizingBarrier(c) { 
+	object: {
+		def condition := c;
+		def resultEnvs := [];
+		def futures := [];
+		def check := false;
+		def first := true;
+		def [result, resolver];
+	
+		def start(env) {
+			resultEnvs := resultEnvs + [env];
+			if: first then: {
+				first := false;
+				[result, resolver] := makeFuture();
+			};
+			execute(env);
+			result;
+		};
+
+		def execute(env) {
+			def group := env.find(`groupInfo);
+			if: check then: {
+				system.println("barrier already passed");
+			} else: {
+				if: condition(self, group) then: {
+					system.println("barrier passed");
+					check := true;
+					futures := futures + [resolver];
+					def newEnv := resultEnvs[1];
+					newEnv.merge(resultEnvs.select(2, resultEnvs.length()+1), true); 
+					resolver.resolve(newEnv);
+				} else: {
+					system.println("barrier not yet ok");
+					futures := futures + [resolver];
+				};
+			};
+		};
+	} taggedAs: [Pattern];
 };
 
 
-def Amount(a) {
-    object: {
-        def amount := a;
-    
-        def check(total, nbr) {
-            nbr < amount;
-        };
-    } taggedAs: [Pattern];
+
+def amount(n) {
+	{ |barrier, group| barrier.resultEnvs.length() >= n; };
 };
+
+
+def positive(varName, varValue, n) {
+	{ |barrier, group|
+		def envs := barrier.resultEnvs.filter( { |e| e.find(varName) == varValue; });
+		envs.length() >= n;
+	};
+};
+
+def percentage(n) {
+	{ |barrier, group|
+		def nbr := group.numberOfParticipants;
+		def envs := barrier.resultEnvs;
+		nbr / envs >= n /100; 
+	};
+};
+
 
 
 def CRIMEGroupInteractionsModule := object: {
@@ -191,6 +241,8 @@ def CRIMEGroupInteractionsModule := object: {
     def ServiceDatabase := ServiceDatabase;
     def SnapshotGroup := &SnapshotGroup;
     def Barrier := &Barrier;
-    def Percentage := &Percentage;
-    def Amount := &Amount;
+    def SynchronizingBarrier := &SynchronizingBarrier;
+    def amount := &amount;
+    def positive := &positive;
+    def percentage := &percentage;
 };

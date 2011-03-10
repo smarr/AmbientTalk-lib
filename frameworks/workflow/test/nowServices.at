@@ -1,0 +1,208 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+ 
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(false); 
+
+deftype UnitTestMsg;	
+deftype Service;
+deftype AService <: Service;
+deftype BService <: Service;
+deftype CService <: Service;
+deftype DService <: Service;
+deftype EService <: Service;
+deftype FoundService <: Service;
+deftype TimeoutService <: Service;
+deftype ExceptionService <: Service;
+deftype ServiceException <: lobby.at.lang.types.Exception;
+def XServiceException := lobby.at.lang.exceptions.createException(ServiceException);
+	
+	
+def services := actor: {
+	import /.at.lang.values;
+	import /.at.lang.futures;
+	enableFutures(false); 
+	network.online();
+
+	def a := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def a(z) {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ServiceA");
+					};
+					[1];
+     			};
+   			};
+   			export: obj as: AService;
+ 		};
+ 	};
+
+	def b := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def b() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ServiceB");
+					};
+					[2];
+     			};
+   			};
+   			export: obj as: BService;
+ 		};
+ 	};
+ 	
+ 	def c := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def c() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ServiceC");
+					};
+					[3];
+     			};
+   			};
+   			export: obj as: CService;
+ 		};
+ 	};
+ 	
+ 	def d := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def d() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ServiceD");
+					};
+					[4];
+     			};
+   			};
+   			export: obj as: DService;
+ 		};
+ 	};
+ 	
+ 	def e := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def e() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ServiceE");
+					};
+					[5];
+     			};
+   			};
+   			export: obj as: EService;
+ 		};
+ 	};
+ 	
+ 	def exc := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def exc() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ExceptionService");
+					};
+					raise: XServiceException.new("exception in service");
+					[999];
+     			};
+   			};
+   			export: obj as: ExceptionService;
+ 		};
+ 	};
+ 	
+ 	def fo := actor: {
+ 		def run() {
+   			def obj := object: {
+     			def fo() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("FoundService");
+					};
+					[101];
+     			};
+   			};
+   			export: obj as: FoundService;
+ 		};
+ 	};
+	
+	def ti := actor: {
+		def run() {
+			def obj := object: {
+				def timeout := true;
+				def ti(initTime) {  
+					if: timeout then: {
+						timeout := false;
+						def nbr := 1;
+						while: {! (/.at.support.timer.has: /.at.support.timer.seconds(10) passedSince: initTime)} do: { nbr := nbr + 1; };
+						[nbr];
+					} else: {
+						when: UnitTestMsg discovered: { |msg|
+							msg<-add("ServiceTimeout");
+						};
+						[666];
+					};
+				};
+				def reset() {
+					timeout := true;
+				};
+				def undo() {
+					timeout := false;
+				};
+			};
+			export: obj as: TimeoutService;
+		};
+	};
+	
+	def makeStandardActors() {
+		a<-run();
+		b<-run();
+		c<-run();
+		d<-run();
+		e<-run();
+	};
+	
+	def makeTimeoutActor() {
+		ti<-run();
+	};
+	
+	def makeFoundActor() {
+		fo<-run();
+	};
+	
+	def makeExceptionActor() {
+		exc<-run();
+	};
+};
+
+
+def nowServicesModule := object: {
+	def services := services;
+};
+
+

@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,6 +23,8 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
  */
  
  
@@ -34,12 +36,18 @@ import initModule;
     def dict := [];
     def id;
 
-    def insert(name, value) {
+    def insert(name, value, merging := false) {
         def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
         if: idx == nil then: {
             dict := dict + [[name, value]];
         } else: {
-            dict[idx] := [name, value];
+        	if: merging then: {
+        		def oldValue := dict.at(idx)[2];
+        		def newValue := if: (is: oldValue taggedAs: Table) then: { oldValue + [value]; } else: { [oldValue] + [value]; };
+        		dict[idx] := [name, newValue]; 
+        	} else: {
+            	dict[idx] := [name, value];
+            };
         };
     };
     
@@ -56,6 +64,7 @@ import initModule;
         def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
         if: idx != nil then: {
             dict[idx] := [];
+            dict := dict.filter: { |e| ! e.isEmpty() };
         };
     };
     
@@ -69,15 +78,15 @@ import initModule;
     };
     
     def bind(arguments) { 
-        arguments.map: { |arg| if: (is: arg taggedAs: Variable) then: { find(arg.variable); } else: { find(arg); }; };
+        arguments.map: { |arg| if: (is: arg taggedAs: Variable) then: { find(arg.variable); } else: { arg; }; };
     };
     
     def isEmpty() {
         dict.isEmpty();
     };
     
-    def merge(envs) {
-        envs.each: { |env| env.dict.each: { |pair| insert(pair[1], pair[2]); }; };
+    def merge(envs, merging := false) {
+        envs.each: { |env| env.dict.each: { |pair| insert(pair[1], pair[2], merging); }; };
     };
     
     def init(@envsToCopy) {

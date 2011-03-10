@@ -1,0 +1,175 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(true); 
+ 
+network.online();
+
+deftype Service;
+deftype AirportService;
+deftype MessagingService;
+deftype AnnouncementService;
+deftype Assistance;
+deftype BoardingResponsible;
+deftype LastMinute;
+deftype LuggageService;
+deftype ControlTower;
+
+
+
+actor: {
+	
+	def service := object: {
+		
+		def reminder(passenger) {
+			system.println("A SMS has been sent to passenger " + 
+			passenger + 
+			" to remind him/her that boarding has already started.");
+			false;
+		};  
+		
+		def gateClosed(flight, passenger) {
+			system.println("A SMS has been sent to passenger " + 
+			passenger + 
+			" to inform that the gate of flight " +
+			flight + 
+			" is closed.");
+			true;
+		};
+	};
+	
+	export: service as: MessagingService;
+};
+
+
+actor: {
+	
+	def service := object: {
+		
+		def missingPerson(passenger) {
+			system.println("Announcement: can passenger " + 
+			passenger + 
+			" please come to the information desk.");
+			false;
+		};  
+	};
+	
+	export: service as: AnnouncementService;
+};
+
+
+actor: {
+
+	def service := object: {
+		
+		def missingPerson(passenger) {
+			system.println("Passenger missing. Look for " + 
+			passenger + 
+			".");
+			false;
+		};  
+	};
+	
+	export: service as: Assistance;
+};
+
+
+actor: {
+	
+	def service := object: {
+		
+		def waitForPassenger(passenger) {
+			system.println("Do not close the gate, passenger " + 
+			passenger + 
+			" has been found.");
+			true;
+		};  
+		
+		def closeGate(flight) {
+			system.println("You can close the gate.");
+			true;
+		};
+	};
+	
+	export: service as: BoardingResponsible;
+};
+
+
+actor: {
+	
+	def service := object: {
+		
+		def freeSeat(flight, passenger) {
+			system.println("There is a free seat on flight " + 
+			flight + 
+			" since passenger " + 
+			passenger + 
+			" did not make it on time to the gate.");
+			true;
+		};  
+	};
+	
+	export: service as: LastMinute;
+};
+
+
+actor: {
+	
+	def service := object: {
+		
+		def removeLuggage(flight, passenger) {
+			system.println("Remove luggage on flight " + 
+			flight + 
+			" of passenger " + 
+			passenger + 
+			".");
+			true;
+		};  
+	};
+	
+	export: service as: LuggageService;
+};
+
+
+actor: {
+	
+	def service := object: {
+		
+		def takeoff(flight) {
+			system.println("Takeoff of flight " + 
+			flight + 
+			".");
+			true;
+		};  
+	};
+	
+	export: service as: ControlTower;
+};

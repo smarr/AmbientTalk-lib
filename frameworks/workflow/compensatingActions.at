@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -17,100 +17,144 @@
  *
  * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
  * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF frameworks.workflowRCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
  * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
  * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
  */
-
+ 
+ 
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
-def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
+def activityModule := lobby.frameworks.workflow.activity;
 import initModule;
 import environmentModule;
-import workflowPatternModule;
+import activityModule;
 import /.at.lang.values;
 import /.at.lang.futures;
-import /.at.lang.multifutures;
-
-
-deftype Compensation;
-deftype RetryType <: Compensation;
-deftype RediscoverType <: Compensation;
-deftype SkipType <: Compensation;
-deftype RestartType <: Compensation;
-deftype FailureType;
-deftype DisconnectionType <: FailureType;
-deftype TimeoutType <: FailureType;
-deftype NotFoundType <: FailureType;
 
 
 def Failure(c, fe) {
     object: {   
         def component := c;
         def failureEvents := fe; 
+        def futures := [];
 
         def start(env) {
             def [result, resolver] := makeFuture(); 
+            futures := futures + [[env.id, [result, resolver]]];    
             execute(env, resolver);
             result;
         };
+        
+        def restart(env) {
+        	def [result, resolver];
+        	cancel(env);
+        	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };   
+        	when: component.start(env) becomes: { |nEnv|
+        			system.println("start component");
+        		resolver.resolve(nEnv);
+        	};
+        	result;
+        };
+        
+        def replace(cmp, env) {
+        	def [result, resolver];
+        	cancel(env);
+        	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+        	when: cmp.start(env) becomes: { |nEnv|
+        		resolver.resolve(nEnv);
+        	};
+        	result;
+        };
+        
+        def cancel(env) {
+        	component.cancel(env);
+        };
     
-        def replaceFailure(failureEvent, env) {
+    	// Shadow the failure types in the environment.
+        def replaceFailure(conditionAction, env) {
+        	def ca := conditionAction;
+        	if: (is: conditionAction taggedAs: Table) then: {
+        		ca := ConditionAction(conditionAction[1], conditionAction[2]);
+        	};
+        	ca.updateFailurePattern(self);
+        	def failureEvent := ca.failureEvent;
             if: (is: failureEvent taggedAs: DisconnectionType) then: {
-                env.replace(`disconnection, failureEvent);
+                env.replace(`disconnection, ca);
             } else: {
                 if: (is: failureEvent taggedAs: TimeoutType) then: {
-                    env.replace(`timeout, failureEvent);
+                    env.replace(`timeout, ca);
                 } else: {
                     if: (is: failureEvent taggedAs: NotFoundType) then: {
-                        env.replace(`notFound, failureEvent);
+                        env.replace(`notFound, ca);
+                    } else: {
+                    	if: (is: failureEvent taggedAs: ExceptionType) then: {
+                    		env.replace(`exception, ca);
+                    	};
                     };
                 };
-            };
-            if: (is: failureEvent.compensation taggedAs: RestartType) then: {
-                failureEvent.compensation.updateAction(component);
             };
         };
     
         def execute(env, resolver) {
-            def prevDisconnection := env.find(`disconnection)[2];
-            def prevTimeout := env.find(`timeout)[2];
-            def prevNotFound := env.find(`notFound)[2];
-            failureEvents.each: { |failure| replaceFailure(failure, env); };
-            WorkflowPattern^run(component, 
-                                env, 
-                                { | _ | 
-                                    env.replace(`disconnection, prevDisconnection);
-                                    env.replace(`timeout, prevTimeout);
-                                    resolver.resolve(_) });
+        	// Shadow the failure types in the environment.
+            def prevDisconnection := env.find(`disconnection);
+            def prevTimeout := env.find(`timeout);
+            def prevNotFound := env.find(`notFound);
+            failureEvents.each: { |ca| replaceFailure(ca, env); };
+            // Run the component and restore the failure types in the environment.
+			when: component.start(env) becomes: { |nEnv|
+				nEnv.replace(`disconnection, prevDisconnection);
+                nEnv.replace(`timeout, prevTimeout);
+                resolver.resolve(nEnv); 
+            };
         };
     } taggedAs: [Pattern];
 };
 
 
 
-def Disconnection(c) {
+def ConditionAction(c, a) {
+	object: {
+		def failureEvent := c;
+		def compensation := a;
+		def failurePattern;
+		
+		def updateFailurePattern(f) {
+			failurePattern := f;
+		};
+	};
+};
+
+
+def Disconnection() {
     object: {
-        def compensation := c;
     } taggedAs: [DisconnectionType];
 };
 
 
-def Timeout(d, c) {
+def Timeout(d) {
     object: {
         def duration := d;
-        def compensation := c;
     } taggedAs: [TimeoutType];
 };
 
 
-def NotFound(c) {
+def NotFound(d := 20) {
     object: {
-        def compensation := c;
+    	def duration := d;
     } taggedAs: [NotFoundType];
+};
+
+
+def Exception() {
+	object: {
+	} taggedAs: [ExceptionType];
 };
 
 
@@ -120,10 +164,26 @@ def Retry(t, a := nil) {
         def maxTimes := t;
         def triedTimes := 0;
         def action := a; 
-        def [result, resolver] := makeFuture();
-    
-        def try() {
-            triedTimes := triedTimes + 1;
+        
+        def setService(s) {
+        	service := s;
+        };
+        
+        def start(env, activity, conditionAction) {
+        	if: (is: conditionAction.failureEvent taggedAs: NotFoundType) then: {
+        		raise: XWrongCompensation.new("retry is not a valid compensating action");
+        	} else: {
+        		if: (triedTimes < maxTimes) then: {
+           			// Try to invoke the same service again.
+                	triedTimes := triedTimes + 1;
+                	activity.retry(env);
+            	} else: {
+                	// Execute the compensating action specified by Retry (if one is specified).
+					if: ! (action == nil) then: {
+                		action.start(env, activity, conditionAction);
+                	};
+                };
+            };
         };
     } taggedAs: [RetryType];
 };
@@ -134,10 +194,18 @@ def Rediscover(t, a := nil) {
         def maxTimes := t;
         def triedTimes := 0;
         def action := a; 
-        def [result, resolver] := makeFuture();
     
-        def try() {
-            triedTimes := triedTimes + 1;
+    	def start(env, activity, conditionAction) {
+        	if: (triedTimes < maxTimes) then: {
+        	    // Try to execute the same activity again, which will rediscover a (possibly other) service.
+            	triedTimes := triedTimes + 1;
+                activity.start(env);
+            } else: {
+            	if: ! (action == nil) then: {
+            		// Execute the compensating action specified by Rediscover (if one is specified).
+					action.start(env, activity, conditionAction);
+				};
+			};
         };
     } taggedAs: [RediscoverType];
 };
@@ -147,50 +215,87 @@ def Skip() {
     object: {
         def maxTimes := 1;
         def triedTimes := 0;
-        def action := nil; 
-        def [result, resolver] := makeFuture(); 
     
-        def try() {
-            triedTimes := triedTimes + 1;
+        def start(env, activity, conditionAction) {
+        	activity.skip();
         };
     } taggedAs: [SkipType];
 };
 
 
-def Restart(t) {
+def Restart(t, a := nil) {
     object: {
         def maxTimes := t;
         def triedTimes := 0;
-        def action; 
-        def [result, resolver] := makeFuture();
-    
-        def try() {
-            triedTimes := triedTimes + 1;
-        };
-    
-        def updateAction(component) {
-            action := component;
+        def action := a; 
+        
+        def start(env, activity, conditionAction) {        
+        	if: (triedTimes < maxTimes) then: {        	        		
+        		// Restart the entirely wrapped subworkflow.
+				triedTimes := triedTimes + 1;
+				conditionAction.failurePattern.restart(env);
+			} else: {
+				if: ! (action == nil) then: {
+                	action.start(env, activity, conditionAction);
+                };
+           };				
         };
     } taggedAs: [RestartType];
 };
 
 
+def Wait(t,a) {
+	object: {
+		def time := t;
+        def action := a; 
+        
+        def start(env, activity, conditionAction) {
+        	/.at.support.timer.when: /.at.support.timer.seconds(t) elapsed: { 
+        		action.start(env, activity, conditionAction);
+             };
+        };
+    } taggedAs: [WaitType];
+};
+
+
+def Component(a) {
+    object: {
+        def action := a;
+    
+        def start(env, activity, conditionAction) {
+			// The compensating action is a workflow component (pattern or activity).
+			// Continue by resolving the future of the surrounding failure pattern.
+        	conditionAction.failurePattern.replace(action, env);
+        };
+    } taggedAs: [ComponentType];
+};
+
+
+def Alternative(a) {
+	object: {
+		def action := a;
+		
+		def start(env, activity, conditionAction) {
+			// Cancel the remainder of the subworkflow.
+			conditionAction.failurePattern.cancel(env);
+			action.start(env);
+        };
+    } taggedAs: [AlternativeType];
+};
+
+
 def CompensatingActionsModule := object: {
-    def Compensation := Compensation;
-    def RetryType := RetryType;
-    def RediscoverType := RediscoverType;
-    def SkipType := SkipType;
-    def RestartType := RestartType;
-    def FailureType := FailureType;
-    def DisconnectionType := DisconnectionType;
-    def TimeoutType := TimeoutType;
-    def NotFoundType := NotFoundType;
     def Failure := &Failure;
+    def ConditionAction := &ConditionAction;
     def Disconnection := &Disconnection;
     def Timeout := &Timeout;
     def NotFound := &NotFound;
+    def Exception := &Exception;
     def Restart := &Restart;
     def Skip := &Skip;
     def Rediscover := &Rediscover;
     def Retry := &Retry;
+    def Wait := &Wait;
+    def Component := &Component;
+    def Alternative := &Alternative;
 };

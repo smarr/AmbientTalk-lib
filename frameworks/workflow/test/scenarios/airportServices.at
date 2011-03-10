@@ -1,0 +1,221 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ *@author eline.philips
+ */
+ 
+ def crimeModule := lobby.bridges.crime.CrimeConnection;
+
+import /.at.lang.values;
+import /.at.lang.futures;
+import crimeModule;
+enableFutures(false); 
+ 
+network.online();
+
+deftype Service;
+deftype AirportServiceNOWs <: Service;
+deftype MessagingServiceNOWs <: Service;
+deftype AnnouncementServiceNOWs <: Service;
+deftype AssistanceNOWs <: Service;
+deftype BoardingResponsibleNOWs <: Service;
+deftype LastMinuteNOWs <: Service;
+deftype LuggageServiceNOWs <: Service;
+deftype ControlTowerNOWs <: Service;
+
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def reminder(passenger) {
+			system.println("A SMS has been sent to passenger " + 
+			passenger + 
+			" to remind him/her that boarding has already started.");
+			[false];
+		};  
+		
+		def gateClosed(flight, passenger) {
+			system.println("A SMS has been sent to passenger " + 
+			passenger + 
+			" to inform that the gate of flight " +
+			flight + 
+			" is closed.");
+		};
+		
+		def export(i) {
+			def fact := makeTuple("messagingService", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: MessagingServiceNOWs;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def missingPerson(passenger) {
+			system.println("Announcement: can passenger " + 
+			passenger + 
+			" please come to the information desk.");
+			[false];
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("announcementService", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: AnnouncementServiceNOWs;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def missingPerson(passenger) {
+			system.println("Passenger missing. Look for " + 
+			passenger + 
+			".");
+			[false];
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("assistance", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: AssistanceNOWs;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def waitForPassenger(passenger) {
+			system.println("Do not close the gate, passenger " + 
+			passenger + 
+			" has been found.");
+		};  
+		
+		def closeGate(flight) {
+			system.println("You can close the gate.");
+		};
+		
+		def export(i) {
+			def fact := makeTuple("boardingResponsible", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: BoardingResponsibleNOWs;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def freeSeat(flight, passenger) {
+			system.println("There is a free seat on flight " + 
+			flight + 
+			" since passenger " + 
+			passenger + 
+			" did not make it on time to the gate.");
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("lastMinute", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: LastMinuteNOWs;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def removeLuggage(flight, passenger) {
+			system.println("Remove luggage on flight " + 
+			flight + 
+			" of passenger " + 
+			passenger + 
+			".");
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("luggageService", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: LuggageServiceNOWs;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def takeoff(flight) {
+			system.println("Takeoff of flight " + 
+			flight + 
+			".");
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("controlTower", "Brussels Airport");
+			[fact];
+		};
+	} taggedAs: [AirportServiceNOWs];
+	
+	export: service as: ControlTowerNOWs;
+};

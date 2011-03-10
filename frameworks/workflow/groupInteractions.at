@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,18 +23,17 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
  */
 
 
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
-def workflowPatternModule := lobby.frameworks.workflow.workflowPattern;
 import initModule;
 import environmentModule;
-import workflowPatternModule;
 import /.at.lang.values;
 import /.at.lang.futures;
-import /.at.lang.multifutures;
 
 deftype Service;
 
@@ -55,8 +54,8 @@ def ServiceDatabase := object: {
             services := services + [service];
             whenever: service disconnected: {
                 system.println("Service disconnected");
-                def idx := services.find: { |s| s == service; };
-                services := services.select(1, idx) + services.select(idx + 1, services.length());
+                //def idx := services.find: { |s| s == service; };  TODO
+                //services := services.select(1, idx) + services.select(idx + 1, services.length());
             };
         };
     };
@@ -83,10 +82,12 @@ def SnapshotGroup(tag, var, cmp) {
             def services := ServiceDB.findAll(groupTag);
             groupId := groupId + 1;
             services.each: { |s| def clonedEnv := Environment.new(env); 
-                                clonedEnv.insert(varName, s); 
-                                def groupInfo := env.find(`groupInfo);
-                                clonedEnv.replace(`groupInfo, [groupId, services.length(), groupInfo]);
-                                WorkflowPattern^run(component, clonedEnv, { | _ | resolver.resolve(_) }); }; 
+                                 clonedEnv.insert(varName, s); 
+                                 def groupInfo := env.find(`groupInfo);
+                                 clonedEnv.replace(`groupInfo, [groupId, services.length(), groupInfo]);
+                                 when: component.start(clonedEnv) becomes: { |nEnv|
+                                 	 resolver.resolve(nEnv);
+                                 }; }; 
         };
     } taggedAs: [Pattern];
 };
@@ -111,7 +112,9 @@ def Barrier(c, cmp) {
                 def passed := passedEnv.find(groupInfo[1]);
                 def nrPassed := if: (passed == false) then: { 0; } else: {passed[2]};
                 passedEnv.replace(groupInfo[1], nrPassed+1);
-                WorkflowPattern^run(component, env, { | _ | resolver.resolve(_) });
+                when: component.start(env) becomes: { |nEnv|
+                	resolver.resolve(nEnv); 
+                };
             } else: {
                 system.println("Condition of barrier no langer holds.");
             };

@@ -1,4 +1,33 @@
-
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+ 
 def crimeModule := lobby.bridges.crime.CrimeConnection;
 def initModule := lobby.frameworks.workflow.WFinit;
 def activityModule := lobby.frameworks.workflow.activity;
@@ -8,20 +37,21 @@ import initModule;
 import activityModule;
 import /.at.lang.values;
 import /.at.lang.futures;
-import /.at.lang.multifutures;
 
 
 def myCrime := makeCrimeEngine();
 def factId := 1;
 deftype Rule;
-deftype RuleActivity <: Activity;
 
 
-def CrimeRuleActivity := object: {
+//TODO NotFound
+def RuleActivity := object: {
     def rule;
     def selector;
     def parameters;
     def output;
+    def futures := [];
+    def services := [];
     
     def init(r, sel, pars, outputVars) {  
         rule       := r;
@@ -29,7 +59,54 @@ def CrimeRuleActivity := object: {
         parameters := pars;
         output     := outputVars;
     };  
-} taggedAs: [RuleActivity];
+    
+    // Execute a RuleActivity (activity executed by all services that satisfy a logical CRIME rule).
+    def start(env) {
+    	def [result, resolver] := makeFuture();
+    	futures := futuress + [[env.id, resolver]];
+    	def ServiceDB := env.find(`serviceDB);
+        // Look up the services that satisfy the rule and invoke them.
+		def s := [];
+    	def closure := { |v| 
+			def service := ServiceDB.find(v.get(`id));
+			s := s + [service];
+    		when: Activity^invokeService(service, self, env) becomes: { |nEnv|
+    			resolver.resolve(nEnv);
+    		};
+    	};
+    	services := services + [[env.id, s]];
+        rule.find(closure);
+        result;
+    };
+    
+    def cancel(env) {
+    	def resolver;
+        futures.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2][2]; }; };
+        if: ! (resolver == nil) then: {
+        	resolver.ruin(/.at.lang.types.Exception);
+        };
+    };
+    
+    def restart(env) {
+    	def [result, resolver];
+    	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+    	execute(env, resolver);
+    	result;
+    };
+    
+    def retry(env) {
+    	def [result, resolver];
+    	futures.each: { |p| if: ( p[1] == env.id) then: { [result, resolver] := p[2]; }; };
+    	def service;
+    	services.each: { |p| if: ( p[1] == env.id) then: { service := p[2]; }; };  //TODO is tabel van services
+    	if: ! (service == nil) then: {
+    		when: Activity^invokeService(service, self, env) becomes: { |nEnv|
+         		resolver.resolve(nEnv);
+         	};
+        }; //TODO else error
+		result;
+    };
+};
 
     
     
@@ -46,9 +123,9 @@ def createRuleActivityMirror(baseObject) {
                     if: (is: inv taggedAs: Output) then: {
                         def theMethodTags := (tagsOf: inv);
                         def theOutputTag  := theMethodTags.at(theMethodTags.find: { | aTag | is: aTag taggedAs: OutputTag });
-                        CrimeRuleActivity.new(baseObject, inv.selector, inv.arguments, theOutputTag.outputArgs)
+                        RuleActivity.new(baseObject, inv.selector, inv.arguments, theOutputTag.outputArgs)
                     } else: { 
-                        CrimeRuleActivity.new(baseObject, inv.selector, inv.arguments, []) 
+                        RuleActivity.new(baseObject, inv.selector, inv.arguments, []) 
                     }
                 }
             }
@@ -93,7 +170,6 @@ def makeRule(@temp) {
 def IntensionalModule := object: {
 	def myCrime := myCrime;
 	def makeRule := &makeRule;
-	def RuleActivity := RuleActivity;
 	def factId := factId;
 	def Rule := Rule;
 }; 

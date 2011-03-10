@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab (2006-2010)
- * Authors: Eline Philips
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -23,25 +23,39 @@
  * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
- */
+ *
+ * @author eline.philips
+ */ 
  
  
-deftype Activity;
-deftype VarActivity <: Activity;
 deftype OutputTag <: lobby.at.lang.types.Closure, lobby.at.lang.types.TypeTag;
-deftype Trigger; // TODO added 
+deftype Trigger; 
 deftype Pattern;
 deftype SyncPattern <: Pattern;
+deftype GroupPattern <: Pattern;
 deftype Table;
 def id := 0;
 def groupId := 0;
 deftype Variable;
-
-
+deftype Compensation;
+deftype RetryType <: Compensation;
+deftype RediscoverType <: Compensation;
+deftype SkipType <: Compensation;
+deftype RestartType <: Compensation;
+deftype WaitType <: Compensation;
+deftype ComponentType <: Compensation;
+deftype AlternativeType <: Compensation;
+deftype FailureType;
+deftype DisconnectionType <: FailureType;
+deftype TimeoutType <: FailureType;
+deftype NotFoundType <: FailureType;
+deftype ExceptionType <: FailureType;
+deftype WrongCompensation <: lobby.at.lang.types.Exception;
+def XWrongCompensation := lobby.at.lang.exceptions.createException(WrongCompensation);
+deftype ServiceException <: lobby.at.lang.types.Exception;
+def XServiceException := lobby.at.lang.exceptions.createException(ServiceException);
 
 def InitModule := object: {
-    def Activity := Activity;
-    def VarActivity := VarActivity;
     def Pattern := Pattern;
     def SyncPattern := SyncPattern;
     def OutputTag := OutputTag;
@@ -50,5 +64,22 @@ def InitModule := object: {
     def id := id;
     def groupId := groupId;
     def Variable := Variable;
+    def Compensation := Compensation;
+	def RetryType := RetryType;
+	def RediscoverType := RediscoverType;
+	def SkipType := SkipType;
+	def RestartType := RestartType;
+	def WaitType := WaitType;
+	def ComponentType := ComponentType;
+	def AlternativeType := AlternativeType;
+	def FailureType := FailureType;
+	def DisconnectionType := DisconnectionType;
+	def TimeoutType := TimeoutType;
+	def NotFoundType := NotFoundType;
+	def ExceptionType := ExceptionType;
+	def WrongCompensation := WrongCompensation;
+	def XWrongCompensation := XWrongCompensation;
+	def ServiceException := ServiceException;
+	def XServiceException := XServiceException;
 };
 

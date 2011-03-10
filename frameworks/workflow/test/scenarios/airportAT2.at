@@ -1,0 +1,141 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(true);
+network.online();
+
+deftype MessagingService;
+deftype AnnouncementService;
+deftype Assistance;
+deftype BoardingResponsible;
+deftype LastMinute;
+deftype LuggageService;
+deftype ControlTower;
+
+
+
+
+def missingPerson(person, flight) {
+	def results := [];
+	
+	def check (reply) {
+		def numberTrues := 0;
+		def numberFalses := 0;
+		results.map: { |e| if: (e) then: { numberTrues := numberTrues + 1; } else: { numberFalses := numberFalses + 1; } };
+		if: ( (reply).and: { numberTrues == 1}) then: {
+			personFound(person, flight);
+		} else: {
+			if: (numberFalses == 3) then: {
+				personNotFound(person, flight);
+			};
+		};		
+	};
+	
+	when: MessagingService discovered: { |service|
+		when: service<-reminder(person) becomes: { |reply|
+			results := results + [reply];
+			check(reply);
+		};
+	};
+	when: AnnouncementService discovered: { |service|
+		when: service<-missingPerson(person) becomes: { |reply|
+			results := results + [reply];
+			check(reply);
+		};
+	};
+	when: Assistance discovered: { |service|
+		when: service<-missingPerson(person) becomes: { |reply|
+			results := results + [reply];
+			check(reply);
+		};
+	};
+};
+
+
+def personFound(person, flight) {
+	when: BoardingResponsible discovered: { |responsible|
+		when: responsible<-waitForPassenger(person) becomes: { |reply|
+			takeoff(flight);
+		};
+	}; 
+};
+
+
+def takeoff(flight) {
+	when: ControlTower discovered: { |tower|
+		when: tower<-takeoff(flight) becomes: { |service|
+			system.println("End of workflow is reached.");
+		};
+	};
+};
+
+
+def personNotFound(person, flight) {
+	def results := [];
+	when: LastMinute discovered: { |service|
+		when: service<-freeSeat(flight, person) becomes: { |reply|
+			results := results + [reply];
+			if: (results.length() == 4) then: {
+				takeoff(flight)
+			};
+		};
+	};
+	when: LuggageService discovered: { |service|
+		when: service<-removeLuggage(flight, person) becomes: { |reply|
+			results := results + [reply];
+			if: (results.length() == 4) then: {
+				takeoff(flight)
+			};
+		};
+	};
+	when: BoardingResponsible discovered: { |service|
+		when: service<-closeGate(flight) becomes: { |reply|
+			results := results + [reply];
+			if: (results.length() == 4) then: {
+				takeoff(flight)
+			};
+		};
+	};
+	when:  MessagingService discovered: { |service|
+		when: service<-gateClosed(flight, person) becomes: { |reply|
+			results := results + [reply];
+			if: (results.length() == 4) then: {
+				takeoff(flight)
+			};
+		};
+	};
+};
+
+
+
+
+missingPerson("Peter", "NY4372");

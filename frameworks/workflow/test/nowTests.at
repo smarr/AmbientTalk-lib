@@ -1,0 +1,375 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+
+def initModule := lobby.frameworks.workflow.WFinit;
+def environmentModule := lobby.frameworks.workflow.environment;
+def activityModule := lobby.frameworks.workflow.activity;
+def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
+def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
+
+import initModule;
+import environmentModule;
+import activityModule;
+import standardPatternsModule;
+import compensatingActionsModule;
+ 
+import lobby.at.unit.test;
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(false);
+network.online();
+
+deftype UnitTestMsg;
+deftype Service;
+deftype AService <: Service;
+deftype BService <: Service;
+deftype CService <: Service;
+deftype DService <: Service;
+deftype EService <: Service;
+deftype TimeoutService <: Service;
+deftype DisconnectionService <: Service;
+deftype FoundService <: Service;
+deftype ExceptionService <: Service;
+
+def asw := makeServiceWrapper(AService);
+def bsw := makeServiceWrapper(BService);
+def csw := makeServiceWrapper(CService);
+def dsw := makeServiceWrapper(DService);
+def esw := makeServiceWrapper(EService);
+def timeoutsw := makeServiceWrapper(TimeoutService);
+def disconnectionsw := makeServiceWrapper(DisconnectionService);
+def foundsw := makeServiceWrapper(FoundService);
+def exceptionsw := makeServiceWrapper(ExceptionService);
+
+
+def testMsg := object: {
+	def array := [];
+
+	def add(msg) {
+		array := array + [msg];
+	};
+	
+	def count(msg) {
+		def nbr := 0;
+		array.map: { |e| if: (e == msg) then: { nbr := nbr + 1; } };
+		nbr; 
+	};
+	
+	def verifyOrder(msg1, msg2) {
+		def idx1 := array.find: { |e| e == msg1; };
+		def idx2 := array.find: { |e| e == msg2; };
+		idx1 < idx2;
+	};
+	
+	def reset() {
+		array := [];
+	};
+};
+export: testMsg as: UnitTestMsg;
+
+
+
+def nowUnitTest := extend: UnitTest.new("NOW unit test", false) with: {
+	import lobby.frameworks.workflow.test.nowServices;
+	services<-makeStandardActors();
+	services<-makeTimeoutActor();
+	services<-makeExceptionActor();
+	
+	def testAsyncSequence() { 
+		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		def sequence := Sequence( asw.a(Env.gps)@Output(Env.a), bsw.b()@Output(Env.b), csw.c()@Output(Env.c) );
+  		def f := when: sequence.start(env) becomes: { |nEnv|
+  			system.println(testMsg.array);
+  			self.assertEquals(nEnv.find(`a), 1);
+  			self.assertEquals(nEnv.find(`b), 2);
+    		self.assertEquals(nEnv.find(`c), 3);
+			def nbr := testMsg.count("ServiceA");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceB");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceC");
+			self.assertEquals(nbr,1);
+		};
+    	f;
+ 	};
+  
+  def testAsyncSequenceTimeoutWithComponent() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`timeout, nil);
+  		def w_sequence := Sequence( asw.a(Env.gps)@Output(Env.a), timeoutsw.ti(/.at.support.timer.now())@Output(Env.ti), csw.c()@Output(Env.c) );
+  		def failure := Failure( w_sequence,
+  								[ [ Timeout(5), Component(dsw.d()@Output(Env.d)) ] ]);
+  		def sequence := Sequence( failure, esw.e()@Output(Env.e) );
+  		def f := when: sequence.start(env) becomes: { |nEnv|
+  			system.println(testMsg.array);
+  			self.assertEquals(nEnv.find(`a), 1);
+  			self.assertEquals(nEnv.find(`ti), nil);
+  			self.assertEquals(nEnv.find(`d), 4);
+  			self.assertEquals(nEnv.find(`c), nil);
+  			self.assertEquals(nEnv.find(`e), 5);
+  			def nbr := testMsg.count("ServiceA");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceTimeout");
+			self.assertEquals(nbr,0);
+			nbr := testMsg.count("ServiceC");
+			self.assertEquals(nbr,0);
+			nbr := testMsg.count("ServiceD");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceE");
+			self.assertEquals(nbr,1);
+			when: TimeoutService discovered: { |s|
+				s<-reset()@FutureMessage;
+			};
+  		};
+		f;
+  	};
+  	
+  	def testAsyncSequenceTimeoutWithWaitAndRestart() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`timeout, nil);
+  		def sequence := Sequence( asw.a(Env.gps)@Output(Env.a), timeoutsw.ti(/.at.support.timer.now())@Output(Env.ti), csw.c()@Output(Env.c) );
+  		def failure := Failure( sequence,
+  								[ [ Timeout(5), Wait(10, Restart(1, Component(dsw.d()@Output(Env.d)))) ] ]);
+  		def f := when: failure.start(env) becomes: { |nEnv|
+  			system.println(testMsg.array);
+  			self.assertEquals(nEnv.find(`a), 1);
+  			self.assertEquals(nEnv.find(`d), nil);
+  			self.assertEquals(nEnv.find(`c), 3);
+  			self.assertEquals(nEnv.find(`ti), 666);
+  			def nbr := testMsg.count("ServiceA");
+			self.assertEquals(nbr,2);
+			nbr := testMsg.count("ServiceTimeout");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceC");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceD");
+			self.assertEquals(nbr,0);
+			when: TimeoutService discovered: { |s|
+				s<-reset()@FutureMessage;
+			};
+		};
+		/.at.support.timer.when: /.at.support.timer.seconds(5) elapsed: {
+			when: TimeoutService discovered: { |s|
+				s<-undo()@FutureMessage;
+			};
+		};  
+		f;
+  	};
+  	
+  	 def testAsyncSequenceDisconnectionWithComponent() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`disconnection, nil);
+  		def w_sequence := Sequence( asw.a(Env.gps)@Output(Env.a), disconnectionsw.di()@Output(Env.di), csw.c()@Output(Env.c) );
+  		def failure := Failure( w_sequence,
+  								[ [ Disconnection(), Component(dsw.d()@Output(Env.d)) ] ]);
+  		def sequence := Sequence( failure, esw.e()@Output(Env.e) );
+  		def [result, resolver] := makeFuture();
+  		when: DisconnectionService discovered: { |s| 
+  			when: s<-reset()@FutureMessage becomes: { |r|
+  				when: sequence.start(env) becomes: { |nEnv|
+  					try: { 
+  						system.println(testMsg.array);
+  						self.assertEquals(nEnv.find(`a), 1);
+  						self.assertEquals(nEnv.find(`di), nil);
+  						self.assertEquals(nEnv.find(`d), 4);
+  						self.assertEquals(nEnv.find(`c), nil);
+  						self.assertEquals(nEnv.find(`e), 5);
+  						def nbr := testMsg.count("ServiceA");
+						self.assertEquals(nbr,1);
+						nbr := testMsg.count("DisconnectionService");
+						self.assertEquals(nbr,0);
+						nbr := testMsg.count("ServiceC");
+						self.assertEquals(nbr,0);
+						nbr := testMsg.count("ServiceD");
+						self.assertEquals(nbr,1);
+						nbr := testMsg.count("ServiceE");
+						self.assertEquals(nbr,1);
+						resolver.resolve(true);
+					} catch: lobby.at.lang.types.Exception using: { |e|
+ 						resolver.ruin(e);
+ 					};
+				};
+			};
+  		};
+		result;
+  	};
+  	
+  	def testAsyncSequenceDisconnectionWithWaitAndRestart() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`disconnection, nil);
+  		def w_sequence := Sequence( asw.a(Env.gps)@Output(Env.a), disconnectionsw.di()@Output(Env.di), csw.c()@Output(Env.c) );
+  		def failure := Failure( w_sequence,
+  								[ [ Disconnection(), Wait(10, Restart(1, Component(dsw.d()@Output(Env.d)))) ] ]);
+  		def sequence := Sequence( failure, esw.e()@Output(Env.e) );
+  		def [result, resolver] := makeFuture();
+  		when: DisconnectionService discovered: { |s| 
+  			when: s<-reset()@FutureMessage becomes: { |r|
+  				when: sequence.start(env) becomes: { |nEnv|
+  				try: { 
+  					system.println(testMsg.array);
+  					self.assertEquals(nEnv.find(`a), 1);
+  					self.assertEquals(nEnv.find(`di), 696);
+  					self.assertEquals(nEnv.find(`d), nil);
+  					self.assertEquals(nEnv.find(`c), 3);
+  					self.assertEquals(nEnv.find(`e), 5);
+  					def nbr := testMsg.count("ServiceA");
+					self.assertEquals(nbr,2);
+					nbr := testMsg.count("DisconnectionService");
+					self.assertEquals(nbr,1);
+					nbr := testMsg.count("ServiceC");
+					self.assertEquals(nbr,1);
+					nbr := testMsg.count("ServiceD");
+					self.assertEquals(nbr,0);
+					nbr := testMsg.count("ServiceE");
+					self.assertEquals(nbr,1);
+					resolver.resolve(true);
+				} catch: lobby.at.lang.types.Exception using: { |e|
+ 					resolver.ruin(e);
+				};
+			};
+  		};
+  		};
+		result;
+  	};
+  	
+  	def testAsyncSequenceNotFoundWithComponent() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`notFound, nil);
+  		def w_sequence := Sequence( asw.a(Env.gps)@Output(Env.a), foundsw.fo()@Output(Env.fo), csw.c()@Output(Env.c) );
+  		def failure := Failure( w_sequence,
+  								[ [ NotFound(10), Component(dsw.d()@Output(Env.d)) ] ]);
+  		def sequence := Sequence( failure, esw.e()@Output(Env.e) );
+  		def f := when: sequence.start(env) becomes: { |nEnv|
+  			system.println(testMsg.array);
+  			self.assertEquals(nEnv.find(`a), 1);
+  			self.assertEquals(nEnv.find(`fo), nil);
+  			self.assertEquals(nEnv.find(`d), 4);
+  			self.assertEquals(nEnv.find(`c), nil);
+  			self.assertEquals(nEnv.find(`e), 5);
+  			def nbr := testMsg.count("ServiceA");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("FoundService");
+			self.assertEquals(nbr,0);
+			nbr := testMsg.count("ServiceC");
+			self.assertEquals(nbr,0);
+			nbr := testMsg.count("ServiceD");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceE");
+			self.assertEquals(nbr,1);
+  		};
+		f;
+  	};
+  	
+  	def testAsyncSequenceNotFoundWithWaitAndComponent() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`notFound, nil);
+  		def w_sequence := Sequence( asw.a(Env.gps)@Output(Env.a), foundsw.fo()@Output(Env.fo), csw.c()@Output(Env.c) );
+  		def failure := Failure( w_sequence,
+  								[ [ NotFound(10), Wait(10, Component(dsw.d()@Output(Env.d))) ] ]);
+  		def sequence := Sequence( failure, esw.e()@Output(Env.e) );
+  		def currentTime := /.at.support.timer.now();
+  		while: { ! (/.at.support.timer.has: /.at.support.timer.seconds(15) passedSince: currentTime) } do: { };
+  		services<-makeFoundActor()@FutureMessage;
+  		def f := when: sequence.start(env) becomes: { |nEnv|
+  			system.println(testMsg.array);
+  			self.assertEquals(nEnv.find(`a), 1);
+  			self.assertEquals(nEnv.find(`fo), 101);
+  			self.assertEquals(nEnv.find(`d), nil);
+  			self.assertEquals(nEnv.find(`c), 3);
+  			self.assertEquals(nEnv.find(`e), 5);
+  			def nbr := testMsg.count("ServiceA");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("FoundService");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceC");
+			self.assertEquals(nbr,1);
+			nbr := testMsg.count("ServiceD");
+			self.assertEquals(nbr,0);
+			nbr := testMsg.count("ServiceE");
+			self.assertEquals(nbr,1);
+  		};
+		f;
+  	};
+  	
+  	def testAsyncSequenceExceptiondWithComponent() {
+  		testMsg.reset();
+  		def env := Environment.new();
+  		env.insert(`gps, 99);
+  		env.insert(`exception, nil);
+  		def w_sequence := Sequence( asw.a(Env.gps)@Output(Env.a), exceptionsw.exc()@Output(Env.exc), csw.c()@Output(Env.c) );
+  		def failure := Failure( w_sequence,
+  								[ [ Exception(), Component(dsw.d()@Output(Env.d)) ] ]);
+  		def sequence := Sequence( failure, esw.e()@Output(Env.e) );
+  		def [result, resolver] := makeFuture();
+  		when: sequence.start(env) becomes: { |nEnv|
+  			try: {
+  				system.println(testMsg.array);
+  				self.assertEquals(nEnv.find(`a), 1);
+  				self.assertEquals(nEnv.find(`exc), nil);
+  				self.assertEquals(nEnv.find(`d), 4);
+  				self.assertEquals(nEnv.find(`c), nil);
+  				self.assertEquals(nEnv.find(`e), 5);
+  				def nbr := testMsg.count("ServiceA");
+				self.assertEquals(nbr,1);
+				nbr := testMsg.count("ExceptionService");
+				self.assertEquals(nbr,1);
+				nbr := testMsg.count("ServiceC");
+				self.assertEquals(nbr,0);
+				nbr := testMsg.count("ServiceD");
+				self.assertEquals(nbr,1);
+				nbr := testMsg.count("ServiceE");
+				self.assertEquals(nbr,1);
+				resolver.resolve(true);
+			} catch: lobby.at.lang.types.Exception using: { |e|
+ 				resolver.ruin(e);
+			};
+  		};
+		result;
+  	};
+};
+
+
+nowUnitTest.runTest();
+
+
