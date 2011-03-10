@@ -1,0 +1,136 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+import /.experimental.lang.nars.propertyReferences;
+import /.at.support.timer;
+
+referenceModule.enableDebug();
+referenceModule.enableWarnings();
+
+def PropertyReferencesTest :=
+	extend: /.at.unit.test.UnitTest.new("property references multinet test") with: {
+
+	def a := actor: {
+		import /.at.support.timer;
+		import /.experimental.lang.nars.propertyReferences;
+		
+		deftype Test1;
+
+		def o1 := object: { def n := 1 };
+		def o2 := object: { def n := 10 };
+		def o3 := object: { def n := 100 };
+		def o4 := object: { def n := 1000 };
+		def o5 := object: { def n := 10000 };
+		def o6 := object: { def n := 100000 };
+		
+		/*
+		def o1 := isolate: { def n := 1 };
+		def o2 := isolate: { def n := 10 };
+		def o3 := isolate: { def n := 100 };
+		def o4 := isolate: { def n := 1000 };
+		def o5 := isolate: { def n := 10000 };
+		def o6 := isolate: { def n := 100000 };
+		*/
+		
+		def testPort := networks[1];
+		
+		when: seconds(2) elapsed: { export: o1 as: Test1 with: (property: {def accept := false}); };              // 2
+		when: seconds(4) elapsed: { export: o2 as: Test1 on: testPort with: (property: {def accept := false}); }; // 1
+		when: seconds(6) elapsed: { export: o3 as: Test1 with: {def accept := true}; };                           // 2
+		when: seconds(8) elapsed: { export: o4 as: Test1 on: testPort with: {def accept := true}; };              // 1
+		when: seconds(10) elapsed: { export: o5 as: Test1; };                                                     // 2
+		when: seconds(12) elapsed: { export: o6 as: Test1 on: testPort; };                                        // 1
+		
+	};
+	
+					
+	deftype Test1;
+	
+	def testPort := networks[1];
+	
+	def ctrs[4]{ 0 };
+	
+	def done := false;
+	
+	def ticks := 0;
+	def tick() {
+		ticks := ticks + 1;
+		system.println("tick: " + ticks);
+		if: (ticks == 2) then: {
+			done := true;
+		}; 
+	};
+	
+	//system.println("I am: " + (print: self));
+	
+	import /.at.lang.futures exclude minutes, seconds, millisec;
+	enableFutures(true);
+	
+	def condBlock := { |prop| prop.accept };
+	
+	whenever: Test1 on: testPort where: condBlock discovered: { |ref|
+		when: ref<-n() becomes: {|v| ctrs[1] := ctrs[1] + v ; tick()};
+	};
+	
+	whenever: Test1 on: testPort discovered:  { |ref|
+		when: ref<-n() becomes: {|v| ctrs[2] := ctrs[2] + v ; tick()};
+	};
+	
+	condBlock := { |prop| prop.accept };
+	when: Test1 on: testPort where: condBlock discovered: { |ref|
+		when: ref<-n() becomes: {|v| ctrs[3] := ctrs[3] + v ; tick()};
+	};
+		
+	when: Test1 on: testPort discovered: { |ref|
+		when: ref<-n() becomes: {|v| ctrs[4] := ctrs[4] + v ; tick()};
+	};
+	
+	
+	
+	def testWheneverOnWhereDiscovered() {
+		self.assertEquals(ctrs[1], 1100);
+	};
+	
+	def testWheneverOnDiscovered() {
+		self.assertEquals(ctrs[2], 111111);
+	};
+
+	def testWhenOnWhereDiscovered() {
+		self.assertEquals(ctrs[3], 100);
+	};
+	
+	def testWhenOnDiscovered() {
+		self.assertEquals(ctrs[4], 1);
+	};
+  
+		
+}; // main
+
+
+when: seconds(15) elapsed: {
+	PropertyReferencesTest.runTest();
+};

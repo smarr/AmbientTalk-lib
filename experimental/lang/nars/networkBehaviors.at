@@ -1,0 +1,208 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/**
+ * This file defines network behaviors. Network behaviors are responsible
+ * for selecting connections in a nar and transmitting messages over the
+ * selected connections.
+ *
+**/
+
+
+import /.experimental.lang.nars.propertyReferences;
+
+
+def NetworkBehaviorModule := object: {
+
+  deftype NetworkBehavior;
+  
+  //def NATMsg := jlobby.edu.vub.at.actors.natives.NATAsyncMessage;
+  
+  deftype TransmitException <: /.at.lang.types.Exception;
+  def XTransmitException := /.at.lang.exceptions.createException(TransmitException);
+  
+  
+  // annotating messages
+  // we need this because we cannot strip a
+  // typetag from a message (or object for that matter)
+  
+  def hasBehavior(msg) {
+    is: msg taggedAs: NetworkBehavior;
+  };
+  
+  def stripBehaviors(msg) {
+    // if the message is annotated with (a) behavior(s)
+    // return a clone of the msg without the behavior(s)
+    def defaultTags := (tagsOf: <-noop());
+    def tags := (tagsOf: msg);
+    def filteredTags := tags.filter: { |tt|
+      !((isNetworkBehavior(tt)).or: {
+        defaultTags.contains(tt);
+      });
+    };
+    def sel := msg.selector;
+    def args := msg.arguments;
+    
+    eval: `(<-#sel(#@args)@#filteredTags) in: object: {};
+    //NATMsg.new(msg.selector, msg.arguments, filteredTags);
+  };
+  
+  
+  // network behaviors
+  
+  def isNetworkBehavior(tt) {
+    tt.isSubtypeOf(NetworkBehavior);
+  };
+  
+  def getNetworkBehavior(msg, default := defaultBehavior) {
+    def b := (tagsOf: msg).find: { |tt|
+      isNetworkBehavior(tt);
+    };
+    if: (b == nil) then: {
+      b := default;
+    } else: {
+      b := (tagsOf: msg)[b];
+    };
+    b;
+  };
+
+  
+  def defaultBehavior := object: {
+    
+    super := NetworkBehavior;
+    
+    def transmit(connections, msg) {
+      if: (connections.isEmpty()) then: {
+		  	raise: XTransmitException.new("could not transmit message");
+		  } else: {
+    		// simply transmit to the first conn
+    		if: hasBehavior(msg) then: {
+          msg := stripBehaviors(msg);
+        };
+        connections[1].super <+ msg;
+		  };
+  	};
+  };
+  
+  def extendBehavior: parent with: code {
+    def beh := object: code;
+    beh.super := parent;
+    beh;
+  };
+
+  def behavior: code {
+  	def beh := object: code;
+  	if: (beh.super == nil) then: {
+  	  beh.super := defaultBehavior;
+  	};
+  	beh;
+  };
+  
+  // XXX UNTESTED
+  def union(@behaviors) {
+    // this is an OR between behaviors
+    behavior: {
+      def transmit(connections, msg) {
+        { |return|
+          behaviors.each: { |b|
+            try: {
+              def r := b.transmit(connections, msg);
+              return(r);
+            } catch: TransmitException using: { |e|
+              // debug("try next behavior in the union");
+            };
+          };
+          raise: XTransmitException.new("could not transmit message");
+        }.escape();
+      };
+    };
+  };
+  
+  // XXX UNTESTED
+  def chain(only, tracer) {
+    def parent := only.super;
+    only.super := tracer;
+    parent := tracer.super;
+    tracer.super := parent;
+    only;
+  };
+
+  
+  def Only(@links) {
+  	behavior: { 
+  	  def transmit(connections, msg) {
+  	    def filteredConnections := connections.filter: { |c|
+  	      links.contains(portOf: c);
+  	    };
+  		  super^transmit(filteredConnections, msg);
+  		};
+  	};
+  };
+
+  
+  def Prefer(@links) {
+  	behavior: { 
+  	  def transmit(connections, msg) {
+  		  def sortedConnections := links.map: { |l|
+  		  	connections.filter: { |c|
+  		  		def result := l == (linkOf: c);
+  		  		result;
+  		  	};
+  		  };
+  		  sortedConnections := sortedConnections.inject: [] into: {|acc,cur| acc + cur};
+  		  if: (sortedConnections.isEmpty()) then: {
+  		  	raise: XTransmitException.new("could not transmit message");
+  		  } else: {
+  		  	super^transmit(sortedConnections, msg)
+  		  };
+  		};
+  	};
+  	
+  };
+  
+  def Tracer(beh) {
+    def tracingBehavior := behavior: {
+      def transmit(connections, msg) {
+        if: (connections.isEmpty()) then: {
+          raise: XTransmitException.new("could not transmit message");
+        } else: {
+          def conn := connections[1];
+	        def linkNr := networks.getAll().find: {|l| l == (linkOf: conn)};
+	        msg.arguments := msg.arguments + [linkNr];
+	        super^transmit([conn], msg)
+	      };
+      };
+    };
+    def parent := beh.super;
+    beh.super := tracingBehavior;
+    tracingBehavior.super := parent;
+    beh;
+  };
+  
+};
+
+NetworkBehaviorModule;

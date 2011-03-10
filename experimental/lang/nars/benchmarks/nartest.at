@@ -1,0 +1,127 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Kevin Pinte and Dries Harnie
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+import /.experimental.lang.nars.networkAwareReferences;
+
+import /.at.support.timer;
+
+deftype NARTest;
+
+def Android := object: {
+  def Log := object: {
+    def v(@args) {
+      system.println("[Android log] " + args.join(" ; "));
+    };
+  };
+  
+  def parent := object: {
+    def ping(@args) {
+      system.println("[Ping] " + jlobby.java.lang.System.currentTimeMillis());
+    };
+    def handshake(@args) {
+      // noop
+    };
+  };
+};
+
+def Sender := object: {
+	def go() {
+		Android.Log.v("NARTest", "Started");
+		
+		whenever: NARTest discovered: { |rec|
+		  def msg := <-ping();
+			def BtWifiMsg := <-ping()@Prefer([Wifi, Bluetooth]);
+			def wifiMsg := <-ping()@Only(Wifi);
+			whenever: millisec(5000) elapsed: {
+				rec<+msg;
+			}
+		};
+	};
+};
+
+def makeReceiver() {
+	actor: {
+	  
+	  import /.experimental.lang.nars.networkAwareReferences;
+	  
+	  def Android := object: {
+      def Log := object: {
+        def v(@args) {
+          system.println("[Android log] " + args.join(" ; "));
+        };
+      };
+
+      def parent := object: {
+        def ping(@args) {
+          system.println("[Ping] " + jlobby.java.lang.System.currentTimeMillis());
+        };
+        def handshake(@args) {
+          // noop
+        };
+      };
+    };
+	  
+	  deftype NARTest;
+		def obj := object: {
+			def ping() {
+				Android.Log.v("NARTest", "Got ping");
+				Android.parent.ping();
+			};
+		};
+		export: obj as: NARTest with: {
+		  def id := 1;
+		  def equivalent(any) { id == any.id };
+		};
+	};
+};
+
+def control := object: {
+	def toggleWifi(on) {
+		Android.Log.v("NARTest","toggled Wifi");
+		if: on then: { networks[1].online() } else: { networks[1].offline() };
+	};
+	
+	def toggleBT(on) {
+		Android.Log.v("NARTest","toggled BT");
+		if: on then: { networks[2].online() } else: { networks[2].offline() };
+	};
+	
+	def sender() {
+		Android.Log.v("NARTest","started sender");
+		Sender<-go();
+	};
+	
+	def receiver() {
+		Android.Log.v("NARTest","started receiver");
+		makeReceiver();
+	};
+};
+
+networks[2].online();
+Android.parent.handshake(control);
+
+self;

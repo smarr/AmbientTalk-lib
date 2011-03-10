@@ -1,0 +1,289 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+
+def VWiFi := networks.addVirtualPort("virtual wifi");
+def VBluetooth := networks.addVirtualPort("virtual bluetooth");
+def VNFC := networks.addVirtualPort("virtual NFC");
+def VInternet := networks.addVirtualPort("virtual internet");
+
+
+// the sending actor
+
+def Sender := actor: {  
+  
+  import /.experimental.lang.nars.networkAwareReferences;
+  import /.at.support.timer;
+  
+  //referenceModule.enableDebug(true);
+  
+  def print(prefix, @args) {
+  	system.println("[sender][" + prefix + "] " + (args.map: {|e| (print: e)}).join(" ; "));
+  };
+
+  def printPing(prefix) {
+    print("ping " + prefix, jlobby.java.lang.System.currentTimeMillis().toString());
+  };
+  
+  def VWiFi := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual wifi";
+  }];
+  def VWifi := VWiFi;
+  def VBluetooth := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual bluetooth";
+  }];
+  def VNFC := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual NFC";
+  }];
+  def VInternet := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual internet";
+  }];
+  
+  deftype Pingable;
+  
+  def MESSAGES_PER_SECOND := 5;
+
+  def setMessageIntensity(n) {
+    MESSAGES_PER_SECOND := n;
+  };
+
+  def internalSender := object: {
+
+    def messageCounter := 0;
+    def handler;
+    def stopB := false;
+    def ignore := false;
+
+    def remote;
+
+    def sendPing(nar) {
+      print("sendPing");
+      def ctr := 0;
+      def hadEnough := false;
+      while: { !hadEnough } do: { 
+        ctr := ctr + 1;
+        if: (ctr >= MESSAGES_PER_SECOND) then: {
+          hadEnough := true;
+        };
+        //nar <+ createBtWifiMsg();
+        nar <+ createBtWifiMsg();
+      };
+    };
+
+
+    def createNormalMsg() {
+      def msg := <-ping(messageCounter);
+      messageCounter := messageCounter + 1;
+      msg;
+    };
+
+  	def createBtWifiMsg() {
+      def msg := <-ping(messageCounter)@Tracer(Prefer(VWifi, VBluetooth));
+      messageCounter := messageCounter + 1;
+      msg;
+  	};
+
+  	def createWifiMsg() {
+  	  def msg := <-ping(messageCounter)@Tracer(Only(VWifi));
+      messageCounter := messageCounter + 1;
+      msg;
+  	};
+
+    def identify() {
+      print("role", "sender");
+    };
+
+    def startSending() {
+      handler := whenever: millisec(1000) elapsed: {
+        if: !stopB then: {
+          sendPing(remote);
+        };
+      };
+    };
+
+    def stopSending() {
+      stopB := true;
+      handler.cancel();
+    };
+
+    def init() {
+      VWifi.online();
+      VBluetooth.online();
+      identify();
+      whenever: Pingable on: [VWifi, VBluetooth] discovered: { |nar|
+        print("discovery", (print: nar));
+        if: !ignore then: { 
+          ignore := true;
+          remote := nar;
+        };
+      };
+    };
+
+    def start() {
+      print("action", "start");
+      startSending()
+    };
+    def stop() {
+      print("action", "stop");
+      stopSending();
+    };
+
+    def break() {
+      print("action", "break");
+      VWifi.offline;
+    };
+
+    def restore() {
+      print("action", "restore");
+      VWifi.online;
+    };
+
+  };
+  
+  
+  def DELAY := seconds(5);
+
+  internalSender.init();
+  
+  when: DELAY elapsed: {
+    internalSender.start();
+  
+    when: seconds(10) elapsed: {
+      internalSender.break();
+  
+      when: seconds(5) elapsed: {
+        internalSender.restore();
+  
+        when: seconds(10) elapsed: {
+          internalSender.stop();
+        }
+      };
+    };
+  
+  };
+  
+  
+};
+
+
+
+// the receiving actor
+
+def Receiver := actor: {
+  
+  def print(prefix, @args) {
+  	system.println("[receiver][" + prefix + "] " + (args.map: {|e| (print: e)}).join(" ; "));
+  };
+
+  def printPing(prefix) {
+    print("ping " + prefix, jlobby.java.lang.System.currentTimeMillis().toString());
+  };
+  
+  import /.experimental.lang.nars.networkAwareReferences;
+  import /.at.support.timer;
+  
+  deftype Pingable;
+  
+  def VWiFi := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual wifi";
+  }];
+  def VWifi := VWiFi;
+  def VBluetooth := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual bluetooth";
+  }];
+  def VNFC := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual NFC";
+  }];
+  def VInternet := networks[networks.getAll().find: { |p| 
+    (print: p) ~= "virtual internet";
+  }];
+  
+  def internalReceiver := object: {
+
+    def receiverObject := object: {
+      def ping(n, p) {
+        printPing((print: n) + " " + (print: p));
+      };
+    };
+
+    def identify() {
+      print("role", "receiver");
+    };
+
+    def defaultProperty := property: {
+      def id := 42;
+      def equivalent(any) {
+        id == any.id;
+      };
+    };
+
+    def init() {
+      identify();
+      export: receiverObject as: Pingable on: [VWifi, VBluetooth] with: defaultProperty;
+    };
+
+    def start() {
+      print("action", "going online", jlobby.java.lang.System.currentTimeMillis().toString());
+    };
+
+    def stop() {
+      print("action", "stop");
+    };
+
+    def break() {
+      print("action", "break");
+    };
+
+    def restore() {
+      print("action", "restore");
+    };
+
+
+  };
+  
+  def DELAY := seconds(5);
+
+  internalReceiver.init();
+  
+  when: DELAY elapsed: {
+    internalReceiver.start();
+  
+    when: seconds(10) elapsed: {
+      internalReceiver.break();
+  
+      when: seconds(5) elapsed: {
+        internalReceiver.restore();
+  
+        when: seconds(10) elapsed: {
+          internalReceiver.stop();
+        }
+      };
+    };
+  
+  };
+  
+};

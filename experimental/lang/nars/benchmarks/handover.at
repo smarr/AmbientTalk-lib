@@ -1,0 +1,214 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+
+import /.experimental.lang.nars.networkAwareReferences;
+import /.at.support.timer;
+
+
+
+def print(prefix, @args) {
+	system.println("[" + prefix + "] " + (args.map: {|e| (print: e)}).join(" ; "));
+};
+
+def printPing(prefix) {
+  print("ping " + prefix, jlobby.java.lang.System.currentTimeMillis().toString());
+};
+
+
+deftype NARTest;
+
+
+def receiver := object: {
+  
+  def receiverObject := object: {
+    def ping(n, p) {
+      printPing((print: n) + " " + (print: p));
+    };
+  };
+  
+  def identify() {
+    print("role", "receiver");
+  };
+  
+  def defaultProperty := property: {
+    def id := 42;
+    def equivalent(any) {
+      id == any.id;
+    };
+  };
+  
+  def init() {
+    identify();
+    network.online();
+    export: receiverObject as: NARTest with: defaultProperty;
+  };
+  
+  def start() {
+    print("action", "going online", jlobby.java.lang.System.currentTimeMillis().toString());
+  };
+  
+  def stop() {
+    print("action", "stop");
+  };
+  
+  def break() {
+    print("action", "break");
+  };
+  
+  def restore() {
+    print("action", "restore");
+  };
+  
+  
+};
+
+
+def MESSAGES_PER_SECOND := 10;
+
+def setMessageIntensity(n) {
+  MESSAGES_PER_SECOND := n;
+};
+
+def sender := object: {
+  
+  def messageCounter := 0;
+  def handler;
+  def stopB := false;
+  def ignore := false;
+  
+  def remote;
+  
+  def sendPing(nar) {
+    def ctr := 0;
+    def hadEnough := false;
+    while: { !hadEnough } do: { 
+      ctr := ctr + 1;
+      if: (ctr >= MESSAGES_PER_SECOND) then: {
+        hadEnough := true;
+      };
+      nar <+ createBtWifiMsg();
+    };
+  };
+  
+  
+  def createNormalMsg() {
+    def msg := <-ping(messageCounter);
+    messageCounter := messageCounter + 1;
+    msg;
+  };
+
+	def createBtWifiMsg() {
+    def msg := <-ping(messageCounter)@TracingPrefer(Wifi, Bluetooth);
+    messageCounter := messageCounter + 1;
+    msg;
+	};
+
+	def createWifiMsg() {
+	  def msg := <-ping(messageCounter)@Only(Wifi);
+    messageCounter := messageCounter + 1;
+    msg;
+	};
+  
+  def identify() {
+    print("role", "sender");
+  };
+  
+  def startSending() {
+    handler := whenever: millisec(1000) elapsed: {
+      if: !stopB then: {
+        sendPing(remote);
+      };
+    };
+  };
+  
+  def stopSending() {
+    stopB := true;
+    handler.cancel();
+  };
+  
+  def init() {
+    networks.online();
+    identify();
+    whenever: NARTest discovered: { |nar|
+      if: !ignore then: { 
+        ignore := true;
+        remote := nar;
+      };
+    };
+  };
+  
+  def start() {
+    print("action", "start");
+    startSending()
+  };
+  def stop() {
+    print("action", "stop");
+    stopSending();
+  };
+  
+  def break() {
+    print("action", "break");
+    Wifi.offline;
+  };
+  
+  def restore() {
+    print("action", "restore");
+    Wifi.online;
+  };
+  
+};
+
+
+
+
+def DELAY := seconds(30);
+def STOP_DELAY := seconds(90);
+
+def run(role) {
+  
+  role.init();
+  
+  when: DELAY elapsed: {
+    role.start();
+    
+    when: seconds(20) elapsed: {
+      role.break();
+      
+      when: seconds(5) elapsed: {
+        role.restore();
+        
+        when: seconds(15) elapsed: {
+          role.stop();
+        }
+      }
+    };
+  };
+  
+};
+
+self;

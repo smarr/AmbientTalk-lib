@@ -1,0 +1,377 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+import /.at.lang.futures exclude minutes, seconds, millisec;
+enableFutures(true);
+
+import /.experimental.lang.nars.multiwayReferences;
+import /.at.support.timer;
+
+referenceModule.enableDebug();
+referenceModule.enableWarnings();
+
+def MultiwayReferencesTest :=
+	extend: /.at.unit.test.UnitTest.new("multiway multinetwork references test") with: {
+
+	def a := actor: {
+		import /.at.support.timer;
+		import /.experimental.lang.nars.multiwayReferences;
+		
+		deftype Test1;
+		deftype Test2;
+		deftype Test3;
+		deftype Test4;
+		deftype Test5;
+		deftype Test6;
+		deftype Test7;
+		deftype Test8;
+		deftype Test9;
+		deftype Test10;
+		
+		def o1 := object: { def n := 1 };
+		def o2 := object: { def n := 10 };
+		def o3 := object: { def n := 100 };
+		def o4 := object: { def n := 1000 };
+		def o5 := object: { def n := 10000 };
+		def o6 := object: { def n := 100000 };
+		def o7 := object: { def n := 1000000 };
+		def o8 := object: { def n := 10000000 };
+		def o9 := object: { def n := 100000000 };
+		
+		
+		// test 1
+		when: seconds(2) elapsed: {
+			export: o1 as: Test1 with: (property: {
+				def id := 1;
+				def equivalent(any) { any.id == id };
+			});
+			
+			export: o2 as: Test1 with: (property: {
+				def id := 1;
+				def equivalent(any) { any.id == id };
+			});
+		};
+		
+		// test 2
+		when: seconds(4) elapsed: {
+			export: o1 as: Test2 with: {
+				def id := 2;
+				def p := 1;
+				def equivalent(any) { any.id == id };
+				def priority(any) { 
+					{ |return|
+						if: (p > any.p) then: { return(1) };
+						if: (p < any.p) then: { return(-1) };
+						return(0);
+					}.escape();
+				};
+			};
+		};
+    when: seconds(5) elapsed: {
+			export: o2 as: Test2 with: {
+				def id := 2;
+				def p := 2;
+				def equivalent(any) { any.id == id };
+				def priority(any) { 
+					{ |return|
+						if: (p > any.p) then: { return(1) };
+						if: (p < any.p) then: { return(-1) };
+						return(0);
+					}.escape();
+				};
+			};
+		};
+		
+		// test 3
+		when: seconds(6) elapsed: {
+			export: o3 as: Test3 with: {
+				def id := 3;
+				def equivalent(any) { any.id == id };
+			};
+			
+			export: o3 as: Test3 with: {
+				def id := 4;
+				def equivalent(any) { any.id == id };
+			};
+		};
+		
+		// def test 4
+		when: seconds(8) elapsed: {
+			export: o4 as: Test4 with: {
+				def propagate() { false };
+			};
+			export: o4 as: Test4 with: {
+				def propagate() { true };
+			};
+		};
+		
+		
+		// test 5
+		def identify := script: { |me, other|
+			me.id == other.id;
+		};
+		
+		when: seconds(10) elapsed: {
+		  export: o5 as: Test5 with: {
+		    def id := 5;
+		    def p := 1;
+				def equivalent(any) { identify(self, any) };
+				def priority(any) { <=>(p, any.p) };
+		  };
+		};
+		when: seconds(11) elapsed: {
+		  export: o6 as: Test5 with: {
+		    def id := 5;
+		    def p := 2;
+				def equivalent(any) { identify(self, any) };
+				def priority(any) { <=>(p, any.p) };
+		  };
+		};
+		when: seconds(12) elapsed: {
+		  export: o7 as: Test5 with: {
+		    def id := 5;
+		    def p := 3;
+				def equivalent(any) { identify(self, any) };
+				def priority(any) { <=>(p, any.p) };
+		  };
+		};
+		
+		def disco5;
+		def disco6;
+		def disco7;
+		when: seconds(14) elapsed: {
+		  disco5 := disconnect: o5;
+		  disco7 := disconnect: o7;
+		};
+		when: seconds(18) elapsed: {
+		  disco7.reconnect();
+		};
+		
+		// test 6
+		when: seconds(22) elapsed: {
+			disco6 := disconnect: o6;
+		  disco7 := disconnect: o7;
+		};
+		when: seconds(26) elapsed: {
+			disco5.reconnect();
+		};
+		
+		// test 7
+		when: seconds(28) elapsed: {
+			export: o8 as: Test8 with: {
+				def n := -1;
+			};
+		};
+		when: seconds(29) elapsed: {
+			export: o9 as: Test8 with: {
+				def n := 1;
+			};
+		};
+		
+
+	
+		// test 8
+		when: seconds(30) elapsed: {
+			export: o1 as: Test9 on: networks[1] with: {
+				def id := 9;
+				def equivalent(any) {
+					id == any.id;
+				};
+			};
+			export: o1 as: Test9 on: networks[1] with: {
+				def id := 10;
+				def equivalent(any) {
+					id == any.id;
+				};
+			};
+		};
+		
+	};
+					
+	deftype Test1;
+	deftype Test2;
+	deftype Test3;
+	deftype Test4;
+	deftype Test5;
+	deftype Test6;
+	deftype Test7;
+	deftype Test8;
+	deftype Test9;
+	deftype Test10;
+	
+	def ctrs[50]{ 0 };
+	
+	// test active ref
+	whenever: Test1 discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[1] := ctrs[1] + v;
+		};
+		ctrs[2] := ctrs[2] + (propertyOf: mwr).id;
+	};
+	
+	// test active ref
+	whenever: Test2 discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[3] := ctrs[3] + v;
+		};
+		ctrs[4] := ctrs[4] + (propertyOf: mwr).id;
+	};
+	
+	// test same object with other identity
+	whenever: Test3 discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[5] := ctrs[5] + v;
+		};
+		ctrs[6] := ctrs[6] + (propertyOf: mwr).id;
+	};
+	
+	// test same object with other identity
+	whenever: Test4 discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[7] := ctrs[7] + v;
+		};
+	};
+	
+	// test disconnection and reconnection
+	def mwr5;
+	whenever: Test5 discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[8] := ctrs[8] + v;
+		};
+		mwr5 := mwr;
+	};
+	when: seconds(16) elapsed: {
+	  when: mwr5<-n() becomes: { |v|
+			ctrs[9] := ctrs[9] + v;
+		};
+	};
+	when: seconds(20) elapsed: {
+	  when: mwr5<-n() becomes: { |v|
+			ctrs[10] := ctrs[10] + v;
+		};
+	};
+	
+	// test wmay disconnect
+	def first := 0;
+	when: seconds(24) elapsed: {
+	  when: mwr5<-n() becomes: { |v|
+			//system.println("resolved!");
+			first := first + 1;
+			ctrs[12] := first;
+			ctrs[11] := ctrs[11] + v;
+		};
+	};
+	when: seconds(25) elapsed: {
+	  first := first + 1;
+	};
+
+	
+	// test where clause
+	def fltr := { |p| p.n > 0 };
+	whenever: Test8 where: fltr discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[13] := ctrs[13] + v;
+		};
+	};
+	when: Test8 discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[14] := ctrs[14] + v;
+		};
+	};
+	
+	// test when(ever):on:discovered:
+	def mwr9;
+	ctrs[17] := false;
+	whenever: Test9 on: networks[1] discovered: { |mwr|
+		if: (!(mwr9 == nil)) then: {
+			ctrs[17] := ((ctrs[17]).or: { mwr == mwr9 });
+		};
+		mwr9 := mwr;
+		when: mwr<-n() becomes: { |v|
+			ctrs[15] := ctrs[15] + v;
+		};
+	};
+	whenever: Test9 on: networks[2] discovered: { |mwr|
+		when: mwr<-n() becomes: { |v|
+			ctrs[16] := ctrs[16] + v;
+		};
+	};
+	
+	
+	//tests
+  	//def testDummy() {
+  	//	system.println(ctrs);
+  	//};
+  	
+
+  	def testActiveReference() {
+  		self.assertEquals(ctrs[1], 4);
+  		self.assertEquals(ctrs[2], 4);
+  	};
+  	
+  	def testPriorityReference() {
+  	  self.assertEquals(ctrs[3], 22);
+  		self.assertEquals(ctrs[4], 8);
+  	};
+  	
+  	def testAlterEgo() {
+  		self.assertEquals(ctrs[5], 400);
+  		self.assertEquals(ctrs[6], 14);
+  	};
+  	
+  	def testNoPropagate() {
+  		self.assertEquals(ctrs[7], 2000);
+  	};
+  	  	
+  	def testDisconnectReconnect() {
+  		self.assertEquals( ctrs[8], 2220000);
+  		self.assertEquals( ctrs[9],  100000);
+  		self.assertEquals(ctrs[10], 1000000);
+  	};
+
+		def testBuffering() {
+			self.assertEquals(ctrs[11], 10000);
+  		self.assertEquals(ctrs[12], 2);
+		};
+		
+		def testWhereAndWhen() {
+			self.assertEquals(ctrs[13], 200000000);
+  		self.assertEquals(ctrs[14], 10000000);
+		};
+		
+		def testMultiNetw() {
+			self.assertEquals(ctrs[15], 2);
+  		self.assertEquals(ctrs[16], 0);
+			self.assertFalse(ctrs[17]);
+		};
+		
+}; // main
+
+
+when: seconds(34) elapsed: {
+	MultiwayReferencesTest.runTest();
+};

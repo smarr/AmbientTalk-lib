@@ -1,0 +1,585 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/**
+ * This file defines multiway references
+ * a multiway reference is a reference that encapsulates 
+ * single remote references to equivalent objects (via multiple paths)
+ * as such, discovery blocks for equivalent objects will be
+ * executed only once. A multiway reference is only disconnected
+ * if all of its composing references become disconnected.
+ * A multiway reference contains 3 properties:
+ * - an equivalence relation:
+ *     takes any other object and returns true/false indicating 
+ *     whether these two objects are equivalent
+ * - a propagate method:
+ *     returns true/false indicating wether this reference is
+ *     still valid after propagating over the network
+ * - a priority function:
+ *     takes any other object and returns -1/0/1 indicating wether a reference takes
+ *     priority over another one in a multiway reference
+**/
+
+// java collections
+import /.at.collections.java.hashset;
+import /.at.collections.java.hashmap;
+import /.at.collections.java.vector;
+
+// utility functions and excaptions
+import /.experimental.lang.nars.referenceUtils;
+// build upon property references
+import /.experimental.lang.nars.propertyReferences;
+// import the reference mirror
+import /.experimental.lang.nars.multiwayReferenceMirror;
+
+import /.at.support.logger;
+
+def logPrefix := "[MULTIWAY REFS]";
+def logger := makeLogger(logPrefix, INFO);
+
+def setLogPrefix(newPrefix) {
+  logPrefix := newPrefix;
+  logger := makeLogger(logPrefix, INFO);
+};
+
+def setMirrorModule(m) {
+  mirrorModule := m;
+};
+
+def setLogLevel(l) {
+  logger := makeLogger(logPrefix, l);
+  self.mirrorModule.setLogLevel(l);
+};
+
+def debug(@args) {
+  logger(args.join(" ; "), DEBUG);
+};
+def warn(@args) {
+  logger(args.join(" ; "), WARNING);
+};
+
+
+// the types
+deftype MultiwayReference <: PropertyReference;
+deftype MultiwayProperty <: Property;
+
+def multiwayPropertyType := MultiwayProperty;
+def multiwayReferenceType := MultiwayReference;
+
+
+// names of the required methods for a property
+def REQUIRED_METHODS := [`equivalent, `propagate, `priority];
+
+
+// the default where clause
+def multiwayDefaultFilter := { |props| true };
+
+def UUID := jlobby.java.util.UUID.randomUUID().toString();
+debug("generated UUID " + UUID + " for " + self);
+
+// the multiway property object must respond to 
+// equivalent, propagate and priority
+def multiwayDefaultProperty := extend: multiwayPropertyType with: { 
+  def stepStones := [UUID];
+  
+	def equivalent(other) {
+		false; // never equivalent
+	};
+	
+	def propagate() {
+		false; // never propagate by default
+	};
+	
+	def priority(other) {
+		// -1 for lower priority
+		//  0 for equal priority
+		//  1 for higher priority
+		-1; // no priority
+	};
+};
+
+def respondsToMethod(props, sym) {
+	try: {
+		(reflect: props).respondsTo(sym);
+	} catch: { |e| 
+		// do nothing
+		debug("property " + props + " does not respond to " + sym); 
+		false;
+	};
+};
+
+def validateProperty(props) {
+  REQUIRED_METHODS.each: { |m|
+    if: !respondsToMethod(props, m) then: {
+      raise: XReferenceException.new("property " + props + " must respond to " + m);
+    };
+  };
+	true;
+};
+
+def validateStepStones(props) {
+  if: props.stepStones.contains(UUID) then: {
+    raise: XReferenceException.new("ignore property " + props + " because of loop in stepstone path");
+  };
+	true;
+};
+
+def isMultiwayReferenceProperty(obj) {
+	(reflect: obj).isRelatedTo(multiwayPropertyType);
+};
+
+def isMultiwayReference(any) {
+	is: any taggedAs: multiwayReferenceType;
+};
+
+def mwayReferenceCreator := { |reference|
+	object: {} taggedAs: [multiwayReferenceType] mirroredBy: { |base| 
+		multiwayReferenceMirror.new(base, reference);
+	};
+};
+
+def referenceCreator := mwayReferenceCreator;
+
+def createMultiwayReference(reference) {
+	referenceCreator(reference);
+};
+
+def setReferenceCreator(c) {
+  referenceCreator := c;
+};
+
+// copies of native functions
+// discovery:
+def nativeWhenever: serviceType on: ports where: condBlock discovered: code {
+	whenever: serviceType on: ports where: condBlock discovered: code;
+};
+
+def nativeWhenever: serviceType where: condBlock discovered: code {
+	whenever: serviceType where: condBlock discovered: code;
+};
+
+def nativeWhenever: serviceType on: ports discovered: code {
+	whenever: serviceType on: ports discovered: code;
+};
+
+def nativeWhenever: serviceType discovered: code {
+	whenever: serviceType discovered: code;
+};
+
+// when: variants:
+def nativeWhen: serviceType on: ports where: condBlock discovered: code {
+	when: serviceType on: ports where: condBlock discovered: code;
+};
+
+def nativeWhen: serviceType where: condBlock discovered: code {
+	when: serviceType where: condBlock discovered: code;
+};
+
+def nativeWhen: serviceType on: ports discovered: code {
+	when: serviceType on: ports discovered: code;
+};
+
+def nativeWhen: serviceType discovered: code {
+	when: serviceType discovered: code;
+};
+
+
+// export objects
+def nativeExport: serviceObject as: type with: clo {
+	export: serviceObject as: type with: clo;
+};
+
+def nativeExport: serviceObject as: type on: port with: clo {
+	export: serviceObject as: type on: port with: clo;
+};
+
+/*
+// not needed, overridden below
+def nativeExport: serviceObject as: type withProperties: clo {
+	export: serviceObject as: type withProperties: clo;
+};
+
+def nativeExport: serviceObject as: type on: port withProperties: clo {
+	export: serviceObject as: type on: port withProperties: clo;
+};	
+
+def nativeExport: serviceObject as: type {
+	export: serviceObject as: type;
+};
+
+def nativeExport: serviceObject as: type on: port {
+	export: serviceObject as: type on: port;
+};
+*/
+
+
+// propagation functionality
+
+def enablePropagation := true;
+
+def setEnablePropagation(bool) {
+  enablePropagation := bool;
+};
+
+def createForwardingMirror(baseObject) {
+  extend: defaultMirror.new(baseObject) with: {
+    def invoke(slf, invocation) {
+      debug("invoked "+invocation.selector+" on "+baseObject);
+
+      def sel := invocation.selector;
+      def args := invocation.arguments;
+      def tags := (tagsOf: invocation);
+      tags := tags + [FutureMessage];
+
+      def [future, resolver] := makeFuture();
+      def msg := eval: `(<-#sel(#@args)@#tags) in: object: {};
+      when: (self.base.super <+ msg) becomes: { |v|
+        resolver.resolve(v);
+      };
+      future;
+    }
+  }
+};
+
+def createForwarderProxy(propRef) {
+  object: {
+	  super := propRef;
+	} mirroredBy: { |base|
+    self.createForwardingMirror(base);
+  };
+};
+
+def attemptPropagation(propRef, typeTag) {
+  if: enablePropagation then: {
+    def prop := (propertyOf: propRef);
+    
+    if: prop.stepStones.contains(UUID) then: {
+    } else: {
+      prop.stepStones := prop.stepStones + [UUID];
+      if: prop.propagate() then: {
+        def forwarder := createForwarderProxy(propRef);
+        export: forwarder as: typeTag with: prop;
+        registerConnectivityHooks(propRef, forwarder);
+      };
+    };
+  };
+};
+
+def forwarderPool := HashMap.new;
+def connectivityHooks := HashMap.new;
+
+def registerConnectivityHooks(propRef, forwarder) {
+  def discoHook := whenever: propRef disconnected: {
+    disconnectForwarder(forwarder);
+  };
+  def recoHook := whenever: propRef reconnected: {
+    reconnectForwarder(forwarder);
+  };
+  when: propRef takenOffline: {
+    takeOfflineForwarder(forwarder);
+  };
+  connectivityHooks.put(forwarder, [discoHook, recoHook]);
+};
+
+def disconnectForwarder(forwarder) {
+  if: (!forwarderPool.contains(forwarder)) then: {
+    def disco := (disconnect: forwarder);
+    forwarderPool.put(forwarder, disco);
+  };
+};
+
+def reconnectForwarder(forwarder) {
+  if: (forwarderPool.contains(forwarder)) then: {
+    def disco := forwarderPool.get(forwarder);
+    disco.reconnect();
+    forwarderPool.remove(forwarder);
+  };
+};
+
+def takeOfflineForwarder(forwarder) {
+  takeOffline: forwarder;
+  forwarderPool.remove(forwarder);
+  def hooks := connectivityHooks.get(forwarder);
+  hooks.each: { |h| h.cancel() };
+  connectivityHooks.remove(forwarder);
+};
+
+
+// the multiwayReferenceModule
+
+def MultiwayReferenceModule := object: {
+	
+	// contains all multiway references (all equivalence classes)
+	def multiwayReferences := HashSet.new;
+	
+	def MultiwayReferenceModule := object: {
+		def enableWarnings(bool) { 
+		  if: bool then: {
+		    setLogLevel(WARNING); 
+		    warn("warnings enabled"); 
+		  } else: {
+		    setLogLevel(INFO);
+		  };
+		};
+		def enableDebug(bool) { 
+		  if: bool then: {
+		    setLogLevel(DEBUG); 
+		    warn("warnings enabled");
+		  } else: {
+		    setLogLevel(WARNING);
+		  };
+		};
+		def enablePropagation(bool) {
+		  setEnablePropagation(bool);
+		};
+		def countReferences() { multiwayReferences.size() };
+	};
+	
+	def processIncomingPropertyReference(propRef, typeTag, code) {
+		try: {
+			debug("processing incoming property ref: " + propRef);
+			if: (is: propRef taggedAs: PropertyReference) then: {
+				// got a property reference
+				def prop := propertyOf: propRef;
+				debug("  property: " + prop);
+				def ref := propRef;
+				// validate properties
+				validateProperty(prop);
+				validateStepStones(prop);
+				
+				attemptPropagation(propRef, typeTag);
+        
+				// try to add to a multiway ref
+				// or create a new multiway reference
+				def mwayRef := { |return|
+					multiwayReferences.each: { |mwayRef|
+						if: ((reflect: mwayRef).extendIfEquivalent(propRef)) then: {
+							// acceptReference checks equivalence and returns true/false
+							// indicating wether the ref was accepted
+							debug("  extend: " + mwayRef + " with: " + propRef);
+							return(mwayRef)
+						};
+					};
+					debug("  no match found");
+					return(nil);
+				}.escape();
+				
+				if: (mwayRef == nil) then: {
+					// the reference was not added to a multiway reference
+					// create a new one
+					mwayRef := createMultiwayReference(propRef);
+					multiwayReferences.add(mwayRef);
+				};
+				
+				code(mwayRef);
+				
+			} else: {
+				// not a property reference
+				raise: XReferenceException.new("property reference expected, got: "+propRef);
+			};
+		} catch: ReferenceException using: { |e|
+			warn("exception occured upon discovery of a reference: " + e.message);
+		};
+	};
+
+	def publicFacade := object: {
+	  
+	  //def getRefs() { multiwayReferences.toTable() };
+
+		def referenceType := multiwayReferenceType;
+		def propertyType := multiwayPropertyType;
+		
+		def referenceModule := MultiwayReferenceModule;
+		
+		def property: closure taggedAs: typeTags {
+			extend: multiwayDefaultProperty with: closure taggedAs: typeTags;
+		};
+		
+		def property: closure {
+			extend: multiwayDefaultProperty with: closure;
+		};
+		
+		def defaultFilter := multiwayDefaultFilter;
+		def defaultProperty := multiwayDefaultProperty;
+		
+		def propertyOf: mwayref {
+			(reflect: mwayref).property
+		};
+		
+		def <=> := script: { |a,b|
+			{ |return|
+				if: (a > b) then: { return(1) };
+				if: (a < b) then: { return(-1) };
+				return(0);
+			}.escape();
+		};
+		
+		def compare := <=>;
+		
+		
+		// discovery
+		// whenever variants
+		def whenever: serviceType on: ports where: condBlock discovered: code {
+			nativeWhenever: serviceType on: ports where: condBlock discovered: { |propRef|
+				// will only be executed if the condBlock accepts the property
+				processIncomingPropertyReference(propRef, serviceType, code);
+			};
+		};
+		
+		def whenever: serviceType where: condBlock discovered: code {
+			nativeWhenever: serviceType where: condBlock discovered: { |propRef|
+				// will only be executed if the condBlock accepts the property
+				processIncomingPropertyReference(propRef, serviceType, code);
+			};
+		};	
+		
+		def whenever: serviceType on: ports discovered: code {
+			whenever: serviceType on: ports where: defaultFilter discovered: code;
+		};
+
+		def whenever: serviceType discovered: code {
+			whenever: serviceType where: defaultFilter discovered: code
+		};
+		
+		// when variants
+		// here we install a native whenever, so that the multiway refs keep expanding
+		// the handler is executed once
+		def when: serviceType on: ports where: condBlock discovered: code {
+		  def wrapper := singleExecutionClosure(code);
+			nativeWhenever: serviceType on: ports where: condBlock discovered: { |propRef|
+				// will only be executed if the condBlock accepts the property
+				processIncomingPropertyReference(propRef, serviceType, wrapper);
+			};
+		};
+		
+		def when: serviceType where: condBlock discovered: code {
+		  def wrapper := singleExecutionClosure(code);
+			nativeWhenever: serviceType where: condBlock discovered: { |propRef|
+				// will only be executed if the condBlock accepts the property
+				processIncomingPropertyReference(propRef, serviceType, wrapper);
+			};
+		};
+		
+		def when: serviceType on: ports discovered: code {
+			when: serviceType on: ports where: defaultFilter discovered: code;
+		};
+
+		def when: serviceType discovered: code {
+			when: serviceType where: defaultFilter discovered: code
+		};
+	
+		
+		// allow exporting an object together with a set of properties
+		def export: serviceObject as: type with: prop {
+			if: (!isMultiwayReferenceProperty(prop)) then: {
+				// prop should be a property, or a closure
+				prop := property: prop;
+			};
+			// validate the property object
+			validateProperty(prop);
+			nativeExport: serviceObject as: type with: prop;
+		};
+
+		def export: serviceObject as: type on: port with: prop {
+			if: (!isMultiwayReferenceProperty(prop)) then: {
+				// prop should be a property, or a closure
+				prop := property: prop;
+			};
+			validateProperty(prop);
+			nativeExport: serviceObject as: type on: port with: prop
+		};
+
+		def export: serviceObject as: type {
+			export: serviceObject as: type with: (property: {});
+		};
+
+		def export: serviceObject as: type on: port {
+			export: serviceObject as: type on: port with: (property: {});
+		};
+		
+		// connectivity observers
+		
+		def whenever: mwayRef disconnected: code {
+		  (reflect: mwayRef).addDisconnectionObserver(code);
+		};
+		
+		def whenever: mwayRef reconnected: code {
+		  (reflect: mwayRef).addConnectionObserver(code);
+		};
+		
+		def when: mwayRef takenOffline: code {
+		  (reflect: mwayRef).addTakenOfflineObserver(code);
+		};
+		
+		// additional observers
+		
+		// add method to listen to default link changes
+		def whenever: ref defaultLinkChanged: code {
+			(reflect: ref).addDefaultLinkObserver(code);
+		};
+		
+		// add method to when refs {dis|re}connect
+		def whenever: ref stateChanged: code {
+			(reflect: ref).addStateChangeObserver(code);
+		};
+		
+		def when: ref defaultLinkChanged: code {
+			def active := true;
+      def sub := whenever: ref defaultLinkChanged: { |@args|
+      	if: active then: { subscription.cancel(); code(@args) };
+      };	
+      def subscription := object: {
+      	def cancel() {
+      		active := false;
+      		sub.cancel();
+      	}
+      };
+      subscription;
+		};
+		
+		// add method to when refs {dis|re}connect
+		def when: ref stateChanged: code {
+			def active := true;
+      def sub := whenever: ref stateChanged: { |@args|
+      	if: active then: { subscription.cancel(); code(@args) };
+      };	
+      def subscription := object: {
+      	def cancel() {
+      		active := false;
+      		sub.cancel();
+      	}
+      };
+      subscription;
+		};
+		
+		
+	
+	}; // public facade
+
+};
+
+self;

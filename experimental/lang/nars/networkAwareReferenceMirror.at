@@ -1,0 +1,208 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/**
+ * This file defines the mirror for nars.
+ * It extends the multiway reference mirror so that network
+ * behaviors are used to transmit messages.
+ *
+**/
+
+// first class references
+import /.at.lang.firstclassrefs;
+
+import /.at.lang.exceptions;
+
+import /.experimental.lang.nars.propertyReferences;
+
+// java collections
+import /.at.collections.java.hashset;
+import /.at.collections.java.hashmap;
+import /.experimental.lang.nars.priorityqueue;
+
+import /.experimental.lang.nars.multiwayReferenceMirror;
+import /.experimental.lang.nars.networkBehaviors;
+
+  
+import /.at.support.logger;
+def logPrefix := "[NAR MIRROR]";
+def logger := makeLogger(self.logPrefix, INFO);
+
+def debug(@args) {
+  self.logger(args.join(" ; "), DEBUG);
+};
+def warn(@args) {
+  self.logger(args.join(" ; "), WARNING);
+};
+
+def setMwayLogLevel(l) {
+  mirrorModule.setLogLevel(l);
+};
+
+def NetworkAwareReferenceMirrorModule := object: {
+
+  def mirrorModule := object: {
+	  def setLogLevel(l) {
+      logger := makeLogger(logPrefix, l);
+      setMwayLogLevel(l);
+    };
+	};
+
+
+	// the mirror to construct a NetworkAwareReference
+
+	def networkAwareReferenceMirror :=  extend: multiwayReferenceMirror with: {
+		
+		def currentDefaultBehavior;
+		
+		def connectedReferencesPerLink;
+		
+		def init(base, propRef, isConnected := true){
+			super^init(base, propRef, isConnected);
+			
+			// add observer types
+			def observerTypes := [`linkStatus];
+			def catalogMirror := (reflect: self.observerCatalog);
+        observerTypes.each: { |type|
+          catalogMirror.defineField(type, Vector.new);
+      };
+			
+			self.connectedReferencesPerLink := HashMap.new;
+			
+      self.currentDefaultBehavior := defaultBehavior;
+				
+			self;	
+		};
+		
+		def disconnectReference(reference) {
+			def rv := super^disconnectReference(reference);
+			
+			def link := portOf: reference;
+			def connectedRefs := self.connectedReferencesPerLink.get(link);
+			if: (connectedRefs != nil) then: {
+			  connectedRefs.remove(reference);
+
+  			if: connectedRefs.isEmpty() then: {
+  			  self.notify: self.observerCatalog.linkStatus withArgs: [link, false]; 
+  			};
+			};
+			
+			rv;
+		};
+		
+		def reconnectReference(reference) {
+			def rv := super^reconnectReference(reference);
+			
+			def link := portOf: reference;
+			def connectedRefs := self.connectedReferencesPerLink.get(link);
+			if: (connectedRefs == nil) then: {
+			  connectedRefs := HashSet.new;
+			  self.connectedReferencesPerLink.put(link, connectedRefs);
+			};
+			
+			if: connectedRefs.isEmpty() then: {
+			  self.notify: self.observerCatalog.linkStatus withArgs: [link, true]; 
+			};
+			
+			connectedRefs.add(reference);
+			rv;
+		};
+	
+		def addReference(reference, isConnected := true) {
+		  def rv := super^addReference(reference, isConnected);
+		  
+			def link := portOf: reference;
+			def connectedRefs := self.connectedReferencesPerLink.get(link);
+			if: (connectedRefs == nil) then: {
+			  connectedRefs := HashSet.new;
+			  self.connectedReferencesPerLink.put(link, connectedRefs);
+			};
+			
+			if: connectedRefs.isEmpty() then: {
+			  self.notify: self.observerCatalog.linkStatus withArgs: [link, true]; 
+			};
+			
+			connectedRefs.add(reference);
+			rv;
+		};
+		
+		
+		// message handling
+		
+		def flushInbox() {
+		  debug("try to flush inbox");
+		  if: self.connected then: {
+		    debug("we are connected");
+		    def msg;
+		    { |break|
+		      while: { !(self.inbox.isEmpty()) } do: {  
+		        try: {
+		          msg := self.inbox.at(0);
+  		        self.sendByBehavior(msg);
+  		        self.inbox.remove_at(0);
+  		      } catch: TransmitException using: { |e|
+              break();
+  		      };
+  		    };
+		    }.escape();
+		  } else: {
+		    debug("we are not connected (noop)");
+		  };
+  		nil;
+		};
+		
+		def sendByBehavior(msg) {
+		  def behavior := getNetworkBehavior(msg, self.currentDefaultBehavior);
+		  debug("calling transmit on the behavior", (print: behavior));
+		  behavior.transmit(self.connectedReferences.toTable(), msg);
+		};
+		
+		def intercept(msg) {
+		  debug("intercepting: " + msg + ", enqueue in mailbox");
+		  self.inbox.add(msg);
+		  self.flushInbox();
+		};
+		
+		def getLinks() {
+		  self.connectedReferencesPerLink.toTable().map: { |kvpair| kvpair[1] };
+		};
+		
+		def toString() { "NetworkAwareReference: " + self.currentReference + " with: " + self.property };		
+		
+		def addLinkStatusChangedObserver(obs) {
+			self.addObserver: obs to: self.observerCatalog.linkStatus;
+		};
+		
+		def setDefaultBehavior(b) {
+			self.currentDefaultBehavior := b;
+		};
+		
+	};
+	
+};
+
+NetworkAwareReferenceMirrorModule;

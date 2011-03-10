@@ -1,0 +1,435 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/**
+ * This file defines a reference wrapper that can hold
+ * properties passed as isolate
+**/
+
+
+import /.at.collections.java.hashset;
+import /.at.collections.java.hashmap;
+import /.at.collections.java.vector;
+
+import /.experimental.lang.nars.referenceUtils;
+
+import /.at.lang.types;
+
+
+import /.at.support.logger;
+
+def logPrefix := "[PROPERTY REFS]";
+def logger := makeLogger(logPrefix, INFO);
+
+def setLogLevel(l) {
+  logger := makeLogger(logPrefix, l);
+};
+
+def debug(@args) {
+  logger(args.join(" ; "), DEBUG);
+};
+def warn(@args) {
+  logger(args.join(" ; "), WARNING);
+};
+
+
+// types
+deftype Property;
+deftype PropertyReference <: Reference;
+deftype PropertyReferenceWrapper <: PropertyReference;
+
+def propertyType := Property;
+def referenceType := PropertyReference;
+
+
+// the default where clause
+def defaultFilter := { |props| true };
+
+// default property is empty
+def defaultProperty := extend: propertyType with: {};
+
+// a property reference is an isolate 
+// containing the property object
+// and the object the reference points to
+def createPropertyReferenceWrapper(prop, obj) {
+	isolate: {
+		def property := prop;
+		def reference := obj;
+	} taggedAs: [PropertyReferenceWrapper];
+};
+
+def forwardAsyncMsgMirror() {
+	mirror: {	  
+		def receive(msg) {
+			self.base.super <+ msg;
+		};
+		
+		def invoke(slf, inv) {
+			// the only legal operation on references is '=='
+			if: (`(==) == inv.selector) then: {
+				def other := (inv.arguments)[1];
+				try: {
+					validatePropertyReference(other);
+					(self.base.super == (other.super)).and: {
+					  true;
+						//(propertyOf: self.base) == (propertyOf: other);
+					};
+				} catch: ReferenceException using: { |e|
+					warn(e.message + ": " + other);
+					false;
+				};
+			} else: {
+				super^invoke(slf, inv);
+			};
+		};
+
+	};
+};
+
+def createPropertyReference(propRefWrapper) {
+  def ref := propRefWrapper.reference;
+  def prop := propRefWrapper.property;
+	extend: ref with: {
+	  def property := prop;
+	} taggedAs: [referenceType] mirroredBy: forwardAsyncMsgMirror();
+};
+
+
+// accessors for the inner property reference
+def referenceOf(propRef) {
+	validatePropertyReference(propRef);
+	propRef.super;
+};
+
+def propertyOf(propRef) {
+	validatePropertyReference(propRef);
+	propRef.property;
+};
+
+def isPropertyReference(ref) {
+	is: ref taggedAs: referenceType;
+};
+
+def hasPropertyField(ref) {
+	try: {
+		(reflect: ref).respondsTo(`property);
+	} catch: { |e| 
+		// do nothing
+		debug("error when checking hasPropertyField: " + e.message); 
+		false;
+	};
+};
+
+def validatePropertyReference(any) {
+	if: (is: any taggedAs: referenceType) then: {
+		hasPropertyField(any);
+	} else: {
+		raise: XReferenceException.new("not a property reference: "+any);
+	};
+};
+
+// utils for properties
+def isProperty(obj) {
+  (reflect: obj).isRelatedTo(propertyType);
+};
+
+def does: propRefWrapper satisfy: whereClause {
+	try: {
+		whereClause(propRefWrapper.property);
+	} catch: { |e|
+		debug("error when satisfying where clause: " + e.message);
+		false;
+	};
+};
+
+def singleExecutionClosure(closure) {
+	def executed := false;
+	{ |@args| 
+		if: (!executed) then: {
+			executed := true;
+			closure.apply(args);
+		};
+	};
+};
+
+// copies of native functions
+def nativeWhenever: serviceType discovered: code {
+	whenever: serviceType discovered: code;
+};
+
+def nativeWhenever: serviceType on: port discovered: code {
+	whenever: serviceType on: port discovered: code;
+};
+
+def nativeWhen: serviceType discovered: code {
+	when: serviceType discovered: code;
+};
+
+def nativeWhen: serviceType on: port discovered: code {
+	when: serviceType on: port discovered: code;
+};
+
+def nativeExport: obj as: type {
+	export: obj as: type;
+};
+
+def nativeExport: obj as: type on: port {
+	export: obj as: type on: port;
+};
+
+// disconnection and reconnection
+
+def nativeWhen: ref disconnected: code {
+  when: ref disconnected: code;
+};
+
+def nativeWhenever: ref disconnected: code {
+  whenever: ref disconnected: code;
+};
+
+def nativeWhen: ref reconnected: code {
+  when: ref reconnected: code;
+};
+
+def nativeWhenever: ref reconnected: code {
+  whenever: ref reconnected: code;
+};
+
+def nativeWhen: ref takenOffline: code {
+  when: ref takenOffline: code;
+};
+
+
+def nativePortsOf: ref {
+  portsOf: ref;
+};
+
+def nativePortOf: ref {
+  portOf: ref;
+};
+
+def PropertyReferenceModule := object: {
+		
+	def PropertyReferencePublicModule := object: {
+		def enableWarnings(bool) { 
+		  if: bool then: {
+		    setLogLevel(WARNING); 
+		    warn("warnings enabled"); 
+		  } else: {
+		    setLogLevel(INFO);
+		  };
+		};
+		def enableDebug(bool) { 
+		  if: bool then: {
+		    setLogLevel(DEBUG); 
+		    warn("warnings enabled");
+		  } else: {
+		    setLogLevel(WARNING);
+		  };
+		};
+	};
+	
+	// public API
+	def publicFacade := object: {
+		
+		def referenceType := referenceType;
+		def propertyType := propertyType;
+		
+		def PropertyReference := referenceType;
+		def Property := propertyType;
+		
+		def referenceModule := PropertyReferencePublicModule;
+		
+		def property: closure taggedAs: typeTags {
+			extend: defaultProperty with: closure taggedAs: typeTags;
+		};
+		
+		def property: closure {
+			extend: defaultProperty with: closure;
+		};
+		
+		def propertyOf: propRef {
+			propertyOf(propRef);
+		};
+		
+		def referenceOf: propRef {
+			referenceOf(propRef);
+		};
+		
+		def portsOf: propRef {
+  	  debug("getting port of", (print: propRef), (print: (referenceOf: propRef)));
+  	  def ports := nativePortsOf: (referenceOf: propRef);
+  	  debug("got ports: " + ports);
+  	  ports;
+  	};
+  	
+  	def portOf: propRef {
+  	  debug("getting port of", (print: propRef), (print: (referenceOf: propRef)));
+  	  def ports := nativePortOf: (referenceOf: propRef);
+  	  debug("got ports: " + ports);
+  	  ports;
+  	};
+  	
+  	def linksOf: propRef { portsOf: propRef };
+  	def linkOf: propRef { portOf: propRef };
+	
+		def defaultFilter := defaultFilter;
+		def defaultProperty := defaultProperty;
+		
+		def singleExecutionClosure := &singleExecutionClosure;
+	
+		def whenever: serviceType on: ports where: condBlock discovered: code {
+			nativeWhenever: serviceType on: ports discovered: { |propRefWrapper|
+				if: (does: propRefWrapper satisfy: condBlock) then: {
+					code(createPropertyReference(propRefWrapper));
+				};
+			};
+		};
+	
+		def whenever: serviceType where: condBlock discovered: code {
+			nativeWhenever: serviceType discovered: { |propRefWrapper|
+				if: (does: propRefWrapper satisfy: condBlock) then: {
+					code(createPropertyReference(propRefWrapper));
+				};
+			};
+		};
+	
+		def whenever: serviceType on: ports discovered: code {
+			whenever: serviceType on: ports where: defaultFilter discovered: code;
+		};
+		
+		def whenever: serviceType discovered: code {
+			whenever: serviceType where: defaultFilter discovered: code;
+		};
+		
+		// when: variants:
+		
+		def when: serviceType on: ports where: condBlock discovered: code {
+			def cancel() {
+				handler.cancel();
+			};
+			
+			def wrapper := singleExecutionClosure(code);
+			
+			def handler := nativeWhenever: serviceType on: ports discovered: { |propRefWrapper|
+				if: (does: propRefWrapper satisfy: condBlock) then: {
+					wrapper(createPropertyReference(propRefWrapper));
+					cancel();
+				};
+			};
+			
+		};
+	
+		def when: serviceType where: condBlock discovered: code {
+			def cancel() {
+				handler.cancel();
+			};
+			
+			def wrapper := singleExecutionClosure(code);
+			
+			def handler := nativeWhenever: serviceType discovered: { |propRefWrapper|
+				if: (does: propRefWrapper satisfy: condBlock) then: {
+					wrapper(createPropertyReference(propRefWrapper));
+					cancel();
+				};
+			};
+		};
+	
+		def when: serviceType on: ports discovered: code {
+			when: serviceType on: ports where: defaultFilter discovered: code;
+		};
+		
+		def when: serviceType discovered: code {
+			when: serviceType where: defaultFilter discovered: code;
+		};
+		
+		
+		// allow exporting an object together with a set of properties
+		def export: serviceObject as: type with: prop {
+			if: (!isProperty(prop)) then: {
+				// prop should be a property, or an closure
+				prop := property: prop;
+			};
+			nativeExport: createPropertyReferenceWrapper(prop, serviceObject) as: type;
+		};
+		
+		def export: serviceObject as: type on: port with: prop {
+			if: (!isProperty(prop)) then: {
+				// prop should be a property, or an closure
+				prop := property: prop;
+			};
+			nativeExport: createPropertyReferenceWrapper(prop, serviceObject) as: type on: port;
+		};
+	
+	  // override export:as: to include a property object
+		def export: serviceObject as: type {
+			export: serviceObject as: type with: (property: {});
+		};
+		
+		def export: serviceObject as: type on: port {
+			export: serviceObject as: type on: port with: (property: {});
+		};
+		
+		// when:{dis|re}connected:
+		
+		def when: propRef disconnected: code {
+		  nativeWhen: (referenceOf: propRef) disconnected: {
+		    code();
+		  };
+		};
+		
+		def whenever: propRef disconnected: code {
+		  nativeWhenever: (referenceOf: propRef) disconnected: {
+		    code();
+		  };
+		};
+		
+		def when: propRef reconnected: code {
+		  nativeWhen: (referenceOf: propRef) reconnected: {
+		    code();
+		  };
+		};
+		
+		def whenever: propRef reconnected: code {
+		  nativeWhenever: (referenceOf: propRef) reconnected: {
+		    code();
+		  };
+		};
+		
+		def when: propRef takenOffline: code {
+		  nativeWhen: (referenceOf: propRef) takenOffline: {
+		    code();
+		  };
+		};
+			
+	}; // publicFacade
+
+	
+}; // PropertyReferenceModule
+	
+PropertyReferenceModule.publicFacade;
+

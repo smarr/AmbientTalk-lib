@@ -1,0 +1,96 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Author: Kevin Pinte
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+
+/**
+ * This file defines the module network-aware references
+ *
+**/
+
+
+import /.experimental.lang.nars.networkAwareReferenceMirror;
+
+import /.experimental.lang.nars.multiwayReferenceModule exclude mirrorModule;
+
+setLogPrefix("[NARS]");
+setMirrorModule(mirrorModule);
+
+deftype NetworkAwareReference <: MultiwayReference;
+
+
+def nativeLinksOf: farref {
+  linksOf: farref;
+};
+
+
+// far reference -> object that represents the multiway reference
+def narCreator := { |reference|
+  object: {} taggedAs: [multiwayReferenceType, NetworkAwareReference] mirroredBy: { |base| 
+		networkAwareReferenceMirror.new(base, reference)
+	};
+};
+
+setReferenceCreator(narCreator);
+
+
+def NetworkAwareReferenceModule := extend: MultiwayReferenceModule with: {
+  
+  import /.experimental.lang.nars.networkAwareReferenceMirror;
+
+	def publicFacade := extend: MultiwayReferenceModule.publicFacade with: {
+	  
+	  def referenceType := NetworkAwareReference;
+		
+    import /.experimental.lang.nars.networkBehaviors;
+				
+    import /.experimental.lang.nars.networkObjects;
+		
+		def linksOf: nar {
+		  (reflect: nar).getLinks();
+		};
+		
+		def portsOf: nar {
+		  (reflect: nar).getLinks();
+		};
+		
+		// additional events
+		// add method to listen for link status changes
+		def when: ref linkStatusChanged: code {
+			(reflect: ref).addLinkStatusChangedObserver(code);
+		};
+		
+		// additional operations
+		def setDefaultBehavior: b for: ref {
+			// first validate b!
+			(reflect: ref).setDefaultBehavior(b);
+		};
+
+	}; // public facade
+
+};
+
+self;
