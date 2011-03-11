@@ -13,9 +13,11 @@ network.online;
 deftype user;
 
 whenever:  user discovered: {|user|
+	
 	when: user<-getName() becomes: {|name|
 		instance.addUser(name, 19);
-	}
+	};
+	
 	when: user disconnected: {
 	
 	};

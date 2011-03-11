@@ -1,0 +1,9 @@
+network.online;
+
+def jos := object: {
+	def getName() { "JOOoooooooooooooooos "};
+};
+
+deftype user;
+
+export: jos as: user;
