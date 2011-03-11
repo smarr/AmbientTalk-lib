@@ -1,0 +1,26 @@
+def PApplet := jlobby.processing.core.PApplet;
+def TwitterWall := jlobby.edu.vub.at.twitterWall.processing.TwitterWall;
+
+PApplet.main(["--present", "edu.vub.at.twitterWall.processing.TwitterWall"]);
+def instance := TwitterWall.instance;
+
+
+import /.at.lang.futures;
+enableFutures(false);
+
+network.online;
+
+deftype user;
+
+whenever:  user discovered: {|user|
+	
+	when: user<-getName()@FutureMessage becomes: {|name|
+		instance.addUser(name, 19);
+	};
+	
+	when: user disconnected: {
+		instance.removeUser();
+	};
+}
+
+
