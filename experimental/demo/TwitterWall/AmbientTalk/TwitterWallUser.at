@@ -1,0 +1,49 @@
+network.online;
+
+deftype TwitterWallUser;
+deftype TwitterWallT;
+
+def timer := /.at.support.timer;
+
+def jos := object: {
+	def id := 0;
+	def getName() { "Jos"};
+	def setId(c) { id = c };
+	
+	timer.when: timer.seconds(5) elapsed: {
+
+		whenever: TwitterWallT discovered: { |wall|
+			wall<-receiveMessage(id, "This is a message from Jos!");
+	
+			timer.when: timer.seconds(6) elapsed: {
+				wall<-receiveMessage(id, "Helloooooo!");
+			};
+		};
+
+		};
+};
+
+export: jos as: TwitterWallUser;
+
+
+timer.when: timer.seconds(10) elapsed: {
+	def piet := object: {
+		def id := 0;
+		
+		def getName() { "Piet"};
+		def setId(c) { id = c };
+	};
+	
+	export: piet as: TwitterWallUser;
+};
+
+
+timer.when: timer.seconds(13) elapsed: {
+	def boris := object: {
+		def id := 0;
+		def getName() { "Boris"};
+		def setId(c) { id = c };
+	};
+	
+	export: boris as: TwitterWallUser;
+};

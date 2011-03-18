@@ -1,5 +1,7 @@
 package edu.vub.at.twitterWall.processing;
 
+import java.awt.Font;
+
 import processing.core.PApplet;
 
 public class Orb {
@@ -27,13 +29,14 @@ public class Orb {
 	public void display() {
 		parent.smooth();
 		parent.noStroke();
-		parent.fill(0, 102, 153, 51);
+		parent.fill(255, 255, 255, 255);
 		parent.ellipseMode(parent.CENTER);
 		//parent.ellipse(px, py, radius, radius);
 		parent.pushMatrix();
-			parent.color((255/5)*2, (255/5)*2, 0);
-			parent.fill(0, 102, 153, 51);
-			parent.translate(px-15, py);
+			parent.color(255, 255, 255);
+			//parent.fill(0, 102, 153, 51);
+			parent.fill(255, 255, 255, 255);
+			parent.translate(px, py);
 			parent.rotate(PApplet.atan2(parent.attractY-py,parent.attractX-px));
 			parent.text(text, 0, 0); 
 		parent.popMatrix(); 
