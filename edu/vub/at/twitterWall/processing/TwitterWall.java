@@ -125,11 +125,14 @@ public class TwitterWall extends PApplet implements TweetInterface {
 				msgs.removeElementAt(0);
 			}
 		}
+		System.out.println("msgs before: " + msgs);
 		msgs.add(message);
 		messages.put(id, msgs);
 		if (currentlyShownMessage == null) {
 			selectNewMessageToShow();
 		}
+		System.out.println("msgs: " + msgs);
+		System.out.println("messages: " + messages.get(id));
 	}
 	
 	public void addUser(String name, Integer id) {
