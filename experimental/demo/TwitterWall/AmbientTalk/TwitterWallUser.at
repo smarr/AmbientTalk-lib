@@ -33,7 +33,9 @@ def user := object: {
 def createUser(username) {
 	def theUser := user.new(username);
 	export: theUser as: TwitterWallUser;
-	jlobby.experimental.demo.TwitterWall.gui.UserGui.new(theUser);
+	jlobby.experimental.demo.tweetwall.gui.UserGui.new(theUser);
 };
 
-createUser("Jos");
+jlobby.experimental.demo.tweetwall.gui.UserNameChooser.new(self);
+
+
