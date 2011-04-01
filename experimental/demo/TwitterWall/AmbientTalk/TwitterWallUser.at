@@ -3,47 +3,37 @@ network.online;
 deftype TwitterWallUser;
 deftype TwitterWallT;
 
-def timer := /.at.support.timer;
-
-def jos := object: {
-	def id := 0;
-	def getName() { "Jos"};
-	def setId(c) { id = c };
+def user := object: {
+	def name := nil;
+	def id := nil;
+	def wall := nil;
 	
-	timer.when: timer.seconds(5) elapsed: {
-
-		whenever: TwitterWallT discovered: { |wall|
-			wall<-receiveMessage(id, "This is a message from Jos!");
-	
-			timer.when: timer.seconds(6) elapsed: {
-				wall<-receiveMessage(id, "Helloooooo!");
-			};
-		};
-
-		};
-};
-
-export: jos as: TwitterWallUser;
-
-
-timer.when: timer.seconds(10) elapsed: {
-	def piet := object: {
-		def id := 0;
-		
-		def getName() { "Piet"};
-		def setId(c) { id = c };
+	def init(theName) {
+		name := theName;
 	};
 	
-	export: piet as: TwitterWallUser;
-};
-
-
-timer.when: timer.seconds(13) elapsed: {
-	def boris := object: {
-		def id := 0;
-		def getName() { "Boris"};
-		def setId(c) { id = c };
+	def setId(newId) {
+		id := newId;
 	};
 	
-	export: boris as: TwitterWallUser;
+	def sendMessage(message) {
+		if: (nil != wall) then: {
+			wall<-receiveMessage(id, message);
+		};
+	};
+
+	whenever: TwitterWallT discovered: { |twall|
+		wall := twall;
+		whenever: wall disconnected: {
+			wall := nil;
+		};
+	};
 };
+
+def createUser(username) {
+	def theUser := user.new(username);
+	export: theUser as: TwitterWallUser;
+	jlobby.experimental.demo.TwitterWall.gui.UserGui.new(theUser);
+};
+
+createUser("Jos");

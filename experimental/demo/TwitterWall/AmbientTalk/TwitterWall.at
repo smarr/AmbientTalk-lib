@@ -19,7 +19,7 @@ whenever:  user discovered: {|user|
 	};
 	
 	when: user disconnected: {
-	
+		instance.removeUser(name);
 	};
 }
 
