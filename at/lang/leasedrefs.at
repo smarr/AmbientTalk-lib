@@ -600,11 +600,18 @@ def LeasingModule := object: {
 			    };
 				  when: clientLease expired: {
 						 def unsentMsg := (retract: clientLease);
-				     self.assertEquals( 1, unsentMsg.length);
-						 self.assertEquals( `foo, unsentMsg[1].selector);
-						 unsentMsg := (retract: clientLease);
-						 self.assertEquals( 0, unsentMsg.length);
-						 res.resolve(`ok); 
+						 // FIXME. tvcutsem: are we sure that the foo() message should still be in the outbox?
+                         // now that retract actually removes matching letters from the outbox, it appears that this test
+                         // sometimes works, and sometimes unsentMsg.length == 0!
+                         try: {
+				           self.assertEquals( 1, unsentMsg.length);
+						   self.assertEquals( `foo, unsentMsg[1].selector);
+						   unsentMsg := (retract: clientLease);
+						   self.assertEquals( 0, unsentMsg.length);
+						   res.resolve(`ok);
+						 } catch: /.at.lang.types.Exception using: { |e|
+						   res.ruin(e);
+						 } 
 				  };
 		    };
 			  fut;
