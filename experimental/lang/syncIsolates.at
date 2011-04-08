@@ -460,7 +460,8 @@ def SyncIsolateModule := object: {
 													self.assertTrue(nil == notifyDisconnected);
 													publishingActor<-disconnect();
 													timer.when: timer.seconds(5) elapsedWithFuture: {
-														self.assertTrue((notifyDisconnected.field == "iso1").or: { notifyDisconnected.field == "iso2" }, "Did not detect disconnection!");
+														system.println("notifyDisconnected.field: " + notifyDisconnected.field);
+														self.assertTrue((notifyDisconnected.field == "invoked iso1").or: { notifyDisconnected.field == "invoked iso2" }, "Did not detect disconnection!");
 														
 														/*publishingActor<-changeIso1();
 														timer.when: timer.seconds(5) elapsedWithFuture: {
@@ -469,7 +470,7 @@ def SyncIsolateModule := object: {
 															self.assertTrue(nil == notifyReconnected);
 															publishingActor<-reconnect();
 															timer.when: timer.seconds(5) elapsedWithFuture: {
-																self.assertTrue((notifyReconnected.field == "iso1").or: { notifyReconnected.field == "iso2" }, "Did not detect reconnection!");				
+																self.assertTrue((notifyReconnected.field == "invoked iso1").or: { notifyReconnected.field == "invoked iso2" }, "Did not detect reconnection!");				
 																												
 																publishingActor<-changeIso1();
 																timer.when: timer.seconds(5) elapsedWithFuture: {
