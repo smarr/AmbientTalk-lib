@@ -10,17 +10,35 @@ enableFutures(false);
 
 network.online;
 
-deftype user;
+deftype TwitterWallUser;
+def count := 0;
+def users := /.at.collections.hashmap.HashMap.new();
+def ids := /.at.collections.hashmap.HashMap.new();
 
-whenever:  user discovered: {|user|
+whenever: TwitterWallUser discovered: {|user|
+	count := count + 1;
 	
-	when: user<-getName() becomes: {|name|
-		instance.addUser(name, 19);
+	when: user<-getName()@FutureMessage becomes: {|name|
+		when: user<-setId(count) becomes: { |ack|
+			users.put(user, count);
+			ids.put(count, user);
+			instance.addUser(name, count);
+		};
 	};
 	
 	when: user disconnected: {
-		instance.removeUser(name);
+		instance.removeUser(users.get(user));
 	};
-}
+};
 
+deftype TwitterWallT;
 
+def remoteWallInterface := object: {
+	def receiveMessage(id, message) {
+		if: (nil != ids.get(id)) then: {
+			instance.addMessage(id, message);
+		};
+	};
+};
+
+export: remoteWallInterface as: TwitterWallT;
