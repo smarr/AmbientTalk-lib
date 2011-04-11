@@ -51,7 +51,8 @@
    def long(nbr) { PrimitiveJavaConversion.intToLong(nbr) };
    def short(nbr) { PrimitiveJavaConversion.intToShort(nbr) };
    def float(frc) { PrimitiveJavaConversion.doubleToFloat(frc) };
-   def byte(nbr) { PrimitiveJavaConversion.intToByte(nbr) };  
+   def byte(nbr) { PrimitiveJavaConversion.intToByte(nbr) };
+   def getBytes(txt) { PrimitiveJavaConversion.getBytes(txt);}; 
 
 	//Arithmetic operations on longs
 	def Long.+(other) {

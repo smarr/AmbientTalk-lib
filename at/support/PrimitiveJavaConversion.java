@@ -39,7 +39,15 @@ import java.lang.reflect.Method;
  * @author tvcutsem
  */
 public class PrimitiveJavaConversion {
-
+    
+	/**
+	 * Auxiliary conversion function to symbiotically create bytes from text.
+	 * @param text an AmbientTalk text to be converted
+	 * @return the byte array representation of the text
+	 */
+	public static byte[] getBytes(String text) {
+		return text.getBytes();
+	}
 	/**
 	 * Auxiliary conversion function to symbiotically create bytes from numbers.
 	 * @param number an AmbientTalk number to be converted
