@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab, 2006 - 2010
- * Authors: PROG Ambient Group
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: SOFT Ambient Group
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -114,7 +114,7 @@ def ambientTupleSpace := object: {
 	 def hashMap;
 	 def value := object:{
 	   def tuple; def tableTsIds;
-	   def init(t) {tuple := t; tableTsIds := []};
+	   def init(t, tblTsIds := []) {tuple := t; tableTsIds := tblTsIds};
 	   def addTs(tsId) { 
 		   if: (! tableTsIds.contains(tsId)) then: {
 		     tableTsIds := tableTsIds + [tsId];
@@ -132,8 +132,8 @@ def ambientTupleSpace := object: {
 			clo(value.tuple, value.tableTsIds);
 		};
 	 };
-	 def add(tuple){
-		 hashMap.put(tuple.getTupleId, value.new(tuple));
+	 def add(tuple, tableTsId := []){
+		 hashMap.put(tuple.getTupleId, value.new(tuple, tableTsId));
 	 };
 	 
 	 def contains(tupleId){
@@ -160,7 +160,7 @@ def ambientTupleSpace := object: {
 			 };
 		 };
 		 if: found then: {
-			hashMap.remove(toRemove);
+			hashMap.remove(toRemove);	 
 		 } else: {
 			 nil;
 		 };
@@ -169,9 +169,10 @@ def ambientTupleSpace := object: {
 	 def addTs(tuple, tsId){
 		 def value := hashMap.get(tuple.getTupleId);
 		 if: (nil != value ) then:{
-			value.addTs(tsId);
+		   value.addTs(tsId);
 		 } else:{ //this shouldn't happen!	
-			  error("trying to add tsId to a tuple not present in the tuple space");
+ 		   system.println("warning: trying to add tsId to a tuple not present in the tuple space" + tuple.getTupleId);
+           add(tuple, [tsId]);
 		 };
 	 };
 	 
@@ -202,7 +203,7 @@ def varNames(template) {
 };
 
 def makeTupleSpace(descriptor := nil){
-  def tupleSpaceId :=  /.at.support.util.RandomNumberGenerator().nextInt(); 	
+    def tupleSpaceId :=  /.at.support.util.RandomNumberGenerator().nextInt(); 	
 	def localTS := Vector.new(); //contains local tuples
 	// contains tuples which needs to be transmitted to the ambient
 	def ambientTS := ambientTupleSpace.new(); 
@@ -244,80 +245,95 @@ def makeTupleSpace(descriptor := nil){
 		};
 	};
  	
-  def removeListener(l) {
+    def removeListener(l) {
 	  localTSListeners.remove(l); 
 	};
 	  
 	def notifyListeners(tuple){
-		localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) }; 
+      localTSListeners.each: { |l| l<-notifyTupleInserted(tuple) }; 
 	};
 	
 	def removeFromTS(tuple){
-		localTS.removeAll: {|t| t.getTupleId == tuple.getTupleId};
-		ambientTS.remove(tuple.getTupleId);
+	  localTS.removeAll: {|t| (t.getTupleId == tuple.getTupleId)};
+	  ambientTS.remove(tuple.getTupleId);
 	};
 	
 	//method starting up the tuple propagation from discovery.
 	def moveTuples(localTs, remoteTupleSpaceId, remoteRefTs, remoteDescriptor){
-		def toSend := [];
-		def remoteTs := delayedSerializationRef: remoteRefTs;
+	  def [toSend, toRemove] := [[], []];
+	  def remoteTs := delayedSerializationRef: remoteRefTs;
 		// add ts to seenTS vector so that it can be
 	  // notified if I add a new tuple to the ambient.
 		//to think: should we override info if remoteTupleSpaceId is already in the seenTS?
-		if: (!seenTS.containsKey(remoteTupleSpaceId)) then: {	
+	  if: (!seenTS.containsKey(remoteTupleSpaceId)) then: {	
 	   	seenTS.put(remoteTupleSpaceId, [remoteTs, remoteDescriptor]);
 	  };
 	  // fill toSend 
 	  ambientTS.each: { |tuple, sentTupleSpaces| 
-		  if: (sendTuple(tuple, localTs, remoteDescriptor)) then: { toSend := toSend + [tuple] };
-		};
-		if: (toSend.length > 0) then: {	
-			toSend.each: {|tuple| ambientTS.addTs(tuple, remoteTupleSpaceId) };
-   		remoteTs<-receiveTuples(toSend);
+	      def [isDead, isInScope] := sendTuple(tuple, localTs, remoteDescriptor);
+		  if: isInScope then: { toSend := toSend + [tuple] };
+		  if: isDead then: { toRemove := toRemove + [tuple] };
 	  };
+	  if: (toSend.length > 0) then: {	
+		toSend.each: {|tuple| ambientTS.addTs(tuple, remoteTupleSpaceId) };
+   		remoteTs<-receiveTuples(toSend, tupleSpaceId);
+	  };
+	  if: (toRemove.length > 0) then: {
+	    toRemove.each: { |tuple| removeFromTS(tuple) };
+	  };	
   };
 	
 	//totam propagation protocol (receiver side)
 	def receiveTuple(tuple, ts){
-		if: tuple.decideEnter(ts) then: {
+	  if: tuple.decideEnter(ts) then: {
     	tuple.doAction(ts);
     	tuple := tuple.changeTupleContent(ts);
-			if: tuple.decideStore(ts) then: { 
-				ts.out(tuple); 
-			}; 
-		};
-		tuple;
-  };
+		if: tuple.decideStore(ts) then: { 
+			ts.out(tuple); 
+		}; 
+	  };
+	  tuple;
+    };
 	
 	// totam propagation protocol (sender side)
+    // returns [boolean, boolean] indicating whether the tuple needs to be removed from the tuple space, and whether the tuple is in scope or not.
 	def sendTuple(tuple, ts, otherDescriptor){
-		// toThink: this method could be called twice via inject and discovery when the ts discover.
-		// this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
-		if: tuple.decideDie(ts) then: {
-      removeFromTS(tuple);
-			false;
+	  // toThink: this method could be called twice via inject and discovery when the ts discover.
+	  // this is not so bad, because a receiving ts checks if it already triggered propagation protocol for this tuple via tupleId.
+	  if: tuple.decideDie(ts) then: {
+		[true, false];
 	  } else:{
-		  //only call inScope method if the tuple space had a descriptor
-		  if: (descriptor != nil) then: { tuple.inScope(descriptor, otherDescriptor)}
-		  else: {true};
+		//only call inScope method if the tuple space had a descriptor
+		if: (descriptor != nil) then: { 
+		  [false, tuple.inScope(descriptor, otherDescriptor)]
+		} else: {
+		  [false, true]
+		};
 	  };
 	};
   
 	//method starting up the propagation protocol from inject after 1st hop.
-	def sendTupleToAmbient(tuple){
-		if: !(ambientTS.contains( tuple.getTupleId)) then: {
-			// adding the tuple to the ambient for next sync.
-			// do not store antituples.
-		  if: (!tuple.getTupleId.isAntituple) then: { 
-			  ambientTS.add(tuple);
-			};
-		  //send tuple to the totam network if sender protocol applies.
-		  seenTS.each: { |tsId, tsRef, tsDescriptor| 
-			  if: (sendTuple(tuple, localInterface, tsDescriptor)) then: { 
-				  ambientTS.addTs(tuple, tsId);
-				  tsRef<-receiveTuples([tuple]) 
-				};
-		  };
+	def sendTupleToAmbient(tuple, hasTupleChanged, priorSenderTsId){
+	  if: !(ambientTS.contains( tuple.getTupleId)) then: {
+		 // OPTIMIZATION: we do not apply sending protocol to antituples, because they died at every hop.
+		 if: (!tuple.getTupleId.isAntituple) then: { 
+		   // adding the tuple to the ambient for next sync.
+		   ambientTS.add(tuple);
+		   seenTS.each: { |tsId, tsRef, tsDescriptor| 
+		     def [isDead, isInScope] := sendTuple(tuple, localInterface, tsDescriptor);
+		     if: (isInScope.and:{ !isDead}) then: { 
+		 	   ambientTS.addTs(tuple, tsId);
+		 	   if: ((tsId == priorSenderTsId).and:{ !hasTupleChanged}) then: { 
+		 	   // if the tuple has not changed: do not send back a tuple to the TS which just sent it to this TS.
+			   } else: {
+			     tsRef<-receiveTuples([tuple], tupleSpaceId); 
+			   };
+		     } else: {
+		       // either the tuple not isInScope or isDead.
+		       if: isDead then: { removeFromTS(tuple)};
+		     };
+		   };
+	     }; //end-if-isAntituple
 	  };
 	};
 	
@@ -343,12 +359,12 @@ def makeTupleSpace(descriptor := nil){
 					def propagate := true;
 					//only propagate the antituple as long as the tuple is still alive if it was leased, 
 					// otherwise it would have died as well in other nodes.
-					if: ((is: ambientTuple taggedAs: LeasedTuple).and:{ambientTuple.decideDie(localInterface)}) then: { propagate := false};
+					if: ((is: ambientTuple taggedAs: LeasedTuple).and:{ambientTuple.decideDie(localInterface)}) then: {propagate := false};
 				  if: propagate then:{
 					  value.getTs.each:{ |tsId| 
 						  def value := seenTS.get(tsId);
 						  def tsRef := value[1];
-						  tsRef<-receiveTuples([makeAntiTuple(ambientTuple)])
+						  tsRef<-receiveTuples([makeAntiTuple(ambientTuple)], tupleSpaceId)
 						};
 				  };
 			  };
@@ -381,14 +397,14 @@ def makeTupleSpace(descriptor := nil){
     if: (nil != toReturn) then:{
       def tupleId := toReturn.getTupleId;
 	    if: (tupleId.isRemote(tupleSpaceId)) then: {
-			  when: removeRemoteTuple(toReturn) becomes: { |removed|
+			when: removeRemoteTuple(toReturn) becomes: { |removed|
 			   if: removed then:{
 				   localTS.remove(toReturn);
 				   resRV.resolve(toReturn);
 			   } else: { resRV.resolve(nil)};
 		    } catch: /.at.lang.types.Exception using: { |e|
 			    resRV.resolve(nil);
-			  };
+			};
       } else: { // found and not remote, end
 	      localTS.remove(toReturn);
 	      resRV.resolve(toReturn);
@@ -403,21 +419,24 @@ def makeTupleSpace(descriptor := nil){
   def remoteInterface := object: {
 		// iterates over all ambient tuples of the other ts 
 		// and triggers the propagation protocol			
-		def receiveTuples(tuples){
-		  tuples.each: { |tuple|
-			  // totam propagation protocol
-		    tuple := receiveTuple(tuple, localInterface);
-				sendTupleToAmbient(tuple);
-		  };
+	def receiveTuples(tuples, senderTsId){
+	  tuples.each: { |tuple|
+	    // totam propagation protocol
+	    def newTuple := receiveTuple(tuple, localInterface);  
+	    // check whether the tuple has changed to optimize tuple sending. 
+	    def hasTupleChanged := (tuple.getTupleId != newTuple.getTupleId); 
+	    // propagate tuple to required connected tuple spaces.   
+		sendTupleToAmbient(tuple, hasTupleChanged, senderTsId);
+	  };
   	};
 	  //interchanges descriptors (piggypacking the tupleSpaceId)
-	  def getTupleSpaceInfo() { [tupleSpaceId, descriptor] };
+	def getTupleSpaceInfo() { [tupleSpaceId, descriptor] };
     //added provisional when tupleSpaceId is not interchanged with descriptor.
     def getTupleSpaceId() { tupleSpaceId};
     //def atomicRemove := &atomicRemovePrivate;
-		def atomicRemove(tupleId, antituple := true) {
-	   atomicRemovePrivate(tupleId,antituple);
-		};
+	def atomicRemove(tupleId, antituple := true) {
+	  atomicRemovePrivate(tupleId,antituple);
+	};
 	  
   };	
 
@@ -425,9 +444,9 @@ def makeTupleSpace(descriptor := nil){
 	def localInterface := object: {
 		// add a tuple to the local ts
 	  def out(tuple, timeout :=  timerModule.ZERO){
-			if: (doesTupleHasVariables(tuple)) then:{
+	 	  if: (doesTupleHasVariables(tuple)) then:{
 				error("trying to insert a template into the tuple space");
-			} else: {
+		  } else: {
 	      if: (timeout > timerModule.ZERO) then: {
 			    timerModule.when: time elapsed: {
 				    localTS.remove(tuple);
@@ -441,7 +460,7 @@ def makeTupleSpace(descriptor := nil){
 					  //set tupleId because it was inserted by a local out.
 					  tupleId.tupleSpaceId := tupleSpaceId; 
 					};
-			    localTS.add(tuple);
+			      localTS.add(tuple);
 				  notifyListeners(tuple);
 			  };
 			};
@@ -485,13 +504,26 @@ def makeTupleSpace(descriptor := nil){
 				// set the tuple id
 				(tuple.getTupleId()).tupleSpaceId := tupleSpaceId; 
 			  //send to local tuple space if necessary.
-			  if: (sendTuple(tuple, self, descriptor)) then: { receiveTuple(tuple, self) };
+              // Optimization so that the tuple in scope does not need to hop to a proximate node and hop back to be received.
+ 			  def [isDead, isInScope] := sendTuple(tuple, self, descriptor);
+			  if: (isInScope.and:{!isDead}) then: { 
+			    receiveTuple(tuple, self) 
+			  } else: { // either the tuple is not in scope or is dead.
+			    if: isDead then: { removeFromTS(tuple) };
+			  };
 			  // send to the ambient.
-			  sendTupleToAmbient(tuple);
+			  sendTupleToAmbient(tuple, false, tupleSpaceId);
 		    //return a publication object to be able to cancel the injection.
 		    object:{
-			    def retract(){atomicRemovePrivate(tuple.getTupleId)};
-		      def cancel(){removeFromTS(tuple)};
+			  def retract(){ 
+			    // retracting the injection makes the tuple be withdrawn. 
+			    // This implies canceling the injection, and removing the tuple from the network (by means of an antituple( 
+			    atomicRemovePrivate(tuple.getTupleId)
+			  };
+		      def cancel(){
+		        //canceling an injection stops the propagation in the network from this node
+ 				ambientTS.remove(tuple.getTupleId);
+			  };
 		    };
 		  };
 		};
@@ -563,7 +595,7 @@ def makeTupleSpace(descriptor := nil){
 											  };
 										  };
 									  } else:{  // the matching tuple is local 
-									    localTS.remove(tuple);	
+ 									    localTS.remove(tuple);	
 									    notifyClosure(tuple); 
 								    };
 								  } else: { //listener for read operation
@@ -689,7 +721,7 @@ def TupleId := isolate: {
 	def isAntituple(){antituple};
 	def isInTupleSpace(){ 0 != tupleSpaceId};
 	def isRemote(aTsId){ tupleSpaceId != aTsId };
-  def getTupleSpaceId(){tupleSpaceId};
+    def getTupleSpaceId(){tupleSpaceId};
 	def getTupleId() {tupleId};
 	def ==(aTupleId){ 
 		(tupleId == aTupleId.getTupleId).and: {tupleSpaceId == aTupleId.getTupleSpaceId};//.and:{ antituple == aTupleId.isAntituple()}
@@ -702,8 +734,8 @@ def TupleId := isolate: {
 
 def makeTuple(tupleId, @fields) {
 	isolate: { |tupleId, fields|
-		//getTupleId shouldn't be part of the public interface, kept for unit testing
-		def getTupleId() { tupleId };
+	  //getTupleId shouldn't be part of the public interface, kept for unit testing
+	  def getTupleId() { tupleId };
 	  def length(){ fields.length };
 	  def getField(n) { fields[n] };
 	  def getFields() {fields};
@@ -877,20 +909,21 @@ def leasingPropagationProtocol(){
 
 def antiTuplePropagationProtocol() {
 	//one hop tuple which further propagates the atomic removal of the original tuple
-	isolate:{
+	isolate: {
 	  def die := false;
 	  //by design antituples generated by the system do follow the tuple everywhere it was sent.
 	  //TODO: keeping the inScope/decideDie as the original will make it follow the tuple as well.
     def inScope(senderDescriptor, receiverDescriptor) {false};
     def decideDie(ts){ die };
     //custom protocol for antituple.
-    def decideEnter(ts){true};
+    def decideEnter(ts){!die};
     def doAction(ts){
 	    ts.atomicRemove(self.getTupleId());
-      die := true;
+        die := true;
     };
     def decideStore(ts) {false};
     def changeTupleContent(ts){self};
+  
   }	printAs: { |base|
 	  if: (nil == base.super ) then: {
 		  "<antiTuplePropagationProtocol>"
@@ -917,6 +950,7 @@ def makeAntiTuple(tuple){
 	};
 	antiTuple;
 };
+//TotamModule.TotamTest.runTest
 
 // the module object of this file
 def TotamModule := object: {
@@ -982,10 +1016,10 @@ def TotamModule := object: {
 			def tuple := myTS.rdp( aTemplate );
 			self.assertNotEquals(nil, tuple);
 			self.assertEquals( tuple.getField(1), "elisa");
-      self.assertEquals( tuple.getField(2), 3);
-      self.assertEquals( tuple.getField(3), false);
-      //read a template with two variables.
-      def template2Vars := tuple: [var: `x, 3, var:`x];
+            self.assertEquals( tuple.getField(2), 3);
+            self.assertEquals( tuple.getField(3), false);
+            //read a template with two variables.
+            def template2Vars := tuple: [var: `x, 3, var:`x];
 			tuple := myTS.rdp( template2Vars );
 			self.assertEquals(nil, tuple, "here");
 			myTS.out( tuple:[false, 3, false]);
