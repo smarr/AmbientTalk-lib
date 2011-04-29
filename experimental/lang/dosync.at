@@ -1,0 +1,62 @@
+import /.at.lang.futures;
+enableFutures(true);
+
+def rootSync := object: {
+	def dosync(script) {
+		script(self);
+	};
+};
+
+def syncObject: block {
+	extend: rootSync() with: block;
+};
+
+def on: object dosync: block with: table {
+		//def newBlockStatements := script: block carrying: table;
+		def newBlock := script: block carrying: table;
+		//block := eval: newBlockStatements in: block.context.lexicalScope;
+		object<-dosync(newBlock);
+};
+
+def on: object dosync: block {
+	 on: object dosync: block with: [];
+};
+
+
+def DoSyncModule := object: {
+		
+	def DoSyncTest := extend: /.at.unit.test.UnitTest.new("DoSync", false) with: {
+	
+		def stack := syncObject: {
+			def vector := /.at.collections.vector.Vector.new();
+			def pop() {
+				vector.pop();
+			};
+			def push(element){
+				system.println(element);
+				vector.add(element);
+			};
+		};	
+	
+		def testAsyncDosync() {
+			def [fut,res] := makeFuture();
+			def resolve() {
+					res.resolve(`ok);
+			};
+			def a := actor: { |stack, res| 
+				import /.at.support.dosync;
+				def fut := on: stack dosync: { |stack|
+					stack.push(1);
+					stack.push(2);
+				};
+				when: fut becomes: { |resloved|			
+					res<-resolve(`ok);
+				};	
+			};
+			fut;
+		};
+	};
+};
+
+
+self;

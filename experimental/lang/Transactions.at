@@ -1,0 +1,359 @@
+def NormalVector := /.at.collections.vector.Vector;
+import /.experimental.lang.dosync;
+
+def ACTIVE := 0;
+def COMMIT  := 1;
+deftype DESCRIPTOR;
+
+def makeEntery := object:  { 
+	def ref;
+	
+	def new_value;
+	def old_value;
+	
+	def new_version;
+	def old_version;
+	
+	def init(Tvar,val,ver) {
+		ref := Tvar;
+		new_value := val;
+		new_version := ver;
+		old_value := val;
+		old_version := ver;
+	};
+	
+};
+
+def CAS(object, variable, expected, newvalue) {
+	on: object dosync: { |object|
+		def field := (reflect: object).grabField(variable);
+		def value := field.readField();
+		if: (value == expected) then: {field.writeField(newvalue)};
+		value;
+	} with: [ `newvalue, `variable, `expected ];
+};
+
+def descriptor() { 
+	object: {
+		def state := ACTIVE;
+		def log := NormalVector.new();
+		
+		def Write(Tvar, value) {
+			def old_value := self.Read(Tvar);
+			def index := log.find:{|var| var.ref == Tvar};
+			def entry := 	log.at(index);
+			entry.new_value := value;
+			entry.new_version := entry.new_version + 1;
+		};
+		
+		def Read(Tvar) {
+			def index := log.find:{|var| var.ref == Tvar};
+			if: nil != index then: {
+				log.at(index).new_value;
+			} else: {
+				def values := on: Tvar dosync: { |Tvar|
+					[Tvar.getValue, Tvar.getVersion];
+				};
+				when: values becomes: { |values|
+					log.add(makeEntery.new(Tvar, values[1], values[2]));
+					values[1];
+				};
+			};
+		};
+		
+		def acquire(var) {
+			def expected := var.old_version;
+			def new_value := self;
+			def seen := CAS(var.ref,`descriptor,var.old_version,self);
+			when: seen becomes: { |seen|
+				(seen == expected).or: { seen == self}
+			};
+		};
+		
+		def release(var) {
+			if: (state == COMMIT) then: {
+				CAS(var.ref,`descriptor,self,var.new_version);
+			} else: {
+				CAS(var.ref,`descriptor,self,var.old_version);
+			};
+		};
+			
+		def Commit() {
+			//acquire all the locks
+			def aquire_table := log.asTable.map:{ |var| acquire(var) };
+			when: (group: aquire_table) becomes: { |values|
+				def result := values.inject: true into: { |result, val| result.and: {val} };
+				if: result then: {
+					state := COMMIT;
+					def commit_table := log.asTable.map: { |var| var.ref<-commit(var.new_value, var.new_version); };
+					when: (group: commit_table) becomes: { |values|
+						def release_table := log.asTable.map:{ |var| release(var) };
+						when: (group: release_table) becomes: { |values|
+								result;
+						};
+					};	
+				} else: {
+						def release_table := log.asTable.map:{ |var| release(var) };
+						when: (group: release_table) becomes: { |values|
+								def touchedVariables := log.asTable;
+								log.clear();
+								def futures := touchedVariables.map: { |var| Read(var.ref) };
+								when: (group: futures) becomes: { |values|
+									result;
+								};
+						};
+				};
+			};
+		};
+	} taggedAs: [DESCRIPTOR];
+};
+
+def Tvar(value) { 
+	syncObject: {
+		def descriptor := 0;
+		
+		def getVersion() {
+			if: (is: descriptor taggedAs: DESCRIPTOR) then: {
+				//already owned !!
+				-1;
+			} else: {
+				descriptor;
+			}; 
+		};
+		
+		def commit(newValue, version) {
+			value := newValue;
+			descriptor := version;
+		}; 
+		def getValue() {
+			value;
+		};
+	};
+};
+
+def makeWriter(descriptor) { 
+	{ |Tvar, value| descriptor.Write(Tvar,value); };
+};
+
+def makeReader(descriptor) {
+	{ |Tvar| descriptor.Read(Tvar);	};
+};
+
+def makeCommit(descriptor) {
+	{ descriptor.Commit;};
+};
+
+def atomic(block, variables) {
+	def descriptor := descriptor();
+	def writer := makeWriter(descriptor);
+	def reader := makeReader(descriptor);
+	def commit := makeCommit(descriptor);
+	
+	def newBlockStatements := `{ |WriteTvar, ReadTvar, Commit|  #@(block.method.bodyExpression.statements)};
+	block := eval: newBlockStatements in: block.context.lexicalScope;	
+	def asyncReads := variables.map: { |var| descriptor.Read(var) };	
+	when: (group: asyncReads) becomes: { |values|		
+		block(writer, reader, commit);
+	};
+};
+
+def TransactionsModule := object: {
+	def atomic: block with: vars { atomic(block,vars) };
+	def Tvar := &Tvar;
+	
+	def do: body while: future {
+		body();
+		future()<-ifTrue: {
+			do: body while: future;
+		};
+	};
+	
+	def dofut: waitFor while: future {
+		when: waitFor() becomes: { |val|
+			future()<-ifTrue: {
+				dofut: waitFor while: future;
+			};
+		};
+	};
+
+	def TransactionsTest := extend: /.at.unit.test.UnitTest.new("TransactionsTest") with: {
+		
+		def testAsyncAtomicWritesRestart() {
+			def [fut,res] := makeFuture();
+			
+			def actorA := actor: {
+				def test_var :=  /.experimental.lang.Transactions.Tvar(7);
+				def getVar() {
+					test_var;
+				};
+			};
+			
+			def actorB := actor: { |actorA, res|
+				import /.at.lang.futures;
+				import /.experimental.lang.Transactions;
+				enableFutures(true);
+				when: actorA<-getVar() becomes: { |test_var|
+						def times := 0;
+						def fut := atomic: {
+							dofut: {
+								times := times + 1;
+								WriteTvar(test_var, 10);
+								test_var<-commit(10, 10);
+							} while: {
+								Commit()<-not();
+							};
+						} with: [test_var];
+						
+						when: fut becomes: { |val|
+							res<-resolve(times);
+						};
+				};
+			};
+			
+			when: fut becomes: { |times| 
+				 self.assertEquals(2,times, "Wrong times of restarts!!");
+				 when: (actorA<-getVar()<-getValue()) becomes: { |value|
+							self.assertEquals(10,value, "Write Commit failed in Restarts!!");
+				};
+			};
+		};
+	
+		def testAsyncAtomicWrite() {
+			def [fut,res] := makeFuture();
+			
+			def actorA := actor: {
+				def test_var :=  /.experimental.lang.Transactions.Tvar(7);
+				def getVar() {
+					test_var;
+				};
+			};
+			
+			def actorB := actor: { |actorA, res|
+				import /.at.lang.futures;
+				import /.experimental.lang.Transactions;
+				enableFutures(true);
+				when: actorA<-getVar() becomes: { |test_var|
+						
+						def fut := atomic: {
+							do: { WriteTvar(test_var, 10) } while: {
+								Commit()<-not();
+							};
+						} with: [test_var];
+						
+						when: fut becomes: { |val|
+							res<-resolve(`ok);
+						};
+				};
+			};
+			
+			when: fut becomes: { |val| 
+				 when: (actorA<-getVar()<-getValue()) becomes: { |value|
+							self.assertEquals(10,value, "Write Commit failed !!");
+				};
+			};
+		};
+		
+		def testAsyncThenSyncReadTvars() {
+				def test_var :=  Tvar(7);
+				test_var.descriptor := 15;
+				def test_descriptor := descriptor();
+				//first read is async
+				def val := test_descriptor.Read(test_var);
+				when: val becomes: {|val|
+						self.assertEquals(7, val);
+						//second is sync
+						self.assertEquals(7, test_descriptor.Read(test_var));
+						def index := test_descriptor.log.find:{|var| var.ref == test_var};
+						self.assertEquals(1,index,"Read not recorded !");
+						def entery := test_descriptor.log.at(index);
+						self.assertEquals(7,entery.new_value);
+						self.assertEquals(7,entery.old_value);
+						self.assertEquals(15,entery.new_version);
+						self.assertEquals(15,entery.old_version);
+				}
+		};
+
+		def testAsyncReadTvars() {
+			def test_var :=  Tvar(7);
+			test_var.descriptor := 15;
+			def test_descriptor := descriptor();
+			def val := test_descriptor.Read(test_var);
+			when: val becomes: {|val|
+				self.assertEquals(7, val);		
+				def index := test_descriptor.log.find:{|var| var.ref == test_var};
+				self.assertEquals(1,index,"Read not recorded !");
+				def entery := test_descriptor.log.at(index);
+				self.assertEquals(7,entery.new_value);
+				self.assertEquals(7,entery.old_value);
+				self.assertEquals(15,entery.new_version);
+				self.assertEquals(15,entery.old_version);
+			}
+		};
+		
+		
+		def testAsyncCASOk() {
+			def testObject := syncObject: {
+				def x := 5;
+			};
+			def y := CAS(testObject,`x,5,10);
+			when: y becomes: { |y|
+				self.assertEquals(5,y,"Return value by replace is wrong");
+				self.assertEquals(10,testObject.x,"Setting value by means of replace is wrong");
+			}
+		};
+		
+		
+		def testAsyncAcquireTrue() {
+			def test_var :=  Tvar(7);
+			def test_descriptor := descriptor();
+			when: test_descriptor.Read(test_var) becomes: {|dont_care|
+				def ok := test_descriptor.acquire(test_descriptor.log.at(1));
+				when: ok becomes: { |ok|
+						self.assertEquals(test_descriptor,test_var.descriptor,"Aquire didn't set the descriptor !!");
+						self.assertEquals(true,ok,"Aquire wasn't true on an unlocked varibale !!");
+				};
+			};
+		};
+		
+		def testAsyncAcquireTrueAlreadyOwned() {
+				def test_var :=  Tvar(7);
+				def test_descriptor := descriptor();
+				when: test_descriptor.Read(test_var) becomes: {|dont_care|
+					test_var.descriptor := test_descriptor;
+					def ok := test_descriptor.acquire(test_descriptor.log.at(1));
+					when: ok becomes: { |ok|
+						self.assertEquals(true,ok,"Aquire wasn't true on an already locked varibale by the same descriptor !!");
+					};
+				};
+			};
+		
+		def testAsyncAcquireVersionFalse() {
+			def test_var :=  Tvar(7);
+			def test_descriptor := descriptor();
+			when: test_descriptor.Read(test_var) becomes: {|dont_care|
+				def ok := test_descriptor.acquire(test_descriptor.log.at(1));
+				test_var.descriptor := 1;
+				when: ok becomes: { |ok|
+					self.assertEquals(false,ok,"Aquire was true on an changed varibale !!");
+				};
+			};
+		};
+		
+		def testAsyncAcquireLocked() {
+			def test_var :=  Tvar(7);
+			def test_descriptor := descriptor();
+			def test_descriptor2 := descriptor();
+			when: test_descriptor.Read(test_var) becomes: {|dont_care|
+				def ok := test_descriptor.acquire(test_descriptor.log.at(1));
+				test_descriptor2.state := COMMIT;
+				test_var.descriptor := test_descriptor2;
+				when: ok becomes: { |ok|
+					self.assertEquals(false,ok,"Aquire was true on a locked varibale !!");
+				};
+			};
+		};
+	};
+};
+
+
+
