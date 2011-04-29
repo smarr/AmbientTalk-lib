@@ -1,0 +1,212 @@
+ // START OF CODE SNIPPET 1   
+def makeISeeFlockrs(aFlockr) {
+  def localInterface := 
+    extend: /.urbiflock.makeApplication("I See Flockrs",icon,aFlockr) with:{  
+      def publishedPictures := HashMap.new(); // pictureId - pictureData
+      def photoFlock := aFlockr.getFlock("NearbyFlock");
+      def connectedPhotoApps := HashMap.new(); // flockrRef - applicationRef.
+      def photoFlockListener;
+      def messageListener;
+      def pictureListener;
+      deftype iSeeFlockrsT;  // type used to export the application
+      def appSubscription; // stores our discovery subscription with Urbiflock
+      def picSubscriptions := HashMap.new(); // pictureId - tupleForPicture
+      def gui;
+      
+      //...
+ // START OF CODE SNIPPET 2    
+     def start(urb) {
+       super^start(urb); // always perform the 'default behaviour'
+       urb.createAndStartActivity(jlobby.iSeeFlockrs.iSeeFlockrs, self);
+       self.export(iSeeFlockrsT);
+       appSubscription := self.registerApplicationListener(iSeeFlockrsT, object: {
+         def notifyApplicationJoined(flockr, profile, app) { //TODO: Discuss why profile is there.
+           if: (nil != connectedPhotoApps.get(flockr)) then: {
+             // reconnection - reinstall the picture listener
+             reinstallPictureListener();
+           } else:{
+             connectedPhotoApps.put(flockr, app);
+           };
+         };
+         def notifyApplicationLeft(flockr, profile, app) {
+           gui.removePictures(flockr);// remove locally the pics of the remote flockr.
+         };
+       }); 
+	 //... // continues next snippet
+ // START OF CODE SNIPPET 3 
+     def makeFlockListener() { object: {
+       def notifyFlockrAdded(flockr){
+		 //we reinstall picture listener in case a flockr comes back to the flock
+         reinstallPictureListener();
+       };
+       def notifyFlockrRemoved(flockr){
+         gui.removePictures(flockr);// remove locally the pics of the remote flockr.
+       };
+     }};  
+     photoFlockListener := photoFlock.addListener(makeFlockListener());
+  // START OF CODE SNIPPET 4     
+     def makeMessageListener(){ object: {
+       def receiveMessage(flockr, content) {
+         gui.showToast(flockr, content);
+       };
+       def messageRetracted(flockr, content) {
+          // not necessary to do anything because we didn't store the message, just show it in a toast.
+       };
+     }};
+     deftype iSeeFlockrsMessageT;   
+     messageListener := photoFlock.receiveFromFlock(makeMessageListener(), iSeeFlockrsMessageT); 
+   // START OF CODE SNIPPET 
+     // add listener for receiving pictures from the flock pictures
+     def makePictureListener() { object:{
+        def receiveMessage(flockr, content) {
+          gui.addImageFromBytes(flockr, content);
+        };
+        def messageRetracted(flockr, content) {
+          gui.removePictures(flockr);
+        };
+     }};
+     deftype iSeeFlockrsPictureT;
+     pictureListener := photoFlock.receiveFromFlock(messagePictureListener(), iSeeFlockrsPictureT);
+   };
+  // START OF CODE SNIPPET 6   - to be removed
+   def stop() {
+     super^stop(); // always perform the 'default behaviour'
+     if: (appSubscription != nil) then: {
+        appSubscription.cancel();  appSubscription := nil; 
+        messageListener.cancel(); messageListener := nil;
+        pictureListener.cancel(); pictureListener := nil;
+        photoFlockListener.cancel(); photoFlockListener := nil;
+        connectedPhotoApps := nil;
+        photoFlock := nil;
+        publishedPictures := nil;
+     };
+   };
+   // START OF CODE SNIPPET 7   
+   def broadcastMessageToPhotoFlock(message) {
+    photoFlock.sendToCurrent(message, iSeeFlockrsMessageT);  
+   };
+   
+   // START OF CODE 
+   def broadcastPictureToPhotoFlock(pictureId, picture) {
+     def tuple := makeTupleForFlock(picture, iSeeFlockrsPictureT); 
+     // creates TOTAM.tuple: [iSeeFlockrsPictureT, photoFlock.getOwner, photoFlock.getFlockName(), picture] withPropagationProtocol: resizingProtocol;
+     def sub := photoFlock.sendTupleToAll(tuple, resizingOneHopProtocol);   
+     // store the subcription object to be able to retract pictures
+     picSubscriptions.put(pictureId, sub); 
+   };
+   
+   def oneHopProtocol := propagationProtocol: {
+       def hops := 0;
+	   def inScope(senderTs, senderDes, receiverDes) {
+	    // super call makes sure that inScope checks the device is part of the photoFlock. 
+	    (super^inScope(senderTs, senderDes, receiverDes)).and: {hops <2}
+	   };
+	   def changeTupleContent(ts) { hops := hops + 1; self};
+     }; 
+         
+    def resizingOneHopProtocol := extend: oneHopProtocol with: {
+       def passTuple(senderTs) {
+		   // aFlockr should get gotten by local ts.
+           def localFlockr := self.getLocalFlockr();
+		   def wifi := localFlockr.getProperty(`network.wifi);
+           if: !wifi then: {
+            def resized := gui.scaleDown(self.getContent());
+            makeTupleForFlock(resized, iSeeFlockrsPictureT); 
+           } else: {
+             self;
+           };
+       };
+     };
+     
+ }; // end-extend
+ // START OF CODE SNIPPET 
+  //called by the gui when a user mark a picture
+  def publishPicture(pictureId, newPicture) {
+     //def pictureId := /.at.support.util.RandomNumberGenerator().nextInt(); 
+     broadcastPictureToPhotoFlock(pictureId, newPicture);
+  };
+  //called by the gui when a user unmark a picture
+  def unpublishPicture(pictureId) {
+    def publication := picSubscriptions.remove(pictureId);
+    if: (publication != nil) then:{
+      // this will send an antituple to remove the pictures from the flockrs that receive it.
+       publication.retract(); 
+    }; 
+  };
+  // called by the gui when an end-user changes the photo flock
+  def setPhotoFlock(newFlock) {
+    photoFlockListener.cancel();
+	photoFlock := newFlock;
+	//reinstall the listeners for the new flock
+	reinstallPictureListener();
+	photoFlockListener := photoFlock.addListener(makeFlockListener());
+	messageListener.cancel();
+	messageListener := photoFlock.receiveFromFlock(makeMessageListener(), iSeeFlockrsMessageT);
+	// change the user property so that inScope() sends now pictures to the newFlock.
+    publishedPictures.each: { |pictureId, picture|
+      broadcastPictureToPhotoFlock(pictureId, picture);
+    };
+    //def eventSource := aFlockr.getPropertyMap().getProperty(`iSeeFlockrPhotoFlock);
+    //eventSource.update(newFlock); 
+  };
+  
+   //helper methods
+   def reinstallPictureListener(){
+       pictureListener.cancel();
+       pictureListener := photoFlock.receiveFromFlock( makePictureListener(), iSeeFlockrsPictureT);
+   };
+  //return localInterface
+  localInterface;
+};	//end-make
+
+// END OF ISEE FLOCKRS
+// ---------------------------
+// CHANGES ON FLOCK TO SUPPORT FLOCK INTERACTIONS IN THE ABSTRACTION
+// ---------------------------
+// operations in flocks for communication
+def makeFlock(theName, theProximity, owner) {
+//other ops...
+def totam := owner.getTotam(); 
+  
+def sendToAll(msg, applTypeTag := GuanotesMessageT) {
+  def tuple := makeTupleForFlock(msg); 
+  //flockProtocol is similar than the one in guanotes: 
+  // inScope checks the devices is part of the flock + it installs a listener to be called when tuple dies by retraction.
+  tuple.extendPropagationStrategy(flockProtocol); 
+  totam.inject: tuple; // returns an object with cancel() and retract() to unexport and remove the tuple respectively.
+};
+
+def sendToCurrent(msg, applTypeTag := GuanotesMessageT) {
+  def tuple := makeTupleForFlock(msg); 
+  // currentContentsProtocol is similar than the one in guanotes: 
+  // propagation where inScope checks the devices is part of the flock + it is only send to flockrs NOW connected (i.e. not stored in the ambient TS)
+  tuple.extendPropagationStrategy(currentContentsProtocol); 
+  totam.inject: tuple; // returns an object with cancel() and retract() to unexport and remove the tuple respectively.
+}; 
+
+// additional helper functions to send tuples with custom protocols
+def sendTupleToCurrent( tuple, propagationProtocol) {
+   //set the default protocol + add the new one in the tuple & inject it.
+  tuple.extendPropagationStrategy(currentContentsProtocol);
+  tuple.extendPropagationStrategy(propagationProtocol);
+  totam.inject: tuple;
+};
+
+// additional helper functions to send more complex data with custom protocols
+def sendTupleToAll( tuple, propagationProtocol) {
+  //set the default protocol + add the new one in the tuple & inject it.
+  tuple.extendPropagationStrategy(flockProtocol);
+  tuple.extendPropagationStrategy(propagationProtocol);
+  totam.inject: tuple;
+};
+
+def receiveFromFlock(listener, applTypeTag := GuanotesMessageT) {
+  def template := aTuple: [applTypeTag, `owner, theName, `content];
+  totam.whenever: template read: { 
+    listener.receiveMessage(owner, content);
+  }
+};
+};
+
+
+  
