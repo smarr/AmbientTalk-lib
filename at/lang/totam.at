@@ -37,7 +37,7 @@ enableFutures(false);
 import /.at.lang.exceptions;
 deftype TotamTuple;
 deftype LeasedTuple <: TotamTuple;
-deftype TotamTupleSpace;
+deftype TotamTupleSpaceT;
 def timerModule := /.at.support.timer;
 
 //helper function to construct mirrors tagged as Isolates.
@@ -202,6 +202,11 @@ def varNames(template) {
  	table;
 };
 
+// given a TS near or far reference, returns its tupleSpaceId (an integer)
+def tsidOf(ts) {
+	/.at.support.util.getAnnotationOfType(ts, TotamTupleSpaceT).tupleSpaceId;
+};
+
 def makeTupleSpace(descriptor := nil){
     def tupleSpaceId :=  /.at.support.util.RandomNumberGenerator().nextInt(); 	
 	def localTS := Vector.new(); //contains local tuples
@@ -259,7 +264,7 @@ def makeTupleSpace(descriptor := nil){
 	};
 	
 	//method starting up the tuple propagation from discovery.
-	def moveTuples(localTs, remoteTupleSpaceId, remoteRefTs, remoteDescriptor){
+	def moveTupleInAmbientTS(localTs, remoteTupleSpaceId, remoteRefTs, remoteDescriptor){
 	  def [toSend, toRemove] := [[], []];
 	  def remoteTs := delayedSerializationRef: remoteRefTs;
 		// add ts to seenTS vector so that it can be
@@ -275,8 +280,11 @@ def makeTupleSpace(descriptor := nil){
 		  if: isDead then: { toRemove := toRemove + [tuple] };
 	  };
 	  if: (toSend.length > 0) then: {	
-		toSend.each: {|tuple| ambientTS.addTs(tuple, remoteTupleSpaceId) };
-   		remoteTs<-receiveTuples(toSend, tupleSpaceId);
+		toSend.each: { |tuple| 
+		  ambientTS.addTs(tuple, remoteTupleSpaceId);
+		  moveTuple(remoteTs, tuple, tupleSpaceId)
+		};
+   		//remoteTs<-receiveTuples(toSend, tupleSpaceId);
 	  };
 	  if: (toRemove.length > 0) then: {
 	    toRemove.each: { |tuple| removeFromTS(tuple) };
@@ -287,15 +295,15 @@ def makeTupleSpace(descriptor := nil){
 	def receiveTuple(tuple, ts){
 	  if: tuple.decideEnter(ts) then: {
     	tuple.doAction(ts);
-    	tuple := tuple.changeTupleContent(ts);
+		tuple := tuple.receiveTuple();  
 		if: tuple.decideStore(ts) then: { 
 			ts.out(tuple); 
-		}; 
+		};
+		tuple; 
 	  };
-	  tuple;
     };
 	
-	// totam propagation protocol (sender side)
+	// totam propagation protocol (sender side - part 1 of 2)
     // returns [boolean, boolean] indicating whether the tuple needs to be removed from the tuple space, and whether the tuple is in scope or not.
 	def sendTuple(tuple, ts, otherDescriptor){
 	  // toThink: this method could be called twice via inject and discovery when the ts discover.
@@ -305,13 +313,21 @@ def makeTupleSpace(descriptor := nil){
 	  } else:{
 		//only call inScope method if the tuple space had a descriptor
 		if: (descriptor != nil) then: { 
-		  [false, tuple.inScope(descriptor, otherDescriptor)]
+		  [false, tuple.inScope(descriptor, otherDescriptor)];
 		} else: {
 		  [false, true]
 		};
 	  };
 	};
-  
+	
+	// totam propagation protocol (sender side - part 2 of 2)
+	def moveTuple(receiverTs, tuple, senderTupleSpaceId) {
+		// replace the tuple content if necessary.
+        // note that doesn't modify the propagation strategy.
+		tuple := tuple.sendTuple();
+	    receiverTs<-receiveTuples([tuple], senderTupleSpaceId);
+	};
+	  
 	//method starting up the propagation protocol from inject after 1st hop.
 	def sendTupleToAmbient(tuple, hasTupleChanged, priorSenderTsId){
 	  if: !(ambientTS.contains( tuple.getTupleId)) then: {
@@ -326,7 +342,8 @@ def makeTupleSpace(descriptor := nil){
 		 	   if: ((tsId == priorSenderTsId).and:{ !hasTupleChanged}) then: { 
 		 	   // if the tuple has not changed: do not send back a tuple to the TS which just sent it to this TS.
 			   } else: {
-			     tsRef<-receiveTuples([tuple], tupleSpaceId); 
+			     moveTuple(tsRef, tuple, tupleSpaceId);
+			    // tsRef<-receiveTuples([tuple], tupleSpaceId); 
 			   };
 		     } else: {
 		       // either the tuple not isInScope or isDead.
@@ -422,23 +439,23 @@ def makeTupleSpace(descriptor := nil){
 	def receiveTuples(tuples, senderTsId){
 	  tuples.each: { |tuple|
 	    // totam propagation protocol
-	    def newTuple := receiveTuple(tuple, localInterface);  
-	    // check whether the tuple has changed to optimize tuple sending. 
-	    def hasTupleChanged := (tuple.getTupleId != newTuple.getTupleId); 
-	    // propagate tuple to required connected tuple spaces.   
-		sendTupleToAmbient(tuple, hasTupleChanged, senderTsId);
+	    def newTuple := receiveTuple(tuple, localInterface); 
+	    if: (newTuple != nil) then: { 
+	      // check whether the tuple has changed to optimize tuple sending. 
+	      def hasTupleChanged := (tuple.getTupleId != newTuple.getTupleId); 
+	      // propagate tuple to required connected tuple spaces.   
+		  sendTupleToAmbient(tuple, hasTupleChanged, senderTsId);
+		};
 	  };
   	};
-	  //interchanges descriptors (piggypacking the tupleSpaceId)
-	def getTupleSpaceInfo() { [tupleSpaceId, descriptor] };
-    //added provisional when tupleSpaceId is not interchanged with descriptor.
-    def getTupleSpaceId() { tupleSpaceId};
+	 
+	def getDescriptor() { descriptor };
     //def atomicRemove := &atomicRemovePrivate;
 	def atomicRemove(tupleId, antituple := true) {
 	  atomicRemovePrivate(tupleId,antituple);
 	};
 	  
-  };	
+  } taggedAs: [ extend: TotamTupleSpaceT with: { |tupleSpaceId| }];	
 
 	// public interface
 	def localInterface := object: {
@@ -647,24 +664,16 @@ def makeTupleSpace(descriptor := nil){
 		
 		// notifies the discovery of a TS	
 		// and starts the propagation protocol (sender side)
-		def notifyTSDiscovered(ts, descriptor := nil, tsId := 0){ 
+		def notifyTSDiscovered(ts, descriptor := nil){ 
 			// get the descriptor if it is not known.
 		  if: (descriptor == nil) then: {
-			  when: ts<-getTupleSpaceInfo()@FutureMessage becomes: { |info|
-				  moveTuples(self, info[1], ts, info[2]); // info = [tupleSpaceId, descriptor]
+			  when: ts<-getDescriptor()@FutureMessage becomes: { |descriptor|
+				  moveTupleInAmbientTS(self, tsidOf(ts), ts, descriptor); 
 			  };
-			} else: {
-				 // ask the remoteTupleSpaceId if necessarymo
-				 // TODO PIGGYBACK the tuplespaceId in receiveTuples.
-				if: (tsId == 0 ) then:{
-				  when: ts<-getTupleSpaceId()@FutureMessage becomes: { |tupleSpaceId|
-						moveTuples(self, tupleSpaceId, ts, descriptor);
-					};
-				} else:{
-					moveTuples(self, tsId, ts, descriptor);
-				};
-			};
-    };
+		  } else: {
+			  moveTupleInAmbientTS(self, tsidOf(ts), ts, descriptor);
+		  };
+    	};
     // get remote interface so that it can be 
     // exported to the network
 	  def getRemoteInterface(){
@@ -674,15 +683,15 @@ def makeTupleSpace(descriptor := nil){
 		// tuples spaces which appear in the network
 		// using AT service discovery
     def goOnline(){
-	    def p := export: remoteInterface as: TotamTupleSpace;
-	    def s := whenever: TotamTupleSpace discovered: { |remoteTs|
+	    def p := export: remoteInterface as: TotamTupleSpaceT;
+	    def s := whenever: TotamTupleSpaceT discovered: { |remoteTs|
 		    def remoteTsInfo := seenTS.getTsInfo(remoteTs); 
 		    // returns [tupleSpaceId, remoteTs, descriptor]
 			  if: (nil == remoteTsInfo) then:{ 
 			    // seen this tuple space for first time, we need descriptor and tupleSpaceId
 			    notifyTSDiscovered(remoteTs);
 			  } else:{ //re-discovering a tuple space already seen.
-				  notifyTSDiscovered(remoteTs, remoteTsInfo[3], remoteTsInfo[1]);
+				  notifyTSDiscovered(remoteTs, remoteTsInfo[3]);
 			  };
 			};
 			network.online();
@@ -692,7 +701,7 @@ def makeTupleSpace(descriptor := nil){
     };
     // added for debugging/unittest purposes
     def dumpContents() {
-			def lts := [];
+		def lts := [];
 	    localTS.each: {|tuple| lts := lts + [tuple] };
 	    [tupleSpaceId, lts, seenTS.asTable()];
     };
@@ -821,19 +830,22 @@ def doesTupleHasVariables(tuple){
 // always in scope and store itself in every hop.
 def defaultPropagationProtocol(){
   isolate: {
-		// TOTAM specific operations
+		// sender-side operations
 		// called in every tuple before transmiting the tuple at the sending side !
 		def inScope(senderDescriptor, receiverDescriptor){ true };
-		// if true -> tuple gets unexported and deleted from local TS.
+		// if true -> tuple gets unexported and deleted from local local tuple space.
 		def decideDie(ts){false};
-		// TOTA-inherited operations
+		// before transmitting the tuple, its content/protocol may be altered.
+		def sendTuple(){self};
+		
+		// receiver-side operation (most of them inherited from TOTA)
 		// called in every tuple at arrival at receiver side.
 		def decideEnter(ts) { true };
-		// specifies operations on the local TS
+		// specifies operations to perform on the local tuple space
 		def doAction(ts){};
-		// create a new tuple resulting from operations on the tuple itself
-		def changeTupleContent(ts){self};
-		// if true -> note gets added to local TS
+		// before receiving a tuple, its content/protocol may be altered.
+		def receiveTuple(){self};
+		// if true -> the tuple gets added to local TS
 		def decideStore(ts) {true};
 	} printAs:{ |base|
 	   "<defaultPropagationProtocol>";
@@ -847,9 +859,10 @@ def noPropagationProtocol(){
 	isolate: { 
 		def inScope(senderDescriptor, receiverDescriptor){false};
 		def decideDie(ts){true};
+		def sendTuple(){self};
 		def decideEnter(ts) { false };
 		def doAction(ts){};
-		def changeTupleContent(ts){self};
+		def receiveTuple(){self};
 		def decideStore(ts) {false};
 	}	printAs:{ |base|
 		"<noPropagationProtocol>";
@@ -873,14 +886,27 @@ def leasingPropagationProtocol(){
 		def startSubscription(){
 	 	  if: ( timeout > ZERO) then: {
 			  timerSubscription := /.at.support.timer.when: timeout elapsed: {
-				  timeout := ZERO;
-				  expired := true;
+				  whenExpired();
 			  };
 		  };
 		};				
 		def whenExpired(){
+		    timeout := ZERO;
 			expired := true;
 		};
+		
+	/*	def sendTuple(){
+		  if: (!expired) then: {
+			timeout := timerSubscription.getTimeRemaining();
+			timerSubscription := nil;
+		  };
+		  self;
+		};
+		
+		def receiveTuple() {
+		  startSubscription();
+		  self;
+		};*/
 		//overrides default decideDie to take into account
 		def decideDie(ts){ self.expired };
 		//do not enter if you are expired.
@@ -915,6 +941,7 @@ def antiTuplePropagationProtocol() {
 	  //TODO: keeping the inScope/decideDie as the original will make it follow the tuple as well.
     def inScope(senderDescriptor, receiverDescriptor) {false};
     def decideDie(ts){ die };
+    def sendTuple(){self};
     //custom protocol for antituple.
     def decideEnter(ts){!die};
     def doAction(ts){
@@ -922,7 +949,7 @@ def antiTuplePropagationProtocol() {
         die := true;
     };
     def decideStore(ts) {false};
-    def changeTupleContent(ts){self};
+    def receiveTuple(){self};
   
   }	printAs: { |base|
 	  if: (nil == base.super ) then: {
@@ -981,6 +1008,13 @@ def TotamModule := object: {
 		   mirrorIsolate: { def print() {"<userDefinedPropagationProtocol>"}}	
 	  );
 	};
+	
+	def extendPropagationProtocol: protocol with: closure {
+		extend: protocol with: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: (
+			mirrorIsolate: { def print() {"<userDefinedPropagationProtocol>"}}	
+		);
+	};
+	
 	// returns an object with all meta-level operations for tuple propagation, 
 	// implementing them using default semantics:
 	// tuple which is always in scope and store itself in every hop.
@@ -1093,7 +1127,7 @@ def TotamModule := object: {
 			def descriptor := isolate: { def team := "red"; };
 			def [fut,res] := makeFuture();
 			def myTS := makeTupleSpace(descriptor);
-			def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+			def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 				
 			myTS.when: helloTemplate read: { 
 				self.assertEquals(123, x);	
@@ -1101,12 +1135,12 @@ def TotamModule := object: {
 				a<-resolve(res); 
 			};
 	
-			def a := actor: { |TotamTupleSpace|
+			def a := actor: { |TotamTupleSpaceT|
 				def totamModule := /.at.lang.totam;
 				def descriptor := isolate: { def team := "blue"; };	
 				def aTS := totamModule.makeTupleSpace(descriptor);
 			  // listen for people in the environment
-				def s := whenever: TotamTupleSpace discovered: { |ts|
+				def s := whenever: TotamTupleSpaceT discovered: { |ts|
 					aTS.notifyTSDiscovered(ts);
 				};
 				// inject a tuple to neighbours
@@ -1183,7 +1217,7 @@ def TotamModule := object: {
 			def descriptor := isolate: { def team := "blue"; };
 			def [fut,res] := makeFuture();
 			def myTS := makeTupleSpace(descriptor);
-			def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+			def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 				
 			myTS.when: helloTemplate read: {
 				self.assertEquals(123, x);	
@@ -1191,18 +1225,21 @@ def TotamModule := object: {
 				a<-resolve(res);
 			};
 	
-			def a := actor: { |TotamTupleSpace|
+			def a := actor: { |TotamTupleSpaceT|
 				def totamModule := /.at.lang.totam;
 			  def descriptor := isolate: { def team := "blue"; };
 			  def aTS := totamModule.makeTupleSpace(descriptor);
 			  // listen for neighbour ts
-				def s := whenever: TotamTupleSpace discovered: { |ts|
+				def s := whenever: TotamTupleSpaceT discovered: { |ts|
 					aTS.notifyTSDiscovered(ts);
 				};
 				def oneHopProtocol := totamModule.propagationProtocol: {
 					 def hops := 0;
 					 def inScope(senderD, receiverD) {hops <2};
-					 def changeTupleContent(ts) { hops := hops + 1; self};
+					 def receiveTuple() { 
+					   hops := hops + 1; 
+					   self;
+					 };
 				};
 				def oneHopTuple := totamModule.tuple: [123, "hallo"] withPropagationProtocol: oneHopProtocol;
 				aTS.inject: oneHopTuple;
@@ -1224,17 +1261,17 @@ def TotamModule := object: {
 			def descriptor := isolate: { def team := "blue"; };
 			def [fut,res] := makeFuture();
 			def myTS := makeTupleSpace(descriptor);
-			def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+			def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 			myTS.when: helloTemplate read: {
 				self.assertEquals(123, x);	
 				s.cancel();
 				a<-resolve(res);
 			};
-			def a := actor: { |TotamTupleSpace, blueProtocol|
+			def a := actor: { |TotamTupleSpaceT, blueProtocol|
 				def totamModule := /.at.lang.totam;
 				def descriptor := isolate: { def team := "red"; };
 				def aTS := totamModule.makeTupleSpace(descriptor);
-				def s := whenever: TotamTupleSpace discovered: { |ts|
+				def s := whenever: TotamTupleSpaceT discovered: { |ts|
 						aTS.notifyTSDiscovered(ts);
 				};
 				def ablueTuple := totamModule.tuple: [123, "hallo"] withPropagationProtocol: blueProtocol;
@@ -1256,7 +1293,7 @@ def TotamModule := object: {
 			def [fut,res] := makeFuture();
 			def [fut2,res2] := makeFuture();
 			def myTS := makeTupleSpace(descriptor);
-			def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+			def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
       // install listener to read a hello tuple.
 			myTS.when: helloTemplate read: {
 				self.assertEquals(123, x);
@@ -1265,12 +1302,12 @@ def TotamModule := object: {
 				s.cancel();
 			  a<-resolve(res);
 			};
-			def b := actor: { |TotamTupleSpace, res2|
+			def b := actor: { |TotamTupleSpaceT, res2|
 				def totamModule := /.at.lang.totam;
 				def descriptor := isolate: { def team := "blue"; };
 				def myTS := totamModule.makeTupleSpace(descriptor);
 				def goOnline(){
-				  def sub := export: myTS.getRemoteInterface as: TotamTupleSpace;
+				  def sub := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 				  /.at.support.timer.when: 2.seconds() elapsed:{
 					   sub.cancel();
 					   //try to read the tuple sent by a) which should have expired by now!
@@ -1280,11 +1317,11 @@ def TotamModule := object: {
 				  };
 				};
 			};
-			def a := actor: { |TotamTupleSpace, b|
+			def a := actor: { |TotamTupleSpaceT, b|
 				def totamModule := /.at.lang.totam;			
 				def descriptor := isolate: { def team := "red"; };
 				def aTS := totamModule.makeTupleSpace(descriptor);
-				def s := whenever: TotamTupleSpace discovered: { |ts|
+				def s := whenever: TotamTupleSpaceT discovered: { |ts|
 					aTS.notifyTSDiscovered(ts);
 				};
 				def blueProtocol := totamModule.propagationProtocol: {
@@ -1333,10 +1370,10 @@ def TotamModule := object: {
 				self.fail("ruined 2nd synchronization future");
 			};
 			def anotherPlayer := actor: {  |syncRes, sync2Res|
-			  deftype TotamTupleSpace;
+			  deftype TotamTupleSpaceT;
 				def totamModule := /.at.lang.totam;	
 				def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
-        def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+        def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
         def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
         //the bomb is present in the tuple space
         /.at.support.timer.when: 1.seconds() elapsed:{ 
@@ -1360,10 +1397,10 @@ def TotamModule := object: {
 			def player := actor: { |originator, anotherPlayer, test|
 				import /.at.lang.futures;
 				enableFutures(false);
-				deftype TotamTupleSpace;
+				deftype TotamTupleSpaceT;
 				def totamModule := /.at.lang.totam;	
 			  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
-        def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+        def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
         def consumeBomb(){
 	        def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
 			 	  myTS.when: template read: {
@@ -1386,10 +1423,10 @@ def TotamModule := object: {
 			def [syncFut,syncRes] := makeMultiFuture(3);
 			def [sync2Fut,sync2Res] := makeMultiFuture(2);
 			def myTS := makeTupleSpace(isolate: { def team := "blue" });
-			def s := whenever: TotamTupleSpace discovered: { |ts|
+			def s := whenever: TotamTupleSpaceT discovered: { |ts|
 				myTS.notifyTSDiscovered(ts);
 			};
-			def se := export: myTS.getRemoteInterface as: TotamTupleSpace;
+			def se := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 		  myTS.inject: makeABlueTuple timeout: 8.seconds();
 			def originator := myTS;
 			whenEach: syncFut becomes:{ |val|
@@ -1423,10 +1460,10 @@ def TotamModule := object: {
 				};	
 			} ruined: { self.fail("ruined 2nd synchronization future") };
 			
-			def anotherPlayer := actor: {  |syncRes, sync2Res, TotamTupleSpace|
+			def anotherPlayer := actor: {  |syncRes, sync2Res, TotamTupleSpaceT|
 				def totamModule := /.at.lang.totam;
 				def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
-	      def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+	      def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 	      //the bomb is present in the tuple space
 	      def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
 	      /.at.support.timer.when: 1.seconds() elapsed:{ 
@@ -1446,21 +1483,21 @@ def TotamModule := object: {
 				  };
 			  };		
 		  }; //end-anotherPlayer	  
-			def player := actor: { |originator, anotherPlayer, test, syncRes, sync2Res, TotamTupleSpace|
+			def player := actor: { |originator, anotherPlayer, test, syncRes, sync2Res, TotamTupleSpaceT|
 				import /.at.lang.futures;
 				enableFutures(false);
 				def totamModule :=/.at.lang.totam;
 			  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
-	      def s := export: myTS.getRemoteInterface() as: TotamTupleSpace;
-	      def se := whenever: TotamTupleSpace discovered: { |ts|
+	      def s := export: myTS.getRemoteInterface() as: TotamTupleSpaceT;
+	      def se := whenever: TotamTupleSpaceT discovered: { |ts|
 					myTS.notifyTSDiscovered(ts);
 				};
 				def yetAnotherPlayer(){ 
 					actor: {
-					  deftype TotamTupleSpace;
+					  deftype TotamTupleSpaceT;
 						def totamModule :=/.at.lang.totam;
 					  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
-		        def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+		        def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
 						def read(res, firstRead := true) {
 							def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
 						  def tuple :=  myTS.rdp(template);
@@ -1542,10 +1579,10 @@ def TotamModule := object: {
 				self.fail("ruined 2nd synchronization future");
 			};
 			def anotherPlayer := actor: {  |syncRes, sync2Res|
-			  deftype TotamTupleSpace;
+			  deftype TotamTupleSpaceT;
 				def totamModule := /.at.lang.totam;	
 				def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
-        def s := export: myTS.getRemoteInterface as: TotamTupleSpace;
+        def s := export: myTS.getRemoteInterface as: TotamTupleSpaceT;
         def template := totamModule.tuple: [totamModule.var: `x, "bomb"];
         //the bomb is present in the tuple space
         /.at.support.timer.when: 1.seconds() elapsed:{ 
@@ -1569,7 +1606,7 @@ def TotamModule := object: {
 			def player := actor: { |originator, anotherPlayer, test|
 				import /.at.lang.futures;
 				enableFutures(false);
-				deftype TotamTupleSpace;
+				deftype TotamTupleSpaceT;
 				def totamModule := /.at.lang.totam;	
 			  def myTS := totamModule.makeTupleSpace(isolate: { def team := "blue"});
         def s := myTS.goOnline;
@@ -1593,10 +1630,10 @@ def TotamModule := object: {
 			def sub := myTS.goOnline();	
 			def a := actor: { |res2|
 				import /.at.lang.totam;
-				deftype TotamTupleSpace;
+				deftype TotamTupleSpaceT;
 				def myTS := makeTupleSpace();
 				def sub; def disc;  
-				def goOnlineHard() {sub := export: myTS.getRemoteInterface as: TotamTupleSpace;}; 
+				def goOnlineHard() {sub := export: myTS.getRemoteInterface as: TotamTupleSpaceT;}; 
 				def goOnlineSoft(){ disc.reconnect() }; 
 				def goOfflineSoft(){ disc :=  disconnect: myTS.getRemoteInterface; };
 				def goOfflineHard(){

@@ -95,7 +95,6 @@ def makeFlock(theName, theProximity, owner) {
 		def setProximity(newProximity) {
 			def oldFlockList := flockrList;
 			def flatlist := oldFlockList.asTable.map:{|profile| profile.username};
-			system.println("oldFlockrlist " + flatlist);
 			flockrList := makeFlockrList;
 			subscription.cancel();
 			proximity := newProximity;
@@ -116,11 +115,16 @@ def makeFlock(theName, theProximity, owner) {
 		def isDefaultFlock() {
 			defaultFlock
 		};
+		
+		/*def intersection(aFlock) {
+		  aFlock.getProximity();
+		  /.frameworks.urbiflock.flock.makeFlock(theName, theProximity, owner
+		};*/
 
 		// interaction protocol
         def sendToAll(msg, applTypeTag := urbiTotamModule.FlockMessageT) {
-          def target := urbiTotamModule.makeMessageTarget(true, [theName]);
-          def tuple := totamModule.tuple: [applTypeTag, owner, target, msg] withPropagationProtocol: urbiTotamModule.flockProtocol(); 
+          def target := urbiTotamModule.makeMessageTarget(true, theName);
+          def tuple := totamModule.tuple: [applTypeTag, owner.getUsername(), target, msg] withPropagationProtocol: urbiTotamModule.flockProtocol(); 
          //flockProtocol is similar than the one in guanotes: 
          // inScope checks the devices is part of the flock + it installs a listener to be called when tuple dies by retraction.
          totam.inject: tuple; // returns an object with cancel() and retract() to unexport and remove the tuple respectively.
@@ -128,29 +132,45 @@ def makeFlock(theName, theProximity, owner) {
 
        def sendToCurrent(msg, applTypeTag := urbiTotamModule.FlockMessageT) {
          def target := urbiTotamModule.makeMessageTarget(false, @(self.getFlockrList()));
-         def tuple :=  totamModule.tuple: [applTypeTag, owner, target, msg] withPropagationProtocol: urbiTotamModule.currentContentsProtocol(); 
+         def tuple :=  totamModule.tuple: [applTypeTag, owner.getUsername(), target, msg] withPropagationProtocol: urbiTotamModule.currentContentsProtocol(); 
          // currentContentsProtocol is similar than the one in guanotes: 
          // propagation where inScope checks the devices is part of the flock + it is only send to flockrs NOW connected (i.e. not stored in the ambient TS)
          totam.inject: tuple; // returns an object with cancel() and retract() to unexport and remove the tuple respectively.
        }; 
        
        // additional helper functions to send tuples with custom protocols
-       def sendTupleToCurrent( tuple, propagationProtocol) {
-          //set the default protocol + add the new one in the tuple & inject it.
-          // TO CHANGE!
-          propagationProtocol.super := urbiTotamModule.currentContentsProtocol();
-          tuple.setPropagationStrategy(propagationProtocol);
-          totam.inject: tuple;
-       };
-
-       // additional helper functions to send more complex data with custom protocols
-       def sendTupleToAll( tuple, propagationProtocol) {
-          //set the default protocol + add the new one in the tuple & inject it.
-         propagationProtocol.super := urbiTotamModule.flockProtocol();
-         tuple.setPropagationStrategy(propagationProtocol);
-         totam.inject: tuple;
-       };
- 
+      def makeMessage(content, applTypeTag := FlockMessageT) {
+        def aTuple := tuple: [applTypeTag, owner, theName, content];
+        extend: aTuple with: { 
+          def getContent() {self.getField(4)};
+          def setContent() {self.setField(4,c)};
+          def setPropagationProtocol(protocol) {
+            // switch the tuple protocol to the given
+            super.super := protocol;
+          };
+        } taggedAs: [/.at.lang.types.Isolate];
+        aTuple.setPropagationStrategy(urbiTotamModule.getDefaultUrbiflockProtocol());
+        aTuple;
+      };  
+      
+      def sendMessage(tuple, propagationProtocol) {
+        //set the default protocol + add the new one in the tuple & inject it.
+        // TO CHANGE!
+        tuple.setPropagationStrategy(propagationProtocol);
+        totam.inject: tuple;
+      };
+      
+      def getFlockProtocol(){
+        urbiTotamModule.flockProtocol();
+      };
+      
+      def getCurrentContentsProtocol(){
+        urbiTotamModule.currentContentsProtocol()
+      };
+      
+      def extendPropagationProtocol: protocol with: closure {
+        totamModule.extendPropagationProtocol: protocol with: closure;
+      };
        /* register a listener with a flock that gets notified when a 
 		  message for the flock is received. The listener should understand:
 		  def receiveMessage(owner, content);
@@ -189,35 +209,43 @@ object: {
 	//public interface
 	def makeFlock := &makeFlock;
 	
-	def FlockTest := extend: /.at.unit.test.UnitTest.new("FlockTest") with: {
+	def FlockTest := extend: /.at.unit.test.UnitTest.new("FlockTest", false) with: {
 		def waitTime := 3;
 		import /.at.support.timer;
 		import /.at.lang.futures exclude seconds, minutes, millisec;
 		enableFutures(false);
-
+		def ProximityModule := /.frameworks.urbiflock.proximity;
+		
 		def actorF2;
 		def flockr1;
-		def profile2;
 		def test := self;
 		def actors := [];
 		
 		// makes a flockr which resolves a future when receives a hallo message.
 		def makeFlockr(username, res) {
 		   actor: { |res, test, username|
+		    def ProximityModule := /.frameworks.urbiflock.proximity;
 			def active := true; 
 			def profile2 := /.frameworks.urbiflock.profile.makeProfile();
 			profile2.username := username;
 			profile2.sex := "MALE"; 
 			def flockr2 := /.frameworks.urbiflock.flockr.makeFlockr(profile2);
-			def maleProximity := /.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(flockr2 , { |profile| profile.sex == "MALE" });
-			def maleFlock := /.frameworks.urbiflock.flock.makeFlock("MaleFlock", maleProximity, flockr2);
-			flockr2.addFlock(maleFlock);
-			maleFlock.receiveFromFlock( object:{
+			def maleProximity := ProximityModule.makeDoesProfileMatchProximity(flockr2 , { |profile| profile.sex == "MALE" });
+			def nearbyMaleProximity := ProximityModule.makeAndProximity(maleProximity, ProximityModule.makeIsNearbyProximity(flockr2));
+			def nearbyMaleFlock := /.frameworks.urbiflock.flock.makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr2);
+			flockr2.addFlock(nearbyMaleFlock);
+			nearbyMaleFlock.receiveFromFlock( object:{
 			  def receiveMessage(owner, content){
+			  system.println("flockr " + username + " received " + content);
 			    test<-assertEquals("hallo", content);
-			    res<-resolve(`ok);
+			    res<-resolve(true);
 			  };
 			});
+			def startCountDown() { 
+			  /.at.support.timer.when: 3.seconds elapsed: {
+			    res<-resolve(false);
+			  }
+			};
 			def goOffline() { if: (active) then: {flockr2.goOffline(); active := false}; `ok };
 			// adding this method for testAsyncFriendsFlock
 			def stop() { active := false };  
@@ -225,37 +253,79 @@ object: {
 		};
 
 		def setUp(){
-		  def profile1 := /.frameworks.urbiflock.profile.makeProfile();
+		  def profile1 :=  /.frameworks.urbiflock.profile.makeProfile();
 		  profile1.username := "flockr1";
 		  profile1.sex := "MALE";
 		  flockr1 := /.frameworks.urbiflock.flockr.makeFlockr(profile1);
-		  profile2 := /.frameworks.urbiflock.profile.makeProfile();
-		  profile2.username := "flockr2";
 		  actors := [];
 		};
 		
 		def tearDown() {
 			// clean up the flockrs created for each test
 			flockr1.goOffline();
+			def tableF := [];
 			actors.each: { |actor| 
-  			  actor<-goOffline()@FutureMessage;
+  			  tableF := tableF + [ actor<-goOffline()@FutureMessage ];
   			};
+  			(group: tableF);
+		};
+				
+		def testAsyncSendToAllMaleFlock(){
+ 			def [futF1, resF1] := makeFuture();
+		    def [futF2, resF2] := makeFuture();
+		    def [fut, res] := makeFuture();
+			def flockr2 := makeFlockr("flockr2", resF1);
+			actors := actors + [flockr2];
+			def maleProximity := ProximityModule.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
+			def nearbyMaleProximity := ProximityModule.makeAndProximity(maleProximity, ProximityModule.makeIsNearbyProximity(flockr1));
+			flockr1.addFlock(makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr1));
+			def nearbyMaleFlock := flockr1.getFlock("NearbyMaleFlock");
+			when: 4.seconds elapsed: { //wait some time so that they discover in the network
+			  self.assertEquals(1, nearbyMaleFlock.getFlockrList.length);	
+			  nearbyMaleFlock.sendToAll("hallo");
+			};
+			when: futF1 becomes: { |res1|
+			  def flockr3 := makeFlockr("flockr3", resF2);
+			  actors := actors + [flockr3];
+			   when: 10.seconds elapsed: {flockr3<-startCountDown()};
+			};	
+			when: futF2 becomes: { | res2|
+			  if: (res2) then: {
+			    res.resolve(`ok);
+			  } else: {
+	//    res.ruin(/.at.lang.exceptions.XException);
+			  };
+			};
+			fut;			
 		};
 		
-		
-		def testAsyncMaleFlock(){
+		def aatestAsyncSendToCurrentMaleFlock(){
+		    def [futF1, resF1] := makeFuture();
+		    def [futF2, resF2] := makeFuture();
 		    def [fut, res] := makeFuture();
-			def flockr2 := makeFlockr("flockr2", res);
+			def flockr2 := makeFlockr("flockr2", resF1);
 			actors := actors + [flockr2];
-			def maleProximity := /.frameworks.urbiflock.proximity.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
-			flockr1.addFlock(makeFlock("MaleFlock", maleProximity, flockr1));
-			flockr1.addBuddy(profile2);
-			def maleFlock := flockr1.getFlock("MaleFlock");
-			when: seconds(waitTime) elapsedWithFuture: {
-			  self.assertEquals(1, maleFlock.getFlockrList.length);	
-			  maleFlock.sendToAll("hallo");
+			def maleProximity := ProximityModule.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
+			def nearbyMaleProximity := ProximityModule.makeAndProximity(maleProximity, ProximityModule.makeIsNearbyProximity(flockr1));
+			flockr1.addFlock(makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr1));
+			def nearbyMaleFlock := flockr1.getFlock("NearbyMaleFlock");
+			when: 4.seconds elapsed: { //wait some time so that they discover in the network
+			  self.assertEquals(1, nearbyMaleFlock.getFlockrList.length);	
+			  nearbyMaleFlock.sendToCurrent("hallo");
 			};
-			fut;		
+			when: futF1 becomes: { |res1|
+			  def flockr3 := makeFlockr("flockr3", resF2);
+			  actors := actors + [flockr3];
+			  when: 5.seconds elapsed: {flockr3<-startCountDown()};
+			};	
+			when: futF2 becomes: { | res2|
+			  if: (!res2) then: {
+			    res.resolve(`ok);
+			  } else: {
+			    res.ruin(/.at.lang.exceptions.XException);
+			  };
+			};
+			fut;	
 		};
 		// more tests in proximities.at.
 	};
