@@ -79,8 +79,12 @@ def NetworkAwareReferenceModule := extend: MultiwayReferenceModule with: {
 		
 		// additional events
 		// add method to listen for link status changes
-		def when: ref linkStatusChanged: code {
+		def whenever: ref linkStatusChanged: code {
 			(reflect: ref).addLinkStatusChangedObserver(code);
+		};
+		
+		def when: ref linkStatusChanged: code {
+			// NYI
 		};
 		
 		// additional operations

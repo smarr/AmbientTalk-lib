@@ -1,34 +1,34 @@
 /**
- * AmbientTalk/2 Project
- * (c) Software Languages Lab, 2006 - 2011
- * Author: Kevin Pinte
- * 
- * Permission is hereby granted, free of charge, to any person
- * obtaining a copy of this software and associated documentation
- * files (the "Software"), to deal in the Software without
- * restriction, including without limitation the rights to use,
- * copy, modify, merge, publish, distribute, sublicense, and/or
- * sell copies of the Software, and to permit persons to whom the
- * Software is furnished to do so, subject to the following
- * conditions:
- *
- * The above copyright notice and this permission notice shall be
- * included in all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
- * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
- * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
- * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
- * OTHER DEALINGS IN THE SOFTWARE.
+* AmbientTalk/2 Project
+* (c) Software Languages Lab, 2006 - 2011
+* Author: Kevin Pinte
+* 
+* Permission is hereby granted, free of charge, to any person
+* obtaining a copy of this software and associated documentation
+* files (the "Software"), to deal in the Software without
+* restriction, including without limitation the rights to use,
+* copy, modify, merge, publish, distribute, sublicense, and/or
+* sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following
+* conditions:
+*
+* The above copyright notice and this permission notice shall be
+* included in all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+* OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+* NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+* HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+* WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+* FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE.
 **/
 
 /**
- * This file defines the reference mirror for multiway references.
- * The mirror manages the "ways" encapsulated by the mway ref (it's base).
- *
+* This file defines the reference mirror for multiway references.
+* The mirror manages the "ways" encapsulated by the mway ref (it's base).
+*
 **/
 
 // first class references
@@ -50,116 +50,116 @@ def logPrefix := "[MWAY REF MIRROR]";
 def logger := makeLogger(self.logPrefix, INFO);
 
 def debug(@args) {
-  self.logger(args.join(" ; "), DEBUG);
+	self.logger(args.join(" ; "), DEBUG);
 };
 def warn(@args) {
-  self.logger(args.join(" ; "), WARNING);
+	self.logger(args.join(" ; "), WARNING);
 };
 
 def MultiwayReferenceMirrorModule := object: {
-  
-  // utility function to compare the priority
-  // of two property references
+
+	// utility function to compare the priority
+	// of two property references
 	def propRefComparator() {
-	  { |r1, r2|
-		  def p1 := (propertyOf: r1);
-		  def p2 := (propertyOf: r2);
-		  try: {
-		  	def res := p1.priority(p2);
-		  	debug("compare: " + r1 + " with " + r2 + " -> " + res); 
-		  	res;
-		  } catch: { |e|
-		  	debug("exception when comparing prop " + p1 + " with " + p2 + ": " + e.message + "; fall back to priority");
-		  	1;
-		  };
+		{ |r1, r2|
+			def p1 := (propertyOf: r1);
+			def p2 := (propertyOf: r2);
+			try: {
+				def res := p1.priority(p2);
+				debug("compare: " + r1 + " with " + r2 + " -> " + res); 
+				res;
+			} catch: { |e|
+				debug("exception when comparing prop " + p1 + " with " + p2 + ": " + e.message + "; fall back to priority");
+				1;
+			};
 		};
 	};
-	
+
 	def mirrorModule := object: {
-	  def setLogLevel(l) {
-      logger := makeLogger(logPrefix, l);
-    };
+		def setLogLevel(l) {
+			logger := makeLogger(logPrefix, l);
+		};
 	};
 
 	// the mirror to construct MultiwayReference
 
 	def multiwayReferenceMirror :=  mirror: {
-	  
+
 		//import TEventualRef exclude pass, invoke, retractUnsentMessages;
 		import TEventualRef exclude defineField, invoke, retractUnsentMessages;
 		import TObservable alias init := initObservable;
-		
+
 		// initially the mway ref is not connected
 		def connected := false;
-		
+
 		// the mailbox
 		def inbox := Vector.new();
-		
-		// the current "active" reference
+
+			// the current "active" reference
 		def currentReference;
-		
+
 		// collections to handle 
 		// - available refs: references that constitute the mway ref
 		// - connected refs: available refs that are currently connected
 		def availableReferences;
 		def connectedReferences;
-				
+
 		// the property determining the mway refs 
 		// equivalence class		
 		def property := nil;
-		
+
 		def UUID;
-			
+
 		def init(base, propRef, isConnected := true) {
 			super^init(base);
-			
+
 			// initialize collections
 			self.availableReferences := HashSet.new;
 			self.connectedReferences := PriorityQueue.new(propRefComparator());
-			
+
 			// initialize the observable trait
 			self.initObservable(`disconnection, `reconnection, `takenOffline, `stateChange, `defaultLink);
-			
+
 			self.UUID := jlobby.java.util.UUID.randomUUID().toString();
-			
+
 			// init equivalence class
 			self.property := (propertyOf: propRef);
-			
+
 			debug("created multiway ref for: " + (print: propRef) + " with: " + property);
-			
+
 			self.extend(propRef, isConnected);
-			self;	
+			self;
 		};
-		
+
 		// check if a references belongs to
 		// to a mway refs equivalence class
 		def equivalent(any) {
-			try: {
-			  def prop := (propertyOf: any);
+		try: {
+			def prop := (propertyOf: any);
 				self.property.equivalent(prop);
 			} catch: { |e|
 				debug("error when checking for equivalence: " + e.message);
 				false;
 			};
 		};
-		
+
 
 		// returns true/false signalling whether the reference was added (accepted)
 		def extendIfEquivalent(reference, isConnected := true) {
-		  if: (self.equivalent(reference)) then: {
+			if: (self.equivalent(reference)) then: {
 				self.extend(reference);
-			  true;
+				true;
 			} else: {
-			  false;
-			}
+				false;
+			};
 		};
-		
+
 		// extend the mway ref with a reference
 		// do the necessary bookkeeping
 		def extend(reference, isConnected := true) {
 			debug("accepted reference: " + reference);
-      self.availableReferences.add(reference);
-              
+			self.availableReferences.add(reference);
+
 			// add the reference to the correct set
 			if: isConnected then: {
 				self.connectedReferences.enqueue(reference);
@@ -167,30 +167,31 @@ def MultiwayReferenceMirrorModule := object: {
 				self.connectedReferences.remove(reference);
 			};
 			self.notify: self.observerCatalog.stateChange withArgs: [reference, isConnected];
-			
+
 			debug("connected refs: " + self.connectedReferences.size());
-			
+
 			// adjust connected state and current reference
 			self.adjustCurrentReference();
-			
+
 			// try to send buffered messages
 			self.flushInbox();
-			
+
 			// disconnected listener
 			whenever: reference disconnected:{
-			  self.disconnectReference(reference);
+				self.disconnectReference(reference);
 			};
 			// reconnecter listener
 			whenever: reference reconnected: {
 				self.reconnectReference(reference);
 			};
+			nil;
 		};
-		
+
 		def adjustCurrentReference() {
 			if: (self.connectedReferences.notEmpty) then: {
 				self.setCurrentReference(connectedReferences.first());
 				if: (!self.connected) then: {
-    		  self.notify: self.observerCatalog.reconnection withArgs: [];
+					self.notify: self.observerCatalog.reconnection withArgs: [];
 				};
 				self.connected := true;
 			};
@@ -201,29 +202,29 @@ def MultiwayReferenceMirrorModule := object: {
 			currentReference := newCurrent;
 			self.notify: self.observerCatalog.defaultLink withArgs: [newCurrent];
 		};
-		
+
 		def disconnectReference(reference) {
 			debug("disconnect: " + reference);
 			self.connectedReferences.remove(reference);
 			self.notify: self.observerCatalog.stateChange withArgs: [reference, false];
 			debug("connected refs left: " + self.connectedReferences.queue.vc.size());
-			
+
 			if: self.connectedReferences.isEmpty() then: {
-			  if: self.connected then: {
-			    self.connected := false;
-			    self.notify: self.observerCatalog.disconnection withArgs: [];
-			  }
+				if: (self.connected) then: {
+					self.connected := false;
+					self.notify: self.observerCatalog.disconnection withArgs: [];
+				}
 			} else: {
 				self.setCurrentReference(self.connectedReferences.first());
 			};
 			def outbox := retract: (referenceOf: reference);
 			outbox.each: { |msg|
-			  inbox.add(msg);
+				inbox.add(msg);
 			};
 			self.flushInbox();
 			nil;
 		};
-		
+
 		def reconnectReference(reference) {
 			self.connectedReferences.enqueue(reference);
 			debug("connected refs: " + self.connectedReferences.size());
@@ -232,25 +233,25 @@ def MultiwayReferenceMirrorModule := object: {
 			self.flushInbox();
 			nil;
 		};
-	
+
 		def asFarRef(){ self.currentReference };
 
-		
+
 		// message handling
-		
+
 		def flushInbox() {
-		  debug("clean up inbox");
-		  if: self.connected then: {
-		    inbox.each: { |msg|
-		      self.currentReference <+ msg;
-		    };
-		    inbox.clear();
-		  };
-		  nil;
+			debug("clean up inbox");
+			if: self.connected then: {
+				inbox.each: { |msg|
+					self.currentReference <+ msg;
+				};
+				inbox.clear();
+			};
+			nil;
 		};
-		
+
 		def intercept(msg) {
-		  debug("intercepting: " + msg);
+			debug("intercepting: " + msg);
 			if: self.connected then: { 
 				self.currentReference <+ msg;
 			} else: { 
@@ -258,15 +259,15 @@ def MultiwayReferenceMirrorModule := object: {
 				nil;
 			};
 		};
-		
+
 		def toString() { "MultiwayReference: " + self.currentReference + " with: " + self.property };		
-		
+
 		def retractUnsentMessages() { 
 			def return := inbox; 
 			inbox := Vector.new;
 			return.toTable();
 		};
-		
+
 		// override equality
 		// disallow synchronous access to the object
 		def invoke(slf, inv) {
@@ -274,55 +275,46 @@ def MultiwayReferenceMirrorModule := object: {
 			if: (`(==) == inv.selector) then: {
 				def other := (inv.arguments)[1];
 				try: {
-				  self.UUID == (reflect: other).UUID;
+					self.UUID == (reflect: other).UUID;
 				} catch: /.at.lang.types.SelectorNotFound using: { |e|
-				  false;
+					false;
 				};
-				
-				/* original:
-				// equal if same mirror
-				def result := (self == (reflect: (inv.arguments)[1]));
-				system.println("self:  " + self);
-				system.println("other: " + (reflect: (inv.arguments)[1]));
-				system.println("invoke equality: " + result);
-				result;
-				*/
 			} else: {
 				raise: XIllegalOperation.new("Cannot synchronously invoke " + inv.selector + " on " + self);
 			};
 		};
-		
+
 		// a multiway reference has three kinds of observers: disconnection,
 		// reconnection and takenOffline observers
 		// import TObservable alias init := initObservable;
-			
+
 		def addConnectionObserver(obs) {
-		  debug("registered reconnection handler: " + obs);
+			debug("registered reconnection handler: " + obs);
 			self.addObserver: obs to: self.observerCatalog.reconnection;
 		};	
-		
+
 		def addDisconnectionObserver(obs) {
-		  debug("registered disconnection handler: " + obs);
+			debug("registered disconnection handler: " + obs);
 			self.addObserver: obs to: self.observerCatalog.disconnection;
 		};
-		
+
 		def addTakenOfflineObserver(obs) {
-		  debug("registered offline handler: " + obs);
+			debug("registered offline handler: " + obs);
 			self.addObserver: obs to: self.observerCatalog.takenOffline;
 		};
-		
+
 		def addStateChangeObserver(obs) {
-		  debug("registered stateChange handler: " + obs);
-		  self.addObserver: obs to: self.observerCatalog.stateChange;
+			debug("registered stateChange handler: " + obs);
+			self.addObserver: obs to: self.observerCatalog.stateChange;
 		};
-		
+
 		def addDefaultLinkObserver(obs) {
-		  debug("registered defaultlink handler: " + obs);
-		  self.addObserver: obs to: self.observerCatalog.defaultLink;
+			debug("registered defaultlink handler: " + obs);
+			self.addObserver: obs to: self.observerCatalog.defaultLink;
 		};
-		
-  };
-	
+
+	};
+
 };
 
 MultiwayReferenceMirrorModule;

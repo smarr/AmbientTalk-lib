@@ -30,17 +30,26 @@
  *
 **/
 
-def Bluetooth := networks[networks.getAll().find: { |l|
-		(print: l) ~= "network port bt";
-}];
 
-def Wifi := networks[networks.getAll().find: { |l|
-		(print: l) ~= "network port net";
-}];
+def findNetworkByName(inName) {
+	def index := networks.getAll().find: { |l|
+		(print: l) ~= inName;
+	};
+	if: (index == nil) then: {
+		nil;
+	} else: {
+		networks[index];
+	};
+};
+
+def Bluetooth := findNetworkByName("network port bt");
+
+def Wifi := findNetworkByName("network port net");
+
 def WiFi := Wifi;
 
-def Lan := networks[networks.getAll().find: { |l|
-		(print: l) ~= "network port net";
-}];
+def Lan := findNetworkByName("network port net");
+
+def Inet := findNetworkByName("switchboard");
 
 self;

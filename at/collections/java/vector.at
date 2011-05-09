@@ -53,18 +53,7 @@ def Vector := object: {
 			clo(it.next());
 		};
 	};
-	
-	def isEmpty() {
-		vc.isEmpty();
-	};
-	
-	def notEmpty() {
-		!vc.isEmpty();
-	};
-	
-	def first() {
-		self.at(0);
-	};
+
 	
 	def add(o) {
 		vc.add(o);
