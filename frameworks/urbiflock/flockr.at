@@ -250,7 +250,7 @@ def makeFlockr(profile) {
 		def removeFlock(flock) {
 			flocks.remove(flock, { |f1,f2| f1.getName() == f2.getName() });
 			notifyListeners: flocksListeners with: <-notifyFlockRemoved(flock);
-			removeProfileChangedListener(flock);
+			removePropertiesChangedListener(flock);
 		};
 		def addFlock(flock) { 
 			flocks.add(flock);
