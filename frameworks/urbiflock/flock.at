@@ -120,8 +120,8 @@ def makeFlock(theName, theProximity, owner) {
 			defaultFlock
 		};
 		
-		def intersection(flockName, aFlock) {
-		   def andProximity :=  /.frameworks.urbiflock.proximity.makeAndProximity(proximity, aFlock.getProximity());
+		def intersection(flockName, anotherFlock) {
+		   def andProximity :=  /.frameworks.urbiflock.proximity.makeAndProximity(proximity, anotherFlock.getProximity());
 		  /.frameworks.urbiflock.flock.makeFlock(flockName, andProximity, owner);
 		};
 		
@@ -245,7 +245,6 @@ object: {
 			flockr2.addFlock(nearbyMaleFlock);
 			nearbyMaleFlock.receiveFromFlock( object:{
 			  def receiveMessage(owner, content){
-			  system.println("flockr " + username + " received " + content);
 			    test<-assertEquals("hallo", content);
 			    res<-resolve(true);
 			  };
@@ -317,10 +316,7 @@ object: {
 			def maleProximity := ProximityModule.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
 			def maleFlock := makeFlock("MaleFlock", maleProximity, flockr1);
 			def nearbyMaleFlock := maleFlock.intersection("NearbyMaleFlock", flockr1.getFlock("NearbyFlock"));
-			//def nearbyMaleProximity := ProximityModule.makeAndProximity(maleProximity, ProximityModule.makeIsNearbyProximity(flockr1));
-			//flockr1.addFlock(makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr1));
 			flockr1.addFlock(nearbyMaleFlock);
-			//def nearbyMaleFlock := flockr1.getFlock("NearbyMaleFlock");
 			when: 4.seconds elapsed: { //wait some time so that they discover in the network
 			  self.assertEquals(1, nearbyMaleFlock.getSnapshot.length);	
 			  nearbyMaleFlock.sendToCurrent("hallo");

@@ -168,10 +168,11 @@ def makeOrJoinNode(fleft, fright){
 			  };
 		  };
 	  };
-	
-	fleft.pass := {|Token| self.leftPass(Token)};
-	fright.pass := {|Token| self.rightPass(Token)};	
-	
+		
+	  def oldlPass := fleft.pass;
+	  fleft.pass := {|Token| oldlPass(Token); self.leftPass(Token)};
+	  def oldrPass := fright.pass;
+	  fright.pass := {|Token| oldrPass(Token); self.rightPass(Token)};
   };
 };
 
@@ -181,7 +182,7 @@ It uses a memory to cache which tokens are already passed. */
 def makeAndJoinNode(fleft, fright){
   extend: makeFilterNode(makeFilter({|v| true})) with: {
 	  def mleft := makeMemory({|Token| getId(Token.getFlockr)});
-		def mright := makeMemory({|Token| getId(Token.getFlockr)});
+	  def mright := makeMemory({|Token| getId(Token.getFlockr)});
 	  
 	  def rightPass(token){		
 		  if: (token.getSign) then:{
@@ -215,8 +216,10 @@ def makeAndJoinNode(fleft, fright){
 		  };
 	  };
 	
-		fleft.pass := {|Token| self.leftPass(Token)};
-		fright.pass := {|Token| self.rightPass(Token)};	
+		def oldlPass := fleft.pass;
+		fleft.pass := {|Token| oldlPass(Token); self.leftPass(Token)};
+		def oldrPass := fright.pass;
+		fright.pass := {|Token| oldrPass(Token); self.rightPass(Token)};	
 	
   };
 };

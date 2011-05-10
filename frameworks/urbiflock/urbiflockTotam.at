@@ -106,12 +106,11 @@ def urbiflockTotamModule := object:{
 	      if: (target.isFlock()) then:{ // this should be always the case for flockProtocol
 	        def targetFlock := localFlockr.getFlock(@target.getTargetFlockrs());
 	        if: (targetFlock != nil) then:{ 
-	        system.println("flockProtocol:InScope:from: " +senderDescriptor+ " target is " + target.getTargetFlockrs() + " including " + targetFlock.getSnapshot());
 	          isInScope := targetFlock.getSnapshot().contains(receiverDescriptor);
 	        }; 
 	      };
 	    };
-	    system.println("flockProtocol:InScope:from: " +senderDescriptor+ " to " + receiverDescriptor + " : " + isInScope);
+	//    system.println("flockProtocol:InScope:from: " +senderDescriptor+ " to " + receiverDescriptor + " : " + isInScope);
 	    isInScope;
 	  }; //end-inScope
 	};
@@ -146,7 +145,7 @@ def urbiflockTotamModule := object:{
 	         };
 	       };
 	     };
-         system.println("currentContentsProtocol:InScope:from: " +senderDescriptor+ " to " + receiverDescriptor + " : " + isInScope);
+       //  system.println("currentContentsProtocol:InScope:from: " +senderDescriptor+ " to " + receiverDescriptor + " : " + isInScope);
 	     isInScope;
 	   };
    
