@@ -102,7 +102,7 @@ public interface GuanotesApp extends Application {
 							public Subscription addListener(FlockListener l) {
 								return null;
 							}
-							public String[] getFlockrList() {
+							public String[] getSnapshot() {
 								return new String[0];
 							}
 							public String getName() { return "testflock"; }

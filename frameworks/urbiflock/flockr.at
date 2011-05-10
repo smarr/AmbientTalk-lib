@@ -174,13 +174,11 @@ def makeFlockr(profile) {
 		 * has changed.
 		 */
 		def updateProfile() {
-			system.println("UPdate profile !!!");
-		
+			
 			notifyListeners: propertiesChangedListeners with: <-notifyChangedProperty(remoteInterface, `profile , myPropertyMap);
 			
 			def connectedFlockrsIterator := uidFlockrMap.values.iterator();
 			while: { connectedFlockrsIterator.hasNext() } do: {
-				system.println("Sending profile !!!");
 				/** operation mayhem  **/	
 				connectedFlockrsIterator.next()<-notifyChangedProperty(remoteInterface,`profile, myPropertyMap);
 			};
@@ -325,7 +323,6 @@ def makeFlockr(profile) {
 			
 			/** operation mayhem  **/
 			def notifyChangedProperty(flockr, key, newPropertyMap) {
-				system.println("Cool property changed !!!");
 				notifyListeners: propertiesChangedListeners with: <-notifyChangedProperty(flockr,key,newPropertyMap);
 				
 				/*if: (key == `profile) then: {
@@ -472,7 +469,7 @@ def makeFlockr(profile) {
 	// 1) all discovery listeners get a notifyJoined event
 	// 2) all profile changed listeners get a notifyProfileChanged event
 	discSubscription := whenever: FlockrT discovered: { |flockr|
-	system.println(" flockr " + username + " discovered " + uidOf(flockr));
+//	system.println(" flockr " + username + " discovered " + uidOf(flockr));
 	
 			when: flockr<-getProperties()@Due(10.seconds) becomes: { |newProperties|
       		// keep track of the flockr far reference via its UID

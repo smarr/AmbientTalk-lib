@@ -217,7 +217,7 @@ def ProximityModule := object: {
 			flockr1.addBuddy(profile2); 
 			def friendFlock := flockr1.getFlock("FriendsFlock");
 			when: seconds(waitTime) elapsedWithFuture: {
-			  self.assertEquals(1, friendFlock.getFlockrList.length);	
+			  self.assertEquals(1, friendFlock.getSnapshot.length);	
 			};			
 		};
 		
@@ -231,13 +231,13 @@ def ProximityModule := object: {
 			flockr1.addBuddy(profile2);
 
 			when: seconds(waitTime) elapsedWithFuture: {
-			  self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);	
+			  self.assertEquals(1, FriendsAndFemaleFlock.getSnapshot.length);	
 				flockr1.removeBuddy(profile2);
 				when: seconds(waitTime) elapsedWithFuture: {
-					self.assertEquals(1, FriendsAndFemaleFlock.getFlockrList.length);
+					self.assertEquals(1, FriendsAndFemaleFlock.getSnapshot.length);
 					when:	actorF2<-sexChange()@FutureMessage becomes: { |val|
 						when: seconds(waitTime*3) elapsedWithFuture: {
-							self.assertEquals(0, FriendsAndFemaleFlock.getFlockrList.length);
+							self.assertEquals(0, FriendsAndFemaleFlock.getSnapshot.length);
 						};
 					};
 				};
@@ -254,13 +254,13 @@ def ProximityModule := object: {
 			flockr1.addBuddy(profile2);
 					
 			when: seconds(waitTime) elapsedWithFuture: {
-			  self.assertEquals(1, FriendsAndFemaleFlock2.getFlockrList.length);	
+			  self.assertEquals(1, FriendsAndFemaleFlock2.getSnapshot.length);	
 				flockr1.removeBuddy(profile2);
 				when: seconds(waitTime) elapsedWithFuture: {
-					self.assertEquals(0, FriendsAndFemaleFlock2.getFlockrList.length);
+					self.assertEquals(0, FriendsAndFemaleFlock2.getSnapshot.length);
 					flockr1.addBuddy(profile2);
 					when: seconds(waitTime*3) elapsedWithFuture: {
-					  self.assertEquals(1, FriendsAndFemaleFlock2.getFlockrList.length);
+					  self.assertEquals(1, FriendsAndFemaleFlock2.getSnapshot.length);
 					};
 				};
 			};		
@@ -285,7 +285,7 @@ def ProximityModule := object: {
 			  def girlFriendFlock := flockr1.getFlock("GirlFriends");
 			
 			  when: seconds(waitTime*2) elapsedWithFuture: {
-			    self.assertEquals(2, girlFriendFlock.getFlockrList.length);	
+			    self.assertEquals(2, girlFriendFlock.getSnapshot.length);	
 				  when: b<-stopFlockrs()@FutureMessage becomes: {|ack| 
 					   // resolving when:elapsedWithFuture: future;
 					  `ok; 
@@ -297,10 +297,10 @@ def ProximityModule := object: {
 		def testAsyncNearbyFlock(){			
 			def nearbyFlock := flockr1.getFlock("NearbyFlock");
 			when: seconds(waitTime*2) elapsedWithFuture: {
-			  self.assertEquals(1, nearbyFlock.getFlockrList.length);	
+			  self.assertEquals(1, nearbyFlock.getSnapshot.length);	
 				when: actorF2<-goOffline()@FutureMessage becomes: { |ack|
 					when: seconds(waitTime) elapsedWithFuture: {
-						self.assertEquals(0, nearbyFlock.getFlockrList.length);	
+						self.assertEquals(0, nearbyFlock.getSnapshot.length);	
 		      };
 				};
 			};		

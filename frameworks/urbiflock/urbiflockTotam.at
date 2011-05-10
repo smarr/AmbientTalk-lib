@@ -63,7 +63,7 @@ def urbiflockTotamModule := object:{
     	def notifyLeft(profile) {
 			//do not do anything for now.
 	  	};		
-	};
+	 };
 	 aFlockr.registerDiscoveryListener(discoveryListener);
      //adding the private flockrTuple used to calculate who should receive the guanote
 	 ts.out(tuple:["Flockr", aFlockr]);
@@ -106,8 +106,8 @@ def urbiflockTotamModule := object:{
 	      if: (target.isFlock()) then:{ // this should be always the case for flockProtocol
 	        def targetFlock := localFlockr.getFlock(@target.getTargetFlockrs());
 	        if: (targetFlock != nil) then:{ 
-	        system.println("flockProtocol:InScope:from: " +senderDescriptor+ " target is " + target.getTargetFlockrs() + " including " + targetFlock.getFlockrList());
-	          isInScope := targetFlock.getFlockrList().contains(receiverDescriptor);
+	        system.println("flockProtocol:InScope:from: " +senderDescriptor+ " target is " + target.getTargetFlockrs() + " including " + targetFlock.getSnapshot());
+	          isInScope := targetFlock.getSnapshot().contains(receiverDescriptor);
 	        }; 
 	      };
 	    };
@@ -131,7 +131,7 @@ def urbiflockTotamModule := object:{
 	       if: (localFlockr != nil) then: {
 	         def target := self.getField(3);
 	         if: (!target.isFlock()) then: { // this should be always the case for currentContentsProtocol
-	           def connectedFlockrs := localFlockr.getFlock("NearbyFlock").getFlockrList();
+	           def connectedFlockrs := localFlockr.getFlock("NearbyFlock").getSnapshot();
 	           def targetFlockrs := target.getTargetFlockrs();
                if: (targetFlockrs != nil) then:{ 
 	             // TODO: to check if the flockrs are connected we should maybe use the property map.

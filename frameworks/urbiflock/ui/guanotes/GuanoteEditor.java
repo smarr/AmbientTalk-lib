@@ -72,7 +72,7 @@ public class GuanoteEditor extends GuanoteView {
 						
 						for (int i = 0; i < names.length; i++) {
 							if ( flocks[i].getName().equals(flockName) ) {
-								String[] flockrs = flocks[i].getFlockrList();
+								String[] flockrs = flocks[i].getSnapshot();
 								String flockrsNames = "";
 								if (flockrs.length > 0) {
 									flockrsNames = flockrs[0];

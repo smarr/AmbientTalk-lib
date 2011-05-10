@@ -28,7 +28,7 @@
 package frameworks.urbiflock.ui;
 
 public interface Flock {
-	public String[] getFlockrList();
+	public String[] getSnapshot();
 	public Profile getProfile(String username);
 	public Profile[] listProfiles();
 	public String getName();

@@ -46,7 +46,7 @@ def makeGuanotes(aFlockr) {
  	  def currentFlock(flockName){
 	    def flock := aFlockr.getFlock(flockName);
 			if: (flock != nil) then: {
-				flock.getFlockrList();
+				flock.getSnapshot();
 			} else: { 
 			  // add warning here!
 				[]; 
@@ -90,7 +90,7 @@ def makeGuanotes(aFlockr) {
 							 result.or: { 
 							   def flock := receiverFlockr.getFlock(flockName);
 								 if: (flock != nil) then: { 
-								   flock.getFlockrList().contains(receiverFlockrId)}
+								   flock.getSnapshot().contains(receiverFlockrId)}
 								 else: {	false } 
 							 }
 						}
@@ -411,7 +411,7 @@ def GuanotesModule := object: {
 							  test<-assertEquals("DagWereld", guanote.getMessage);
 							  // leave sometime to be sure flockr2 and its guanotes disconnected.
 							  when: seconds(waitTime) elapsed: { 
-								  def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
+								  def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getSnapshot();
 								  test<-assertEquals(1, connectedFlockrs.length);
 							    test<-assertTrue(connectedFlockrs.contains("flockr1"));
 							    flockr4.goOffline();
@@ -423,7 +423,7 @@ def GuanotesModule := object: {
 					};
 					// waiting some time to be sure that flockr2,flockr4 belong to the flockr1 "FriendsFlock".			
 					when: seconds(waitTime*3) elapsed: {
-					  def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
+					  def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getSnapshot();
 				      self.assertTrue(connectedFlockrs.contains("flockr2"));
 				      self.assertTrue(connectedFlockrs.contains("flockr4"));
 					  def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, myGuanotes.makeReceiver(myGuanotes.currentFlock("FriendsFlock")), "HelloWorld");
@@ -452,7 +452,7 @@ def GuanotesModule := object: {
 					  test<-assertEquals("DagWereld", guanote.getMessage);
 					  // leave sometime to be sure flockr2 and its guanotes disconnected.
 					  when: seconds(waitTime) elapsed: { 
-					    def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
+					    def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getSnapshot();
 						test<-assertEquals(1, connectedFlockrs.length);
 						test<-assertFalse(connectedFlockrs.contains("flockr1"));
 					 	flockr4.goOffline();
@@ -481,7 +481,7 @@ def GuanotesModule := object: {
 						  test<-assertEquals("flockr1", guanote.getSender);
 						  test<-assertEquals("DagWereld", guanote.getMessage);  
 						  when: aFlockr4<-goOnline()@FutureMessage becomes: { |ack|
-							def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
+							def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getSnapshot();
 						    test<-assertFalse(connectedFlockrs.contains("flockr1"));
 						  };
 						};
@@ -498,7 +498,7 @@ def GuanotesModule := object: {
 		  	  flockr1.addBuddy(profile4);
 			  //waiting some time to be sure that flockr2, flockr3, flockr4 belong to the flockr1 "FriendsFlock".			
 			  when: seconds(waitTime*3) elapsed: {
-			    def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getFlockrList();
+			    def connectedFlockrs := myGuanotes.getFlockr().getFlock("NearbyFlock").getSnapshot();
 				self.assertTrue(connectedFlockrs.contains("flockr2"));
 				def aGuanote := myGuanotes.makeGuanote(flockr1.getUsername, myGuanotes.makeReceiver(myGuanotes.currentFlock("FriendsFlock")), "DagWereld");
 				myGuanotes.sendGuanote(aGuanote);

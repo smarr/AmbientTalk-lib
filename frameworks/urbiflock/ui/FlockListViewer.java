@@ -175,7 +175,7 @@ public class FlockListViewer extends Frame implements ActionListener {
 							return null;
 						}
 
-						public String[] getFlockrList() {
+						public String[] getSnapshot() {
 							return null;
 						}
 					}

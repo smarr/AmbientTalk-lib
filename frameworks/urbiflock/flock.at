@@ -34,7 +34,7 @@ def makeFlockrList(){
 
 //Assumption: theName of a flock is unique.
 def makeFlock(theName, theProximity, owner) {
-	
+
 	def flockrList := makeFlockrList; //list of flockr profiles belonging to the flock
 	def name := theName; // flock's name
 	def proximity := theProximity; // proximity function ruling a flock.
@@ -75,12 +75,13 @@ def makeFlock(theName, theProximity, owner) {
 		
 		//getters and setters
 		def getName() { name };
-		def getOwner(){ owner };
+		
 		// returns a list of flockr's usernames belonging to that flock or
 		// nil if the flock is empty.
-		def getFlockrList() {
+		def getSnapshot() {
 		    flockrList.asTable.map:{|profile| profile.username};
 		};
+
 		// returns the profile of a flockr in the flock or 
 		// nil if the flockr id is not found in the flock.
 		def getProfile(flockrId) {
@@ -88,6 +89,9 @@ def makeFlock(theName, theProximity, owner) {
 			if: (nil != idx) then: {
 				flockrList.at(idx);				
 			}
+		};
+		def getProximity() {
+		  proximity;
 		};
 		// sets a new proximity in the flock
 		// note that flockr belonging to that flock before changing the proximity 
@@ -116,10 +120,15 @@ def makeFlock(theName, theProximity, owner) {
 			defaultFlock
 		};
 		
-		/*def intersection(aFlock) {
-		  aFlock.getProximity();
-		  /.frameworks.urbiflock.flock.makeFlock(theName, theProximity, owner
-		};*/
+		def intersection(flockName, aFlock) {
+		   def andProximity :=  /.frameworks.urbiflock.proximity.makeAndProximity(proximity, aFlock.getProximity());
+		  /.frameworks.urbiflock.flock.makeFlock(flockName, andProximity, owner);
+		};
+		
+		def union(flockName, aFlock) {
+		   def orProximity :=  /.frameworks.urbiflock.proximity.makeOrProximity(proximity, aFlock.getProximity());
+		  /.frameworks.urbiflock.flock.makeFlock(flockName, orProximity, owner);
+		};
 
 		// interaction protocol
         def sendToAll(msg, applTypeTag := urbiTotamModule.FlockMessageT) {
@@ -131,7 +140,7 @@ def makeFlock(theName, theProximity, owner) {
        };
 
        def sendToCurrent(msg, applTypeTag := urbiTotamModule.FlockMessageT) {
-         def target := urbiTotamModule.makeMessageTarget(false, @(self.getFlockrList()));
+         def target := urbiTotamModule.makeMessageTarget(false, @(self.getSnapshot()));
          def tuple :=  totamModule.tuple: [applTypeTag, owner.getUsername(), target, msg] withPropagationProtocol: urbiTotamModule.currentContentsProtocol(); 
          // currentContentsProtocol is similar than the one in guanotes: 
          // propagation where inScope checks the devices is part of the flock + it is only send to flockrs NOW connected (i.e. not stored in the ambient TS)
@@ -281,7 +290,7 @@ object: {
 			flockr1.addFlock(makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr1));
 			def nearbyMaleFlock := flockr1.getFlock("NearbyMaleFlock");
 			when: 4.seconds elapsed: { //wait some time so that they discover in the network
-			  self.assertEquals(1, nearbyMaleFlock.getFlockrList.length);	
+			  self.assertEquals(1, nearbyMaleFlock.getSnapshot.length);	
 			  nearbyMaleFlock.sendToAll("hallo");
 			};
 			when: futF1 becomes: { |res1|
@@ -293,24 +302,27 @@ object: {
 			  if: (res2) then: {
 			    res.resolve(`ok);
 			  } else: {
-	//    res.ruin(/.at.lang.exceptions.XException);
+	            res.ruin(/.at.lang.exceptions.XException);
 			  };
 			};
 			fut;			
 		};
 		
-		def aatestAsyncSendToCurrentMaleFlock(){
+		def testAsyncSendToCurrentMaleFlock(){
 		    def [futF1, resF1] := makeFuture();
 		    def [futF2, resF2] := makeFuture();
 		    def [fut, res] := makeFuture();
 			def flockr2 := makeFlockr("flockr2", resF1);
 			actors := actors + [flockr2];
 			def maleProximity := ProximityModule.makeDoesProfileMatchProximity(flockr1 , { |profile| profile.sex == "MALE" });
-			def nearbyMaleProximity := ProximityModule.makeAndProximity(maleProximity, ProximityModule.makeIsNearbyProximity(flockr1));
-			flockr1.addFlock(makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr1));
-			def nearbyMaleFlock := flockr1.getFlock("NearbyMaleFlock");
+			def maleFlock := makeFlock("MaleFlock", maleProximity, flockr1);
+			def nearbyMaleFlock := maleFlock.intersection("NearbyMaleFlock", flockr1.getFlock("NearbyFlock"));
+			//def nearbyMaleProximity := ProximityModule.makeAndProximity(maleProximity, ProximityModule.makeIsNearbyProximity(flockr1));
+			//flockr1.addFlock(makeFlock("NearbyMaleFlock", nearbyMaleProximity, flockr1));
+			flockr1.addFlock(nearbyMaleFlock);
+			//def nearbyMaleFlock := flockr1.getFlock("NearbyMaleFlock");
 			when: 4.seconds elapsed: { //wait some time so that they discover in the network
-			  self.assertEquals(1, nearbyMaleFlock.getFlockrList.length);	
+			  self.assertEquals(1, nearbyMaleFlock.getSnapshot.length);	
 			  nearbyMaleFlock.sendToCurrent("hallo");
 			};
 			when: futF1 becomes: { |res1|

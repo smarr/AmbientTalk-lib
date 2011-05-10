@@ -65,7 +65,7 @@ public class FlockViewer extends Frame implements FlockListener {
 		owner_ = owner;
 		
 		unameList_ = new List();
-		updateFlockrList(flock_.getFlockrList());
+		updateFlockrList(flock_.getSnapshot());
 		unameList_.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent ae) {
 				int selected = unameList_.getSelectedIndex();
@@ -199,7 +199,7 @@ public class FlockViewer extends Frame implements FlockListener {
 			public Profile[] listProfiles() {
 				return null;
 			}
-			public String[] getFlockrList() {
+			public String[] getSnapshot() {
 				return new String[] { "foo" };
 			}
 			public String getName() { return "testflock"; }
