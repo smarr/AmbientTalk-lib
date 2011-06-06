@@ -487,6 +487,40 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	  fut
 	};
 	
+	// test order in outbox of (local) far references is kept after reconnection and when using retract.
+	def testAsyncRetract() {
+		def [fut,res] := makeFuture();
+		def [mfut,mres] := /.at.lang.multifutures.makeMultiFuture(2);
+		def makeServerActor(res) {
+			actor: { |res |
+					def foo(){res.resolve(24)}; 
+					def bar(){res.resolve(42)};
+			};
+		};
+		def refToServer := makeServerActor(mres);
+		def s := disconnect: refToServer;
+		def send2Msgs() {
+		  refToServer<-foo();
+		  refToServer<-bar();
+		};
+		
+		send2Msgs();
+		// retract and check order of messages.
+		def outbox := retract: refToServer;
+		self.assertEquals(2, outbox.length);
+		self.assertEquals(`foo, (outbox[1]).selector);
+		self.assertEquals(`bar, (outbox[2]).selector);
+		s.reconnect();
+		
+		send2Msgs();
+		// check that order when flushing is kept.
+		res.resolve( /.at.lang.multifutures.whenAll: mfut resolved: { |tbl|
+		system.println("hallo");
+			self.assertEquals(24, tbl[1]);
+		    self.assertEquals(42, tbl[2]);
+		});
+		fut;
+	};
 };
 
 self
