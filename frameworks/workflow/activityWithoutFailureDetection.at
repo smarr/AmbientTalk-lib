@@ -46,87 +46,21 @@ def Activity := object: {
         reflectOnActor().createMessage(selector, args, [FutureMessage]);
     };
     
-    // Create an asynchronous message with a due time.
-    def createTimeoutMsg(selector, args, timeout) {
-        reflectOnActor().createMessage(selector, args, [Due(seconds(timeout))]);
-    };
-    
     // Invocation of a service.
 	def invokeService(service, activity, env) {
 		def [result, resolver] := makeFuture();
 		def arguments := activity.parameters;
 		def output := activity.output;  
 		def msg := createAsyncMsg(activity.selector, env.bind(arguments));
-		def duration := env.getTimeoutDuration();
-		// When a timeout failure is specified, create asynchronous message with @Due annotation
-		if: ! (duration == nil) then: { 
-			msg := createTimeoutMsg(activity.selector, env.bind(arguments), duration);
-		};
-		// In order to cancel TimeoutException in case of a disconnection error.
-		def disconnection := false;
 		when: service <+ msg becomes: { |reply|
-			if: !disconnection then: {
-				// When a disconnection failure is not being handled
-           		if: (is: reply taggedAs: Table) then: {
-           			// Insert the new variable bindings in the environment.
-               		def idx := 1;
-               		reply.each: { |val| env.insert(output[idx].variable, val); idx := idx + 1; }; 
-           		};
-           		resolver.resolve(env);
+			if: (is: reply taggedAs: Table) then: {
+           		// Insert the new variable bindings in the environment.
+               	def idx := 1;
+               	reply.each: { |val| env.insert(output[idx].variable, val); idx := idx + 1; }; 
            	};
-        } catch: lobby.at.lang.types.Exception using: { |exception|
-        	if: (is: exception taggedAs: TimeoutException) then: { 
-        		env.timeoutOccured(service);
-        		def timeoutFailureDescription := env.getTimeout();
-        		if: ( (! (timeoutFailureDescription == nil)).and: { ! disconnection } ) then: {
-        			// a compensating action is specified for a timeout failure
-        			def compensation := timeoutFailureDescription.compensation;
-        			compensate(compensation, service, activity, timeoutFailureDescription, env);
-        		} else: {
-        			// no compensating action for a timeout is specified
-					env.group.decrease();
-        			self.cancel(env);
-        		};
-        	} else: {
-        		if: (is: exception taggedAs: ServiceException) then: {
-        			env.exceptionOccured(service);
-       				def exceptionFailureDescription := env.getException();
-        			if: (! (exceptionFailureDescription == nil)) then: {
-        				// a compensating action is specified for an exception failure
-        				def compensation := exceptionFailureDescription.compensation;
-        				compensate(compensation, service, activity, exceptionFailureDescription, env);
-        			} else: {
-        				// no compensating action for a service exception is specified
-						env.group.decrease();
-        				self.cancel(env);
-        			};
-        		};
-        	};
-        };
-        when: service disconnected: {
-        	// In order to cancel TimeoutException in case of a disconnection error.
-        	disconnection := true;
-			env.disconnectionOccured(service);
-        	def disconnectionFailureDescription := env.getDisconnection();
-        	if: (! (disconnectionFailureDescription == nil)) then: {
-        		// a compensating action is specified for a disconnection failure
-        		def compensation := disconnectionFailureDescription.compensation;
-        		compensate(compensation, service, activity, disconnectionFailureDescription, env);
-        	} else: {
-        		// no compensating action for a service exception is specified
-        		env.group.decrease();
-        		self.cancel(env);
-        	};
+           	resolver.resolve(env);
         };
         result;
-	};
-	
-	def compensate(compensation, service, activity, failureDescription, env) {
-		try: {
-			compensation.start(env, activity, failureDescription);
-		} catch: WrongCompensation using: { |e|
-			system.println("Wrong compensating action specified : " + e);
-		};
 	};
 };
 
@@ -168,35 +102,12 @@ def ServiceActivity := object: {
     	
     
     def execute(env, resolver) {      
-    	def notFoundTriggered := false;
-    	def discovered := false;
     	when: service.tag discovered: { |s|
     		services.insert(env.id, s);
-    		discovered := true;
-    		if: !notFoundTriggered then: {
-				when: Activity^invokeService(s, self, env)  becomes: { |nEnv|
-    				resolver.resolve(nEnv);
-    			};
+    		when: Activity^invokeService(s, self, env)  becomes: { |nEnv|
+    			resolver.resolve(nEnv);
     		};
     	};
-    	def duration := env.getNotFoundDuration(); 
-    	duration := if: (duration == nil) then: { 10; } else: { duration; }; 
-    	/.at.support.timer.when: /.at.support.timer.seconds(duration) elapsed: {      
-    		// The service 's not found.
-        	if: !discovered then: {
-        		// In order to deactivate the when: discovered: event handler.
-            	notFoundTriggered := true;  
-            	env.notFoundOccured();
-            	def notFoundFailureDescription := env.getNotFound();
-                if: (! (notFoundFailureDescription == nil)) then: {  
-                	Activity^compensate(notFoundFailureDescription.compensation, nil, self, notFoundFailureDescription, env);
-                } else: {
-                	// no compensating action for a service exception is specified
-        			env.group.decrease();
-        			cancel(env);
-        		};
-          	};
-       	};
     };
       
     def retry(env) {

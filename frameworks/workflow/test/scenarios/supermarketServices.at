@@ -1,0 +1,164 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+
+import /.at.lang.values;
+import /.at.lang.futures;
+import crimeModule;
+enableFutures(false); 
+ 
+network.online();
+
+deftype Service;
+deftype Customer <: Service;
+deftype MessagingService <: Service;
+deftype RecommendationService <: Service;
+deftype Shop <: Service;
+deftype AnnouncementService <: Service;
+deftype Stock <: Service;
+
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def shoppingList() {
+			system.println("ShoppingList of the customer is retrieved");
+			["bed, matras, lattenbodem"];
+		};  
+		
+		def notInStock() {
+			system.println("Not all the articles of your shopping list are in stock.");
+		};
+		
+		def updateMap(locs) {
+			system.println("MAP : " + locs);
+		};
+		
+		def recommend(recommendations) {
+			system.println("RECOMMENDATIONS : " + recommendations);
+		};
+		
+		def export(i) {
+			def fact := makeTuple("customer", "Ikea", "Peter");
+			[fact];
+		};
+	} taggedAs: [Customer];
+	
+	export: service as: Customer;
+};
+
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def check(articles) {
+			system.println("Stock - check");
+			[false];
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("stock", "Ikea");
+			[fact];
+		};
+	} taggedAs: [Stock];
+	
+	export: service as: Stock;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def getLocation(articles) {
+			system.println("Shop - locations");
+			["rij 32 plaats 4 - rij 46 plaats 9 - rij 34 plaats 1"];
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("shop", "Ikea");
+			[fact];
+		};
+	} taggedAs: [Shop];
+	
+	export: service as: Shop;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def goToCustomerService(p) {
+			system.println("Customer " + p + " should go to the customer service.");
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("announcementService", "Ikea");
+			[fact];
+		};
+	} taggedAs: [AnnouncementService];
+	
+	export: service as: AnnouncementService;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	
+	def service := object: {
+		
+		def get(a) {
+			system.println("Recommendations are being retrieved.");
+			["nachttafeltje, nachtlamp, kleerkast"];
+		};  
+		
+		def export(i) {
+			def fact := makeTuple("announcementService", "Ikea");
+			[fact];
+		};
+	} taggedAs: [RecommendationService];
+	
+	export: service as: RecommendationService;
+};

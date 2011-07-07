@@ -1,0 +1,358 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+ 
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(false); 
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+import crimeModule;
+
+deftype UnitTestMsg;	
+deftype Service;
+deftype AService <: Service;
+deftype BService <: Service;
+deftype CService <: Service;
+deftype DService <: Service;
+deftype EService <: Service;
+deftype FoundService <: Service;
+deftype TimeoutService <: Service;
+deftype ExceptionService <: Service;
+deftype ServiceException <: lobby.at.lang.types.Exception;
+def XServiceException := lobby.at.lang.exceptions.createException(ServiceException);
+	
+	
+def services := actor: {
+	import /.at.lang.values;
+	import /.at.lang.futures;
+	enableFutures(false); 
+	network.online();
+	
+
+	def a := actor: {
+		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;	
+ 		def run() {
+   			def obj := object: {
+     			def a(z) {
+     				when: UnitTestMsg discovered: { |msg|
+     					system.println("service A");
+						msg<-add("ServiceA");
+					};
+					[1];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "A");
+					def fact2 := makeTuple("function", i, "Intensional");
+					[fact, fact2];
+				};
+				def test() {
+					when: UnitTestMsg discovered: { |msg|
+						system.println("service A");
+						msg<-add("ServiceA");
+					};
+					[1];
+				};
+   			} taggedAs: [Service];
+   			export: obj as: AService;
+ 		};
+ 	};
+
+	def b := actor: {
+		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+ 		def run() {
+   			def obj := object: {
+     			def b() {
+     				when: UnitTestMsg discovered: { |msg|
+     					system.println("service B");
+						msg<-add("ServiceB");
+					};
+					[2];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "B");
+					def fact2 := makeTuple("function", i, "Intensional");
+					[fact, fact2];
+				};
+				def test() {
+					when: UnitTestMsg discovered: { |msg|
+						system.println("service B");
+						msg<-add("ServiceB");
+					};
+					[2];
+				};
+   			} taggedAs: [Service];
+   			export: obj as: BService;
+ 		};
+ 	};
+ 	
+ 	def c := actor: {
+ 		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+ 		def run() {
+   			def obj := object: {
+     			def c() {
+     				when: UnitTestMsg discovered: { |msg|
+     					system.println("service C");
+						msg<-add("ServiceC");
+					};
+					[3];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "C");
+					def fact2 := makeTuple("function", i, "Intensional");
+					[fact, fact2];
+				};
+				def test() {
+					when: UnitTestMsg discovered: { |msg|
+						system.println("service C");
+						msg<-add("ServiceC");
+					};
+					[3];
+				};
+   			} taggedAs: [CService];
+   			export: obj as: CService;
+ 		};
+ 	};
+ 	
+ 	def d := actor: {
+ 		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+ 		def run() {
+   			def obj := object: {
+     			def d() {
+     				when: UnitTestMsg discovered: { |msg|
+     					system.println("service D");
+						msg<-add("ServiceD");
+					};
+					[4];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "D");
+					[fact];
+				};
+				def test() {
+					when: UnitTestMsg discovered: { |msg|
+						system.println("service D");
+						msg<-add("ServiceD");
+					};
+					[4];
+				};
+   			} taggedAs: [DService];
+   			export: obj as: DService;
+ 		};
+ 	};
+ 	
+ 	def e := actor: {
+ 		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+		def run() {
+   			def obj := object: {
+     			def e() {
+     				when: UnitTestMsg discovered: { |msg|
+     					system.println("service E");
+						msg<-add("ServiceE");
+					};
+					[5];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "E");
+					[fact];
+				};
+				def test() {
+					when: UnitTestMsg discovered: { |msg|
+						system.println("service E");
+						msg<-add("ServiceE");
+					};
+					[5];
+				};
+   			} taggedAs: [EService];
+   			export: obj as: EService;
+ 		};
+ 	};
+ 	
+ 	def exc := actor: {
+ 		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+		def run() {
+   			def obj := object: {
+   				def nbr := 1;
+     			def exc() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("ExceptionService");
+						system.println("exception service");
+					};
+					nbr := nbr + 1;
+					system.println("nbr " + nbr);
+					if: ((nbr > 3).and: { nbr < 6 }) then: {
+						system.println("raise exception");
+						raise: XServiceException.new("exception in service");
+					};
+					[999];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "Exc");
+					[fact];
+				};
+				def reset() {
+   					nbr := 1;
+	   				`ok;
+   				};
+   				def test() {
+   					def initTime := /.at.support.timer.now();
+					when: UnitTestMsg discovered: { |msg|
+						system.println("exception service");
+						msg<-add("ExceptionService");
+					};
+					nbr := nbr + 1;
+					if: ((nbr > 1).and: { nbr < 3 }) then: {
+						while: {! (/.at.support.timer.has: /.at.support.timer.seconds(15) passedSince: initTime)} do: { nbr := nbr + 1; };
+						raise: XServiceException.new("exception in service");
+					};
+					[999];
+				};
+   			} taggedAs: [ExceptionService];
+   			export: obj as: ExceptionService;
+ 		};
+ 	};
+
+ 	def fo := actor: {
+ 		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+		def run() {
+   			def obj := object: {
+     			def fo() {
+     				when: UnitTestMsg discovered: { |msg|
+						msg<-add("FoundService");
+					};
+					[101];
+     			};
+     			def export(i) {
+					def fact := makeTuple("service", i, "Fo");
+					[fact];
+				};
+				def test() {
+					when: UnitTestMsg discovered: { |msg|
+						msg<-add("FoundService");
+					};
+					[101];
+				};
+   			} taggedAs: [FoundService];
+   			export: obj as: FoundService;
+ 		};
+ 	};
+	
+	def ti := actor: {
+		def crimeModule := lobby.bridges.crime.CrimeConnection;
+		import crimeModule;
+		def run() {
+			def obj := object: {
+				def nbr := 0;
+				def timeout := true;
+				def ti() {
+					def initTime := /.at.support.timer.now();
+					nbr := nbr + 1;
+					if: (nbr > 4) then: {
+						if: timeout then: {
+							timeout := false;
+							while: {! (/.at.support.timer.has: /.at.support.timer.seconds(15) passedSince: initTime)} do: { nbr := nbr + 1; };
+							[nbr];
+						} else: {
+							when: UnitTestMsg discovered: { |msg|
+								msg<-add("TimeoutService");
+							};
+							[666];
+						};
+					} else: {
+						when: UnitTestMsg discovered: { |msg|
+								msg<-add("TimeoutService");
+							};
+							[666];
+					};
+				};
+				def test() {
+					def initTime := /.at.support.timer.now();
+					if: timeout then: {
+						system.println("timeout actor");
+						timeout := false;
+						def nbr := 0;
+						while: {! (/.at.support.timer.has: /.at.support.timer.seconds(15) passedSince: initTime)} do: { nbr := nbr + 1; };
+						[nbr];
+					} else: {
+						when: UnitTestMsg discovered: { |msg|
+							msg<-add("TimeoutService");
+							system.println("timeout service");
+						};
+						[666];
+					};
+				};
+				def reset() {
+					timeout := true;
+					nbr := 0;
+				};
+				def undo() {
+					timeout := false;
+				};
+				def export(i) {
+					def fact := makeTuple("service", i, "Ti");
+					[fact];
+				};
+			} taggedAs: [TimeoutService];
+			export: obj as: TimeoutService;
+		};
+	};
+	
+	def makeStandardActors() {
+		a<-run();
+		b<-run();
+		c<-run();
+		d<-run();
+		e<-run();
+	};
+	
+	def makeTimeoutActor() {
+		ti<-run();
+	};
+	
+	def makeFoundActor() {
+		fo<-run();
+	};
+	
+	def makeExceptionActor() {
+		exc<-run();
+	};
+};
+
+
+def nowServicesModule := object: {
+	def services := services;
+};
+
+

@@ -28,58 +28,18 @@
  */
  
  
-def crimeModule := lobby.bridges.crime.CrimeConnection;
 def initModule := lobby.frameworks.workflow.WFinit;
+def dictionaryModule := lobby.frameworks.workflow.dictionary;
 def activityModule := lobby.frameworks.workflow.activity;
-
-import crimeModule;
 import initModule;
+import dictionaryModule;
 import activityModule;
 import /.at.lang.values;
 import /.at.lang.futures;
-import /.at.lang.multifutures;
-
-def myCrime := makeCrimeEngine();
-def factId := 1;
-deftype Rule;
 
 
 
-def makeRule(@temp) {
-	object: {
-		def template := temp;
-		
-		def find(closure) {
-			myCrime.when: template activated: { |varMap|
-				closure(varMap);
-			};
-		};
-		
-		def findallAux() {
-			def [future, resolver] := makeMultiFuture(10000); //TODO factId); factId == 1 (CRIMEgroupInteractions factId++)
-			myCrime.when: template activated: { |varMap|
-				resolver.resolve(varMap);
-			};
-			future;
-		};
-		
-		def findall(closure) {
-			def results := [];
-			whenEach: findallAux() becomes: { |varMap|
-				results := results + [varMap];
-			};
-			/.at.support.timer.when: /.at.support.timer.seconds(1) elapsed: {   //TODO: 1?
-				closure(results);
-			};
-		};
-	} taggedAs: [Rule];
-};
 
- 
- 
-def IntensionalModule := object: {
-	def myCrime := myCrime;
-	def makeRule := &makeRule;
-	def factId := factId;
-	def Rule := Rule;
+def GroupCompensatingActionsModule := object: {
+
 };

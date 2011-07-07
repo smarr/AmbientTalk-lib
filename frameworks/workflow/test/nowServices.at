@@ -155,7 +155,8 @@ def services := actor: {
 		def run() {
 			def obj := object: {
 				def timeout := true;
-				def ti(initTime) {  
+				def ti() {  
+					def initTime := /.at.support.timer.now();
 					if: timeout then: {
 						timeout := false;
 						def nbr := 1;

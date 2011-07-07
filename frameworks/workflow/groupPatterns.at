@@ -1,0 +1,417 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+
+def initModule := lobby.frameworks.workflow.WFinit;
+def environmentModule := lobby.frameworks.workflow.environment;
+def intensionalModule := lobby.frameworks.workflow.intensional;
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
+def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
+def failuresModule := lobby.frameworks.workflow.failures;
+import crimeModule;
+import initModule;
+import environmentModule;
+import intensionalModule;
+import standardPatternsModule;
+import compensatingActionsModule;
+import failuresModule;
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(false);
+
+
+
+def GroupSynchronize := object: {
+		
+	def cancel(env) { };
+		
+	def start(env) {
+		def [result, resolver] := makeFuture();
+		execute(env, resolver, self);
+		result;
+	};
+	
+	def execute(env, resolver, syncPattern) {
+		when: syncPattern.condition.start(env) becomes: { |reply|
+			if: (reply.or: { is: reply taggedAs: Environment }) then: {
+				syncPattern.check := true;
+				resolver.resolve(true);
+			} else: {
+				resolver.resolve(false);
+			};
+		};
+	};
+};
+
+
+/**
+* Barrier waits until a certain condition is satisfied and resolves then all futures.
+* Once the condition is satisfied, all following futures may be resolved immediately.
+* @param condition
+*/
+def Barrier(_condition) {
+	object: {
+		def condition := Condition(_condition); 
+		def resultEnvs := [];
+		def futures := [];
+		def check := false;
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			resultEnvs := resultEnvs + [env];
+			execute(env, resolver);
+			result;
+		};
+		
+		def cancel(env) { };
+
+		def execute(env, resolver) {
+			if: check then: {
+				resolver.resolve(env);
+			} else: {
+				futures := futures + [resolver];
+				when: GroupSynchronize^start(env) becomes: { |reply|
+					if: reply then: {
+						def idx := 0;
+						futures.each: { |r| idx := idx+1; r.resolve(resultEnvs[idx]); };	
+					};
+				};
+			};
+		};
+	} taggedAs: [Pattern];
+};
+
+
+/**
+* Cancelling barrier waits until a certain condition is satisfied and resolves then all futures.
+* Once the condition is satisfied, no more futures may be resolved.
+* @param condition
+*/
+def CancellingBarrier(_condition) {
+	object: {
+		def condition := Condition(_condition);
+		def resultEnvs := [];
+		def futures := [];
+		def check := false;
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			resultEnvs := resultEnvs + [env];
+			execute(env, resolver);
+			result;
+		};
+
+		def cancel(env) { };
+
+		def execute(env, resolver) {
+			def group := env.group;
+			if: !check then: {
+				futures := futures + [resolver];
+				when: GroupSynchronize^start(env) becomes: { |reply|
+					if: reply then: {
+						def idx := 0;
+						group.numberOfParticipants := futures.length;
+						group.activeParticipants := group.numberOfParticipants;
+						futures.each: { |r| idx := idx+1; r.resolve(resultEnvs[idx]); };
+					};
+				};
+			};
+		};
+	} taggedAs: [Pattern];
+};
+
+
+/**
+* Join waits until a certain condition is satisfied and resolves then one future with an environment tat has been merged.
+* (i.e. the resulting environment has a table of values for identical keys)
+* Once the condition is satisfied, no more futures may be resolved.
+* @param condition
+*/
+def Join(_condition) { 
+	object: {
+		def condition := Condition(_condition);
+		def resultEnvs := [];
+		def futures := [];
+		def check := false;
+		def first := true;
+		def [result, resolver];
+		
+		def getCondition() { condition; };
+	
+		def start(env) {
+			if: first then: {
+				first := false;
+				[result, resolver] := makeFuture();
+			};
+			resultEnvs := resultEnvs + [env];
+			execute(env, resultEnvs);
+			result;
+		};
+		
+		def cancel(env) { };
+		
+		def drop(env) {
+			execute(env);
+		};
+
+		def execute(env, resultEnvs) {
+			if: !check then: {
+				futures := futures + [resolver];
+				when: GroupSynchronize^start(env) becomes: { |reply|
+					if: reply then: {
+						def group := env.group;
+						group.numberOfParticipants := futures.length;
+						group.activeParticipants := group.numberOfParticipants;
+						def newEnv := resultEnvs[1];
+						newEnv.merge(resultEnvs.select(2, resultEnvs.length+1), true); 
+						resolver.resolve(newEnv);
+					};
+				};
+			};
+		};
+	} taggedAs: [Pattern];
+};
+
+
+
+/**
+* Filter which only resolves when the incoming environment satisfies a specific condition.
+* @param condition
+*/
+def Filter(_condition) {
+	object: {
+		def condition := _condition;
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			execute(env, resolver);
+			result;
+		};
+
+		def execute(env, resolver) {
+			if: condition(env) then: {
+				resolver.resolve(env);
+			} else: {
+				env.group.decrease();
+			};
+		};
+	} taggedAs: [Pattern];
+};
+
+
+/**
+* Condition resolves when a certain condition is satisfied.
+* Condition is used for Barrier, CancellingBarrier and Join.
+* @param condition: can be either a time constraint (At, After) or an AmbientTalk block (or predefined ones such as percentage, amount)
+*/
+def Condition(_condition) {
+	object: {
+		def condition := _condition;
+		def check := false;
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			if: !check then: { 
+				execute(env, resolver);
+			};
+			result;
+		};
+		
+		def execute(env, resolver) {
+			if: (is: condition taggedAs: TimeConstraint) then: {
+				when: condition.start(env) becomes: { |nEnv|
+					check := true;
+					resolver.resolve(true);
+				};
+			} else: { 
+				if: condition(env.group.join, env.group) then: {
+					check := true;								
+					resolver.resolve(true);
+				} else: {
+					resolver.resolve(false);
+				};
+			};
+		};
+	} taggedAs: [ConditionType];
+};
+
+
+
+/**
+* After, a time constraint that can be as argument for the Condition of a Barrier, CancellingBarrier and Join.
+* Waits until x time has passed since the starting of the execution of a certain component.
+* @param time: the number of seconds that must be passed
+* @param component
+*/
+def After(time, component) {
+	def obj := object: {
+		def timeMapping := [];
+
+		def init() {
+			component.addObserver(self);
+		};
+		
+		def informStartTime(id, time) {
+			if: ( timeMapping.find: { |p| p[1] == id; } ) == nil then: {
+				timeMapping := timeMapping + [[id, time]];
+			};
+		};
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			execute(env, resolver);
+			result;
+		};
+	
+		def execute(env, resolver) {
+			def idx := timeMapping.find: { |p| p[1] == env.getId(); };
+			def startTime := timeMapping[idx][2];
+			while: { ! (/.at.support.timer.has: /.at.support.timer.seconds(time) passedSince: startTime) } do: { };
+			resolver.resolve(env);
+		};
+	} taggedAs: [TimeConstraint];
+	obj.init();
+	obj;
+};
+
+
+/**
+* After, a time constraint that can be as argument for the Condition of a Barrier, CancellingBarrier and Join.
+* Waits until a certain time (Time(hour, min, sec).
+* @param time: Time(hour, min, sec)
+*/
+def At(time) {
+	object: {
+	
+		def start(env) {
+			def [result, resolver] := makeFuture();
+			execute(env, resolver);
+			result;
+		};
+	
+		def execute(env, resolver) {
+			def curDate := Date.now();
+			def now := /.at.support.timer.now();
+			def dif := curDate.calculateDifference(time);
+			while: { ! (/.at.support.timer.has: /.at.support.timer.seconds(dif) passedSince: now) } do: { };
+			resolver.resolve(env);
+		};
+	} taggedAs: [TimeConstraint];
+};
+
+
+/**
+* Time.
+* @param: hour
+* @param min
+* @param sec
+* @output a new Date object
+*/
+def Time(hour, min, sec) {
+	Date.new(hour, min, sec);
+};
+
+
+/**
+* Date object containing the data members hour, min and sec.
+*/
+def Date :=	object: {
+	def hours;
+	def min;
+	def sec;
+
+	def init(h, m, s) {
+		hours := h;
+		min := m;
+		sec := s;
+	};		
+	
+	def now() {
+		def jDate := jlobby.java.util.Date;
+		def curDate := jDate.new();
+		Date.new( curDate.getHours(), curDate.getMinutes(), curDate.getSeconds() );
+	};
+		
+	def calculateDifference(date) {
+		((date.hours - hours) * 3600) + ((date.min - min) * 60) + (date.sec - sec);
+	};
+};	
+		
+
+/**
+* Predefined condition, n participants must have finished their execution.
+*/
+def amount(n) {
+	{ |barrier, group| barrier.resultEnvs.length == n; };
+};
+
+
+/**
+* Predefined condition, n participants must have a certain value for a cerain variable name
+*/
+def positive(varName, varValue, n) {
+	{ |barrier, group|
+		def envs := barrier.resultEnvs.filter( { |e| e.find(varName) == varValue; });
+		envs.length >= n;
+	};
+};
+
+
+/**
+* Predefined condition, n percent of participants must have finished their execution.
+*/
+def percentage(n) {
+	{ |barrier, group|
+		def nbr := group.activeParticipants;
+		def envs := barrier.resultEnvs;
+		if: ! (nbr == 0) then: {
+			envs.length / nbr >= n / 100; 
+		} else: { 
+			false;
+		};
+	};
+};
+
+
+
+def groupPatternsModule := object: {
+    def Barrier := &Barrier;
+    def CancellingBarrier := &CancellingBarrier;
+    def Join := &Join;
+    def Filter := &Filter;
+    def After := &After;
+    def Time := &Time;
+    def Date := Date;
+    def At := &At;
+    def Condition := &Condition;
+    def amount := &amount;
+    def positive := &positive;
+    def percentage := &percentage;
+};

@@ -26,11 +26,13 @@
  *
  * @author eline.philips
  */
+ 
 
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
 def activityModule := lobby.frameworks.workflow.activity;
 def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
+def failuresModule := lobby.frameworks.workflow.failures;
 def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
 def crimeModule := lobby.bridges.crime.CrimeConnection;
 def intensionalModule := lobby.frameworks.workflow.intensional;
@@ -40,6 +42,7 @@ import initModule;
 import environmentModule;
 import activityModule;
 import standardPatternsModule;
+import failuresModule;
 import compensatingActionsModule;
 //import groupInteractionsModule;
 import crimeModule;
@@ -48,11 +51,12 @@ import CRIMEgroupInteractionsModule;
 
 
 def WFenv := SystemEnvironment.new();
-//def ServiceDB := ServiceDatabase.new();
+def ServiceDB := ServiceDatabase.new();
 
-
-WFenv.insert(`passenger, "Stijn Verhaegen");
-WFenv.insert(`flight, "BA376 to NewYork");
+WFenv.insert(`customer, "Stijn Verhaegen");
+WFenv.insert(`notFound, "default");
+WFenv.insert(`disconnection, "default");
+WFenv.insert(`timeout, "default");
 
 import /.at.lang.values;
 import /.at.lang.futures;
@@ -61,37 +65,34 @@ network.online();
 
 
 def MessagingService := defService(`MessagingService);
+def Customer := defService(`Customer);
+def RecommendationService := defService(`RecommendationService);
+def Shop := defService(`Shop);
 def AnnouncementService := defService(`AnnouncementService);
-def Assistance := defService(`Assistance);
-def BoardingResponsible := defService(`BoardingResponsible);
-def LastMinute := defService(`LastMinute);
-def LuggageService := defService(`LuggageService);
-def ControlTower := defService(`ControlTower);
-
-
-//==================================
-def seq4 := Sequence( BoardingResponsible.waitForPassenger(Env.passenger), ControlTower.takeoff(Env.flight) );
-def structDiscr := StructuredDiscriminator( seq4 );
-
-def sync2 := Synchronize( ControlTower.takeoff(Env.flight) );
-def seq5 := Sequence( LastMinute.freeSeat(Env.flight, Env.passenger), Connection(sync2) );
-def seq6 := Sequence( LuggageService.removeLuggage(Env.flight, Env.passenger), Connection(sync2) );
-def seq7 := Sequence( BoardingResponsible.closeGate(Env.flight), Connection(sync2) );
-def seq8 := Sequence( MessagingService.gateClosed(Env.flight, Env.passenger), Connection(sync2) );
-def parSplit2 := ParallelSplit( seq5, seq6, seq7, seq8 );
-
-def sync1 := Synchronize( parSplit2 ); 
-
-def exc1 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
-def exc2 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
-def exc3 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
-
-def seq1 := Sequence( MessagingService.reminder(Env.passenger)@Output(Env.found), exc1 );
-def seq2 := Sequence( AnnouncementService.missingPerson(Env.passenger)@Output(Env.found), exc2 );
-def seq3 := Sequence( Assistance.missingPerson(Env.passenger)@Output(Env.found), exc3 );
-
-def parSplit1 := ParallelSplit( seq1, seq2, seq3 );
+def Stock := defService(`Stock);
 
 
 
-def parSplit := ParallelSplit( BoardingResponsible.waitForPassenger(Env.passenger), ControlTower.takeoff(Env.flight) );
+def exc := ExclusiveChoice( { |in_stock| in_stock }, 
+							Sequence( Shop.getLocation(Env.articles)@Output(Env.locs),
+							          Failure( Customer.updateMap(Env.locs),
+							                   [ [Disconnection(), Rediscover(1)],
+							                     [NotFound(), Rediscover(1)] ] ) ),
+							Failure( Customer.notInStock(),
+									 [ [Timeout(10), AnnouncementService.goToCustomerService(Env.customer)],
+									   [NotFound(), AnnouncementService.goToCustomerService(Env.customer)] ] ) );   
+							                
+
+
+def parSplit := ParallelSplit( Sequence(Stock.check(Env.articles)@Output(Env.in_stock), exc ),
+                               Failure( Sequence( RecommendationService.get(Env.articles)@Output(Env.recommendations),
+                                                  Customer.recommend(Env.recommendations) ),
+                                        [ [Timeout(10), Rediscover(1, Skip())],
+                                          [Disconnection(), Skip()],
+                                          [NotFound(), Skip()] ] ) );
+
+
+def seq := Sequence( Customer.shoppingList()@Output(Env.articles), parSplit);
+
+
+

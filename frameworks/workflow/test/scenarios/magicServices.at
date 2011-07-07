@@ -1,0 +1,244 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+ 
+def crimeModule := lobby.bridges.crime.CrimeConnection;
+
+import /.at.lang.values;
+import /.at.lang.futures;
+import crimeModule;
+enableFutures(false); 
+ 
+network.online();
+
+deftype Service;
+deftype SOFTmember <: Service;
+
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	def answers := [ ["Interested in playing magic next Saturday?", "yes"],
+	                 ["Interested in a draft?", "yes"],
+	                 [ "Do you have your own boosters?", "no"]];
+	
+	
+	def person := object: {
+		def name := "Eline Philips";
+		def function := "PhD student";
+		
+		def ask(msg) {
+			def idx := answers.find: { |a| a[1] == msg };
+			if: ! (idx == nil) then: {
+				def answer := answers[idx][2];
+				[answer];
+			} else: {
+				[666];
+			};
+		};
+		
+		def export(i) {
+			def fact1 := makeTuple("SOFT member", "name", name);
+			def fact2 := makeTuple("SOFT member", "function", function);
+			[fact1, fact2];
+		};
+	} taggedAs: [SOFTmember];
+	
+	export: person as: SOFTmember;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	def answers := [ ["Interested in playing magic next Saturday?", "yes"],
+	                 ["Interested in a draft?", "no"],
+	                 [ "Do you have your own boosters?", "yes"],
+	                 [ "Do you want to join the draft?", "yes"] ];
+	
+	
+	def person := object: {
+		def name := "Charlotte Herzeel";
+		def function := "Post doc";
+		
+		def ask(msg) {
+			def idx := answers.find: { |a| a[1] == msg };
+			if: ! (idx == nil) then: {
+				def answer := answers[idx][2];
+				[answer];
+			} else: {
+				[666];
+			};
+		};
+		
+		def export(i) {
+			def fact1 := makeTuple("SOFT member", "name", name);
+			def fact2 := makeTuple("SOFT member", "function", function);
+			[fact1, fact2];
+		};
+	} taggedAs: [SOFTmember];
+	
+	export: person as: SOFTmember;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	def answers := [ ["Interested in playing magic next Saturday?", "no"],
+	                 ["Interested in a draft?", "no"]];
+	
+	
+	def person := object: {
+		def name := "Andy Kellens";
+		def function := "Post doc";
+		
+		def ask(msg) {
+			def idx := answers.find: { |a| a[1] == msg };
+			if: ! (idx == nil) then: {
+				def answer := answers[idx][2];
+				[answer];
+			} else: {
+				[666];
+			};
+		};
+		
+		def export(i) {
+			def fact1 := makeTuple("SOFT member", "name", name);
+			def fact2 := makeTuple("SOFT member", "function", function);
+			[fact1, fact2];
+		};
+	} taggedAs: [SOFTmember];
+	
+	export: person as: SOFTmember;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	def answers := [ ["Interested in playing magic next Saturday?", "yes"],
+	                 ["Interested in a draft?", "yes"],
+	                 [ "Do you have your own boosters?", "no"],
+	                 [ "Do you want to join the draft?", "yes"] ];
+	
+	
+	def person := object: {
+		def name := "Tom Van Cutsem";
+		def function := "Post doc";
+		
+		def ask(msg) {
+			def idx := answers.find: { |a| a[1] == msg };
+			if: ! (idx == nil) then: {
+				def answer := answers[idx][2];
+				[answer];
+			} else: {
+				[666];
+			};
+		};
+		
+		def export(i) {
+			def fact1 := makeTuple("SOFT member", "name", name);
+			def fact2 := makeTuple("SOFT member", "function", function);
+			[fact1, fact2];
+		};
+	} taggedAs: [SOFTmember];
+	
+	export: person as: SOFTmember;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	def answers := [ ["Interested in playing magic next Saturday?", "yes"],
+	                 ["Interested in a draft?", "no"],
+	                 [ "Do you have your own boosters?", "no"],
+	                 [ "Do you want to join the draft?", "no"] ];
+	
+	
+	def person := object: {
+		def name := "Joeri";
+		def function := "De Koster";
+		
+		def ask(msg) {
+			def startTime := /.at.support.timer.now();
+			def idx := answers.find: { |a| a[1] == msg };
+			if: ! (idx == nil) then: {
+				def answer := answers[idx][2];
+				while: { ! (/.at.support.timer.has: /.at.support.timer.seconds(30) passedSince: startTime) } do: { };
+				[answer];
+			} else: {
+				[666];
+			};
+		};
+		
+		def export(i) {
+			def fact1 := makeTuple("SOFT member", "name", name);
+			def fact2 := makeTuple("SOFT member", "function", function);
+			[fact1, fact2];
+		};
+	} taggedAs: [SOFTmember];
+	
+	export: person as: SOFTmember;
+};
+
+
+actor: {
+	def crimeModule := lobby.bridges.crime.CrimeConnection;
+	import crimeModule;
+	def answers := [ ["Interested in playing magic next Saturday?", "yes"],
+	                 ["Interested in a draft?", "yes"],
+	                 [ "Do you have your own boosters?", "yes"] ];
+	
+	
+	def person := object: {
+		def name := "Yves Vandriessche";
+		def function := "PhD student";
+		
+		def ask(msg) {
+			def idx := answers.find: { |a| a[1] == msg };
+			if: ! (idx == nil) then: {
+				def answer := answers[idx][2];
+				[answer];
+			} else: {
+				[666];
+			};
+		};
+		
+		def export(i) {
+			def fact1 := makeTuple("SOFT member", "name", name);
+			def fact2 := makeTuple("SOFT member", "function", function);
+			[fact1, fact2];
+		};
+	} taggedAs: [SOFTmember];
+	
+	export: person as: SOFTmember;
+};

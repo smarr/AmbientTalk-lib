@@ -33,11 +33,17 @@ def environmentModule := lobby.frameworks.workflow.environment;
 def intensionalModule := lobby.frameworks.workflow.intensional;
 def crimeModule := lobby.bridges.crime.CrimeConnection;
 def standardPatternsModule := lobby.frameworks.workflow.standardPatterns;
+def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
+def failuresModule := lobby.frameworks.workflow.failures;
+def groupPatternsModule := lobby.frameworks.workflow.groupPatterns;
 import crimeModule;
 import initModule;
 import environmentModule;
 import intensionalModule;
 import standardPatternsModule;
+import compensatingActionsModule;
+import failuresModule;
+import groupPatternsModule;
 import /.at.lang.values;
 import /.at.lang.futures;
 enableFutures(false);
@@ -49,6 +55,15 @@ deftype Service;
 def ServiceDatabase := object: {
     def services := [];
     def servicesMapping := [];
+    def observers := [];
+    
+     def addObserver(group, env) {
+    	observers := observers + [[group, env]];
+    };
+    
+    def cancelObserver(group) {
+    	observers := observers.filter: { |g| ! (g[1] == group) };
+    };
         
     def findAll(tag) {
         def result := [];
@@ -58,7 +73,6 @@ def ServiceDatabase := object: {
     
     def find(id) {
     	def idx := servicesMapping.find: { |pair| pair[1] == id }; 
-    	def bla := if: (idx == nil) then: { "nil"; } else: { servicesMapping[idx][2]; };  //TODO
     	if: (idx == nil) then: { nil; } else: { servicesMapping[idx][2]; };
     };
     
@@ -76,12 +90,18 @@ def ServiceDatabase := object: {
 				servicesMapping := servicesMapping + [[factId, service]];
             	factId := factId + 1; 
             	services := services + [service];
+            	observers.each: { |groupEnv| def group := grpupEnv[1]; group.serviceDiscovered(service, groupEnv[2]); };
             	whenever: service disconnected: {
                 	system.println("Service disconnected");
+                	observers.each: { |groupEnv| def group := groupEnv[1]; group.serviceDisconnected(service, groupEnv[2]); };
                 	// TODO myCrime retract
                 	def idx := services.find: { |s| s == service; };
-                	services := services.select(1, idx) + services.select(idx + 1, services.length());
+                	services := services.select(1, idx) + services.select(idx + 1, services.length);
             	};
+            };
+            whenever: service reconnected: {
+            	system.println("service reconnected");
+            	observers.each: { |groupEnv| def group := groupEnv[1]; group.serviceReconnected(service, groupEnv[2]); };
             };
         };
     };
@@ -89,149 +109,332 @@ def ServiceDatabase := object: {
 
 
 
-def SnapshotGroup(d, var, cmp, syncBarrier := SynchronizingBarrier(percentage(100))) { 
-    object: {
-        def description := d;
-        def varName := var;
-        def component := Sequence(cmp, syncBarrier);
+def Group() {
+	def obj := extend: WorkflowComponent with: {
+		def passed := true;
+		def varName;
+	
+		// Check if a compensating action is allowed.
+		// When a group has already stopped execution (the future of the terminating join has been resolved),
+		// compensating actions that are triggered by participants who have not finished their execution 
+		// (e.g. the join has a condition which is not percentage(100))
+		// may not influence the group or activities outside the group pattern.
+		// Hence, we could opt to not allow any compensations when a group has finished execution.
+		// Instead we have chosen to allow the compensating actions Retry, Rediscover and Wait since they only influence 
+		// an activity in the group for one single participant.
+		def compensationAllowed(failureDescription, env) {
+			def group := env.group;
+			def failure := failureDescription.failureEvent;
+			if: ! group.passed then: {
+				true;
+			} else: {
+				def compensation := failureDescription.compensation;
+				if: ( ( (is: compensation taggedAs: RetryType).or: { is: compensation taggedAs: RediscoverType } ).or: { is: compensation taggedAs: WaitType } ) then: {
+					true;
+				} else: {
+					false;
+				};
+			};
+		};
+        
+        def start(env) { `ok; };
+        def cancel(env) { };
+        def drop(env) { };
+        def replace(cmp, env) { `ok; };
+        def decrease() { };
+    	def getEnvironmentId(instanceId) { nil; };
+    	def getDisconnection(env) { env.disconnection; };
+    	def getTimeout(env) { env.timeout; };
+    	def getException(env) { env.exception; };
+    	def getNotFound(env) { env.notFound; };
+    	def addDisconnection(env, service) { };
+    	def addTimeout(env, service) { };
+    	def addNotFound(env) { };
+    	def addException(env, service) { };
+    	def addParticipantDisconnection(env, service) { };
+    	def addParticipantTimeout(env, service) { };
+    	def addParticipantNotFound(env) { };
+    	def addParticipantException(env, service) { };
+    	def getDisconnections() { 0; };
+    	def getTimeouts() { 0; };
+    	def getNoutFounds() { 0; };
+    	def getExceptions() { 0; };
+    	def getParticipantDisconnections() { 0; };
+    	def getParticipantTimeouts() { 0; };
+    	def getParticipantNoutFounds() { 0; };
+    	def getParticipantExceptions() { 0; };
+    } taggedAs: [GroupPattern];
+    obj;
+};
+
+
+
+/**
+* Snapshot group.
+* @param description: description of the participants.
+*					  can be either an AMbientTalk type tag or a CRIME rule
+* @param varName: symbol representing the variable name (is stored in the environment during the execution of the group)
+* @param component: the component that must be executed for all participants of the group
+* @param join: (optional) how and when all resulting environments can be merged
+*              default when all participants have returned a resulting environment (100%) the environments are joined (values of identicale keys are merged in a table)
+*/
+def SnapshotGroup(_description, _varName, _component, _condition := percentage(100)) { 
+    def obj := extend: Group with: {
+    	def passed := false;
+    	def join := Join(_condition);
+        def description := _description;
+        def varName := _varName;
+        def component := Sequence(_component, join);
         def started := false;
         def numberOfParticipants := 0;
-    
+        def activeParticipants := 0;
+        def environmentIds := [];
+        def resolvers := [];
+        def failures := FailuresEnvironment();
+        
         def start(env) {
-        	env.insert(`groupInfo, self);
+        	def previousGroup := env.group;
+        	env.group := self;
             def [result, resolver] := makeFuture();
-            execute(env, resolver);
+            super^informObservers(env);
+            execute(env, resolver, previousGroup);
             result;
         };
+        
+        def cancel(env) {
+        	component.cancel(env);
+        };
+        
+        def drop(env) {
+        	decrease();
+        	if: (numberOfParticipants == 0) then: {
+        		cancel(env);
+        	};
+        };
+        
+        def decrease() {
+        	activeParticipants := activeParticipants - 1;
+        	if: activeParticipants == 0 then: {
+        		cancel(env);
+        	};
+        };
+        
+        def replace(cmp, env) {
+        	def [result, resolver];
+        	futures.each: { |p| if: ( p[1] == env.getId()) then: { [result, resolver] := p[2]; }; };
+        	when: cmp.start(env) becomes: { |nEnv|
+        		resolver.resolve(nEnv);
+        	};
+        	result;
+        };
     
-        def execute(env, resolver) {
-        	def ServiceDB := env.find(`serviceDB);
+        def execute(env, resolver, previousGroup) {
+        	def ServiceDB := env.serviceDB;
             def services := [];
             if: (is: description taggedAs: Rule) then: {
-            	description.findall( { |varMaps| varMaps.each: { |v|
-            											def s := ServiceDB.find(v.get(`id));
-            											services := services + [s]; };
-            							 numberOfParticipants := services.length();  
-            							 executeServices(env, resolver, services) ;});
+            	description.findall( { |varMaps| varMaps.each: { |v| def s := ServiceDB.find(v.get(`id));
+            											             services := services + [s]; };
+            							 numberOfParticipants := services.length;  
+            							 activeParticipants := numberOfParticipants;
+            							 executeServices(env, resolver, services, previousGroup) ;});
             } else: {
-            	services := ServiceDB.findAll(groupTag);
-            	executeServices(env, resolver, services);
+            	services := ServiceDB.findAll(description);
+            	numberOfParticipants := services.length; 
+            	activeParticipants := numberOfParticipants;
+            	executeServices(env, resolver, services, previousGroup);
            	};
 		};
 		
-		def executeServices(env, resolver, services) {
-            groupId := groupId + 1;
+		def executeServices(env, resolver, services, previousGroup) {
             def envs := [];
-            services.each: { |s| def clonedEnv := Environment.new(env); 
+            services.each: { |s| def clonedEnv := SystemEnvironment.new(env); 
                                  clonedEnv.insert(varName, s); 
+                                 environmentIds := environmentIds + [[clonedEnv.id, env.id]];
+                                 resolvers := resolvers + [[env.id, resolver]]; 
                                  when: component.start(clonedEnv) becomes: { |nEnv|
-                                 	nEnv.delete(`groupInfo); 
+                                 	passed := true;
+                                 	nEnv.group := previousGroup;
                                  	nEnv.delete(varName); 
                                  	resolver.resolve(nEnv); };
                            }; 
     	};
-    } taggedAs: [Pattern];
+    	
+    	def getEnvironmentId(instanceId) {
+    		def idx := environmentIds.find: { |e| e[1] == instanceId; };
+    		if: ! (idx == nil) then: {
+    			environmentIds[idx][2];
+    		} else: {
+    			nil;
+    		};
+    	};
+    	
+    	def getDisconnection(env) { env.participantDisconnection; };
+    	def getTimeout(env) { env.participantTimeout; };
+    	def getException(env) { env.participantException; };
+    	def getNotFound(env) { env.participantNotFound; };
+    	def addDisconnection(env, service) { failures.addDisconnection(env, service); };
+    	def addTimeout(env, service) { failures.addTimeout(env, service); };
+    	def addNotFound(env) { failures.addNotFound(env); };
+    	def addException(env, service) { failures.addException(env, service); };
+    	def addParticipantDisconnection(env, service) { failures.addParticipantDisconnection(env, service); };
+    	def addParticipantTimeout(env, service) { failures.addParticipantTimeout(env, service); };
+    	def addParticipantNotFound(env) { failures.addParticipantNotFound(env); };
+    	def addParticipantException(env, service) { failures.addParticipantException(env, service); };
+    	def getDisconnections() { failures.disconnectionIds.length; };
+    	def getTimeouts() { failures.timeoutIds.length; };
+    	def getNoutFounds() { failurs.notFoundIds.length; };
+    	def getExceptions() { failures.exceptionIds.length; };
+    	def getParticipantDisconnections() { failures.participantDisconnectionIds.length; };
+    	def getParticipantTimeouts() { failures.participantTimeoutIds.length; };
+    	def getParticipantNoutFounds() { failurs.participantNotFoundIds.length; };
+    	def getParticipantExceptions() { failures.participantExceptionIds.length; };
+    } taggedAs: [GroupPattern];
+    obj;
 };
 
 
 
-def Barrier(c) {
-	object: {
-		def condition := c;
-		def resultEnvs := [];
-		def futures := [];
-		def check := false;
-	
-		def start(env) {
-			def [result, resolver] := makeFuture();
-			resultEnvs := resultEnvs + [env];
-			execute(env, resolver);
-			result;
+/**
+* Living group.
+* @param description: description of the participants.
+*					  can be either an AMbientTalk type tag or a CRIME rule
+* @param varName: symbol representing the variable name (is stored in the environment during the execution of the group)
+* @param component: the component that must be executed for all participants of the group
+* @param join: (optional) how and when all resulting environments can be merged
+*              default when all participants have returned a resulting environment (100%) the environments are joined (values of identicale keys are merged in a table)
+*/
+def LivingGroup(_description, _varName, _component, _condition := percentage(100)) { 
+    def obj := extend: Group with: {
+    	def passed := false;
+    	def join := Join(_condition);
+        def description := _description;
+        def varName := _varName;
+        def component := Sequence(_component, join);
+        def started := false;
+        def numberOfParticipants := 0;
+        def activeParticipants := 0;
+        def environmentIds := [];
+        def resolvers := [];
+        def failures := FailuresEnvironment();
+        
+        def start(env) {
+        	def previousGroup := env.group;
+        	env.group := self;
+        	// add observer to the group (env passed since group can be started multiple times (multiple instance pattern warps group)).
+        	env.serviceDb.addObserver(self, env);
+            def [result, resolver] := makeFuture();
+            super^informObservers(env);
+            execute(env, resolver, previousGroup);
+            result;
+        };
+        
+        def cancel(env) {
+        	component.cancel(env);
+        };
+        
+        def drop(env) {
+        	decrease();
+        	if: (numberOfParticipants == 0) then: {
+        		cancel(env);
+        	};
+        };
+        
+        def decrease() {
+        	activeParticipants := activeParticipants - 1;
+        	if: activeParticipants == 0 then: {
+        		cancel(env);
+        	};
+        };
+        
+        def replace(cmp, env) {
+        	def [result, resolver];
+        	futures.each: { |p| if: ( p[1] == env.getId()) then: { [result, resolver] := p[2]; }; };
+        	when: cmp.start(env) becomes: { |nEnv|
+        		nEnv.serviceDB.cancelObserver(self);
+        		resolver.resolve(nEnv);
+        	};
+        	result;
+        };
+    
+        def execute(env, resolver, previousGroup) {
+        	def ServiceDB := env.serviceDB;
+            def services := [];
+            if: (is: description taggedAs: Rule) then: {
+            	description.findall( { |varMaps| varMaps.each: { |v| def s := ServiceDB.find(v.get(`id));
+            											             services := services + [s]; };
+            							 numberOfParticipants := services.length;  
+            							 activeParticipants := numberOfParticipants;
+            							 executeServices(env, resolver, services, previousGroup) ;});
+            } else: {
+            	services := ServiceDB.findAll(description);
+            	numberOfParticipants := services.length; 
+            	activeParticipants := numberOfParticipants;
+            	executeServices(env, resolver, services, previousGroup);
+           	};
 		};
-
-		def execute(env, resolver) {
-			def group := env.find(`groupInfo);
-			if: check then: {
-				system.println("barrier checked");
-				resolver.resolve(env);
-			} else: {
-				if: condition(self, group) then: {
-					system.println("barrier passed");
-					check := true;
-					futures := futures + [resolver];
-					def idx := 0;
-					futures.each: { |r| idx := idx+1; r.resolve(resultEnvs[idx]); };
-				} else: {
-					system.println("barrier not yet ok");
-					futures := futures + [resolver];
-				};
-			};
-		};
-	} taggedAs: [Pattern];
-};
-
-
-
-def SynchronizingBarrier(c) { 
-	object: {
-		def condition := c;
-		def resultEnvs := [];
-		def futures := [];
-		def check := false;
-		def first := true;
-		def [result, resolver];
-	
-		def start(env) {
-			resultEnvs := resultEnvs + [env];
-			if: first then: {
-				first := false;
-				[result, resolver] := makeFuture();
-			};
-			execute(env);
-			result;
-		};
-
-		def execute(env) {
-			def group := env.find(`groupInfo);
-			if: check then: {
-				system.println("barrier already passed");
-			} else: {
-				if: condition(self, group) then: {
-					system.println("barrier passed");
-					check := true;
-					futures := futures + [resolver];
-					def newEnv := resultEnvs[1];
-					newEnv.merge(resultEnvs.select(2, resultEnvs.length()+1), true); 
-					resolver.resolve(newEnv);
-				} else: {
-					system.println("barrier not yet ok");
-					futures := futures + [resolver];
-				};
-			};
-		};
-	} taggedAs: [Pattern];
-};
-
-
-
-def amount(n) {
-	{ |barrier, group| barrier.resultEnvs.length() >= n; };
-};
-
-
-def positive(varName, varValue, n) {
-	{ |barrier, group|
-		def envs := barrier.resultEnvs.filter( { |e| e.find(varName) == varValue; });
-		envs.length() >= n;
-	};
-};
-
-def percentage(n) {
-	{ |barrier, group|
-		def nbr := group.numberOfParticipants;
-		def envs := barrier.resultEnvs;
-		nbr / envs >= n /100; 
-	};
+		
+		def executeServices(env, resolver, services, previousGroup) {
+            def envs := [];
+            services.each: { |s| def clonedEnv := SystemEnvironment.new(env); 
+                                 clonedEnv.insert(varName, s); 
+                                 environmentIds := environmentIds + [[clonedEnv.id, env.id]];
+                                 resolvers := resolvers + [[env.id, resolver]]; 
+                                 when: component.start(clonedEnv) becomes: { |nEnv|
+                                 	passed := true;
+                                 	nEnv.group := previousGroup;
+                                 	nEnv.delete(varName); 
+                                 	nEnv.serviceDB.cancelObserver(self);
+                                 	resolver.resolve(nEnv); };
+                           }; 
+    	};
+    	
+    	def serviceDiscovered(service, env) {
+    		def failureDescription := env.getParticipantConnected();
+    		if: ! (failureDescription == nil) then: {
+    			def compensation := failureDescription.compensation;
+    			compensation.start(env, activity, failureDescription);
+    		};
+    	};
+    	
+    	def serviceDisconnected(service, env) {
+    		system.println("Participant disconnected");
+    	};
+    	
+    	def serviceReconnected(service, env) {	
+    		system.println("Participant reconnected");
+    	};
+    	
+    	def getEnvironmentId(instanceId) {
+    		def idx := environmentIds.find: { |e| e[1] == instanceId; };
+    		if: ! (idx == nil) then: {
+    			environmentIds[idx][2];
+    		} else: {
+    			nil;
+    		};
+    	};
+    	
+    	def getDisconnection(env) { env.participantDisconnection; };
+    	def getTimeout(env) { env.participantTimeout; };
+    	def getException(env) { env.participantException; };
+    	def getNotFound(env) { env.participantNotFound; };
+    	def addDisconnection(env, service) { failures.addDisconnection(env, service); };
+    	def addTimeout(env, service) { failures.addTimeout(env, service); };
+    	def addNotFound(env) { failures.addNotFound(env); };
+    	def addException(env, service) { failures.addException(env, service); };
+    	def addParticipantDisconnection(env, service) { failures.addParticipantDisconnection(env, service); };
+    	def addParticipantTimeout(env, service) { failures.addParticipantTimeout(env, service); };
+    	def addParticipantNotFound(env) { failures.addParticipantNotFound(env); };
+    	def addParticipantException(env, service) { failures.addParticipantException(env, service); };
+    	def getDisconnections() { failures.disconnectionIds.length; };
+    	def getTimeouts() { failures.timeoutIds.length; };
+    	def getNoutFounds() { failurs.notFoundIds.length; };
+    	def getExceptions() { failures.exceptionIds.length; };
+    	def getParticipantDisconnections() { failures.participantDisconnectionIds.length; };
+    	def getParticipantTimeouts() { failures.participantTimeoutIds.length; };
+    	def getParticipantNoutFounds() { failurs.participantNotFoundIds.length; };
+    	def getParticipantExceptions() { failures.participantExceptionIds.length; };
+    } taggedAs: [GroupPattern];
+    obj;
 };
 
 
@@ -239,10 +442,6 @@ def percentage(n) {
 def CRIMEGroupInteractionsModule := object: {
     deftype Service;
     def ServiceDatabase := ServiceDatabase;
+    def Group := &Group;
     def SnapshotGroup := &SnapshotGroup;
-    def Barrier := &Barrier;
-    def SynchronizingBarrier := &SynchronizingBarrier;
-    def amount := &amount;
-    def positive := &positive;
-    def percentage := &percentage;
 };

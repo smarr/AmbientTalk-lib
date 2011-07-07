@@ -1,0 +1,158 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+ 
+import /.at.lang.values;
+import /.at.lang.futures;
+enableFutures(true);
+network.online();
+
+deftype Customer;
+deftype MessagingService;
+deftype RecommendationService;
+deftype Shop;
+deftype AnnouncementService;
+deftype Stock;
+
+
+def discoverService(typeTag, next, notFound := { |_| _ }) {
+	when: typeTag discovered: { |service|
+		next(service);
+	};
+	/.at.support.timer.when: /.at.support.timer.seconds(20) elapsed: {
+		notFound();
+	};
+};
+
+def updateMap(customer, locs) {
+	when: customer<-updateMap(locs) becomes: { |reply|
+		reply;
+	};
+	whenever: customer disconnected: {
+		def updateMapAfterRediscover() { 
+			/.at.support.timer.when: /.at.support.timer.seconds(20) elapsed: {
+				discoverService(Customer, { |c| updateMap(c, locs) }, { |_| updateMapAfterRediscover()});
+			};
+		};
+		updateMapAfterRediscover(); 
+	};
+};
+
+def locateArticles(shop, articles) {
+	when: shop<-getLocation(articles) becomes: { 
+		def updateMapAfterRediscover() { 
+			/.at.support.timer.when: /.at.support.timer.seconds(20) elapsed: {
+				discoverService(Customer, { |c| updateMap(c, locs) }, { |_| updateMapAfterRediscover()});
+			};
+		};
+		discoverService(Customer, { |c| updateMap(c, locs) }, { |_| updateMapAfterRediscover() }); 
+	}; 
+};
+
+def announce(announcementS, customer) {
+	when: announcementS<-goToCustomerService(customer) becomes: { |reply|
+		reply;
+	} catch: TimeoutException using: { |e|
+		announce(announcementS, customer);
+	};
+	whenever: announcementS disconnected: {
+		discoverService(AnnouncementService, { |a| announce(a, customer) });
+	};
+};
+
+def notInStock(customer) {
+	when: customer<-notInStock() becomes: { |reply|
+		reply;
+	} catch: TimeoutException using: { |e|
+		discoverService(AnnouncementService, { |a| announce(a, customer) });
+	};
+};
+
+def checkArticles(stock, articles, customer) {
+	when: stock<-check(articles) becomes: { |in_stock|
+		if: (in_stock == true) then: {
+			discoverService(Shop, { |s| locateArticles(s, articles) });
+		} else: {
+			discoverService(Customer, { |c| notInStock(c) }, { |_| discoverService(AnnouncementService, { |a| announce(a, customer) }) });
+		};
+	};
+};
+
+def recommendToCustomer(customer, recommendations) {
+	when: customer<-recommend(recommendations) becomes: { |reply|
+		reply;
+	} catch: TimeoutException using: { |e|
+		discoverService(Customer,
+						{ |c| recommendToCustomer(c, recommendations) },
+					    { |_| system.println("skipped") });
+	};
+	whenever: customer disconnected: {
+		system.println("skipped");
+	};
+};
+
+def getRecommendations(recommendationS, articles) {
+	def ctr := 0;
+	
+	def retrieveList(recommendationS) {
+		if: (ctr == 2) then: {
+			system.println("skipped");
+		} else: {
+			when: recommendationS<-get(articles) becomes: { |recommendations|
+				discoverService( Customer,
+				                 { |c| recommendToCustomer(c, recommendations)}, 
+				                 { |_| system.println("skipped") });
+			} catch: TimeoutException using: { |e|
+				ctr := ctr + 1;
+				discoverService( RecommendationService,
+								 { |r| retrieveList(r) },
+								 { |_| system.println("skipped") } );
+			};
+			whenever: recommendationS disconnected: {
+				system.println("skipped");
+			};
+		};
+	};
+	
+	retrieveList(recommendationS);
+};
+
+def enter(customer) {
+	when: customer<-shoppingList() becomes: { |articles|
+		discoverService(Stock, { |s| checkArticles(s, articles, customer) });
+		discoverService(RecommendationService, { |r| getRecommendations(r, articles) }, { |_| system.println("skipped") });
+	} catch: TimeoutException using: { |e|
+		enter(customer);
+	};
+	whenever: customer disconnected: {
+		discoverService(Customer, { |c| enter(c) });
+	};
+};
+
+discoverService(Customer, { |c| enter(c) });

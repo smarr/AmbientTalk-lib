@@ -1,0 +1,567 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Soft Ambient Group
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * @author eline.philips
+ */
+ 
+ 
+def initModule := lobby.frameworks.workflow.WFinit;
+def dictionaryModule := lobby.frameworks.workflow.dictionary;
+def activityModule := lobby.frameworks.workflow.activity;
+import initModule;
+import dictionaryModule;
+import activityModule;
+import /.at.lang.values;
+import /.at.lang.futures;
+
+
+/**
+* Failure object representig a failure pattern that surrounds a subworkflow and specifies compensating actions of specific kind of failure events.
+* @param component: the component (subworkflow) surrouned by the failure pattern
+* @param failureDescriptions: table consisting of failureDescriptions describing the compensating action for a failure
+*/
+def Failure(_component, _failureDescriptions) {
+    object: {   
+        def component := _component;
+        def failureDescriptions :=_failureDescriptions;
+        def futures := Dictionary.new();
+
+        def start(env) {
+            def [result, resolver] := makeFuture(); 
+            futures.insert(env.id, [result, resolver]);
+            execute(env, resolver);
+            result;
+        };
+        
+        def restart(env) {
+        	def [result, resolver] := futures.find(env.id);
+        	cancel(env);
+        	when: component.start(env) becomes: { |nEnv|
+        		resolver.resolve(nEnv);
+        	};
+        	result;
+        };
+        
+        def replace(cmp, env) {
+        	def future := futures.find(env.getId());
+        	def [result, resolver] := if: (future == nil) then: { futures.find(env.id); } else: { future; };
+			cancel(env);
+        	when: cmp.start(env) becomes: { |nEnv|
+        		resolver.resolve(nEnv);
+        	};
+        	result;
+        };
+        
+        def cancel(env) {
+        	component.cancel(env);
+        };
+    
+    	// Shadow the failure types in the environment.
+        def replaceFailure(_failureDescription, env) {
+        	def failureDescription := _failureDescription;
+        	// Syntactic sugar [ failure, compensation ] = FailureDescription(failure, compensation)
+        	if: (is: failureDescription taggedAs: Table) then: {
+        		failureDescription := FailureDescription(failureDescription[1], failureDescription[2]);
+        	};
+        	failureDescription.updateFailurePattern(self);
+        	env.addFailure(failureDescription);
+        };
+        	
+        def execute(env, resolver) {
+        	// Shadow the failure types in the environment.
+			def prevFailureDescriptions := env.getFailureDescriptions();
+            failureDescriptions.each: { |failureDescription| replaceFailure(failureDescription, env); };
+            // Run the component and restore the failure types in the environment.
+			when: component.start(env) becomes: { |nEnv|
+				nEnv.restoreFailureDescriptions(prevFailureDescriptions);
+                resolver.resolve(nEnv); 
+            };
+        };
+    } taggedAs: [Pattern];
+};
+
+
+
+/**
+* Rrturns a failure description object.
+* @param failureEvent
+* @param compensation
+*/
+def FailureDescription(_failureEvent, _compensation) {
+	object: {
+		def failureEvent := _failureEvent;
+		def compensation := _compensation;
+		def failurePattern;
+		
+		def updateFailurePattern(f) {
+			failurePattern := f;
+		};
+	};
+};
+
+
+
+/**
+* Disconnection failure event.
+*/
+def Disconnection() {
+    object: {    
+    	def addToEnvironment(env, failureDescription) {
+    		env.disconnection := failureDescription;
+    	};
+    	
+    	def addToGroup(env, service) {
+    		env.group.addDisconnection(env, service);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getDisconnections();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.disconnectionIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		def failureServices := env.group.disconnectionServices;
+    		failureServices := failureServices.filter: { |s| s == service; };
+    		failureServices.length;
+    	};
+    } taggedAs: [DisconnectionType];
+};
+
+
+/**
+* ParticipantDisconnection failure event.
+*/
+def ParticipantDisconnection() {
+    object: {
+    	def addToEnvironment(env, failureDescription) {
+    		env.participantDisconnection := failureDescription;
+    	};
+    	
+    	def addToGroup(env, service) {
+    		env.group.addParticipantDisconnection(env, service);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getParticipantDisconnections();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.participantDisconnectionIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		def failureServices := env.group.participantDisconnectionServices;
+    		failureServices := failureServices.filter: { |s| s == service; };
+    		failureServices.length;
+    	};
+    } taggedAs: [ParticipantDisconnectionType];
+};
+
+
+/**
+* Timeout failure event.
+* @param duration: duration before we can conclude that a timeout occured
+*/
+def Timeout(_duration := 2000000) { //TODO: for testing (10)
+    object: {
+        def duration := _duration;
+        
+        def addToEnvironment(env, failureDescription) {
+    		env.timeout := failureDescription;
+    	};
+    	
+    	def addToGroup(env, service) {
+    		env.group.addTimeout(env, service);
+    	};
+    	
+    	def getFailuresOfAll(env) { 
+    		env.group.getTimeouts();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.timeoutIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		def failureServices := env.group.TimeoutServices;
+    		failureServices := failureServices.filter: { |s| s == service; };
+    		failureServices.length;
+    	};
+    } taggedAs: [TimeoutType];
+};
+
+
+/**
+* ParticipantTimeout failure event.
+* @param duration: duration before we can conclude that a timeout occured
+*/
+def ParticipantTimeout(_duration) {
+    object: {
+        def duration := _duration;
+        
+        def addToEnvironment(env, failureDescription) {
+    		env.participantTimeout := failureDescription;
+    	};
+    	
+    	def addToGroup(env, service) {
+    		env.group.addParticipantTimeout(env, service);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getParticipantTimeouts();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.participantTimeoutIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		def failureServices := env.group.participantTimeoutServices;
+    		failureServices := failureServices.filter: { |s| s == service; };
+    		failureServices.length;
+    	};
+    } taggedAs: [ParticipantTimeoutType];
+};
+
+
+/**
+* NotFound failure event.
+* @param duration: duration before we can conclude that a service is not found (default 20 seconds)
+*/
+def NotFound(_duration := 2000000) {   //TODO: for testing (20)
+    object: {
+    	def duration := _duration;
+    	
+    	def addToEnvironment(env, failureDescription) {
+    		env.notFound := failureDescription;
+    	};
+    	
+    	def addToGroup(env) {
+    		env.group.addNotFound(env);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getNotFounds();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.notFoundIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		0;
+    	};
+    } taggedAs: [NotFoundType];
+};
+
+
+/**
+* ParticipantNotFound failure event.
+* @param duration: duration before we can conclude that a service is not found (default 20 seconds)
+*/
+def ParticipantNotFound(_duration := 20) {
+    object: {
+    	def duration := _duration;
+    	
+    	def addToEnvironment(env, failureDescription) {
+    		env.participantNotFound := failureDecription;
+    	};
+    	
+    	def addToGroup(env) {
+    		env.group.addParticipantNotFound(env);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getParticipantNotFounds();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.participantNotFoundIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		0;
+    	};
+    } taggedAs: [ParticipantNotFoundType];
+};
+
+
+/**
+* Exception failure event.
+*/
+def Exception() {
+	object: {
+		def addToEnvironment(env, failureDescription) {
+    		env.exception := failureDescription;
+    	};
+    	
+    	def addToGroup(env, service) {
+    		env.group.addException(env, service);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getExceptions();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.exceptionIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		def failureServices := env.group.exceptionServices;
+    		failureServices := failureServices.filter: { |s| s == service; };
+    		failureServices.length;
+    	};
+	} taggedAs: [ExceptionType];
+};
+
+
+/**
+* ParticipantException failure event.
+*/
+def ParticipantException() {
+	object: {
+		def addToEnvironment(env, failureDescription) {
+    		env.participantException := failureDescription;
+    	};
+    	
+    	def addToGroup(env, service) {
+    		env.group.addParticipantException(env, service);
+    	};
+    	
+    	def getFailuresOfAll(env) {
+    		env.group.getParticipantExceptions();
+    	};
+    	
+    	def getFailuresOfSameParticipant(env) {
+    		def failureIds := env.group.participantExceptionIds;
+    		failureIds := failureIds.filter: { |id| env.id == id; };
+    		failureIds.length;
+    	};
+    	
+    	def getFailuresOfSameService(env, service) {
+    		def failureServices := env.group.participantExceptionServices;
+    		failureServices := failureServices.filter: { |s| s == service; };
+    		failureServices.length;
+    	};
+	} taggedAs: [ParticipantExceptionType];
+};
+
+
+/**
+* Combiner failure event.
+* @param combiner: AmbientTalk block (for instance { |a, b| a.and: {b} })
+* @param failureEvents: table containing Times failure events
+* @param goal
+*/
+def Combiner(_combiner, _failureEvents, _goal) {
+	object: {
+		def combiner := _combiner;
+		def failureEvents := _failureEvents;
+		def goal := _goal;
+		
+		def addToEnvironment(env, failureDescription) {
+    		env.combinerFailures := env.combinerFailures + [failureDescription];
+    	};
+    	
+    	def retrieveCheckFunction() {
+    		if: goal == `all then: {
+    			{ |env, failureEvent| checkAllFailure(env, failureEvent); };
+    		} else: {
+    			if: goal == `participant then: {
+    				{ |env, failureEvent| checkSameParticipantFailure(env, failureEvent); };
+    			} else: {
+    				{ |env, failureEvent| checkSameServiceFailure(env, failureEvent); };   
+    			}; //TODO else error
+    		};
+    	};
+
+		def checkCombination(env) {
+			def check := retrieveCheckFunction();
+			def result := check(env, failureEvents[1]);
+			failureEvents.each: { |failureEvent| result := combiner(result, check(env, failureEvent)) };
+			result;
+		};
+
+		def checkAllFailure(env, failureEvent) {
+			// failureEvent is Times(nbr, failure)
+			def nbr := failureEvent.failure.getFailuresOfAll(env);
+			( ! (nbr == 0) ).and: { nbr % failureEvent.number == 0 };
+		};
+		
+		def checkSameParticipantFailure(env, failureEvent) {
+			def nbr := failureEvent.failure.getFailuresOfSameParticipant(env);
+			( ! (nbr == 0) ).and: { nbr % failureEvent.number == 0 };
+		};
+		
+		// In case of a not found, service equals nil
+		def checkSameServiceFailure(env, service := nil) {
+			def nbr := failureEvent.failure.getFailuresOfSameService(env, service);
+			( ! (nbr == 0) ).and: { nbr % failureEvent.number == 0 };
+		};
+		
+		def getTimeoutDuration() {
+			def duration;
+			failureEvents.each: { |failureEvent| if: (is: failureEvent.failure taggedAs: TimeoutType) then: { duration := failureEvent.failure.duration; }; };
+			duration;
+		};
+		
+		def getNotFoundDuration() {
+			def duration;
+			failureEvents.each: { |failureEvent| if: (is: failureEvent.failure taggedAs: NotFound) then: { duration := failureEvent.failure.duration; }; };
+			duration;
+		};
+		
+		def addToGroup(env) {
+			failureEvents.each: { |failureEvent| failureEvent.failure.addToGroup(env); };
+		};
+		
+		def hasTag(tag) {
+			def result := false;
+			failureEvents.each: { |failureEvent| if: (is: failureEvent.failure taggedAs: tag) then: { result := true; }; };
+			result;
+		};
+		
+		def getFailure(tag) {
+			def result;
+			failureEvents.each: { |failureEvent| if: (is: failureEvent.failure taggedAs: tag) then: { result := failureEvent.failure; }; };
+			result;
+		};
+		
+	} taggedAs: [CombinerType];
+};
+
+
+/**
+* Times failure event.
+* @param number: the number of times the specific failure must have occured
+* @param failure
+*/
+def Times(_number, _failure) {
+	object: {
+		def number := _number;
+		def failure := _failure;
+	};
+};
+
+
+
+/**
+* FailureEnvironment (needed by group patterns) storing the failures that happened.
+*/
+def FailuresEnvironment() {
+	object: {
+		def disconnectionIds := [];
+		def disconnectionServices := [];
+		def timeoutIds := [];
+		def timeoutServices := [];
+		def exceptionIds := [];
+		def exceptionServices := [];
+		def notFoundIds := [];
+		def notFoundServices := [];
+		def participantDisconnectionIds := [];
+		def participantDisconnectionServices := [];
+		def participantTimeoutIds := [];
+		def participantTimeoutServices := [];
+		def participantExceptionIds := [];
+		def participantExceptionServices := [];
+		def participantNotFoundIds := [];
+		def participantNotFoundServices := [];
+	
+		def addDisconnection(env, service) {
+			disconnectionsId := disconnectionIds + [env.id];
+			disconnectionServices := disconnectionServices + [service];
+		};
+	
+		def addTimeout(env, service) {
+			timeoutIds := timeoutIds + [env.id];
+			timeoutServices := timeoutServices + [service];
+		};
+	
+		def addException(env, service) {
+			exceptionIds := exceptionIds + [env.id];
+			exceptionServices := exceptionServices + [services];
+		};
+	
+		def addNotFound(env) {
+			notFoundIds := notFoundIds + [env.id];
+		};
+		
+		def addParticipantDisconnection(env, service) {
+			participantDisconnectionIds := participantDisconnectionIds + [env.id];
+			participantDisconnectionServices := participantDisconnectionServices + [service];
+		};
+	
+		def addParticipantTimeout(env, service) {
+			participantTimeoutIds := participantTimeoutIds + [env.id];
+			participantTimeoutServices := participantTimeoutServices + [service];
+		};
+	
+		def addParticipantException(env, service) {
+			participantExceptionIds := participantExceptionIds + [env.id];
+			participantExceptionServices := participantExceptionServices + [service];
+		};
+	
+		def addParticipantNotFound(env) {
+			participantNotFoundIds := participantNotFoundIds + [env.id];
+		};
+	};
+};
+
+
+
+def FailuresModule := object: {
+    def Failure := &Failure;
+    def FailureDescription := &FailureDescription;
+    def Disconnection := &Disconnection;
+    def ParticipantDisconnection := &ParticipantDisconnection;
+    def Timeout := &Timeout;
+    def ParticipantTimeout := &ParticipantTimeout;
+    def NotFound := &NotFound;
+    def ParticipantNotFound := &ParticipantNotFound;
+    def Exception := &Exception;
+    def ParticipantException := &ParticipantException;
+    def Combiner := &Combiner;
+    def Times := &Times;
+    def FailuresEnvironment := &FailuresEnvironment;
+};

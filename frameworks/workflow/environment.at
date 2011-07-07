@@ -29,80 +29,325 @@
  
  
 def initModule := lobby.frameworks.workflow.WFinit;
+def dictionaryModule := lobby.frameworks.workflow.dictionary;
+def compensatingActionsModule := lobby.frameworks.workflow.compensatingActions;
+def failuresModule := lobby.frameworks.workflow.failures;
+def groupModule := lobby.frameworks.workflow.CRIMEgroupInteractions;
 import initModule;
+import dictionaryModule;
+import compensatingActionsModule;
+import failuresModule;
+import groupModule;
+def activityModule := lobby.frameworks.workflow.activity;
+import activityModule;
+def asw := defService(`AService);  //TODO
  
- 
- def Environment := object: {
-    def dict := [];
-    def id;
-
-    def insert(name, value, merging := false) {
-        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
-        if: idx == nil then: {
-            dict := dict + [[name, value]];
-        } else: {
-        	if: merging then: {
-        		def oldValue := dict.at(idx)[2];
-        		def newValue := if: (is: oldValue taggedAs: Table) then: { oldValue + [value]; } else: { [oldValue] + [value]; };
-        		dict[idx] := [name, newValue]; 
-        	} else: {
-            	dict[idx] := [name, value];
-            };
-        };
-    };
+/**
+* A system environment object which contains specific workflow information. 
+* One environment for each workflow instance.
+*/
+def SystemEnvironment := extend: Dictionary with: {
+	def id;									// the id of the environment
+	def serviceDB := ServiceDatabase.new();	// the service database (for group interactions)
+	def group := Group();					// the group pattern 
+	// Failure descriptions
+	// default compensating action for disconnection is rediscover
+    def disconnection := FailureDescription( Disconnection(), Rediscover() );	
+    // default compensating action for timeout is retry		
+    def timeout := FailureDescription( Timeout(), Retry() );						
+    def notFound;				
+    def exception := FailureDescription( Exception(), Component(asw.a(222)@Output(Env.a)) );				
+    // Failure descriptions for group interaction failures
+    def participantDisconnection;	
+    def participantTimeout;
+    def participantNotFound;
+    def participantException := FailureDescription( ParticipantException(), Component(asw.a(222)@Output(Env.a)) );  
+    // Failure descriptions of combiners
+    def combinerFailures := [];  
     
-    def replace(name, value) {
-        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
-        if: idx == nil then: {
-            dict := dict + [[name, value]];
-        } else: {
-            dict[idx] := [name, value];
-        };
-    };
-    
-    def delete(name) {
-        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
-        if: idx != nil then: {
-            dict[idx] := [];
-            dict := dict.filter: { |e| ! e.isEmpty() };
-        };
-    };
-    
-    def find(name) {
-        def idx := dict.find: { |keyValuePair|  (keyValuePair[1] == name) };
-        if: idx == nil then: {
-            nil;
-        } else: {
-            dict[idx][2];
-        };
-    };
-    
-    def bind(arguments) { 
-        arguments.map: { |arg| if: (is: arg taggedAs: Variable) then: { find(arg.variable); } else: { arg; }; };
-    };
-    
-    def isEmpty() {
-        dict.isEmpty();
-    };
-    
-    def merge(envs, merging := false) {
-        envs.each: { |env| env.dict.each: { |pair| insert(pair[1], pair[2], merging); }; };
-    };
-    
+    /**
+    * Initialise a new system environment
+    * @param envsToCOpy: optional environments whose values that need to be inserted in this one
+    */
     def init(@envsToCopy) {
+    	// Increase the global identifier, such that each environment has a unique id
     	initModule.id := initModule.id + 1;
     	self.id := initModule.id;
-        self.merge(envsToCopy)
+    	// Insert the values of the environments into this one
+		def dictionaries := [];
+		envsToCopy.each: { |env| dictionaries := dictionaries + [env.super]; };
+        self.merge(dictionaries);
+        if: (envsToCopy.length > 0) then: { 
+    		// Copy the values of the failure descriptions and serviceDB
+        	def env := envsToCopy[1];
+        	self.disconnection := env.disconnection;
+    		self.timeout := env.timeout;
+    		self.notFound := env.notFound;
+    		self.exception := env.exception;
+    		self.participantDisconnection := env.participantDisconnection;
+    		self.participantTimeout := env.participantTimeout;
+    		self.participantNotFound := env.participantNotFound;
+    		self.participantException := env.participantException;
+    		self.combinerFailures := env.combinerFailures;
+    		self.group := env.group;
+    		self.serviceDB := env.serviceDB;
+    	};
     };
     
-    def print() {
-        system.println(dict);
+    /**
+    * Retrieve the id of the environment.
+	* In case there is a group, retrieve the id of the group instead.
+	* This is necessary since for group comunication, new environments (and hence new ids) are being made for each participant of the group.
+ 	* However, when something goes wrong (i.e. a failure occurs) and for instance the component surrounded by the group needs to be replaced,
+	* we need to be able to look up the future of the group (which can b eretrieved when knowing the identifier of the group).
+	* @output id: the identifier of this environment in case no group interaction is busy, otherwise the id of the group
+    */
+    def getId() {
+    	def groupId := group.getEnvironmentId(id);
+    	if: (groupId == nil) then: { id; } else: { groupId; };
     };
-};
+    
+    /**
+	* Retrieve all failure descriptions stored in the environment.
+	* @output dictionary containing the failure descriptions
+	*/
+    def getFailureDescriptions() {
+    	def dict := Dictionary.new();
+    	dict.insert(`disconnection, disconnection);
+    	dict.insert(`timeout, timeout);
+    	dict.insert(`notFound, notFound);
+    	dict.insert(`exception, exception);
+    	dict.insert(`participantDisconnection, participantDisconnection);
+    	dict.insert(`participantTimeout, participantTimeout);
+    	dict.insert(`participantNotFound, participantNotFound);
+    	dict.insert(`participantException, participantException);
+    	dict;
+    };
+    
+    /**
+	* Change all the failure descriptions.
+	* @param failureDescriptions: dictionary containing for each failure event its failure description
+	*/
+    def restoreFailureDescriptions(failureDescriptions) {
+    	disconnection := failureDescriptions.find(`disconnection);
+    	timeout := failureDescriptions.find(`timeout);
+    	notFound := failureDescriptions.find(`notFound);
+    	exception := failureDescriptions.find(`exception);
+    	participantDisconnection := failureDescriptions.find(`participantDisconnection);
+    	participantTimeout := failureDescriptions.find(`participantTimeout);
+    	participantNotFound := failureDescriptions.find(`participantNotFound);
+    	participantException := failureDescriptions.find(`participantException);
+    };
+    
+    /**
+    * Retrieve the failure description (whose failureEvent is a combiner) of a certain type tag.
+    * @param type
+    * @output the failure description if one is found, nil otherwise
+    */
+    def findCombinerFailure(type) {
+    	def result;
+    	combinerFailures.each: { |failureDescription| if: failureDescription.failureEvent.hasTag(type) then: { result := failureDescription; }; };
+    	result;
+    };
+    
+    /**
+    * Retrieve the failure description of a combiner whose combination of failures is fulfilled.
+    * @output the failure description if one is found, nil otherwise
+    */
+    def findFulfilledCombinerFailure() {
+    	def result;
+    	combinerFailures.each: { |failureDescription| if: failureDescription.failureEvent.checkCombination(self) then: { result := failureDescription; }; };
+    	result;
+    };
+    
+    /**
+    * Get the failure description of a disconnection.
+    * @param find: function for finding the failure description of a combiner (type tag versus fulfilled combination of failures).
+    *              default value is findFulfilledCombinerFailure
+    * @output the failure description of a disconnection
+    *		  in case a combiner is found, we return its failure description
+    *		  otherwise we return the failure description of the disconnection specified by the group
+    *		  (note that this can equal nil)
+    */
+    def getDisconnection(find := findFulfilledCombinerFailure) {
+    	def combiner := find();
+    	if: ! (combiner == nil) then: {
+	    	combiner;
+    	} else: {
+    		group.getDisconnection(self);
+    	};
+    };
+    
+    /**
+    * In case there is group interaction, notify the group that a disconnection has occured.
+    */
+    def disconnectionOccured(service) {
+    	def disconnectionFailureDescription := getDisconnection(findCombinerFailure(DisconnectionType));
+    	if: ! (disconnectionFailureDescription == nil)  then: {
+       		if: (is: disconnectionFailureDescription.failureEvent taggedAs: DisconnectionType) then: {
+    			disconnectionFailureDescription.failureEvent.addToGroup(self, service);
+    		} else: {
+    			// disconnectionFailureDescription has a combiner as its failure event
+    			def disconnectionFailure := disconnctionFailureDescription.failureEvent.getFailure(DisconnectionType);
+        		disconnectionFailure.addToGroup(self, service);
+        	};
+        };
+    };
+    
+    /**
+    * Get the failure description of a timeout.
+    * @param find: function for finding the failure description of a combiner (type tag versus fulfilled combination of failures).
+    *              default value is findFulfilledCombinerFailure
+    * @output the failure description of a timeout
+    *		  in case a combiner is found, we return its failure description
+    *		  otherwise we return the failure description of the timeot speicfied by the group
+    *		  (note that this can equal nil)
+    */
+    def getTimeout(find := findFulfilledCombinerFailure) {
+    	def combiner := find();
+    	if: ! (combiner == nil) then: {
+	    	combiner;
+    	} else: {
+    		group.getTimeout(self);
+    	};
+    };
+    
+    /**
+	* Retrieve the duration in case a timeout failure was specified.
+	* Needed in order to annotate the asynchronous message with @Due(duration).
+	* @output: in case a timeout failure is used in a combiner, return the duration specified by that timeout
+	*		   in case group interaction is happening, return the duration specified by its timeout
+	*		   (note that this can equal nil)
+	*/
+    def getTimeoutDuration() {
+    	def timeoutFailureDescription := getTimeout(findCombinerFailure(TimeoutType));
+    	if: !(timeoutFailureDescription == nil) then: {
+    		if: (is: timeoutFailureDescription.failureEvent taggedAs: TimeoutType) then: {
+    			timeoutFailureDescription.failureEvent.duration;
+    		} else: {
+    			// TimeoutType is part of a Combiner
+    			timeoutFailureDescription.failureEvent.getTimeoutDuration();
+    		};
+    	};
+    };
+    
+     /**
+    * In case there is group interaction, notify the group that a timeout has occured.
+    */
+    def timeoutOccured(service) {
+    	def timeoutFailureDescription := getTimeout(findCombinerFailure(TimeoutType));
+    	if: ! (timeoutFailureDescription == nil) then: {
+        	if: (is: timeoutFailureDescription.failureEvent taggedAs: TimeoutType) then: {
+    			timeoutFailureDescription.failureEvent.addToGroup(self, service);
+    		} else: {
+    			// exceptionFailureDescription has a combiner as its failure event
+    			def timeoutFailure := timeoutFailureDescription.failureEvent.getFailure(TimeoutType);
+        		timeoutFailure.addToGroup(self, service);
+        	};
+        };
+    };
+    
+    /**
+    * Get the failure description of a not found failure.
+    * @param find: function for finding the failure description of a combiner (type tag versus fulfilled combination of failures).
+    *              default value is findFulfilledCombinerFailure
+    * @output the failure description of a not found
+    *		  in case a combiner is found, we return its failure description
+    *		  otherwise we return the failure description of the not found of the group
+    *		  (note that thiscan equal nil)
+    */
+    def getNotFound(find := findFulfilledCombinerFailure) {
+    	def combiner := find();
+    	if: ! (combiner == nil) then: {
+	    	combiner;
+    	} else: {
+    		group.getNotFound(self);
+    	};
+    };
+    
+    /**
+	* Retrieve the duration in case a not found failure was specified.
+	* Needed in order to know when the failure occurs (after x time has elapsed since discovery started).
+	* @output: in case a not found failure is used in a combiner, return the duration specified by that not found
+	*		   in case group interaction is happening, return the duration specified by its notFound
+	*		   (note that this can equal nil)
+	*/
+     def getNotFoundDuration() {
+    	def notFoundFailureDescription := getNotFound(findCombinerFailure(NotFoundType));
+    	if: !(notFoundFailureDescription == nil) then: {
+    		if: (is: notFoundFailureDescription.failureEvent taggedAs: NotFoundType) then: {
+    			notFoundFailureDescription.failureEvent.duration;
+    		} else: {
+    			// NotFoundType is part of a Combiner
+    			notFoundFailureDescription.failureEvent.getNotFoundDuration();
+    		};
+    	};
+    };
+    
+     /**
+    * In case there is group interaction, notify the group that a not found failure has occured.
+    */
+    def notFoundOccured() {
+    	def notFoundFailureDescription := getNotFound(findCombinerFailure(NotFoundType));
+    	if: ! (notFoundFailureDescription == nil) then: {
+        	if: (is: notFoundFailureDescription.failureEvent taggedAs: NotFoundType) then: {
+    			notFoundFailureDescription.failureEvent.addToGroup(self);
+    		} else: {
+    			// notFoundFailureDescription has a combiner as its failure event
+    			def notFoundFailure := notFoundFailureDescription.failureEvent.getFailure(NotFoundType);
+        		notFoundFailure.addToGroup(self);
+        	};
+        };
+    };
+    
+    /**
+    * Get the failure description of a exception.
+    * @param find: function for finding the failure description of a combiner (type tag versus fulfilled combination of failures).
+    *              default value is findFulfilledCombinerFailure
+    * @output the failure description of an exception
+    *		  in case a combiner is found, we return its failure description
+    *		  otherwise we  return the failure description of the exception specified by the group
+    *		  (note that this can equal nil)
+    */
+    def getException(find := findFulfilledCombinerFailure) {
+    	def combiner := find();
+    	if: ! (combiner == nil) then: {
+	    	combiner;
+    	} else: {
+    		group.getException(self);
+    	};
+    };
+    
+     /**
+    * In case there is group interaction, notify the group that an exception has occured.
+    */
+    def exceptionOccured(service) {
+    	def exceptionFailureDescription := getException(findCombinerFailure(ExceptionType));
+    	if: ! (exceptionFailureDescription == nil) then: {
+    		if: (is: exceptionFailureDescription.failureEvent taggedAs: ExceptionType) then: {
+    			exceptionFailureDescription.failureEvent.addToGroup(self, service);
+    		} else: {
+    			// exceptionFailureDescription has a combiner as its failure event
+    			def exceptionFailure := exceptionFailureDescription.failureEvent.getFailure(ExceptionType);
+        		exceptionFailure.addToGroup(self, service);
+        	};
+        };
+    };
+    
+    /**
+    * Add a failure description to the environment.
+	* Results in the failure adding its failure description to the environment.
+    * @param failureDescription
+    */
+    def addFailure(failureDescription) {
+    	def failure := failureDescription.failureEvent;
+    	failure.addToEnvironment(self, failureDescription);
+    };
+} taggedAs: [Environment];
 
 
  
 def environmentModule := object: {
-    def Environment := Environment;
+    def SystemEnvironment := SystemEnvironment;
 };
 

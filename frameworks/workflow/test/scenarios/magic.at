@@ -26,6 +26,7 @@
  *
  * @author eline.philips
  */
+ 
 
 def initModule := lobby.frameworks.workflow.WFinit;
 def environmentModule := lobby.frameworks.workflow.environment;
@@ -41,57 +42,66 @@ import environmentModule;
 import activityModule;
 import standardPatternsModule;
 import compensatingActionsModule;
-//import groupInteractionsModule;
 import crimeModule;
 import intensionalModule;
 import CRIMEgroupInteractionsModule;
-
-
-def WFenv := SystemEnvironment.new();
-//def ServiceDB := ServiceDatabase.new();
-
-
-WFenv.insert(`passenger, "Stijn Verhaegen");
-WFenv.insert(`flight, "BA376 to NewYork");
-
 import /.at.lang.values;
 import /.at.lang.futures;
 enableFutures(false);
 network.online();
 
 
-def MessagingService := defService(`MessagingService);
-def AnnouncementService := defService(`AnnouncementService);
-def Assistance := defService(`Assistance);
-def BoardingResponsible := defService(`BoardingResponsible);
-def LastMinute := defService(`LastMinute);
-def LuggageService := defService(`LuggageService);
-def ControlTower := defService(`ControlTower);
+def WFenv := SystemEnvironment.new();
+def ServiceDB := ServiceDatabase.new();
+WFenv.serviceDB := ServiceDB;
+deftype SOFTmember <: Service;
 
 
-//==================================
-def seq4 := Sequence( BoardingResponsible.waitForPassenger(Env.passenger), ControlTower.takeoff(Env.flight) );
-def structDiscr := StructuredDiscriminator( seq4 );
+def Local(blk) {
+    object: {
+        def block := blk;
+        def resolvers := [];
 
-def sync2 := Synchronize( ControlTower.takeoff(Env.flight) );
-def seq5 := Sequence( LastMinute.freeSeat(Env.flight, Env.passenger), Connection(sync2) );
-def seq6 := Sequence( LuggageService.removeLuggage(Env.flight, Env.passenger), Connection(sync2) );
-def seq7 := Sequence( BoardingResponsible.closeGate(Env.flight), Connection(sync2) );
-def seq8 := Sequence( MessagingService.gateClosed(Env.flight, Env.passenger), Connection(sync2) );
-def parSplit2 := ParallelSplit( seq5, seq6, seq7, seq8 );
-
-def sync1 := Synchronize( parSplit2 ); 
-
-def exc1 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
-def exc2 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
-def exc3 := ExclusiveChoice( { |found| found}, structDiscr, Connection(sync1) );
-
-def seq1 := Sequence( MessagingService.reminder(Env.passenger)@Output(Env.found), exc1 );
-def seq2 := Sequence( AnnouncementService.missingPerson(Env.passenger)@Output(Env.found), exc2 );
-def seq3 := Sequence( Assistance.missingPerson(Env.passenger)@Output(Env.found), exc3 );
-
-def parSplit1 := ParallelSplit( seq1, seq2, seq3 );
-
+        def start(env) {
+            def [result, resolver] := makeFuture();
+            resolvers := resolvers + [[env.id, resolver]];   
+            block(env);      
+            resolver.resolve(env);
+            result;
+        };
+        
+        def cancel(env) {
+        	def resolver;
+        	resolvers.each: { |p| if: ( p[1] == env.id) then: { resolver := p[2]; }; };
+        	if: ! (resolver == nil) then: {
+        		resolver.ruin(/.at.lang.types.Exception);
+        	};
+        };
+    } taggedAs: [Pattern];
+};
 
 
-def parSplit := ParallelSplit( BoardingResponsible.waitForPassenger(Env.passenger), ControlTower.takeoff(Env.flight) );
+def exc :=  ExclusiveChoice( { |draft| draft == "yes" }, 
+							 Sequence( Env.p.ask("Do you have your own boosters?")@Output(Env.boosters), Local({|e| e.print()}) ),
+							 //Env.p.ask("Do you have your own boosters?")@Output(Env.boosters),
+							 //Env.p.ask("Do you want to join the draft?")@Output(Env.joinDraft) );
+							 Sequence( Env.p.ask("Do you want to join the draft?")@Output(Env.joinDraft),  Local({|e| e.print()}) ) );
+
+def draft := Env.p.ask("Interested in a draft?")@Output(Env.draft);
+
+def seq := Sequence( Env.p.ask("Interested in playing magic next Saturday?")@Output(Env.magic),
+	                 CancellingBarrier(percentage(100)),
+					 Filter( { |e| e.find(`magic) == "yes"} ),
+					 draft );
+
+def group := SnapshotGroup( SOFTmember,
+							`p,
+							Sequence( seq,
+									  CancellingBarrier(At(Time(23,15, 0))),
+									  //CancellingBarrier(After(5, draft)),
+									  exc));
+									  
+									  									   
+
+
+

@@ -29,7 +29,7 @@
 
 
 def initModule := lobby.frameworks.workflow.WFinit;
-def dictionaryModule := lobby.frameworks.workflow.dictionary;
+def dictionaryModule := lobby.framworks.workflow.dictionary;
 import initModule;
 import dictionaryModule;
 import /.at.lang.values;
