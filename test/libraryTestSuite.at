@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Programming Technology Lab, 2006 - 2007
- * Authors: Tom Van Cutsem & Stijn Mostinckx
+ * (c) Software Languages Lab, 2006 - 2011
+ * Authors: Ambient Group at SOFT
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -61,7 +61,8 @@ def LibraryTestSuiteModule := object: {
     /.at.discovery.templatediscovery.TemplateDiscoveryModuleTest,
     /.at.discovery.composition.DiscoveryCompositionModuleTest,
     /.at.lang.ref_adaptors.AdaptorModuleTest,
-    /.demo.locationtracker.LocationTrackerTest
+    /.demo.locationtracker.LocationTrackerTest,
+    /.test.serialization.SerializationTest()
     // /.at.discovery.deapspace.DEAPspaceProtocolTest,	
 	]);
 

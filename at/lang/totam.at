@@ -40,11 +40,6 @@ deftype LeasedTuple <: TotamTuple;
 deftype TotamTupleSpaceT;
 def timerModule := /.at.support.timer;
 
-//helper function to construct mirrors tagged as Isolates.
-def mirrorIsolate: closure {
-	 object: closure childOf: defaultMirror extends: true taggedAs: [/.at.lang.types.Isolate] mirroredBy: defaultMirror
-};
-
 //helper function to construct isolate objects overriding print method for debugging/unittesting purposes.
 def isolate: closure printAs: printClosure {
 	def clo := script: printClosure;

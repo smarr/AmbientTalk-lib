@@ -206,10 +206,19 @@ def script: clo {
  *    becomes a some.Object on the other side. Note that state can be
  *    transferred as usual via the parameter list of the closure.
  */
-def isolate: closure passAs: transportClosure {
-	object: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: (mirror: {
+ // BUGFIX#54: mirror should be also an isolate.
+def mirrorIsolate: closure {
+  object: closure childOf: defaultMirror extends: true taggedAs: [/.at.lang.types.Isolate] mirroredBy: defaultMirror;
+};
+
+def isolate: closure passAs: clo {
+    def quotedVarList := (clo.method).parameters;	
+    def transportClosure := script: clo carrying: quotedVarList;
+	object: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: (mirrorIsolate: { | transportClosure, quotedVarList |
 		def pass() {
-			/.at.support.util.uponArrivalBecome: transportClosure
+			///.at.support.util.uponArrivalBecome: transportClosure
+  			def args := eval: quotedVarList in: transportClosure;
+			transportClosure.run(@args);
 		};
 	})
 };
