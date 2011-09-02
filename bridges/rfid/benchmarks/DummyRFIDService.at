@@ -1,0 +1,670 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2010
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/**
+ * This file contains the RFID service
+ * it detects RFID tags, creates proxy objects and publishes them as services
+ *
+**/
+
+// imports
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(false);
+
+import /.at.collections.java.vector;
+import /.at.collections.java.hashmap; 
+
+import /.at.lang.mutatorInterceptorMirror;  
+
+import /.at.lang.propertyReferences;
+
+//
+// benchmarking
+//
+
+import /.at.support.symbiosis;
+
+def nameStack := Vector.new();
+def timeStack := Vector.new();
+def idx := -1;
+
+def getTime() {
+	jlobby.java.lang.System.nanoTime();
+};
+
+def startB(name) {
+	timeStack.add(getTime());
+	nameStack.add(name);
+	idx := idx + 1;
+	def ctr := idx;
+	name := "entering " + name;
+	while: { ctr > 0 } do: {
+		name := " " + name;
+		ctr := ctr - 1;
+	};
+	system.println(name);
+};
+
+def stopB(arg) {
+	def time := timeStack.elementAt(idx);
+	timeStack.removeElementAt(idx);
+	def name := nameStack.elementAt(idx);
+	nameStack.removeElementAt(idx);
+	def ctr := idx;
+	def elapsed := getTime() - time;
+	def out := "in " + name + " for " + (elapsed / long(1000)).toString() + " microsec (" + (elapsed / long(1000*1000)).toString() + " millisec)";
+	while: { ctr > 0 } do: {
+		out := " " + out;
+		ctr := ctr - 1;
+	};
+	system.println(out);
+	idx := idx - 1;
+	arg;
+};
+
+
+
+
+// globals
+def POLLING_INTERVAL := millisec(500);
+def OFFLINE_TIMEOUT  := 240.seconds();
+
+// toggle debug output
+def DEBUG := false;
+def INFO := false;
+def ERR := false;
+
+def debug(@args) {
+	if: (DEBUG) then: {
+		system.println("[DEBUG] " + args);
+	};
+};
+
+def info(@args) {
+	if: (INFO) then: {
+		system.println("[INFO] " + args);
+	};
+};
+
+def err(@args) {
+	if: (ERR) then: {
+		system.println("[ERR][!] " + args);
+	};
+};
+
+// generic RFID type tags
+deftype RFIDTag;
+deftype GenericTag;
+
+deftype Wrapper;
+
+
+deftype NotAnIsolate <: lobby.at.lang.types.Exception;
+def XNotAnIsolate := lobby.at.lang.exceptions.createException(NotAnIsolate);
+deftype AlreadyIsolate <: lobby.at.lang.types.Exception;
+def XAlreadyIsolate := lobby.at.lang.exceptions.createException(AlreadyIsolate);
+
+/**
+ * 
+ * the object stored on an RFID tag is wrapped in two layers:
+ * 	- outer layer: an object to which the far references will point
+ * 	- inner layer: an object on which the mutatorInterceptorMirror is placed
+ * 
+ * this allows us to swap the core object when the corresponding tags reappears
+ * the mirror and the far references remain unchanged
+ *  
+ *             +--outer-layer--------------+
+ *  far refs   |                           |
+ * ----------> |  +--inner-layer--------+  |
+ *             |  |                     |<-+------ mutatorInterceptorMirror
+ *             |  |  +--core-object--+  |  |
+ *             |  |  |  (from tag)   |  |  |
+ *             |  |  +---------------+  |  |
+ *             |  +---------------------+  |
+ *             +---------------------------+
+**/
+
+def RFIDService := object: {
+
+	def NUMINV := 1;
+	def INVCTR := 0;
+
+	
+	// Java Reader & Tag classes
+	// classes to use:
+	//   - ReaderFromDisk to store data locally on disk
+	//   - Reader to store data in tag memory
+	//def JavaRFIDDevice := jlobby.bridges.rfid.ReaderFromDisk;
+	def JavaRFIDDevice := jlobby.bridges.rfid.DummyReader;
+	
+	def deviceID := nil;
+	
+	// the RFID reader device
+	def device := nil;
+	
+	// the facade
+	def facade := nil;
+	
+	// the timeout after which tags are considered permanently discovered
+	def offlineTimeout := OFFLINE_TIMEOUT; // unused
+
+	// interval to poll
+	def pollingInterval := POLLING_INTERVAL; 
+	
+	// holds disconnection objects for tags
+	def discoTags := HashMap.new;     // serial -> discoObject
+	
+	// maintain mappings between tags, serials and proxys
+	def tagToObject := HashMap.new; // serial -> obj
+	def objectToTag := HashMap.new; // obj -> serial
+	def serialToTag := HashMap.new; // serial -> tag
+	
+	// the polling loop
+	def loop := false;
+	
+	def exportWithSerial(someObject, tagSerial) {
+//		startB("exportWithSerial");
+		debug("export with serial: " + someObject + " with " + tagSerial);
+		def tagsSS := tagsOf: someObject.super;
+		// the object is double wrapped
+		(tagsSS).each: {|tt|
+		//	debug("  " + tt);
+//			startB("export raw");
+			export: someObject as: tt with: { def serial := tagSerial ; def devID := deviceID };
+//			stopB(nil);
+		};
+//		stopB(nil);
+	};
+	
+	// create and remove mapping between tag and object
+	
+	def createMapping(aTag, wrapperObj) {
+//		startB("createMapping");
+		def serial := aTag.getSerial().toString();
+		info("create mapping: " + serial + " <-> " + wrapperObj);
+		tagToObject.put(serial, wrapperObj);
+		objectToTag.put(wrapperObj, serial);
+		serialToTag.put(serial, aTag);
+//		stopB(wrapperObj);
+		wrapperObj;
+	};
+	
+	def updateMapping(aTag, newObj) {
+//		startB("updateMapping");
+		def serial := aTag.getSerial().toString();
+		def wrapper := tagToObject.get(serial);
+		info("update mapping: " + serial + " <-> " + wrapper + " with new super: " + newObj);
+		if: (wrapper == nil) then: {
+			info("no mapping for " + serial);
+			nil;
+//			stopB(nil);
+		} else: {
+			if: (newObj == wrapper) then: {
+				err("SETTING SUPER TO SELF");
+			};
+			wrapper.super := newObj;
+//			stopB(wrapper);
+			wrapper;
+		};
+	};
+	
+	def removeMapping(aTag, wrapperObj) {
+//		startB("removeMapping");
+		def serial := aTag.getSerial().toString();
+		tagToObject.remove(serial);
+		objectToTag.remove(wrapperObj);
+		serialToTag.remove(serial);
+//		stopB(wrapperObj);
+		wrapperObj;
+	};
+	
+	// Intercept mutators
+	
+	def tagMutatorInterceptor := { |base, method|
+		info("mutator invoked: " + base + " " + method);
+		if: ( method != `super:= ) then: {
+			try: {
+					info("save to tag base: " + base);
+					info("save to tag super: " + base.super);
+					saveToTag(base);
+				} catch: {|e| 
+					info("save to tag failed: " + e.message);
+				};
+			};
+	};
+	
+	def makeTagMutatorInterceptorMirror() {
+//		startB("makeTagMutatorInterceptorMirror");
+		def r := makeMutatorInterceptor(tagMutatorInterceptor);
+		r;
+//		stopB(r);
+	};
+	
+	def wrapAndPlaceMirror(obj) {
+//		startB("wrapAndPlaceMirror");
+		def wrapper := object: {} mirroredBy: makeTagMutatorInterceptorMirror(); // DIT IS TRAAG!
+		//makeTagMutatorInterceptorMirror();
+		wrapper.super := obj;
+//		stopB(wrapper);
+		wrapper;
+	};
+	
+	// Serialization and Deserialization
+	
+	// dump and load objects to and from a tag
+	def loadFromCode(tag){
+//		startB("loadFromCode");
+		def definition := tag.read();
+		debug("definition: " + definition);
+		if: ((definition == nil).or: {definition == ""}) then: {
+			debug("definition was nil!");
+//			stopB(nil);
+			nil;
+		} else: {
+			try: {
+				def obj := (fromCode: definition in: (object: { deftype Mutator }));
+				obj;
+//				stopB(obj);
+			} catch: /.at.lang.types.Exception using: { |e|
+				info("could not reify from code: " + definition);
+				info("exeption was: " + e.message);
+				nil;
+//				stopB(nil);
+			};
+		};
+	};
+	
+	def loadFromJava(tag) {
+//		startB("loadFromJava");
+		def r := tag.load();
+//		stopB(r);
+		r;
+	};
+	
+	// default is to deserialize using from
+	def load(tag) {
+//		startB("load");
+		def r := loadFromCode(tag);
+//		stopB(r);
+		r;
+	};
+	
+	def dumpAsCode(tag, wrapperObj) {
+//		startB("dumpAsCode");
+		def definition := asCode: wrapperObj.super;
+		debug("  dumping object with size: " + definition.length + "; " + definition);
+		def r := tag.write(definition);
+//		stopB(r);
+		r;
+	};
+	
+	def dumpAsJava(tag, obj) {
+//		startB("dumpAsJava");
+		def r := tag.dump(obj);
+//		stopB(r);
+		r;
+	};
+	
+	// default is to serialize using asCode
+	def dump(tag, wrapperObj) {
+//		startB("dump");
+		def r := dumpAsCode(tag, wrapperObj);
+//		stopB(r);
+		r;
+	};
+	
+	def saveToTag(wrapperObj) {
+//		startB("saveToTag");
+		def serial := objectToTag.get(wrapperObj);
+		def tag := serialToTag.get(serial);
+		info("saving to tag serial: " + serial);
+		info("saving to tag tag: " + tag);
+		def r := dump(tag, wrapperObj);
+//		stopB(r);
+		r;
+	};
+	
+	// Conversion from and to isolate
+	
+	// copy an isolate to a "normal" object	
+	def isolateToObject(someIsolate) {
+//		startB("isolateToObject");
+		info("convert isolate to object");
+		info(someIsolate);
+		unless: (is: someIsolate taggedAs: /.at.lang.types.Isolate) then: {
+			raise: XNotAnIsolate.new("argument is not an isolate: " + someIsolate);
+		};
+		info("obj is an isolate");
+		def tags := (tagsOf: someIsolate).filter: {|e| e != /.at.lang.types.Isolate};
+		info("tags: " + tags);
+		def someObject := object: {} taggedAs: tags;
+		info("new object: " + someObject);
+		def ir := reflect: someIsolate;
+		def or := reflect: someObject;
+		ir.listFields.each: {|f|
+			if: (f.name != `super) then: {
+				or.addField(f);
+			};
+		};
+		ir.listMethods.each: {|m|
+			or.addMethod(m);
+		};
+		someObject;
+//		stopB(someObject);
+	};
+	
+	// copy an object to an isolate
+	def objectToIsolate(someObject) {
+//		startB("objectToIsolate");
+		debug("convert object to isolate: " + someObject);
+		if: (is: someObject taggedAs: /.at.lang.types.Isolate) then: {
+			raise: XAlreadyIsolate.new("argument is already an isolate: " + someObject);
+		};
+		def tags := (tagsOf: someObject).filter: {|e| e != /.at.lang.types.Isolate};
+		def someIsolate := isolate: {} taggedAs: tags;
+		def ir := reflect: someIsolate;
+		def or := reflect: someObject;
+		or.listFields.each: {|f|
+			if: (f.name != `super) then: {
+				ir.addField(f);
+			};
+		};
+		or.listMethods.each: {|m|
+			ir.addMethod(m);
+		};
+//		stopB(someIsolate);
+		someIsolate;
+	};
+	
+	// Generic tag (empty or unrecognized)
+	
+	def GenericTag := object: {
+
+		def tag := nil;
+		
+		def getSerial() { 
+			tag.getSerial().toString();
+		};
+
+		def initialize(someObject) {
+			if: !(is: someObject taggedAs: /.at.lang.types.Isolate) then: {
+				raise: XNotAnIsolate.new("object must be isolate");
+			};
+			debug("before convert isolate to object");
+			debug(someObject);
+			def newObject := isolateToObject(someObject);
+			dump(tag, newObject);
+			def wrapper := updateMapping(tag, newObject);
+			// wrapper should never be nil
+			exportWithSerial(wrapper, getSerial());
+			wrapper;
+		};
+
+		def init(atag) {
+			tag := atag;
+		};
+	
+	} taggedAs: [RFIDTag, GenericTag];
+	
+	
+	// Different cases to handle RFID inventory
+	
+	// case 1: a tag that was already available
+	//         - check if there is a disconnection object
+	// !!! semantic subtlety: FIRST reconnect the object, THEN replace it
+	def ackTag(serial, tag) {
+		startB("ackTag");
+		info("ack serial: " + serial);
+		debug("  ack serial: " + serial);
+		if: (discoTags.contains(serial)) then: {
+			// if tag marked offline
+			// take back online
+			// update mark
+
+			debug("  reconnect serial: " + serial);
+			def disco := discoTags.get(serial);
+			disco.reconnect();
+			discoTags.remove(serial);
+		} else: {
+				debug("ignore 1");
+		};
+		def newObject := load(tag);
+		if: (nil != newObject) then: {
+			info("replacing super of object: " + tagToObject.get(serial) + " with: "+ newObject);
+			updateMapping(tag, newObject);
+		};
+		stopB(nil);
+	};
+	
+	// case 2: a new tag
+	//         - export its proxy or a generic object
+	def exportTag(serial, tag) {
+//		startB("exportTag");
+		info("new serial: " + serial);
+		debug("  new serial: " + serial);
+		def tagObject := load(tag);
+		if: (nil == tagObject) then: {
+			// empty tag
+			info("empty tag");
+			tagObject := GenericTag.new(tag);
+			def wrapper := wrapAndPlaceMirror(tagObject);
+			createMapping(tag, wrapper);
+			def s := serial;
+			export: wrapper as: RFIDTag with: { def serial := s }; //XXX
+		} else: {
+			info("valid tag");
+			def wrapper := wrapAndPlaceMirror(tagObject);
+			createMapping(tag, wrapper);
+			exportWithSerial(wrapper, serial);
+		};
+//		stopB(nil);
+	};
+	
+	// case 3: tag not seen with respect to previous poll
+	//         - disconnect
+	def unseeTag(serial, tag) {
+		startB("unseeTag");
+		if: (!(discoTags.contains(serial))) then: {
+			// take all unseen tags offline
+	        info("  off serial: " + serial + " object: " + tagToObject.get(serial));
+					try: {
+	        	def discoTag := disconnect: tagToObject.get(serial);
+	        	discoTags.put(serial, discoTag);
+					} catch: { |e|
+						info("was not online");
+					};
+		} else: {
+		    debug("ignore 2");
+		};
+		stopB(nil);
+	};
+	
+	def inventory() {
+		//system.println("Starting new inventory");
+//		startB("inventory");
+		if: loop then: {
+			debug("");
+			debug("ROUND started");
+			debug("avail tags: " + serialToTag.size());
+			debug("disco tags: " + discoTags.size());
+		
+			def tags := Vector.new(device.inventory(true));
+			debug("in range: " + tags.size());
+			
+			def unseen := serialToTag.clone();
+      
+			tags.each: { |tag|
+				def serial := tag.getSerial().toString();
+				unseen.remove(serial);
+				if: (serialToTag.contains(serial)) then: {
+//					// case 1
+//					// seen before
+//					// check for possible disconnection object
+//					try: {
+//						ackTag(serial, tag);
+//					} catch: { |e|
+//						info("tag disappeared between inventory and processing: " + e.stackTrace());
+//						// take tag offline
+//						unseeTag(serial, tag);
+//					};
+				} else: {
+					// case 2
+					// new tag
+					// export!
+					try: {
+						exportTag(serial, tag);
+					} catch: { |e|
+						info("tag disappeared between inventory and processing: " + e.stackTrace());
+					};
+				};
+			};
+			debug("  unseen tags: " + unseen.size());
+//			unseen.each: {|serial, tag|
+//				// case 3:
+//				// disappearing tags
+//				//unseeTag(serial, tag);
+//			};
+			
+			if: (INVCTR < NUMINV) then: {
+				INVCTR := INVCTR + 1;
+				self<-inventory();
+			};
+		};
+//		stopB(nil);
+	};
+	
+	def startLoop() {
+//		startB("startLoop");
+		unless: loop then: {
+			info("really starting loop");
+			loop := true;
+			inventory();
+		};
+//		stopB(nil);
+	};
+	
+	def stopLoop() {
+//		startB("stopLoop");
+		loop := false;
+//		stopB(nil);
+	};
+	
+	
+	// Create a facade with functions visible to the outside
+	
+	def createFacade() {
+//		startB("createFacade");
+		if: (facade == nil) then: {
+			facade := object: {
+				def getAvailableTags() {
+					serialToTag;
+				};
+		
+				def getAvailableObjects() {
+					tagToObject;
+				};
+			
+				def getDiscoTags() {
+					discoTags;
+				};
+			
+				def displayEmAll() {
+					tagToObject.printme();
+					objectToTag.printme();
+					serialToTag.printme();
+				};
+			
+				def numTags() {
+					serialToTag.size();
+				};
+		
+				def numDiscoTags() {
+					discoTags.size();
+				};
+			
+				def numConnectedTags() {
+					serialToTag.size() - discoTags.size();
+				};
+			
+				def stop() {
+					stopLoop();
+				};
+			
+				def run() {
+					info("starting loop");
+					startLoop();
+				};
+				
+				def setPollingInterval(i) {
+					pollingInterval := i;
+				};
+				
+				def setAntennaAlwaysOn() {
+					device.setAntennaAlwaysOn();
+				};
+				
+				def setAntennaOnRequest() {
+					device.setAntennaOnRequest();
+				};
+				
+				
+			}; // object
+		};
+//		stopB(facade);
+		facade;
+	};
+	
+
+
+	// initializer
+	def init() {
+//		startB("init");
+		info("initializing device ");
+		device := JavaRFIDDevice.new();
+		facade := createFacade();
+		INVCTR := 1;
+//		stopB(nil);
+	};
+	
+};
+
+def RFIDServiceModule := object: {
+	def createRFIDService() {
+		def service := RFIDService.new();
+		service.facade;
+	};
+	
+	def createAndRunRFIDService(device) {
+		def service := RFIDService.new();
+		def facade := service.facade;
+		facade.run();
+		facade;
+	};
+};
+
+

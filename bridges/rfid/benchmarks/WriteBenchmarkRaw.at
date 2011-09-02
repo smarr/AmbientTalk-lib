@@ -1,0 +1,47 @@
+import /.at.support.symbiosis;
+
+import /.at.collections.java.vector;
+
+def reader := jlobby.bridges.rfid.DummyReader.new();
+
+def current;
+def currentChar;
+
+
+def tagsC := jlobby.java.util.Vector.new();
+
+def ctr := 0;
+
+def numInv := 1;
+while: { numInv > 0 } do: {
+
+	numInv := numInv - 1;
+	
+	def tags := reader.inventory();
+	def it := tags.iterator();
+	while: { it.hasNext() } do: {
+		current := it.next();
+		tagsC.add(current);
+	};
+	
+
+};
+
+ctr := 0;
+
+def start := jlobby.java.lang.System.nanoTime();
+
+
+def it := tagsC.iterator();
+while: { it.hasNext() } do: {
+	ctr := ctr + 1;
+	current := it.next();
+	def s := current.read();
+	s.explode().each: { |e| currentChar := e };
+	current.write(current.read());
+};
+
+
+def elapsed := jlobby.java.lang.System.nanoTime() - start;
+
+system.println((print: ctr) + " tags in " + (elapsed / long(1000) / long(1000)).toString() + " millisec");

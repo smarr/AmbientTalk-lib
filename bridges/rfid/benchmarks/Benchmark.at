@@ -1,0 +1,103 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2010
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/**
+ * This file contains a runner for the RFID service
+**/
+
+import /.at.lang.futures exclude minutes, seconds, millisec;
+import /.at.support.timer;
+import /.at.support.util;
+enableFutures(false);
+
+
+import /.bridges.rfid.DummyRFIDService;
+
+def service := createRFIDService();
+//network.online();
+service.run();
+service;
+
+
+def client := actor: {
+
+	deftype DummyTag;
+	
+	import /.at.collections.java.vector;
+	import /.at.support.symbiosis;
+
+	def tags := Vector.new();
+	def ctr := 0;
+	def iterateCtr := 0;
+	def lastTag;
+	def total := 0;
+	
+	def numInv := 10;
+	
+	def limit := jlobby.bridges.rfid.DummyReader.getTagNum() * numInv;
+
+	
+	system.println("start 1");
+	def start := jlobby.java.lang.System.nanoTime();
+	
+	whenever: DummyTag discovered: { |ref|
+		if: (total == 0) then: { system.println("first discovered: " + ref) };
+		//system.println("discovered: " + ref);
+		total := total + 1;
+		ctr := ctr + 1;
+		//system.println("ctr: " + ctr + " limit: " + limit);
+		tags.add(ref);
+		if: (ctr == jlobby.bridges.rfid.DummyReader.getTagNum()) then: {
+			iterateCtr := iterateCtr + 1;
+			ctr := 0;
+			iterate();
+			tags := Vector.new();
+		};
+		if: (iterateCtr >= numInv) then: {
+			done();
+		};
+	};
+	
+	system.println("start 2");
+	start := jlobby.java.lang.System.nanoTime();
+	
+	def iterate() {
+		//system.println("iterating");
+		tags.each: { |e|
+			lastTag := e;
+		};
+	};
+	
+	def done() {
+	def elapsed := jlobby.java.lang.System.nanoTime() - start;
+	system.println((print: iterateCtr * jlobby.bridges.rfid.DummyReader.getTagNum()) + " tags in " + (elapsed / long(1000) / long(1000)).toString() + " millisec");
+	};
+};
+
+
+
+self;
+

@@ -59,6 +59,14 @@ def Vector := object: {
 		vc.add(o);
 	};
 	
+	def elementAt(i) {
+		vc.elementAt(i);
+	};
+	
+	def removeElementAt(i) {
+		vc.removeElementAt(i);
+	};
+	
 	def add_at(i, o) {
 		vc.add(i, o);
 	};
