@@ -36,17 +36,13 @@ def makeEventSource(itsDependencyHeight := 0) {
 			def unhook() {
 				unhookNestedDependents();
 				hasBeenUnhooked := true; };
-
-			def invoke(aReceiver, anInvocation) {
-				if: ((anInvocation.selector == `==).or: { anInvocation.selector == `!= })
-					then: { super^invoke(aReceiver, anInvocation) }
-					else: {
-						def currentEncapsulator	:= reflectOnActor.dataflowEngine.currentlyEmitting;
-						(reflect: currentEncapsulator).addDependent(base);
-
-						scheduleForEmission(currentEncapsulator, anInvocation)
-					}
- 			};
+ 			
+ 			def doesNotUnderstand(selector) {
+				{ | @args | 
+					def currentEncapsulator	:= reflectOnActor.dataflowEngine.currentlyEmitting;
+					(reflect: currentEncapsulator).addDependent(base);
+						
+					scheduleForEmission(currentEncapsulator, makeInvocation(selector, args)) } };
 
 			def scheduleForEmission(aProgenitor, anInvocation) {
 				reflectOnActor.dataflowEngine.schedule(aProgenitor, base, anInvocation) };

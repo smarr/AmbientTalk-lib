@@ -16,4 +16,8 @@ def Set.each: clo {
 	  do:  { clo.apply([ theSetElements.nextElement() ]) }
 };
 
+def makeInvocation(selector, args) {
+	lobby.at.lang.values.createInvocation(selector, args, [])
+};
+
 self

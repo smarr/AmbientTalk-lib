@@ -81,8 +81,7 @@ def merge(@aTableOfEventSources) {
 	aTableOfEventSources.each: { | anEventSource |
 		(reflect: anEventSource).addDependent(theMergedEvents);
 		
-		// theMergedEvents <<+ anEventSource;
-		(reflect: anEventSource).relayTo(theMergedEvents);
+		theMergedEvents <<+ anEventSource;
 	};
 	
 	theMergedEvents
