@@ -1,0 +1,251 @@
+// A suite of unit tests to verify that messages emitted by an event 
+// source are relayed in the correct order.
+import lobby.at.unit.test;
+
+// Auxiliary abstraction: which allows verifying whether messages are
+// emitted and relayed in the correct order.
+def makeOrderChecker(totalNumberOfCases, allowDuplicateTriggering := false) {
+	def theTriggeredTestClauses[totalNumberOfCases] { nil };
+	
+	def check(whenItShouldBeTriggered) {
+		1.to: whenItShouldBeTriggered do: { | previouslyTriggered | 
+			if: (theTriggeredTestClauses[previouslyTriggered] == nil)
+				then: { UnitTest.fail("A test clause was triggered prematurely:" + whenItShouldBeTriggered + ", missing: " + previouslyTriggered) }
+		};
+		
+		if: ((theTriggeredTestClauses[whenItShouldBeTriggered] != nil).and: { ! allowDuplicateTriggering })
+			then: { UnitTest.fail("A test was triggered spuriously:" + whenItShouldBeTriggered) };
+			
+		theTriggeredTestClauses[whenItShouldBeTriggered] := `triggered;
+	}
+};
+
+def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with: {
+	
+	// Ensure that the dataflow engine has emitted all messages,  even
+	// after a failed test. This prevents a failed test from infecting
+	// the test or tests that follow it.
+	def tearDown() {
+		try: {
+			reflectOnActor.dataflowEngine.relayPendingMessages;
+		} catch: (lobby.at.lang.types.Exception) using: { | e | tearDown() }
+	};
+	
+	// Test whether invoking methods on an event source results in the
+	// emission of a message which is relayed to all consumers.
+	def testEmission() {
+		def lastTrigger	:= 2;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		{ | i | check(i) } <<+ source;
+		
+		source <+ .apply([1]);
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)
+	};
+	
+	// Test whether for a single event source, messages are relayed in
+	// same order as which they were scheduled.
+	def testOrderOfSending() {
+		def lastTrigger	:= 3;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		{ | i | check(i) } <<+ source;
+		
+		source <+ .apply([1]);
+		source <+ .apply([2]);
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)
+	};
+	
+	// Test whether for two event sources located at the same stratum,
+	// messages are delivered in the order they were scheduled 
+	def testMixedOrderOfSending() {
+		def lastTrigger	:= 4;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		def otherSource := makeEventSource();
+		{ | i | check(i) } <<+ source;
+		{ | i | check(i) } <<+ otherSource;
+		
+		source 			<+ .apply([1]);
+		otherSource <+ .apply([2]);
+		source 			<+ .apply([3]);
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)
+	};
+	
+	// Test whether messages scheduled for an event source in a higher
+	// stratum are not performed too soon. 
+	def testStratifiedOrder() {
+		def lastTrigger	:= 4;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource(0);
+		def otherSource := makeEventSource(1);
+		{ | i | check(i) } <<+ source;
+		{ | i | check(i) } <<+ otherSource;
+		
+		source 			<+ .apply([1]);
+		otherSource <+ .apply([3]);
+		source 			<+ .apply([2]);
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)
+	};
+
+	// Test whether messages scheduled for an event source in a higher
+	// stratum are not performed too soon. Rather than determining the
+	// desired height of the event sources explicitly, a dependency is
+	// explicitly added.  This leads to the promotion of the dependent
+  // event source.
+	def testExplicitDependency() {
+		def lastTrigger	:= 4;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		def otherSource := makeEventSource();
+		
+		{ | i | check(i) } <<+ source;
+		{ | i | check(i) } <<+ otherSource;
+		
+		(reflect: source).addDependent(otherSource);
+		
+		source 			<+ .apply([1]);
+		otherSource <+ .apply([3]);
+		source 			<+ .apply([2]);
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)
+	};
+	
+	// Test whether messages scheduled for an event source in a higher
+	// stratum are not performed too soon. Rather than determining the
+	// desired height of the event sources explicitly, a dependency is
+	// explicitly added.  This leads to the promotion of the dependent
+  // event source.
+  // In this test,  the explicit dependency is scheduled after a few
+	// messages have already been scheduled for emission.
+	def testDynamicExplicitDependency() {
+		def lastTrigger	:= 4;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		def otherSource := makeEventSource();
+		
+		{ | i | check(i) } <<+ source;
+		{ | i | check(i) } <<+ otherSource;
+		
+		source 			<+ .apply([1]);
+		otherSource <+ .apply([3]);
+		source 			<+ .apply([2]);
+		
+		(reflect: source).addDependent(otherSource);
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)		
+	};
+	
+	// Test whether messages scheduled for an event source in a higher
+	// stratum are not performed too soon. Rather than determining the
+	// desired height of the event sources explicitly, a dependency is
+	// implicitly added.  This leads to the promotion of the dependent
+  // event source.
+  // An implicit dependency is added when a message is scheduled for
+  // emission during the emission of events for another event source
+	def testImplicitDependency() {
+		def lastTrigger	:= 6;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		def otherSource := makeEventSource();
+		
+		{ | i | check(i) } <<+ source;
+		{ | i | check(i) } <<+ otherSource;
+		
+		// This consumer establishes an implicit dependency.
+		{ | i | otherSource <+ .apply([i + 3]) } <<+ source;
+		
+		// Initially, both event sources have the same height. Therefore,
+		// this message is emitted first as it the first to be scheduled. 
+		source 			<+ .apply([1]);
+		// While emitting the previous message, an implicit dependency is
+		// established between source and otherSource.  As a consequence,
+		// otherSource has been promoted to a higher stratum.  Therefore,
+		// this message is the third to be emitted,  rather than the 2nd.
+
+		// Note that this message still precedes the message scheduled by
+		// the consumer of source, as it was scheduled earlier.
+		otherSource <+ .apply([3]);
+		
+		// This message is emitted before any message to otherSource.
+		source 			<+ .apply([2]);
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		check(lastTrigger)
+	};
+	
+	// Tests the semantics of nested dependents: a nested dependent is
+	// created whenever a new signal is created during the emission of
+	// a message by another signal (the encapsulator).
+	// Nested dependents are allocated in a higher stratum, and can be
+	// unhooked, which prevents any further emission by that signal. 
+	def testNestedDependency() {
+		def lastTrigger	:= 5;
+		def check 			:= makeOrderChecker(lastTrigger);
+		
+		def source 			:= makeEventSource();
+		def otherSource;
+		
+		{ | i | check(i) } <<+ source;
+		
+		// This consumer creates a nested dependent.
+		{ | i | if: (i == 1) then: { otherSource := makeEventSource() } } <<+ source;
+		
+		// Schedule this message to create a nested dependent.
+		source 			<+ .apply([1]);
+
+		self.assertEquals(nil, otherSource, "Expecting that otherSource would not be initialized yet.");
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+		
+		self.assertNotNil(otherSource, "Expecting that otherSource would be initialized by now.");
+
+		// Relay, now that the event source has been initialized
+		{ | i | check(i) } <<+ otherSource;
+		
+		// Since otherSource is a nested signal, it's allocated higher in
+		// the dependency graph than source.
+		otherSource <+ .apply([3]);
+		
+		// This message is emitted before any message to otherSource.
+		source 			<+ .apply([2]);
+
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+
+		// When a nested signals is unhooked,  it can no longer emit and
+		// relay messages, even if some have already been scheduled.
+
+		// Hence, this message should not be emitted.
+		otherSource <+ .apply([lastTrigger + 1]);
+		source 			<+ .apply([4]);
+		
+		(reflect: source).unhookNestedDependents();
+		
+		reflectOnActor.dataflowEngine.relayPendingMessages;
+
+		check(lastTrigger)
+	};
+};

@@ -1,0 +1,15 @@
+// A suite of unit tests to verify the semantics of AmbientTalk/R.
+
+def ReactiveTestSuite := lobby.at.unit.test.TestSuite.new("reactive testsuite", [
+  ~.ordering
+]);
+
+def testReactiveProgramming() {
+  // first perform a self-test to see if unit tests work
+  lobby.at.unit.test.selfTest()<-ifTrue: {
+    // then perform the standard unit test suite
+    ReactiveTestSuite.runTest();
+  };
+};
+
+self
