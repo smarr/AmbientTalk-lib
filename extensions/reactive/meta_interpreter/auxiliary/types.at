@@ -1,0 +1,23 @@
+/**
+ * types.at
+**/
+
+/**
+ * The Lifted typetag is used to denote methods for which the programmer has specified non-default lifting
+ * semantics. In other words, such functions and methods are not governed by the semantics defined in this
+ * module, nor by those in lifting_methods.at
+**/
+deftype Lifted;
+
+/**
+ * The Mutator typetag is used to denote methods which may result in a logical update of a Mutable object.
+ * Such methods warrant special treatment when invoke upon a reactive value. Invoking them occurs *before*
+ * invoking dependent accessor methods, and their execution is considered to be an update.
+**/
+deftype Mutator;
+
+/**
+ * What is a DummyMethod?
+ * Why Lifted? 
+**/
+deftype DummyMethod <: lobby.at.lang.types.Method, Lifted;

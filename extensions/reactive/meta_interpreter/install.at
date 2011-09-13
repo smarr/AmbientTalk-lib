@@ -1,0 +1,32 @@
+// AmbientTalk/R meta-interpreter
+//
+// Import this file to make all reactive programming constructs  (e.g. makeEventSource, hold:with:, snapshot) 
+// available. The module constructed by this file takes a boolean value, and installs a reactive actor mirror
+// if the value that is passed to it is true.
+
+def MetaInterpreterModule(shouldInstallActorMirror := false) {
+	
+	def installActorMirror() {
+		reflectOnActor.becomeMirroredBy: (
+			extend: reflectOnActor with: { 
+				def dataflowEngine := ~.dataflow_engine;
+				
+				// import ~.default_lifting;
+			})
+	};
+	
+	if: (shouldInstallActorMirror)
+		then: { 
+			def nil.<<+(anEventSource) {
+				if: (is: anEventSource taggedAs: EventSource)
+					then: { (reflect: anEventSource).relayTo(self) }
+					else: { raise: lobby.at.exceptions.XIllegalArgument.new(
+						"Relay operator expects an event source as second argument, given " + anEventSource) }
+			};
+			
+			installActorMirror() };
+		
+	object: {
+		import ~.event_source;
+	}
+}

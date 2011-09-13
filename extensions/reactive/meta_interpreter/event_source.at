@@ -1,0 +1,99 @@
+deftype EventSource;
+
+def makeEventSource(itsDependencyHeight := 0) {
+	import ~.auxiliary.jgl_collections;
+	
+	def theEngine 			:= reflectOnActor.dataflowEngine;
+	def theEncapsulator		:= reflect: theEngine.currentlyEmitting;
+	
+	itsDependencyHeight	:= max(itsDependencyHeight, theEncapsulator.dependencyHeight + 1);
+
+	def theDependents 			:= Set.new();
+	def theNestedDependents		:= Set.new();
+	def theObjectsToRelayTo 	:= Set.new();
+	def hasBeenUnhooked			:= false;
+
+	def theEventSource	:= object: { nil } taggedAs: [ EventSource ] mirroredBy: { | base | 
+		extend: defaultMirror.new(base) with: {
+			def dependencyHeight() {
+				itsDependencyHeight };
+			
+			def addDependent(d) { 
+				(reflect: d).promote(itsDependencyHeight + 1);
+				theDependents.add(d) };
+				
+			def removeDependent(d) { 
+				theDependents.remove(d) };
+				
+			def registerNestedDependent(n) {
+				(reflect: n).promote(itsDependencyHeight + 1);
+				theNestedDependents.add(n) };
+				
+			def unhookNestedDependents()		{
+				theNestedDependents.each: { | n | (reflect: n).unhook() };
+				theNestedDependents.clear() };
+
+			def unhook() {
+				unhookNestedDependents();
+				hasBeenUnhooked := true; };
+
+			def invoke(aReceiver, anInvocation) {
+				if: ((anInvocation.selector == `==).or: { anInvocation.selector == `!= })
+					then: { super^invoke(aReceiver, anInvocation) }
+					else: {
+						def currentEncapsulator	:= reflectOnActor.dataflowEngine.currentlyEmitting;
+						(reflect: currentEncapsulator).addDependent(base);
+
+						scheduleForEmission(currentEncapsulator, anInvocation)
+					}
+ 			};
+
+			def scheduleForEmission(aProgenitor, anInvocation) {
+				reflectOnActor.dataflowEngine.schedule(aProgenitor, base, anInvocation) };
+
+			def emit(anInvocation) {
+				if: (! hasBeenUnhooked)
+					then: { 
+						theObjectsToRelayTo.each: { | o | o <+ anInvocation } 
+					};
+
+				!hasBeenUnhooked };
+
+			def relayTo(anObject) {
+				theObjectsToRelayTo.add(anObject);
+
+				object: { 
+					def cancel() { theObjectsToRelayTo.remove(anObject) } }
+			};
+			
+			def promote(newDependencyHeight) {
+				do: {
+					def theEngine 			 := reflectOnActor.dataflowEngine;
+
+					if: (theEngine.hasAlreadyEmittedMessagesFor(self))
+						then: { 
+							raise: lobby.exception.XIllegalOperation.new(
+								"Dependency Loop: Cannot update the dependency height of a"+
+								" signal which has already been emitted messages this turn.") 
+						}
+						else: { 
+							itsDependencyHeight := newDependencyHeight;
+
+							theEngine.reprioritize(self);
+
+							theDependents.each: { | d | (reflect: d).promote(itsDependencyHeight + 1) };
+							theNestedDependents.each: { | d | (reflect: d).promote(itsDependencyHeight + 1) };
+						}
+				} unless: (itsDependencyHeight > newDependencyHeight);
+				
+				itsDependencyHeight
+			}
+		}
+	};
+	
+	theEncapsulator.registerNestedDependent(theEventSource);
+	
+	theEventSource;
+};
+
+self

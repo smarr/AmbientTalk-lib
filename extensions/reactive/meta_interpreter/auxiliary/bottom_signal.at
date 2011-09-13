@@ -1,0 +1,31 @@
+/**
+ * This file defines the bottom signal, a signal which is the bottom of the stack
+ * of encapsulating signals. Hence, signals that are created at the top-level are
+ * nested dependents of this signal.  
+ *
+ * Unhooking the bottom signal unhooks all signals created at the top-level which
+ * in turn unhooks all nested signals.  Hence, this can be used as a mechanism to
+ * halt all reactive computation in an actor.
+**/
+
+// Contains all signals created at the top level.
+def bottomsNestedDependents	:= jlobby.com.objectspace.jgl.HashSet.new();
+
+// This object is returned as the result of evaluating this file.
+// The bottom signal only defines the methods required to manage dependencies, as
+// it will never emit any messages itself. 
+def BottomSignal					 	:= object: { nil } mirroredBy: { | base | 
+		extend: defaultMirror.new(base) with: {
+			def dependencyHeight()	{ -1 };
+			def addDependent(d) 	{ nil };
+			def removeDependent(d)	{ nil };
+			def unhook() 			{ unhookNestedDependents() };
+
+			def registerNestedDependent(n) { 
+				bottomsNestedDependents.add(n) };
+
+			def unhookNestedDependents()		{
+				bottomsNestedDependents.each: { | n | n.unhook() };
+				bottomsNestedDependents.clear() };
+		}
+}

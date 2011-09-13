@@ -1,0 +1,134 @@
+/**
+ * This file defines a dataflow engine,  which propagates the messages emitted by
+ * all event sources owned by a single actor. It is a part of the actor mirror of
+ * any actor that supports reactive programming.
+ *
+ * The dependency actor keeps track of message to be emitted, and propagates them
+ * according to the stratum in which the receiver is allocated.  Additionally, it
+ * keeps track of encapsulating signals to detect implicit dependencies and keeps
+ * a record of signals that were already updated: these cannot be promoted during
+ * the current evaluation round.
+**/
+import ~.auxiliary.jgl_collections;
+
+def DataflowEngineModule() {
+	
+	/**
+	 * A collection of triplets of the form:  [dependent, progenitor, message].
+	 * Each triplet represents a message which has been scheduled for emission.
+	 * Triplets are sorted according to the dependency height of the dependent.
+	**/
+	def thePendingMessages := makePriorityQueue(object: {
+		def execute(first, second) {
+			def [d1, p1, m1] := first;
+			def [d2, p2, m2] := second;
+			
+			(reflect: d1).dependencyHeight > (reflect: d2).dependencyHeight;
+		}
+	});
+	
+	/**
+	 * It is possible to promote a signal to a higher stratum,  after messages
+	 * have been scheduled for emission by that signal. To ensure such pending
+	 * messages are delivered in the correct order,  thePendingMessages should
+	 * be sorted anew. 
+	**/
+	def should_reprioritize := false;
+
+	/**
+	 * Sorts the priority queue of pending messages, after one or more signals
+	 * have been promoted to a higher stratum.
+	**/
+	def do_reprioritize() {
+		def newPendingMessages := makePriorityQueue(thePendingMessages.getComparator());
+		
+		def enumOfPendingMessages := thePendingMessages.elements();
+		
+		while: { enumOfPendingMessages.hasMoreElements() }
+			 do: { newPendingMessages.add(enumOfPendingMessages.nextElement) };
+			
+		thePendingMessages	:= newPendingMessages;
+		should_reprioritize := false;
+	};
+
+	/**
+	 * This collection contains all signals which have already emitted messages
+	 * in the current evaluation round. Such signals cannot be promoted as that
+	 * may introduce dependency loops. 
+	**/
+	def theLockedSignals := Set.new();
+	
+	def currentlyReachedStratum := -1; 
+	
+	/**
+	 * A stack of encapsulating signals: signals are pushed on the stack while
+	 * messages they emitted are being relayed. Encapsulators are important to
+	 * detect the following conditions:
+	 *
+	 * - Implicit dependencies: when messages are scheduled for emission while
+	 *      relaying messages for another event source.
+	 * - Nested dependencies: any event source created while relaying messages
+	 *      for another event source.
+	 * 
+	 * The bottom signal is the lowest element of this stack.
+	**/
+	def theEncapsulatingSignals := Stack.new();
+	theEncapsulatingSignals.push(~.auxiliary.bottom_signal);
+		
+	def DataflowEngine := object: {
+
+		/**
+		 * Schedules a message for emission when the dataflow engine reaches the
+		 * stratum in which theDependent is situated.
+		**/
+		def schedule(theProgenitor, theDependent, theMessage) {
+			thePendingMessages.add([theDependent, theProgenitor, theMessage]) };
+
+		/**
+		 * Relays all messages scheduled for emissions.
+		**/
+		def relayPendingMessages() { 
+			while: 	{ thePendingMessages.size() > 0 }
+				 do:	{ 
+					// Make sure that the order of the pending messages is correct.
+					if: (should_reprioritize) then: { do_reprioritize() };
+					
+					def [theDependent, theProgenitor, theMessage] 
+																	:= thePendingMessages.pop();
+					def theDependentMirror	:= (reflect: theDependent);
+					
+					currentlyReachedStratum := theDependentMirror.dependencyHeight;
+					
+					theEncapsulatingSignals.push(theDependent);
+					
+					if: (! theDependentMirror.emit(theMessage))
+						then: { (reflect: theProgenitor).removeDependent(theDependent) };
+					
+					theEncapsulatingSignals.pop();
+					
+					theLockedSignals.add(theDependent)			
+				};
+			
+			theLockedSignals.clear();
+			currentlyReachedStratum := -1;	
+		};
+		
+		/**
+		 * Tests whether a given signal has already emitted messages during this
+		 * evaluation round, in which case it cannot be promoted.
+		**/ 
+		def hasAlreadyEmittedMessagesFor(aSignal) {
+			theLockedSignals.count(aSignal) > 0	};
+		
+		/**
+		 * Called after aSignal has been promoted to a higher stratum, to ensure
+		 * that pending messages for that signal are not delivered prematurely.
+		**/
+		def reprioritize(aSignal) {
+			should_reprioritize := true };
+		
+		def currentlyEmitting() {
+			theEncapsulatingSignals.top()	};
+	}
+}
+

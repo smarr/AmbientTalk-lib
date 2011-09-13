@@ -1,0 +1,19 @@
+def Set		:= jlobby.com.objectspace.jgl.HashSet;
+def Stack	:= jlobby.com.objectspace.jgl.Stack;
+
+def makePriorityQueue := do: {
+	def PQ 		:= jlobby.com.objectspace.jgl.PriorityQueue;
+	def BP 		:= jlobby.com.objectspace.jgl.BinaryPredicate;
+	
+	def maker := PQ.&new;
+	maker.cast(BP)
+};
+
+def Set.each: clo {
+	def theSetElements	:= self.elements();
+		
+	while: { theSetElements.hasMoreElements() }
+	  do:  { clo.apply([ theSetElements.nextElement() ]) }
+};
+
+self
