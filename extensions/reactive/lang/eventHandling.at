@@ -1,0 +1,146 @@
+/**
+ * This file defines a number of auxiliary functions to program with event
+ * sources.  In other reactive programming languages - where event sources
+ * produce values (oft called occurences), rather than emitting messages -
+ * functions like these are part of the core language.
+ *
+ * Since in AmbientTalk/R event sources emit messages, they can be defined
+ * in terms of event sources, objects, closures and the relay operator. 
+**/
+
+// Each of these functions explicitly registers its dependencies,  so that
+// these dependencies are already taken into account even before the first
+// message is emitted. 
+
+/**
+ * Filters occurences from an event source, using a boolean function.
+ *
+ * Assumes an event source which emits only .run(@args) messages, to mimic
+ * occurences with an unspecified (and possibly variable) arity. The table
+ * of values is passed to the given closure, which in return has to return
+ * a boolean value.  
+ *
+ * - If true, a .run(@args) message is scheduled for emission by the event
+ *   source that this function returns. 
+ * - If false, no such message will be emitted.
+ *
+ * @returns a dependent event source.
+**/
+def filterEvents(anEventSource, aClosure) {
+	def theFilteredEvents := makeEventSource();
+	(reflect: anEventSource).addDependent(theFilteredEvents);
+	
+	def theConsumer := object: {
+		def run(@args) {
+			if: (aClosure(@args))
+				then: { theFilteredEvents <+ .run(@args) }
+		}
+	};
+	
+	theConsumer <<+ anEventSource;
+	theFilteredEvents;
+};
+
+/**
+ * Maps occurences to different values.
+ *
+ * Assumes an event source which emits only .run(@args) messages, to mimic
+ * occurences with an unspecified (and possibly variable) arity. The table
+ * of values is passed to the given closure, which in return has to return
+ * a new (table of) value(s).  
+ *
+ * - If a single value is returned, a .run(value) message is scheduled for
+ *   emission by the event source that this function returns. 
+ * - If a table is returned, a .run(@table) message will be emitted.
+ * - If an exception is raise, no message will be emitted.
+ *
+ * @returns a dependent event source.
+**/
+def mapEvents(anEventSource, aClosure) {
+	def theMappedEvents := makeEventSource();
+	(reflect: anEventSource).addDependent(theMappedEvents);
+	
+	def theConsumer := object: {
+		def run(@args) {
+			def mapped := aClosure(@args);
+			if: (is: mapped taggedAs: lobby.at.lang.types.Table)
+				then: { theMappedEvents <+ .run(@mapped) }
+				else: { theMappedEvents <+ .run(mapped) }
+		}
+	};
+	
+	theConsumer <<+ anEventSource;
+	theMappedEvents;
+};
+
+/**
+ * Merges a number of event sources into one.
+**/
+def merge(@aTableOfEventSources) {
+	def theMergedEvents := makeEventSource();
+	aTableOfEventSources.each: { | anEventSource |
+		(reflect: anEventSource).addDependent(theMergedEvents);
+		
+		// theMergedEvents <<+ anEventSource;
+		(reflect: anEventSource).relayTo(theMergedEvents);
+	};
+	
+	theMergedEvents
+};
+
+/**
+ * Filters messages emitted by event source, using a boolean function.
+ *
+ * The event source is free to emit any kind of message. Said messages are 
+ * trapped using a mirage, and then passed to a unary closure. The closure
+ * returns a boolean value, which determines whether the message will also
+ * be emitted by the event source that this function returns. 
+ *
+ * @returns a dependent event source.
+**/
+def filterMessages(anEventSource, aClosure) {
+	def theFilteredMessages := makeEventSource();
+	(reflect: anEventSource).addDependent(theFilteredMessages);
+	
+	def theConsumer := object: { nil } mirroredBy: { | base | 
+		extend: defaultMirror.new(base) with: { 
+			def invoke(aReceiver, aMessage) {
+				if: (aClosure(aMessage))
+					then: { theFilteredMessages <+ aMessage }
+			}
+		}
+	};
+	
+	theConsumer <<+ anEventSource;
+	theFilteredMessages;
+};
+
+/**
+ * Maps messages emitted by event source onto other messages.
+ *
+ * The event source is free to emit any kind of message. Said messages are 
+ * trapped using a mirage, and then passed to a unary closure. The closure
+ * returns a message, that will be emitted by the event source returned by
+ * this function.  If an exception is raised by the closure, no message is
+ * to be emitted.
+ *
+ * @returns a dependent event source.
+**/
+def mapMessages(anEventSource, aClosure) {
+	def theMappedMessages := makeEventSource();
+	(reflect: anEventSource).addDependent(theMappedMessages);
+	
+	def theConsumer := object: { nil } mirroredBy: { | base | 
+		extend: defaultMirror.new(base) with: { 
+			def invoke(aReceiver, aMessage) {
+				def mapped := aClosure(aMessage);
+				theMappedMessages <+ mapped;
+		  }
+		}
+	};
+	
+	theConsumer <<+ anEventSource;
+	theMappedMessages
+};
+
+self;
