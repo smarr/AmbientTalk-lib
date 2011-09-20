@@ -1,0 +1,87 @@
+import /.at.lang.types;
+import ~.collection;
+import ~.list;
+
+def MapTraitModule := object: {
+
+	def MapTrait := object: {
+
+		def getMap() @Required;
+		def setMap() @Required;
+		def toTable() @Required;
+	
+		def clear() {
+			self.getMap().clear();
+		};
+		
+		def containsKey(key) {
+			self.getMap().containsKey(key);
+		};
+		
+		def containsValue(val) {
+			self.getMap().containsValue(val);
+		};
+		
+		def entrySet() {
+			createCollectionWith(self.getMap().entrySet());
+		};
+		
+		def get(key) {
+			self.getMap().get(key);
+		};
+		
+		def isEmpty() {
+			self.getMap().isEmpty();
+		};
+		
+		def keySet() {
+			createCollectionWith(self.getMap().keySet());
+		};
+		
+		def put(key, val) {
+			self.getMap().put(key, val);
+		};
+		
+		def putAll(map) {
+			def keyIt := self.getMap().keySet().iterator();
+			def valIt := self.getMap().valueSet().iterator();
+			while: { keyIt.hasNext() } do: {
+				map.put(keyIt.next(), valIt.next());
+			};
+			nil;
+		};
+		
+		def remove(key) {
+			self.getMap().remove(key);
+		};
+		
+		def size() {
+			self.getMap().size();
+		};
+		
+		def values() {
+			createCollectionWith(self.getMap().values());
+		};
+	
+	};
+	
+	def createMapWith(javaMap) {
+		object: {
+			def jmap := javaMap;
+			def getMap()  { self.jmap };
+			def setMap(m) { self.jmap := m };
+			import MapTrait;
+		} mirroredBy: { |base|
+			extend: defaultMirror.new(base) with: {
+				def print() {
+					"<map:{" + (self.base.toTable().map: { |entry|
+						(print: entry[1]) + "=>" + (print: entry[2]);
+					}).join(", ") + "}>";
+				};
+			};
+		};
+	};
+
+};
+
+MapTraitModule;

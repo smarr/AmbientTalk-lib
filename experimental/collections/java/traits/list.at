@@ -1,0 +1,74 @@
+import ~.collection;
+import ~.table;
+import /.at.lang.types;
+
+def ListTraitModule := object: {
+
+	def ListTrait := object: {
+				
+		def getList() @Required;
+		def setList() @Required;
+				
+		def getCollection()  { self.getList() };
+		def setCollection(c) { self.setList(c) };
+	
+		import CollectionTrait;
+	
+		def get(index) {
+			self.getList().get(index);
+		};
+		
+		def set(index, element) {
+			self.getList().set(index, element);
+		};
+		
+		def addAt(index, element) {
+			self.getList().add(index, element);
+		};
+		
+		def removeAt(index) {
+			def remove := self.getList().&remove;
+			remove.cast(jlobby.java.lang.Integer.TYPE)(index);
+		};
+		
+		def indexOf(element) {
+			self.getList().indexOf(element);
+		};
+		
+		def lastIndexOf(element) {
+			self.getList().lastIndexOf(element);
+		};
+		
+		def listIterator() {
+			self.getList().listIterator();
+		};
+		
+		def listIteratorAt(index) {
+			self.getList().listIterator(index);
+		};
+		
+		def subList(fromIndex, toIndex) {
+			createListWith(self.getList().subList(fromIndex, toIndex));
+		};
+		
+	};
+	
+	def createListWith(javaList) {
+		object: {
+			def jlist := javaList;
+			def getList()  { self.jlist };
+			def setList(l) { self.jlist := l };
+			import ListTrait;
+			import TableListTrait;
+		} mirroredBy: { |base|
+			extend: defaultMirror.new(base) with: {
+				def print() {
+					"<list:" + (print: self.base.toTable()) + ">";
+				};
+			};
+		};
+	};
+
+};
+
+ListTraitModule;

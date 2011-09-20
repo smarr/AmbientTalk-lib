@@ -1,0 +1,109 @@
+import /.at.lang.types;
+import ~.table;
+
+def CollectionTraitModule := object: {
+
+	def CollectionTrait := object: {
+			
+		def each: clo @Required;
+		def inject: init into: clo @Required;
+		def getCollection() @Required;
+		def setCollection() @Required;
+	
+		def add(object) {
+			self.getCollection().add(object);
+		};
+		
+		def addAll(collection) {
+			def changed := false;
+			collection.each: { |e|
+				changed := (self.add(e)).or: { changed };
+			};
+			changed;
+		};
+		
+		def clear() {
+			self.getCollection().clear();
+		};
+		
+		def contains(object) {
+			self.getCollection().contains(object);
+		};
+		
+		def containsAll(collection) {
+			collection.inject: true into: { |total, next| 
+				total.and: { self.contains(next) };
+			};
+		};
+		
+		def equals(other) {
+			self == other;
+		};
+		
+		def hashCode() {
+			self.getCollection().hashCode();
+		};
+		
+		def isEmpty() {
+			self.getCollection().isEmpty();
+		};
+		
+		def iterator() {
+			self.getCollection().iterator();
+		};
+		
+		def remove(object) {
+			def remove := self.getCollection().&remove;
+			remove.cast(jlobby.java.lang.Object)(object);
+		};
+		
+		def removeAll(collection) {
+			def changed := false;
+			collection.each: { |e|
+				changed := (self.remove(e)).or: { changed };
+			};
+			changed;
+		};
+		
+		def retainAll(collection) {
+			def copy := self.new(collection);
+			self.getCollection().retainAll(copy);
+		};
+		
+		def size() {
+			self.getCollection().size();
+		};
+		
+		def toTable() {
+			def result := [];
+			self.each: { |e|
+				result := result + [e];
+			};
+			result;
+		};
+		
+		def asTable() {
+			self.toTable();
+		};
+		
+	};
+	
+	def createCollectionWith(javaCollection) {
+		object: {
+			def jcollection := javaCollection;
+			def getCollection()  { self.jcollection };
+			def setCollection(c) { self.jcollection := c };
+			import CollectionTrait;
+			import TableTrait;
+		} mirroredBy: { |base|
+			extend: defaultMirror.new(base) with: {
+				def print() {
+					"<collection:" + (print: self.base.toTable()) + ">";
+				};
+			};
+		};
+	};
+
+};
+
+CollectionTraitModule;

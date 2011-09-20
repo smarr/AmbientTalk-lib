@@ -1,0 +1,45 @@
+import ~.traits.collection;
+import ~.traits.table;
+
+def JHashSet := jlobby.java.util.HashSet;
+
+def HashSetModule := object: {
+
+	def HashSetMirror := mirror: {
+		
+		def print() {
+			"<hashset:" + (print: self.base.toTable()) + ">";
+		};
+		
+		def asCode() {
+			def elements := asCode: (self.base.toTable());
+			"{ def elements := " + elements + " ; HashSet.new(elements) }()";
+		};
+		
+	};
+	
+	def HashSet := object: {
+		
+		// wrapped java vector
+		def jhashset := JHashSet.new();
+		
+		// initialization
+		def init(collection := []) { 
+			// a collection that supports .each: {|e| ... }
+			self.jhashset := JHashSet.new();
+			collection.each: { |e| self.add(e) };
+			self;
+		};
+		
+		def getCollection() {
+			self.jhashset;
+		};
+		
+		import CollectionTrait;
+		import TableTrait;
+		
+	} mirroredBy: HashSetMirror;
+	
+};
+
+HashSetModule;

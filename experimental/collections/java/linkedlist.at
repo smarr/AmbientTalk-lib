@@ -1,0 +1,75 @@
+import ~.traits.list;
+import ~.traits.table;
+
+def JLinkedList := jlobby.java.util.LinkedList;
+
+def LinkedListModule := object: {
+	
+	def LinkedListMirror := mirror: {
+		
+		def print() {
+			"<linkedlist:" + (print: self.base.toTable()) + ">";
+		};
+		
+		def asCode() {
+			def elements := asCode: (self.base.toTable());
+			"{ def elements := " + elements + " ; LinkedList.new(elements) }()";
+		};
+		
+	};
+	
+	def LinkedList := object: {
+		
+		// wrapped java vector
+		def jll := JLinkedList.new();
+		
+		// initialization
+		def init(collection := []) { 
+			// a collection that supports .each: {|e| ... }
+			self.jll := JLinkedList.new();
+			collection.each: { |e| self.add(e) };
+			self;
+		};
+		
+		def getList() {
+			self.jll;
+		};
+		
+		def setList(list) {
+			self.jll := list;
+		};
+		
+		import ListTrait;
+		import TableListTrait;
+		
+		// java linkedlist interface
+		
+		def getFirst() {
+			self.jll.getFirst();
+		};
+		
+		def getLast() {
+			self.jll.getLast();
+		};
+		
+		def removeFirst() {
+			self.jll.removeFirst();
+		};
+		
+		def removeLast() {
+			self.jll.removeLast();
+		};
+		
+		def addFirst(object) {
+			self.jll.addFirst(object);
+		};
+		
+		def addLast(object) {
+			self.jll.addLast(object);
+		};
+		
+	} mirroredBy: LinkedListMirror;
+
+};
+
+LinkedListModule;

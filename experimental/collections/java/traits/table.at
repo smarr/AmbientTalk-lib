@@ -1,0 +1,111 @@
+import /.at.lang.types;
+import ~.list;
+
+def TableTraitModule := object: {
+
+	def TableTrait := object: {
+
+		def toTable() @Required;
+		def size() @Required;
+		def add() @Required;
+		def addAll() @Required;
+		def iterator() @Required;
+	
+		def +(other) {
+			def result := self.new(self);
+			result.addAll(other);
+			result;
+		};
+	
+		def each: clo {
+			def it := self.iterator();
+			while: { it.hasNext() } do: {
+				clo(it.next());
+			};
+		};
+		
+		def filter: clo {
+			def result := self.new();
+			self.each: { |e|
+				if: clo(e) then: {
+					result.add(e);
+				};
+			};
+			result;
+		};
+		
+		def implode() {
+			self.toTable().implode();
+		};
+		
+		def inject: init into: clo {
+			def acc := init;
+			self.each: { |e|
+				acc := clo(acc, e);
+			};
+			acc;
+		};
+		
+		def join(sep) {
+			self.toTable().join(sep);
+		};
+		
+		def length() {
+			self.size();
+		};
+		
+		def map: clo {
+			def result := self.new();
+			self.each: { |e|
+				result.add(clo(e));
+			};
+			result;
+		};
+		
+	};
+	
+	def TableListTrait := object: {
+		
+		def get() @Required;
+		def set() @Required;
+		def subList() @Required;
+		
+		import TableTrait;
+		
+		def at(index) {
+			self.get(index);
+		};
+		
+		def atPut(index, object) {
+			self.set(index, object);
+		};
+		
+		def eachWithIndex: clo {
+			def index := 0;
+			def it := self.iterator();
+			while: { it.hasNext() } do: {
+				clo(it.next(), index);
+				index := index + 1;
+			};
+		};
+		
+		def find: clo {
+			{ |return|
+				self.eachWithIndex: { |e, i|
+					if: clo(e) then: {
+						return(i);
+					};
+				};
+				return(nil);
+			}.escape();
+		};
+			
+		def select(start, stop) {
+			def result := self.new(createListWith(self.subList(start, stop)));
+		};
+		
+	};
+
+};
+
+TableTraitModule;
