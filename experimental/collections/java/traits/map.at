@@ -43,10 +43,16 @@ def MapTraitModule := object: {
 		};
 		
 		def putAll(map) {
-			def keyIt := self.getMap().keySet().iterator();
-			def valIt := self.getMap().valueSet().iterator();
-			while: { keyIt.hasNext() } do: {
-				map.put(keyIt.next(), valIt.next());
+			if: (is: map taggedAs: /.at.lang.types.Table) then: {
+				map.each: { |pair|
+					self.put(pair[1], pair[2]);
+				};
+			} else: {
+				def keyIt := map.keySet().iterator();
+				def valIt := map.values().iterator();
+				while: { keyIt.hasNext() } do: {
+					self.put(keyIt.next(), valIt.next());
+				};
 			};
 			nil;
 		};

@@ -6,7 +6,7 @@ import /.experimental.collections.java.linkedlist;
 def TraitsTestModule := object: {
 
 	// helpers
-	def sameElements(t1, t2) {
+	def sameElementsInOrder(t1, t2) {
 		{ |return|
 			def i := 1;
 			t1.each: { |e|
@@ -16,6 +16,33 @@ def TraitsTestModule := object: {
 				i := i + 1;
 			};
 			return(true);
+		}.escape();
+	};
+	
+	def sameElements(t1, t2) {
+		{ |return|
+			def foundMatch := false;
+			def keep;
+			t1.each: { |e1|
+				foundMatch := false;
+				t2 := t2.filter: { |e2|
+					// filter out first occurence
+					if: (e1 == e2) then: {
+						// found match
+						if: foundMatch then: {
+							// not first occurence
+							true;
+						} else: {
+							foundMatch := true;
+							false;
+						};
+					} else: {
+						true;
+					};
+				};
+				if: !foundMatch then: { return(false) };
+			};
+			return(t2.isEmpty());
 		}.escape();
 	};
 
@@ -108,7 +135,7 @@ def TraitsTestModule := object: {
 		def testToTable() {
 			def t := [1,2,3,4,5,6];
 			a.addAll(t);
-			self.assertTrue(sameElements(a.toTable(), t));
+			self.assertTrue(sameElementsInOrder(a.toTable(), t));
 		};
 		
 		
@@ -181,7 +208,7 @@ def TraitsTestModule := object: {
 			a.addAll([2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
 			def t := [5,6,7,8,9,10];
 			def sl := a.subList(3, 9);
-			self.assertTrue(sameElements(t, sl.toTable()));
+			self.assertTrue(sameElementsInOrder(t, sl.toTable()));
 		};
 		
 		
@@ -229,6 +256,35 @@ def TraitsTestModule := object: {
 		def testEntrySet() {
 			a := HashMap.new(t);
 			def es := a.entrySet();
+			self.assertEquals(es.size(), 5);
+			es.each: { |entry|
+				if: (entry.getValue() == 2) then: {
+					entry.setValue(42);
+				};
+				if: (entry.getKey() == "d") then: {
+					entry.setValue(43);
+				};
+			};
+			self.assertEquals(a.get("b"), 42);
+			self.assertEquals(a.get("d"), 43);
+		};
+		
+		def testGet() {
+			a := HashMap.new(t);
+			self.assertEquals(a.get("b"), 2);
+			self.assertEquals(a.get("z"), nil);
+		};
+		
+		def testIsEmpty() {
+			a := HashMap.new(t);
+			self.assertFalse(a.isEmpty());
+			a.clear();
+			self.assertTrue(a.isEmpty());
+		};
+		
+		def testKeySet() {
+			a := HashMap.new(t);
+			def es := a.keySet();
 			def kt := t.map: { |entry| entry[1] };
 			self.assertTrue(sameElements(kt, es.toTable()));
 			self.assertTrue(es.remove("b"));
@@ -236,28 +292,33 @@ def TraitsTestModule := object: {
 			self.assertFalse(a.containsKey("b"));
 		};
 		
-		def testGet() {
-		};
-		
-		def testIsEmpty() {
-		};
-		
-		def testKeySet() {
-		};
-		
 		def testPut() {
+			a.put("x", "y");
+			self.assertEquals(a.get("x"), "y");
 		};
 		
 		def testPutAll() {
+			a := HashMap.new(t);
+			b.putAll(a);
+			self.assertEquals(b.size(), 5);
 		};
 		
 		def testRemove() {
+			a := HashMap.new(t);
+			self.assertEquals(a.remove("a"), 1);
+			self.assertFalse(a.containsKey("a"));
 		};
 		
 		def testSize() {
+			a := HashMap.new(t);
+			self.assertEquals(a.size(), 5);
 		};
 		
 		def testValues() {
+			a := HashMap.new(t);
+			def vs := a.values();
+			def vt := t.map: { |entry| entry[2] };
+			self.assertTrue(sameElements(vt, vs.toTable()));
 		};
 		
 	};
