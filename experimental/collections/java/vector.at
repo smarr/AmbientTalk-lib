@@ -73,7 +73,7 @@ def VectorModule := object: {
 		};
 		
 		def elements() {
-			self.jvector.elements();
+			createEnumerationWith(self.jvector.elements());
 		};
 		
 		def ensureCapacity(minCapacity) {
@@ -112,10 +112,6 @@ def VectorModule := object: {
 			self.removeAt(index); // returns removed obj instead of void
 		};
 		
-		def removeRange(fromIndex, toIndex) {
-			self.jvector.removeRange(fromIndex, toIndex);
-		};
-		
 		def setElementAt(object, index) {
 			self.jvector.setElementAt(object, index);
 		};
@@ -130,6 +126,33 @@ def VectorModule := object: {
 
 		
 	} mirroredBy: VectorMirror;
+	
+	def createEnumerationWith(javaEnum) {
+		object: {
+			def enum := javaEnum;
+			
+			def hasMoreElements() {
+				self.enum.hasMoreElements();
+			};
+			
+			def nextElement() {
+				self.enum.nextElement()
+			};
+			
+			def each: clo {
+				while: { self.hasMoreElements() } do: {
+					clo(self.nextElement());
+				};
+			};
+			
+		} mirroredBy: { |base|
+			extend: defaultMirror.new(base) with: {
+				def print() {
+					"<enumeration:" + (print: self.base.toTable()) + ">";
+				};
+			};
+		};
+	};
 
 };
 

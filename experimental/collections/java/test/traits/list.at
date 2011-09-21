@@ -1,0 +1,81 @@
+import /.experimental.collections.java.linkedlist;
+import ~.util;
+
+def ListTestModule := object: {
+
+	def ListTest := extend: /.at.unit.test.UnitTest.new("ListTest") with: {
+	
+		def [a, b, c, d, e] := [nil, nil, nil, nil, nil];
+		
+		def setUp() {
+			def vt[5] { LinkedList.new() };
+			[a, b, c, d, e] := vt;
+		};
+		
+		def tearDown() {
+			[a, b, c, d, e].each: { |v| v.clear() };
+		};
+			
+		def testGet() {
+			a.addAll([42,43,44]);
+			self.assertEquals(a.get(1), 43);
+		};
+		
+		def testSet() {
+			a.addAll([42,43,44]);
+			self.assertEquals(a.set(1, 69), 43);
+			self.assertEquals(a.get(1), 69);
+			self.assertEquals(a.size(), 3);
+		};
+		
+		def testAddAt() {
+			a.addAll([2,3,4]);
+			a.addAt(1, 42);
+			self.assertEquals(a.get(1), 42);
+			self.assertEquals(a.size(), 4);
+		};
+		
+		def testRemoveAt() {
+			a.addAll([42,43,44,45]);
+			self.assertEquals(a.removeAt(2), 44);
+			self.assertEquals(a.size(), 3);
+		};
+		
+		def testIndexOf() {
+			a.addAll([2,3,42,4,5,42,6,7]);
+			self.assertEquals(a.indexOf(42), 2);
+		};
+		
+		def testLastIndexOf() {
+			a.addAll([2,3,42,4,5,42,6,7]);
+			self.assertEquals(a.lastIndexOf(42), 5);
+		};
+		
+		def testListIterator() {
+			a.addAll(["a", "b", "c", "d", "e"]);
+			def lit := a.listIterator();
+			lit.next();
+			lit.next();
+			self.assertEquals(lit.next(), "c");
+		};
+		
+		def testListIteratorAt() {
+			a.addAll(["a", "b", "c", "d", "e"]);
+			def lit := a.listIteratorAt(2);
+			lit.next();
+			self.assertEquals(lit.next(), "d");
+		};
+		
+		def testSubList() {
+			a.addAll([2,3,4,5,6,7,8,9,10,11,12,13,14,15]);
+			def t := [5,6,7,8,9,10];
+			def sl := a.subList(3, 9);
+			self.assertTrue(sameElementsInOrder(t, sl.toTable()));
+		};
+		
+		
+	};
+	
+};
+
+ListTestModule;

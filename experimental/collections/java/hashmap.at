@@ -53,6 +53,7 @@ def HashMapModule := object: {
 		
 		def atPut(key, val) {
 			self.jhashmap.put(key, val);
+			val;
 		};
 		
 		def at(key) {

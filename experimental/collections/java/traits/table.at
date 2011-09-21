@@ -10,6 +10,7 @@ def TableTraitModule := object: {
 		def add() @Required;
 		def addAll() @Required;
 		def iterator() @Required;
+		def contains() @Required;
 	
 		def +(other) {
 			def result := self.new(self);
@@ -34,20 +35,12 @@ def TableTraitModule := object: {
 			result;
 		};
 		
-		def implode() {
-			self.toTable().implode();
-		};
-		
 		def inject: init into: clo {
 			def acc := init;
 			self.each: { |e|
 				acc := clo(acc, e);
 			};
 			acc;
-		};
-		
-		def join(sep) {
-			self.toTable().join(sep);
 		};
 		
 		def length() {
@@ -78,6 +71,7 @@ def TableTraitModule := object: {
 		
 		def atPut(index, object) {
 			self.set(index, object);
+			object;
 		};
 		
 		def eachWithIndex: clo {
@@ -99,9 +93,17 @@ def TableTraitModule := object: {
 				return(nil);
 			}.escape();
 		};
+		
+		def implode() {
+			self.toTable().implode();
+		};
+		
+		def join(sep) {
+			self.toTable().join(sep);
+		};
 			
 		def select(start, stop) {
-			def result := self.new(createListWith(self.subList(start, stop)));
+			def result := self.new(self.subList(start, stop));
 		};
 		
 	};

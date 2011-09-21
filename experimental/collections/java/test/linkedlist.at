@@ -1,0 +1,66 @@
+import /.experimental.collections.java.linkedlist;
+import ~.traits.util;
+
+
+def LinkedListTestModule := object: {
+
+
+	def LinkedListTest := extend: /.at.unit.test.UnitTest.new("LinkedListTest") with: {
+	
+		def [a, b, c] := [nil, nil, nil];
+		
+		def setUp() {
+			def vt[3] { LinkedList.new() };
+			[a, b, c] := vt;
+		};
+		
+		def tearDown() {
+			[a, b, c].each: { |v| v.clear() };
+		};
+		
+		def testGetFirst() {
+			a.addAll([1,2,3,4]);
+			self.assertEquals(a.getFirst(), 1);
+		};
+		
+		def testGetLast() {
+			a.addAll([1,2,3,4]);
+			self.assertEquals(a.getLast(), 4);
+		};
+		
+		def testRemoveFirst() {
+			a.addAll([1,2,3,4]);
+			def r := a.removeFirst();
+			self.assertEquals(r, 1);
+			self.assertEquals(a.getFirst(), 2);
+			self.assertEquals(a.size(), 3);
+		};
+		
+		def testRemoveLast() {
+			a.addAll([1,2,3,4]);
+			def r := a.removeLast();
+			self.assertEquals(r, 4);
+			self.assertEquals(a.getLast(), 3);
+			self.assertEquals(a.size(), 3);
+		};
+		
+		def testAddFirst() {
+			a.addAll([1,2,3,4]);
+			a.addFirst(42);
+			self.assertEquals(a.getFirst(), 42);
+			self.assertEquals(a.size(), 5);
+		};
+		
+		def testAddLast() {
+			a.addAll([1,2,3,4]);
+			a.addLast(42);
+			self.assertEquals(a.getLast(), 42);
+			self.assertEquals(a.size(), 5);
+		};
+
+	
+	};
+
+};
+
+LinkedListTestModule;

@@ -1,0 +1,18 @@
+import ~.traits.collection;
+import ~.traits.list;
+import ~.traits.map;
+import ~.traits.table;
+import ~.vector;
+import ~.hashmap;
+import ~.linkedlist;
+
+def traitsTests := [CollectionTest, ListTest, MapTest, TableTest, TableListTest];
+def collectionTests := [VectorTest, HashMapTest, LinkedListTest];
+
+def JavaCollectionsTestSuiteModule := object: {
+
+	def JavaCollectionsTestSuite := /.at.unit.test.TestSuite.new("test suite for java collection wrappers", traitsTests + collectionTests);
+	
+};
+
+JavaCollectionsTestSuiteModule;

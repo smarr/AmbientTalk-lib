@@ -1,0 +1,45 @@
+
+// element per element comparison
+def sameElementsInOrder(t1, t2) {
+	{ |return|
+		def i := 1;
+		t1.each: { |e|
+			if: !(e == t2[i]) then: {
+				return(false);
+			};
+			i := i + 1;
+		};
+		return(true);
+	}.escape();
+};
+
+// checks if two tables contain the same
+// elements, possibly in a different order
+def sameElements(t1, t2) {
+	{ |return|
+		def foundMatch := false;
+		def keep;
+		t1.each: { |e1|
+			foundMatch := false;
+			t2 := t2.filter: { |e2|
+				// filter out first occurence
+				if: (e1 == e2) then: {
+					// found match
+					if: foundMatch then: {
+						// not first occurence
+						true;
+					} else: {
+						foundMatch := true;
+						false;
+					};
+				} else: {
+					true;
+				};
+			};
+			if: !foundMatch then: { return(false) };
+		};
+		return(t2.isEmpty());
+	}.escape();
+};
+
+self;
