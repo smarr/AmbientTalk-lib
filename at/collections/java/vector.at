@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Programming Technology Lab, 2006 - 2010
- * Authors: Kevin Pinte
+ * (c) Programming Technology Lab, 2006 - 2011
+ * Author: Kevin Pinte
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -27,132 +27,169 @@
 
 
 /**
- * wrapper for Java Vector
- * serializable using asCode:
+ * AmbientTalk wrapper for java.util.Vector
+ * supports interface of java.util.Vector
+ * supports interface of AmbientTalk table
+ * supports (de)serialization using asCode: and fromCode:
+ *
  */
 
-def VectorMirror := mirror: {
+import ~.traits.list;
+import ~.traits.table;
+
+def JVector := jlobby.java.util.Vector;
+
+def VectorModule := object: {
 	
-	def asCode() {
-		def elements := asCode: (self.base.toTable());
-		def source := "{ def v := Vector.new() ; ";
-		source := source + "def elements := " + elements + "; ";
-		source := source + "v.addFromTable(elements); v }()";
-		source;
+	def VectorMirror := mirror: {
+		
+		def print() {
+			"<vector:" + (print: self.base.toTable()) + ">";
+		};
+
+		
+		def asCode() {
+			def elements := asCode: (self.base.toTable());
+			"{ def elements := " + elements + " ; Vector.new(elements) }()";
+		};
+		
 	};
 	
+	def Vector := object: {
+		
+		// wrapped java vector
+		def jvector := JVector.new();
+		
+		// initialization
+		def init(collection := []) { 
+			// a collection that supports .each: {|e| ... }
+			self.jvector := JVector.new();
+			collection.each: { |e| self.add(e) };
+			self;
+		};
+		
+		def getList() {
+			self.jvector;
+		};
+		
+		def setList(list) {
+			self.jvector := list;
+		};
+		
+		import ListTrait;
+		import TableListTrait;
+		
+		// java vector interface
+		
+		def addElement(object) {
+			self.add(object); // returns bool instead of void
+		};
+		
+		def capacity() {
+			self.jvector.capacity;
+		};
+	
+		def clone() {
+			def vectorclone := Vector.new();
+			vectorclone.addAll(self);
+			vectorclone;
+		};
+		
+		def copyInto(table) {
+			def index := 0;
+			self.each: { |e|
+				index := index + 1;
+				table[index] := e;
+			};
+			table; // returns table instead of void
+		};
+		
+		def elementAt(index) {
+			self.jvector.elementAt(index);
+		};
+		
+		def elements() {
+			createEnumerationWith(self.jvector.elements());
+		};
+		
+		def ensureCapacity(minCapacity) {
+			self.jvector.ensureCapacity(minCapacity);
+		};
+	
+		def firstElement() {
+			self.elementAt(0);
+		};
+		
+		def indexOfFrom(object, index) {
+			self.jvector.indexOf(object, index);
+		};
+		
+		def insertElementAt(object, index) {
+			self.addAt(index, object); // return bool instead of void
+		};
+		
+		def lastElement() {
+			self.jvector.lastElement();
+		};
+		
+		def lastIndexOfBefore(object, index) {
+			self.jvector.lastIndexOf(object, index);
+		};
+	
+		def removeAllElements() {
+			self.jvector.removeAllElements();
+		};
+		
+		def removeElement(object) {
+			self.jvector.removeElement(object);
+		};
+		
+		def removeElementAt(index) {
+			self.removeAt(index); // returns removed obj instead of void
+		};
+		
+		def setElementAt(object, index) {
+			self.jvector.setElementAt(object, index);
+		};
+		
+		def setSize(newSize) {
+			self.jvector.setSize(newSize);
+		};
+		
+		def trimToSize() {
+			self.jvector.trimToSize();
+		};
+
+		
+	} mirroredBy: VectorMirror;
+	
+	def createEnumerationWith(javaEnum) {
+		object: {
+			def enum := javaEnum;
+			
+			def hasMoreElements() {
+				self.enum.hasMoreElements();
+			};
+			
+			def nextElement() {
+				self.enum.nextElement()
+			};
+			
+			def each: clo {
+				while: { self.hasMoreElements() } do: {
+					clo(self.nextElement());
+				};
+			};
+			
+		} mirroredBy: { |base|
+			extend: defaultMirror.new(base) with: {
+				def print() {
+					"<enumeration:" + (print: self.base.toTable()) + ">";
+				};
+			};
+		};
+	};
+
 };
 
-def Vector := object: {
-
-	def vc := nil;
-
-	def each: clo {
-		def it := vc.iterator();
-		while: { it.hasNext() } do: {
-			clo(it.next());
-		};
-	};
-
-	
-	def add(o) {
-		vc.add(o);
-	};
-	
-	def elementAt(i) {
-		vc.elementAt(i);
-	};
-	
-	def removeElementAt(i) {
-		vc.removeElementAt(i);
-	};
-	
-	def add_at(i, o) {
-		vc.add(i, o);
-	};
-
-	def get(i) {
-		vc.get(i);
-	};
-	
-	def at(i) {
-		vc.get(i);
-	};
-	
-	def set(i, o) {
-		vc.set(i, o);
-	};
-
-	def clear() {
-		vc.clear();
-	};
-	
-	def contains(o) {
-		vc.contains(o);
-	};
-	
-	def index_of(o) {
-		vc.indexOf(o);
-	};
-	
-	def isEmpty() {
-		vc.isEmpty();
-	};
-	
-	def notEmpty() {
-		!vc.isEmpty();
-	};
-	
-	def first() {
-		vc.firstElement() ;
-	};
-	
-	def remove(o) {
-		vc.removeElement(o);
-	};
-	
-	def remove_at(i) {
-		vc.removeElementAt(i);
-	};
-	
-	def clone() {
-		Vector.new(vc.clone());
-	};
-	
-	def remove_all(coll) {
-		vc.removeAll(coll.clone_internal());
-	};
-	
-	def retain_all(coll) {
-		vc.retainAll(coll.clone_internal());
-	};
-	
-	def clone_internal() {
-		vc.clone();
-	};
-
-	def size() {
-		vc.size;
-	};
-
-	def init(ivc := jlobby.java.util.Vector.new()) {
-		vc := ivc;
-	};
-	
-	def addFromTable(t) {
-		t.each: { |e|
-			self.add(e);
-		};
-	};
-	
-	def toTable() {
-		def t := [];
-		self.each: {|e|
-			t := t + [e];
-		};
-		t;
-	};
-	
-} mirroredBy: VectorMirror;
-
-self;
+VectorModule;

@@ -1,7 +1,7 @@
 /**
  * AmbientTalk/2 Project
- * (c) Programming Technology Lab, 2006 - 2010
- * Authors: Kevin Pinte
+ * (c) Programming Technology Lab, 2006 - 2011
+ * Author: Kevin Pinte
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -25,102 +25,107 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
+
 /**
- * when manually using the Java hashmaps
- * we need to define .each for each instance
- * and when the hashmap is overwritten
- * the .each method is gone
- * this wrapper does away with that problem
- * And it is serializable using asCode:
+ * AmbientTalk wrapper for java.util.HashMap
+ * supports interface of java.util.HashMap
+ * partially supports interface of AmbientTalk table
+ *   e.g. hm["key"] := "value" is equivalent to hm.put("key", "value")
+ *   e.g hm.each: { |key ,value| ... }
+ * supports (de)serialization using asCode: and fromCode:
+ *
  */
 
-def HashMapMirror := mirror: {
+import ~.traits.map;
 
-	def asCode() {
-		def elements := asCode: (self.base.toTable());
-		def source := "{ def hm := HashMap.new() ; ";
-		source := source + "def elements := " + elements + "; ";
-		source := source + "hm.addFromTable(elements); hm }()";
-		source;
+def JHashMap := jlobby.java.util.HashMap;
+
+def HashMapModule := object: {
+
+	def HashMapMirror := mirror: {
+		
+		//def print() {
+		//	"<hashmap:" + (print: self.base.toTable()) + ">";
+		//};
+		
+		def print() {
+			"<hashmap:{" + (self.base.toTable().map: { |entry|
+				(print: entry[1]) + "=>" + (print: entry[2]);
+			}).join(", ") + "}>";
+		};
+		
+		def asCode() {
+			def elements := asCode: (self.base.toTable());
+			"{ def elements := " + elements + " ; HashMap.new(elements) }()";
+		};
+		
 	};
+	
+	def HashMap := object: {
+		
+		// wrapped java vector
+		def jhashmap := JHashMap.new();
+		
+		// initialization
+		def init(collection := []) { 
+			// a collection that supports .each: {|e| ... }
+			self.jhashmap := JHashMap.new();
+			if: (is: collection taggedAs: /.at.lang.types.Table) then: {
+				//suppose table with key-value pairs
+				collection.each: { |entry| self.put(entry[1], entry[2]) };
+			} else: {
+				collection.each: { |k, v| self.put(k, v) };
+			};
+			self;
+		};
+		
+		def getMap() {
+			self.jhashmap;
+		};
+		
+		def setMap(map) {
+			self.jhashmap := map;
+		};
+		
+		import MapTrait;
+		
+		def atPut(key, val) {
+			self.jhashmap.put(key, val);
+			val;
+		};
+		
+		def at(key) {
+			self.jhashmap.get(key);
+		};
+		
+		def each: clo {
+			def keyIt := self.jhashmap.keySet().iterator();
+			def valIt := self.jhashmap.values().iterator();
+			while: { keyIt.hasNext() } do: {
+				clo(keyIt.next(), valIt.next());
+			};
+		};
+		
+		def eachKey: clo {
+			def keyIt := self.jhashmap.keySet().iterator();
+			while: { keyIt.hasNext() } do: {
+				clo(keyIt.next());
+			};
+		};
+		
+		def toTable() {
+			def table := [];
+			self.each: { |k, v|
+				table := table + [[k, v]];
+			};
+			table;
+		};
+		
+		def asTable() { self.toTable() };
 
+		
+	} mirroredBy: HashMapMirror;
+	
 };
 
-def HashMap := object: {
-
-	def hm := nil;
-
-	def each: clo {
-		def keyit := hm.keySet().iterator();
-		def valit := hm.values().iterator();
-		while: { keyit.hasNext() } do: {
-			clo(keyit.next(), valit.next());
-		};
-	};
-	
-	def put_soft(k, v) {
-		if: (nil == hm.get(k)) then: {
-			hm.put(k, v);
-		};
-	};
-
-	def put(k, v) {
-		hm.put(k, v);
-	};
-
-	def get(k) {
-		hm.get(k);
-	};
-	
-	def remove(k) {
-		if: (!(nil == hm.get(k))) then: {
-			hm.remove(k);
-		};
-	};
-	
-	def clone() {
-		HashMap.new(hm.clone());
-	};
-	
-	def clone_internal() {
-		hm.clone();
-	};
-
-	def size() {
-		hm.size;
-	};
-
-	def contains(k) {
-		(!(nil == hm.get(k)));
-	};
-	
-	def printme() {
-	    system.println("{");
-	    self.each: {|key, val|
-	        system.println("  " + (print: key) + " -> " + (print: val));
-        };
-        system.println("}");
-	};
-
-	def init(ihm := jlobby.java.util.HashMap.new()) {
-		hm := ihm;
-	};
-	
-	def addFromTable(t) {
-		t.each: { |e|
-			def key := e[1];
-			def val := e[2];
-			self.put(key, val);
-		};
-	};
-	
-	def toTable() {
-		def t := [];
-		self.each: {|k,v|
-			t := t + [[k,v]];
-		};
-		t;
-	};
-} mirroredBy: HashMapMirror;
-
-self;
+HashMapModule;
