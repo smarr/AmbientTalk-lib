@@ -83,6 +83,10 @@ def makeEventSource(itsDependencyHeight := 0) {
 				} unless: (itsDependencyHeight > newDependencyHeight);
 				
 				itsDependencyHeight
+			};
+			
+			def print() {
+				"<event source:" + dependencyHeight + ">"
 			}
 		}
 	};

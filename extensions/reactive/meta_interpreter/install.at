@@ -28,5 +28,6 @@ def MetaInterpreterModule(shouldInstallActorMirror := false) {
 		
 	object: {
 		import ~.event_source;
+		import ~.reactive_value;
 	}
 }
