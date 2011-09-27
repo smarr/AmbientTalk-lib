@@ -1,0 +1,205 @@
+import lobby.at.lang.values;
+// import ~.auxiliary.dummy_methods;
+
+deftype ReactiveValueNotInitialized;
+def notInitialized := extend: ReactiveValueNotInitialized with: { nil } mirroredBy: { | base |
+	extend: defaultMirror.new(base) with: { 
+		def print() { "<not initialized>" };
+	}
+};
+
+deftype NoValueChange;
+deftype SelectorNotFound;
+deftype Mutable;
+
+def ReactiveValueModule := object: { // defines ReactiveValue & makeReactiveValue
+	deftype ReactiveValue;
+	
+	def makeReactiveValue(consumer, inputEvents := makeEventSource(0)) {
+		def updateEvents; // emits at most one .value() message per evaluation round
+		def outputEvents; // emits a .run(snapshotvalue) message to notify dependents of an update
+
+		def snapshotvalue 						:= notInitialized; // the cached snapshot value
+
+		def hasAlreadyScheduledUpdate := false; // ensures that only one .value() is scheduled
+		def aPendingNotification			:= nil; // the message (if any) to emit via outputEvents
+
+		// This method schedules a .value() message for emission via the updateEvents event source
+		// iff no such message has been scheduled during the current evaluation round.
+		def scheduleUpdate() {
+			if: (!hasAlreadyScheduledUpdate) then: { 
+				updateEvents <+ .value();
+				hasAlreadyScheduledUpdate := true;
+			}
+		};
+
+		// This method updates the (cached) snapshot value of the reactive value,  and will emit a
+		// .run(theNewSnapshotValue) message via the outputEvents event source to notify dependent
+		// reactive values that one of their progenitors has been updated.
+		def updateSnapshot(theNewSnapshotValue) {
+			if: (snapshotvalue == notInitialized)
+				then: { initializeDependents(theNewSnapshotValue) };
+
+			snapshotvalue := notifyDependents(theNewSnapshotValue);
+			hasAlreadyScheduledUpdate := false; 	
+		};
+
+		// Schedules a  .run(theNewSnapshotValue)  message for emission via the outputEvents event
+		// source to notify dependent reactive values that their progenitor has been updated.
+		def notifyDependents(theNewSnapshotValue) {
+			if: (aPendingNotification == nil)
+				then: { 
+					aPendingNotification := .run(theNewSnapshotValue);
+					outputEvents <+ aPendingNotification; }
+				else: {
+					def arguments := aPendingNotification.arguments;
+					arguments[1]  := theNewSnapshotValue;
+				};
+
+			theNewSnapshotValue
+		};
+
+		// Initializes the event sources, registers their interdependencies and relays them to the
+		// necessary handler objects to ensure that the necessary methods are invoked. 
+		def initEventSources() {
+			def inputMirror  := reflect: inputEvents;
+
+					updateEvents := makeEventSource(inputMirror.dependencyHeight + 1);
+					outputEvents := makeEventSource(inputMirror.dependencyHeight + 2);
+
+			def updateMirror := reflect: updateEvents;
+
+			inputMirror.addDependent(updateEvents);
+			updateMirror.addDependent(outputEvents);
+
+			makeInputHandler()	<<+ inputEvents;
+			makeUpdateHandler()	<<+ updateEvents;
+			makeOutputHandler()	<<+ outputEvents;
+
+			scheduleUpdate()
+		};
+
+		// Forwards all messages to the delegate, and then passes the method's return value or the
+		// exception it raised to the appropriate handler. 
+		def makeSignalListener(delegate, resultHandler, exceptionHandler) {
+			object: { nil } mirroredBy: { | base| 
+				extend: defaultMirror.new(base) with: {
+					def invoke(rcv, inv) {
+						if: (inv.selector == `<<+)
+							then: { super^invoke(rcv, inv) }
+							else: { 
+								try: {
+									resultHandler(rcv, inv, delegate <+ inv);
+								}
+								catch: { | exc | exceptionHandler(rcv, inv, exc) }
+							}
+					}
+				}
+			}
+		};
+
+		// Invokes scheduleUpdate()
+		def makeInputHandler() {
+			makeSignalListener(consumer, 
+				{ | receiver, invocation, value | scheduleUpdate() },
+				{ | receiver, invocation, exception |
+					do: { 
+						system.println(exception.message);
+						system.println(exception.stackTrace);
+					} unless: (is: exception taggedAs: NoValueChange).or: {
+							(is: exception taggedAs: SelectorNotFound).and: {
+								exception.getSelector() == invocation.selector;
+							}
+						};
+				})
+		};
+
+		// Invokes updateSnapshot() & resets hasAlreadyScheduledUpdate
+		def makeUpdateHandler() {
+			makeSignalListener(consumer, 
+				{ | receiver, invocation, value | updateSnapshot(value) },
+				{ | receiver, invocation, exception |
+					hasAlreadyScheduledUpdate := false;
+					do: { 
+						system.println(exception.message);
+						system.println(exception.stackTrace);
+					} unless: (is: exception taggedAs: NoValueChange);
+				})	
+		};
+
+		// Resets aPendingNotification
+		def makeOutputHandler() {
+			{ | value | aPendingNotification := nil }
+		};
+
+		// TODO revise 
+		def initializeDependents(anInitialValue) {
+			if: (is: anInitialValue taggedAs: ReactiveValue)
+				then: { 
+					def itsSnapshot  := (reflect: anInitialValue).snapshot;
+					if: (itsSnapshot != notInitialized)
+						then: { initializeDependents(itsSnapshot) } }
+				else: {
+					/**def uninitializedDependents := LiftedMethodInvocationsAwaitingInitialization.values(self);
+					uninitializedDependents.each: { | dependent | 
+						DefaultLiftingSemantics.initialize(self, dependent);
+					} **/ nil
+				}
+		}; 
+
+		initEventSources();
+
+		// A newly created Reactive Value.
+		object: { nil } taggedAs: [ ReactiveValue ] mirroredBy: { | base | 
+			extend: defaultMirror.new(base) with: { 
+				// Overridden to deal with delayed initialization of the snapshot value.
+				def select(receiver, selector) {
+					// If the reactive value has not been initialized(1):
+			  	// (1) This occurs if the reactive value has been created in this evaluation round and the
+			  	//     dataflow engine has not yet reached the stratum in which the update event source is
+			  	//     allocated, which implies that the snapshot value will be computed later on.
+					if: (itsSnapshot == notInitialized)
+						then: {
+				 			// Use a closure which contains a dummy method, this indicates that the correct method
+				  		// has to be selected as soon as the snapshot has been computed (and prior to emitting
+				  		// any messages on the output event source).
+							createClosure(
+								createDummyMethod(selector), 
+								createContext(base, receiver)) 
+						}
+						else: {
+							// Otherwise, look up the method along the object path of the current snapshot value.
+							// This method is used to determine the kind of method the interpreter has to lift. 
+							super^select(receiver, selector); 
+						}
+				};
+
+				// Override invoke, to ensure we also trap the methods that all objects share (e.g. ==, !=).
+				def invoke(receiver, invocation) {
+					def theClosure := self.select(base, invocation.selector);
+
+					// Create a dependent reactive value using the default lifting semantics.
+			  	def result := reflectOnActor().
+						liftMethodInvocation(theClosure, invocation.arguments());
+
+					// Register a dependency on the updateEvents event source (which is kept private). This is
+					// used to ensure that the dependency height of the  dependent reactive value exceeds that
+					// of the reactive value's updateEvents.
+					(reflect: updateEvents).addDependent(result);
+
+					result
+				};
+				
+				def print() {
+					"<reactive value:" + snapshot + "(" + triggers + " --- " + changes +")>"
+				};
+				
+				def triggers() { inputEvents };
+				
+				def changes()  { outputEvents};
+				
+				def snapshot() { snapshotvalue };
+			}
+		}
+	};	
+};
