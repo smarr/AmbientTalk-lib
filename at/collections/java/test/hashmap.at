@@ -104,6 +104,17 @@ def HashMapTestModule := object: {
 			self.assertTrue(sameElementsInOrder([2,2,2], rt.map: { |e| e.length() }));
 		};
 		
+		def testLiteral() {
+			def o := object: {};
+			def t := [[1,2], [3,4], [5,6], ["k" + "ey", o]];
+			a.addFromTable(t);
+			b := HashMap: {1=>2;3=>4;5=>6;("k" + "ey") => o};
+			self.assertEquals(a[1], b[1]);
+			self.assertEquals(a[3], b[3]);
+			self.assertEquals(a[5], b[5]);
+			self.assertEquals(a["key"], b["key"]);
+		};
+		
 	
 	};
 

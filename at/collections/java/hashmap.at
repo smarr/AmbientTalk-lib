@@ -33,20 +33,22 @@
  *   e.g. hm["key"] := "value" is equivalent to hm.put("key", "value")
  *   e.g hm.each: { |key ,value| ... }
  * supports (de)serialization using asCode: and fromCode:
+ * hashmaps can be created in a literal way: HashMap: { k1 => v1; k2 => v2; ... }; 
  *
  */
 
 import ~.traits.map;
+import /.at.lang.exceptions;
+
+def HASHMAP_SELECTOR := `=>;
 
 def JHashMap := jlobby.java.util.HashMap;
 
 def HashMapModule := object: {
 
+	deftype HashMapT;
+
 	def HashMapMirror := mirror: {
-		
-		//def print() {
-		//	"<hashmap:" + (print: self.base.toTable()) + ">";
-		//};
 		
 		def print() {
 			"<hashmap:{" + (self.base.toTable().map: { |entry|
@@ -62,6 +64,8 @@ def HashMapModule := object: {
 	};
 	
 	def HashMap := object: {
+	
+		def type := HashMapT;
 		
 		// wrapped java vector
 		def jhashmap := JHashMap.new();
@@ -72,11 +76,10 @@ def HashMapModule := object: {
 			self.jhashmap := JHashMap.new();
 			if: (is: collection taggedAs: /.at.lang.types.Table) then: {
 				//suppose table with key-value pairs
-				collection.each: { |entry| self.put(entry[1], entry[2]) };
+				self.addFromTable(collection);
 			} else: {
 				collection.each: { |k, v| self.put(k, v) };
 			};
-			self;
 		};
 		
 		def getMap() {
@@ -121,10 +124,42 @@ def HashMapModule := object: {
 			table;
 		};
 		
+		def addFromTable(t) {
+			t.each: { |entry| self.put(entry[1], entry[2]) };
+			nil;
+		};
+		
 		def asTable() { self.toTable() };
 
 		
-	} mirroredBy: HashMapMirror;
+	} taggedAs: [HashMapT] mirroredBy: HashMapMirror;
+	
+	deftype IllegalHashMapSelector;
+		
+	def HashMap: clo in: scope {
+		def hm := HashMap.new();
+		def statements := clo.method.bodyExpression.statements;
+		def keyExp;
+		def valExp;
+		def key;
+		def val;
+		statements.each: { |s|
+			if: (s.messageExpression.selector == HASHMAP_SELECTOR) then: {
+				keyExp := s.receiverExpression;
+				valExp := s.messageExpression.arguments[1];
+				key := eval: keyExp in: scope;
+				val := eval: valExp in: scope;
+				hm.put(key, val);
+			} else: {
+				raise: createException(IllegalHashMapSelector);
+			};
+		};
+		hm;
+	};
+	
+	def HashMap: clo {
+		HashMap: clo in: clo.context().lexicalScope();
+	};
 	
 };
 

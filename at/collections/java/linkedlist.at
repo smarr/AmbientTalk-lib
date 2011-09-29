@@ -40,6 +40,8 @@ import ~.traits.table;
 def JLinkedList := jlobby.java.util.LinkedList;
 
 def LinkedListModule := object: {
+
+	deftype LinkedListT;
 	
 	def LinkedListMirror := mirror: {
 		
@@ -55,6 +57,8 @@ def LinkedListModule := object: {
 	};
 	
 	def LinkedList := object: {
+	
+		def type := LinkedListT;
 		
 		// wrapped java vector
 		def jll := JLinkedList.new();
@@ -104,7 +108,7 @@ def LinkedListModule := object: {
 			self.jll.addLast(object);
 		};
 		
-	} mirroredBy: LinkedListMirror;
+	} taggedAs: [LinkedListT] mirroredBy: LinkedListMirror;
 
 };
 

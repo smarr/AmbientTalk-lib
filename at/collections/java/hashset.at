@@ -42,6 +42,8 @@ def JHashSet := jlobby.java.util.HashSet;
 
 def HashSetModule := object: {
 
+	deftype HashSetT;
+
 	def HashSetMirror := mirror: {
 		
 		def print() {
@@ -56,6 +58,8 @@ def HashSetModule := object: {
 	};
 	
 	def HashSet := object: {
+	
+		def type := HashSetT;
 		
 		// wrapped java vector
 		def jhashset := JHashSet.new();
@@ -75,7 +79,7 @@ def HashSetModule := object: {
 		import CollectionTrait;
 		import TableTrait;
 		
-	} mirroredBy: HashSetMirror;
+	} taggedAs: [HashSetT] mirroredBy: HashSetMirror;
 	
 };
 

@@ -40,6 +40,8 @@ import ~.traits.table;
 def JVector := jlobby.java.util.Vector;
 
 def VectorModule := object: {
+
+	deftype VectorT;
 	
 	def VectorMirror := mirror: {
 		
@@ -56,6 +58,8 @@ def VectorModule := object: {
 	};
 	
 	def Vector := object: {
+	
+		def type := VectorT;
 		
 		// wrapped java vector
 		def jvector := JVector.new();
@@ -161,7 +165,9 @@ def VectorModule := object: {
 		};
 
 		
-	} mirroredBy: VectorMirror;
+	} taggedAs: [VectorT] mirroredBy: VectorMirror;
+	
+	deftype EnumerationT;
 	
 	def createEnumerationWith(javaEnum) {
 		object: {
@@ -181,7 +187,7 @@ def VectorModule := object: {
 				};
 			};
 			
-		} mirroredBy: { |base|
+		} taggedAs: [EnumerationT] mirroredBy: { |base|
 			extend: defaultMirror.new(base) with: {
 				def print() {
 					"<enumeration:" + (print: self.base.toTable()) + ">";
