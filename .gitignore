@@ -1,0 +1,8 @@
+.svn
+*/*.svn
+bin
+
+/.classpath
+/.project
+/.settings/
+/at/lang/nars/
