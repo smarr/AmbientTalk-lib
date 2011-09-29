@@ -73,7 +73,22 @@ def DataflowEngineModule() {
 	**/
 	def theEncapsulatingSignals := Stack.new();
 	theEncapsulatingSignals.push(~.auxiliary.bottom_signal);
-		
+	
+	def startEmittingFor(anEventSource) {
+		theLockedSignals.add(anEventSource);
+					
+		theEncapsulatingSignals.push(anEventSource);
+	};
+	
+	def stopEmittingFor(anEventSource) {
+		if: (theEncapsulatingSignals.top()	!= anEventSource)
+			then: { raise: IllegalDataflowOperation.new(
+				"Asked to stop emitting for an event source, " +
+				"which doesn't match the one on file.") }
+			else: {
+				theEncapsulatingSignals.pop() }
+	};
+	
 	def DataflowEngine := object: {
 
 		/**
@@ -86,7 +101,7 @@ def DataflowEngineModule() {
 		/**
 		 * Relays all messages scheduled for emissions.
 		**/
-		def relayPendingMessages() { 
+		def emitPendingMessages() { 
 			while: 	{ thePendingMessages.size() > 0 }
 				 do:	{ 
 					// Make sure that the order of the pending messages is correct.
@@ -98,15 +113,13 @@ def DataflowEngineModule() {
 					
 					currentlyReachedStratum := theDependentMirror.dependencyHeight;
 					
-					theEncapsulatingSignals.push(theDependent);
+					startEmittingFor(theDependent);
 					
 					if: (! theDependentMirror.emit(theMessage))
 						then: { (reflect: theProgenitor).removeDependent(theDependent) };
 					
-					theEncapsulatingSignals.pop();
-					
-					theLockedSignals.add(theDependent)			
-				};
+					stopEmittingFor(theDependent);
+			};
 			
 			theLockedSignals.clear();
 			currentlyReachedStratum := -1;	

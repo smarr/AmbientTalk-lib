@@ -27,7 +27,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 	// the test or tests that follow it.
 	def tearDown() {
 		try: {
-			reflectOnActor.dataflowEngine.relayPendingMessages;
+			reflectOnActor.dataflowEngine.emitPendingMessages;
 		} catch: (lobby.at.lang.types.Exception) using: { | e | tearDown() }
 	};
 	
@@ -41,7 +41,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		{ | i | check(i) } <<+ source;
 		
 		source <+ .apply([1]);
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)
 	};
@@ -58,7 +58,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		source <+ .apply([1]);
 		source <+ .apply([2]);
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)
 	};
@@ -78,7 +78,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		otherSource <+ .apply([2]);
 		source 			<+ .apply([3]);
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)
 	};
@@ -98,7 +98,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		otherSource <+ .apply([3]);
 		source 			<+ .apply([2]);
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)
 	};
@@ -124,7 +124,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		otherSource <+ .apply([3]);
 		source 			<+ .apply([2]);
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)
 	};
@@ -152,7 +152,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		
 		(reflect: source).addDependent(otherSource);
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)		
 	};
@@ -192,7 +192,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		// This message is emitted before any message to otherSource.
 		source 			<+ .apply([2]);
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		check(lastTrigger)
 	};
@@ -219,7 +219,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 
 		self.assertEquals(nil, otherSource, "Expecting that otherSource would not be initialized yet.");
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 		
 		self.assertNotNil(otherSource, "Expecting that otherSource would be initialized by now.");
 
@@ -233,7 +233,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		// This message is emitted before any message to otherSource.
 		source 			<+ .apply([2]);
 
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 
 		// When a nested signals is unhooked,  it can no longer emit and
 		// relay messages, even if some have already been scheduled.
@@ -244,7 +244,7 @@ def EventOrdering := extend: UnitTest.new("Reactive Event Ordering", false) with
 		
 		(reflect: source).unhookNestedDependents();
 		
-		reflectOnActor.dataflowEngine.relayPendingMessages;
+		reflectOnActor.dataflowEngine.emitPendingMessages;
 
 		check(lastTrigger)
 	};
