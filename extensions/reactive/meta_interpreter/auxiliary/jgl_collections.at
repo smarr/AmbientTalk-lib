@@ -6,14 +6,31 @@ def makePriorityQueue := do: {
 	def BP 		:= jlobby.com.objectspace.jgl.BinaryPredicate;
 	
 	def maker := PQ.&new;
-	maker.cast(BP)
+	
+	{ | predicate | 
+		if: (is: predicate taggedAs: BP)
+			then: { maker.cast(BP).run(predicate) }
+			else: { 
+				maker.cast(BP).run( 
+				// This object implements the BinaryPredicate interface
+				// which matches the PriorityQueue constructor expected
+				// argument type.
+					object: { 
+						def execute(alreadySorted, newElement) { 
+							predicate.run(alreadySorted, newElement) 
+						} 
+					} taggedAs: [BP]
+				) 
+			}
+		
+	}
 };
 
 def Set.each: clo {
 	def theSetElements	:= self.elements();
 		
 	while: { theSetElements.hasMoreElements() }
-	  do:  { clo.apply([ theSetElements.nextElement() ]) }
+	  do:  { clo.run(theSetElements.nextElement()) }
 };
 
 def makeInvocation(selector, args) {

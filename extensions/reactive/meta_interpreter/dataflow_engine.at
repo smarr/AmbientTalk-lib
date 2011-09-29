@@ -18,14 +18,13 @@ def DataflowEngineModule() {
 	 * Each triplet represents a message which has been scheduled for emission.
 	 * Triplets are sorted according to the dependency height of the dependent.
 	**/
-	def thePendingMessages := makePriorityQueue(object: {
-		def execute(first, second) {
-			def [d1, p1, m1] := first;
-			def [d2, p2, m2] := second;
+	def thePendingMessages := makePriorityQueue(
+		{ | alreadySorted, newElement |
+			def [d1, p1, m1] := alreadySorted;
+			def [d2, p2, m2] := newElement;
 			
 			(reflect: d1).dependencyHeight > (reflect: d2).dependencyHeight;
-		}
-	});
+		});
 	
 	/**
 	 * It is possible to promote a signal to a higher stratum,  after messages
