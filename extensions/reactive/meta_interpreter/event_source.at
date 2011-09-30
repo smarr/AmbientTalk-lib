@@ -4,14 +4,14 @@ def makeEventSource(itsDependencyHeight := 0) {
 	import ~.auxiliary.jgl_collections;
 	
 	def theEngine 			:= reflectOnActor.dataflowEngine;
-	def theEncapsulator		:= reflect: theEngine.currentlyEmitting;
+	def theEncapsulator	:= reflect: theEngine.currentlyEmitting;
 	
 	itsDependencyHeight	:= max(itsDependencyHeight, theEncapsulator.dependencyHeight + 1);
 
-	def theDependents 			:= Set.new();
+	def theDependents 				:= Set.new();
 	def theNestedDependents		:= Set.new();
 	def theObjectsToRelayTo 	:= Set.new();
-	def hasBeenUnhooked			:= false;
+	def hasBeenUnhooked				:= false;
 
 	def theEventSource	:= object: { nil } taggedAs: [ EventSource ] mirroredBy: { | base | 
 		extend: defaultMirror.new(base) with: {
@@ -39,13 +39,10 @@ def makeEventSource(itsDependencyHeight := 0) {
  			
  			def doesNotUnderstand(selector) {
 				{ | @args | 
-					def currentEncapsulator	:= reflectOnActor.dataflowEngine.currentlyEmitting;
-					(reflect: currentEncapsulator).addDependent(base);
-						
-					scheduleForEmission(currentEncapsulator, makeInvocation(selector, args)) } };
+					scheduleForEmission(makeInvocation(selector, args)) } };
 
-			def scheduleForEmission(aProgenitor, anInvocation) {
-				reflectOnActor.dataflowEngine.schedule(aProgenitor, base, anInvocation) };
+			def scheduleForEmission(anInvocation) {
+				reflectOnActor.dataflowEngine.schedule(base, anInvocation) };
 
 			def emit(anInvocation) {
 				if: (! hasBeenUnhooked)

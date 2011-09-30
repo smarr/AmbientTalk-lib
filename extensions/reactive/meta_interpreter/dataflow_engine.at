@@ -95,7 +95,12 @@ def DataflowEngineModule() {
 		 * Schedules a message for emission when the dataflow engine reaches the
 		 * stratum in which theDependent is situated.
 		**/
-		def schedule(theProgenitor, theDependent, theMessage) {
+		def schedule(theDependent, theMessage) {
+			def theProgenitor := self.currentlyEmitting();
+			
+			// register the implicit dependency
+			(reflect: theProgenitor).addDependent(theDependent); 
+						
 			thePendingMessages.add([theDependent, theProgenitor, theMessage]) };
 
 		/**
