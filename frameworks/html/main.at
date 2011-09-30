@@ -40,50 +40,49 @@ def createHTMLObjectMirror(base, tag) {
 	};
 };
 
-
-def HTMLModule := object: {
-	
-	def htmlNode(tag, clo, attributes) {
-		// create html node
-		def htmlObject := extend: Vector.new() with: {
-			// with tag name
-			def name := tag;
-			// attributes
-			def attributes := attributes;
-			// utility functions
-			def getElementById(id) {
-				def queue := LinkedList.new();
-				queue.addAll(self);
-				def currentNode;
-				{ |return|
-					while: {!queue.isEmpty()} do: {
-						currentNode := queue.removeFirst();
-						if: (currentNode.id == id) then: {
-							return(currentNode);
-						};
-						queue.addAll(currentNode);
+def htmlNode(tag, clo, attributes) {
+	// create html node
+	def htmlObject := extend: Vector.new() with: {
+		// with tag name
+		def name := tag;
+		// attributes
+		def attributes := attributes;
+		// utility functions
+		def getElementById(id) {
+			def queue := LinkedList.new();
+			queue.addAll(self);
+			def currentNode;
+			{ |return|
+				while: {!queue.isEmpty()} do: {
+					currentNode := queue.removeFirst();
+					if: (currentNode.id == id) then: {
+						return(currentNode);
 					};
-				}.escape();
-			};
-		} mirroredBy: { |base| createHTMLObjectMirror(base, tag) };
-		// if there is a parent node, add this node as a child
-		if: ((?dHTMLParent) != nil) then: {
-			(?dHTMLParent).add(htmlObject);
+					queue.addAll(currentNode);
+				};
+			}.escape();
 		};
-		// wrap closure
-		def extendedScope := object: { 
-			def attributes := htmlObject.attributes;
-			def parent := (?dHTMLParent);
-		};
-		def wrappedClo := { clo.applyInScope([], extendedScope) };
-		def result := with: dHTMLParent is: htmlObject do: wrappedClo;
-		if: ((result != nil).and: { !(htmlObject.contains(result)) }) then: {
-			htmlObject.add(result);
-		};
-		htmlObject;
+	} mirroredBy: { |base| createHTMLObjectMirror(base, tag) };
+	// if there is a parent node, add this node as a child
+	if: ((?dHTMLParent) != nil) then: {
+		(?dHTMLParent).add(htmlObject);
 	};
+	// wrap closure
+	def extendedScope := object: { 
+		def attributes := htmlObject.attributes;
+		def parent := (?dHTMLParent);
+		import tagModule;
+	};
+	def wrappedClo := { clo.applyInScope([], extendedScope) };
+	def result := with: dHTMLParent is: htmlObject do: wrappedClo;
+	if: ((result != nil).and: { !(htmlObject.contains(result)) }) then: {
+		htmlObject.add(result);
+	};
+	htmlObject;
+};
 
-	[`html, `head, `body, `div, `title, `p].each: { |t|
+def tagModule := object: {
+		[`html, `head, `body, `div, `title, `p].each: { |t|
 		def sym := jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(t.text() + ":");
 		def symId := jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(t.text() + ":id:");
 		def symCl := jlobby.edu.vub.at.objects.natives.grammar.AGSymbol.jAlloc(t.text() + ":class:");
@@ -109,7 +108,12 @@ def HTMLModule := object: {
 			htmlNode(t.text(), clo, HashMap: {`id => id; `class => class});
 		});
 	};
+};
+
+
+def HTMLModule := object: {
 	
+	import tagModule;
 	
 	def HTMLConvertor := jlobby.frameworks.html.HTMLConvertor;
 	
