@@ -39,7 +39,9 @@ import /.at.lang.types;
 
 def ListTraitModule := object: {
 
-	def ListTrait := object: {
+	deftype ListT;
+
+	def ListTrait := isolate: {
 				
 		def getList() @Required;
 		def setList() @Required;
@@ -47,7 +49,7 @@ def ListTraitModule := object: {
 		def getCollection()  { self.getList() };
 		def setCollection(c) { self.setList(c) };
 	
-		import CollectionTrait;
+		import /.at.collections.java.traits.collection.CollectionTrait;
 	
 		def get(index) {
 			self.getList().get(index);
@@ -83,26 +85,27 @@ def ListTraitModule := object: {
 		};
 		
 		def subList(fromIndex, toIndex) {
-			createListWith(self.getList().subList(fromIndex, toIndex));
+			/.at.collections.java.traits.list.createListWith(self.getList().subList(fromIndex, toIndex));
 		};
 		
 	};
-	
-	def createListWith(javaList) {
-		object: {
+
+	def ListMirror := mirrorIsolate: {
+		def print() {
+			"<list:" + (print: self.base.toTable()) + ">";
+		};
+	};
+
+	def createListWith := { |javaList|
+		isolate: {
 			def jlist := javaList;
 			def getList()  { self.jlist };
 			def setList(l) { self.jlist := l };
 			import ListTrait;
 			import TableListTrait;
-		} mirroredBy: { |base|
-			extend: defaultMirror.new(base) with: {
-				def print() {
-					"<list:" + (print: self.base.toTable()) + ">";
-				};
-			};
-		};
+		} taggedAs: [ListT] mirroredBy: ListMirror;
 	};
+	
 
 };
 

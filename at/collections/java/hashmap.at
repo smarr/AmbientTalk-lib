@@ -48,7 +48,7 @@ def HashMapModule := object: {
 
 	deftype HashMapT;
 
-	def HashMapMirror := mirror: {
+	def HashMapMirror := mirrorIsolate: {
 		
 		def print() {
 			"<hashmap:{" + (self.base.toTable().map: { |entry|
@@ -63,10 +63,8 @@ def HashMapModule := object: {
 		
 	};
 	
-	def HashMap := object: {
-	
-		def type := HashMapT;
-		
+	def HashMap := isolate: {
+			
 		// wrapped java vector
 		def jhashmap := JHashMap.new();
 		
@@ -132,7 +130,7 @@ def HashMapModule := object: {
 		def asTable() { self.toTable() };
 
 		
-	} taggedAs: [HashMapT] mirroredBy: HashMapMirror;
+	} taggedAs: [HashMapT, MapT] mirroredBy: HashMapMirror;
 	
 	deftype IllegalHashMapSelector;
 		

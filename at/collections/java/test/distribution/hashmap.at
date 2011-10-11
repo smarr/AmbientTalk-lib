@@ -1,0 +1,56 @@
+import ~.<<.<<.hashmap;
+import /.at.lang.futures;
+enableFutures(false);
+
+def HashMapDistributionTestModule := object: {
+
+	def HashMapDistributionTest := extend: /.at.unit.test.UnitTest.new("HashMapDistributionTest") with: {
+	
+		def [a, b, c] := [nil, nil, nil];
+		def [A,B] := [nil, nil];
+		
+		def setUp() {
+			def vt[3] { HashMap.new() };
+			[a, b, c] := vt;
+		};
+		
+		def tearDown() {
+			[a, b, c].each: { |v| v.clear() };
+		};
+		
+		def testIsIsolate() {
+			self.assertTrue(is: a taggedAs: /.at.lang.types.Isolate);
+		};
+		
+		def testAsyncSerialisation() {
+			def [fut, res] := makeFuture();
+			 
+			def A := actor: {
+				import /.at.collections.java.hashmap;
+				def o := object: { def m := 41 };
+				def i := isolate: { def n := 42 };
+				//def h := HashMap: { 0 => 42; 1 => o; 2 => i; 3 => "foo"; 4 => [42, 43]};
+				def h := HashMap.new([[0, 42], [1, o], [2, i], [3, "foo"], [4, [42, 43]]]);
+				export: h as: HashMapT;
+			};
+			when: HashMapT discovered: { |rh|
+				try: {
+					self.assertFalse(is: rh taggedAs: /.at.lang.types.FarReference);
+					self.assertEquals(rh[0], 42);
+					self.assertEquals(rh.at(2).n, 42);
+					self.assertEquals(rh.at(3), "foo");
+					self.assertEquals(rh.at(4)[1], 42);
+					self.assertTrue(is: rh.at(1) taggedAs: /.at.lang.types.FarReference);
+					res.resolve(true);
+				} catch: /.at.lang.types.Exception using: { |e|
+					res.ruin(e);
+				};
+			};
+			fut;
+		};
+		
+	};
+	
+};
+
+HashMapDistributionTestModule;

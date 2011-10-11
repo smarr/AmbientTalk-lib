@@ -1,0 +1,54 @@
+import ~.<<.<<.vector;
+import /.at.lang.futures;
+enableFutures(false);
+
+def VectorDistributionTestModule := object: {
+
+	def VectorDistributionTest := extend: /.at.unit.test.UnitTest.new("VectorDistributionTest") with: {
+	
+		def [a, b, c] := [nil, nil, nil];
+		def [A,B] := [nil, nil];
+		
+		def setUp() {
+			def vt[3] { Vector.new() };
+			[a, b, c] := vt;
+		};
+		
+		def tearDown() {
+			[a, b, c].each: { |v| v.clear() };
+		};
+		
+		def testIsIsolate() {
+			self.assertTrue(is: a taggedAs: /.at.lang.types.Isolate);
+		};
+		
+		def testAsyncSerialisation() {
+			def [fut, res] := makeFuture();
+			 
+			def A := actor: {
+				import /.at.collections.java.vector;
+				def o := object: { def m := 41 };
+				def i := isolate: { def n := 42 };
+				def v := Vector.new([1, "foo", i, o]);
+				export: v as: VectorT;
+			};
+			when: VectorT discovered: { |rv|
+				try: {
+					self.assertFalse(is: rv taggedAs: /.at.lang.types.FarReference);
+					self.assertEquals(rv[0], 1);
+					self.assertEquals(rv.elementAt(1), "foo");
+					self.assertEquals(rv.elementAt(2).n, 42);
+					self.assertTrue(is: rv.elementAt(3) taggedAs: /.at.lang.types.FarReference);
+					res.resolve(true);
+				} catch: /.at.lang.types.Exception using: { |e|
+					res.ruin(e);
+				};
+			};
+			fut;
+		};
+		
+	};
+	
+};
+
+VectorDistributionTestModule;

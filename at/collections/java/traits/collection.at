@@ -38,7 +38,9 @@ import ~.table;
 
 def CollectionTraitModule := object: {
 
-	def CollectionTrait := object: {
+	deftype CollectionT;
+
+	def CollectionTrait := isolate: {
 			
 		def getCollection() @Required;
 		def setCollection() @Required;
@@ -122,20 +124,20 @@ def CollectionTraitModule := object: {
 		
 	};
 	
+	def CollectionMirror := mirror: {
+		def print() {
+			"<collection:" + (print: self.base.toTable()) + ">";
+		};
+	};
+	
 	def createCollectionWith(javaCollection) {
-		object: {
+		isolate: {
 			def jcollection := javaCollection;
 			def getCollection()  { self.jcollection };
 			def setCollection(c) { self.jcollection := c };
 			import CollectionTrait;
 			import TableTrait;
-		} mirroredBy: { |base|
-			extend: defaultMirror.new(base) with: {
-				def print() {
-					"<collection:" + (print: self.base.toTable()) + ">";
-				};
-			};
-		};
+		} taggedAs: [CollectionT] mirroredBy: CollectionMirror
 	};
 
 };

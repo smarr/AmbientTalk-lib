@@ -44,7 +44,7 @@ def HashSetModule := object: {
 
 	deftype HashSetT;
 
-	def HashSetMirror := mirror: {
+	def HashSetMirror := mirrorIsolate: {
 		
 		def print() {
 			"<hashset:" + (print: self.base.toTable()) + ">";
@@ -57,10 +57,8 @@ def HashSetModule := object: {
 		
 	};
 	
-	def HashSet := object: {
-	
-		def type := HashSetT;
-		
+	def HashSet := isolate: {
+			
 		// wrapped java vector
 		def jhashset := JHashSet.new();
 		
@@ -79,7 +77,7 @@ def HashSetModule := object: {
 		import CollectionTrait;
 		import TableTrait;
 		
-	} taggedAs: [HashSetT] mirroredBy: HashSetMirror;
+	} taggedAs: [HashSetT, CollectionT, TableT] mirroredBy: HashSetMirror;
 	
 };
 

@@ -34,11 +34,13 @@
  */
 
 import /.at.lang.types;
-import ~.list;
 
 def TableTraitModule := object: {
 
-	def TableTrait := object: {
+	deftype TableT;
+	deftype TableListT;
+
+	def TableTrait := isolate: {
 
 		def toTable() @Required;
 		def size() @Required;
@@ -92,7 +94,7 @@ def TableTraitModule := object: {
 		
 	};
 	
-	def TableListTrait := object: {
+	def TableListTrait := isolate: {
 		
 		def get() @Required;
 		def set() @Required;

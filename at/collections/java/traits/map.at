@@ -39,6 +39,8 @@ import ~.list;
 
 def MapTraitModule := object: {
 
+	deftype MapT;
+
 	def MapTrait := object: {
 
 		def getMap() @Required;
@@ -105,21 +107,21 @@ def MapTraitModule := object: {
 	
 	};
 	
+	def MapMirror := mirror: {
+		def print() {
+			"<map:{" + (self.base.toTable().map: { |entry|
+				(print: entry[1]) + "=>" + (print: entry[2]);
+			}).join(", ") + "}>";
+		};
+	};
+	
 	def createMapWith(javaMap) {
-		object: {
+		isolate: {
 			def jmap := javaMap;
 			def getMap()  { self.jmap };
 			def setMap(m) { self.jmap := m };
 			import MapTrait;
-		} mirroredBy: { |base|
-			extend: defaultMirror.new(base) with: {
-				def print() {
-					"<map:{" + (self.base.toTable().map: { |entry|
-						(print: entry[1]) + "=>" + (print: entry[2]);
-					}).join(", ") + "}>";
-				};
-			};
-		};
+		} taggedAs: [MapT] mirroredBy: MapMirror;
 	};
 
 };

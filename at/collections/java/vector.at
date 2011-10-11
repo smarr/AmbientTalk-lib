@@ -42,8 +42,9 @@ def JVector := jlobby.java.util.Vector;
 def VectorModule := object: {
 
 	deftype VectorT;
+	deftype EnumerationT;
 	
-	def VectorMirror := mirror: {
+	def VectorMirror := mirrorIsolate: {
 		
 		def print() {
 			"<vector:" + (print: self.base.toTable()) + ">";
@@ -57,10 +58,8 @@ def VectorModule := object: {
 		
 	};
 	
-	def Vector := object: {
-	
-		def type := VectorT;
-		
+	def Vector := isolate: {
+			
 		// wrapped java vector
 		def jvector := JVector.new();
 		
@@ -94,7 +93,7 @@ def VectorModule := object: {
 		};
 	
 		def clone() {
-			def vectorclone := Vector.new();
+			def vectorclone := self.new();
 			vectorclone.addAll(self);
 			vectorclone;
 		};
@@ -113,7 +112,7 @@ def VectorModule := object: {
 		};
 		
 		def elements() {
-			createEnumerationWith(self.jvector.elements());
+			/.at.collections.java.vector.createEnumerationWith(self.jvector.elements());
 		};
 		
 		def ensureCapacity(minCapacity) {
@@ -162,15 +161,19 @@ def VectorModule := object: {
 		
 		def trimToSize() {
 			self.jvector.trimToSize();
-		};
-
+		};		
 		
-	} taggedAs: [VectorT] mirroredBy: VectorMirror;
+	} taggedAs: [VectorT, ListT, TableListT] mirroredBy: VectorMirror;	
 	
-	deftype EnumerationT;
+		// enumerations
+	def EnumerationMirror := mirrorIsolate: {
+		def print() {
+			"<enumeration:" + (print: self.base.toTable()) + ">";
+		};
+	};
 	
 	def createEnumerationWith(javaEnum) {
-		object: {
+		isolate: {
 			def enum := javaEnum;
 			
 			def hasMoreElements() {
@@ -187,13 +190,7 @@ def VectorModule := object: {
 				};
 			};
 			
-		} taggedAs: [EnumerationT] mirroredBy: { |base|
-			extend: defaultMirror.new(base) with: {
-				def print() {
-					"<enumeration:" + (print: self.base.toTable()) + ">";
-				};
-			};
-		};
+		} taggedAs: [EnumerationT] mirroredBy: EnumerationMirror;
 	};
 
 };

@@ -32,20 +32,29 @@
  *
  */
 
+// traits tests
 import ~.traits.collection;
 import ~.traits.list;
 import ~.traits.map;
 import ~.traits.table;
+
+// collection tests
 import ~.vector;
 import ~.hashmap;
 import ~.linkedlist;
 
+// distribution tests
+import ~.distribution.vector;
+import ~.distribution.linkedlist;
+import ~.distribution.hashmap;
+
 def traitsTests := [CollectionTest, ListTest, MapTest, TableTest, TableListTest];
 def collectionTests := [VectorTest, HashMapTest, LinkedListTest];
+def distrTests := [VectorDistributionTest, HashMapDistributionTest, LinkedListDistributionTest];
 
 def JavaCollectionsTestSuiteModule := object: {
 
-	def JavaCollectionsTestSuite := /.at.unit.test.TestSuite.new("test suite for java collection wrappers", traitsTests + collectionTests);
+	def JavaCollectionsTestSuite := /.at.unit.test.TestSuite.new("test suite for java collection wrappers", traitsTests + collectionTests + distrTests);
 	
 };
 
