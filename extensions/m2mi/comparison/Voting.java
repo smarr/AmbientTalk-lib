@@ -25,7 +25,7 @@
  * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
  * OTHER DEALINGS IN THE SOFTWARE.
  */
-package ext.m2mi.comparison;
+package extensions.m2mi.comparison;
 
 import edu.rit.m2mi.M2MI;
 import edu.rit.util.Timer;

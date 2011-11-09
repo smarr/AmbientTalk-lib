@@ -1,4 +1,4 @@
-package ext.m2mi.comparison;
+package extensions.m2mi.comparison;
 
 public interface RoamingService {
 	public void anycast(ReplyHandler r);

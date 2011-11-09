@@ -27,7 +27,7 @@
 //
 //******************************************************************************
 
-package ext.m2mi.slides;
+package extensions.m2mi.slides;
 
 import edu.rit.m2mi.Eoid;
 import edu.rit.m2mi.M2MI;

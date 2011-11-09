@@ -1,4 +1,4 @@
-package ext.m2mi.slides;
+package extensions.m2mi.slides;
 
 import edu.rit.slides.Screen;
 
