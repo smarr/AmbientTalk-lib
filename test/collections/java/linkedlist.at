@@ -33,7 +33,7 @@
 
 
 
-import ~.<<.linkedlist;
+import /.at.collections.java.linkedlist;
 import ~.traits.util;
 
 

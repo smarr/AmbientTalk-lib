@@ -31,8 +31,8 @@
  *
  */
 
-import ~.<<.<<.vector;
-import ~.<<.<<.hashset;
+import /.at.collections.java.vector;
+import /.at.collections.java.hashset;
 import ~.util;
 
 

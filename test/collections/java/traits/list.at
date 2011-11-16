@@ -31,7 +31,7 @@
  *
  */
 
-import ~.<<.<<.linkedlist;
+import /.at.collections.java.linkedlist;
 import ~.util;
 
 def ListTestModule := object: {

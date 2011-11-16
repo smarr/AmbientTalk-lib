@@ -31,7 +31,7 @@
  *
  */
 
-import ~.<<.<<.vector;
+import /.at.collections.java.vector;
 import ~.util;
 
 def CollectionTestModule := object: {

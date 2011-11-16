@@ -62,8 +62,9 @@ def LibraryTestSuiteModule := object: {
     /.at.discovery.composition.DiscoveryCompositionModuleTest,
     /.at.lang.ref_adaptors.AdaptorModuleTest,
     /.demo.locationtracker.LocationTrackerTest,
-    /.test.serialization.SerializationTest()
+    /.test.serialization.SerializationTest(),
     // /.at.discovery.deapspace.DEAPspaceProtocolTest,	
+	/.test.collections.java.main.JavaCollectionsTestSuite
 	]);
 
   def testATDistribution() {

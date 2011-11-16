@@ -31,7 +31,7 @@
  *
  */
 
-import ~.<<.hashmap;
+import /.at.collections.java.hashmap;
 import ~.traits.util;
 
 def HashMapTestModule := object: {
