@@ -40,10 +40,9 @@
  * if _all_ participants voted "commit", and will be ruined if _any_
  * participant voted "abort".
  * 
- * If a participant disconnects and never reconnects to submit its vote, all
- * other participants will get stuck. This is a known limitation of the 2PC
- * protocol. We may be able to get around this by simply posting a timeout
- * on the decision future.
+ * A timeout is used to guard against permanent failures where one or more
+ * participants do not submit a vote. In that case, the outcome will be to
+ * "abort".
  *
  * The main reason this protocol is so trivial to express in AmbientTalk is
  * because, by default, AmbientTalk provides guaranteed eventual message
@@ -110,14 +109,14 @@ def makeParticipant(name, decision) {
   }
 };
 
-def twopc(participants) {
+def twopc(participants, timeout) {
   def [globalF, globalR] := makeFuture();
   def answersF :=
-    group: participants.map: { |p| p<-decide(globalF)@TwoWay };
+    group: participants.map: { |p| p<-decide(globalF)@Due(timeout) };
   globalR.resolve(answersF);
   globalF;
 };
 
 def alice := makeParticipant("Alice", true);
 def bob := makeParticipant("Bob", true);
-def outcome := twopc([alice, bob]);
+def outcome := twopc([alice, bob], 10.seconds);
