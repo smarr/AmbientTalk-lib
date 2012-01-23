@@ -68,9 +68,9 @@ def stmFrame := object: {
 			changed;
 		}
 	};
-}
+};
 
-def saveCopyFields
+def saveCopyFields;
 
 def FrameTest := extend: /.at.unit.test.UnitTest.new("FramesTest", false) with: {
 	def myobjectA := 
