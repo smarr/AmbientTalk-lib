@@ -521,6 +521,30 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		});
 		fut;
 	};
+	
+	// test whether exception stack traces are serialized across actors
+	def testAsyncSerializedStackTrace() {
+	  def [fut,res] := makeFuture();
+	  def o := object: {
+	    def m() { raise: /.at.lang.exceptions.XIllegalOperation.new("test"); }
+	  };
+	  def a := actor: { |o,res|
+	    import /.at.lang.futures;
+	    def run() {
+	      when: o<-m()@FutureMessage becomes: { |val|
+	        res<-ruin("expected exception"); 
+	      } catch: /.at.lang.types.IllegalOperation using: { |e|
+	        if: (is: e.stackTrace taggedAs: /.at.lang.types.Text) then: {
+	          res<-resolve("ok");
+	        } else: {
+	          res<-ruin(/.at.lang.exceptions.XIllegalOperation.new("incompatible stack trace:"+e.stackTrace));
+	        }
+	      }
+	    }
+	  };
+	  a<-run();
+	  fut;
+	};
 };
 
 self
