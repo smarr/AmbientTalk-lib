@@ -55,9 +55,9 @@ def NIL := object: {
 	def join(txt) { txt };
 	def tail(n) { self };
 	def add(elt) { Cons.new(elt, self) };
-  def insert(atPos, element) {
+  def insert(atPos, elt) {
 	  if: (atPos == 1) then: { Cons.new(elt,self) } else: {
-		  raise: XEmptyList.new("Cannot insert into the empty list: " + element);
+		  raise: XEmptyList.new("Cannot insert into the empty list: " + elt);
 	  };
   };
   def delete(atPos) { raise: XEmptyList.new("cannot delete from empty list at pos "+atPos) };
