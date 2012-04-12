@@ -55,17 +55,21 @@ def ListTraitModule := object: {
 			self.getList().get(index);
 		};
 		
-		def set(index, element) {
+		def set(index, element) { // mutator
 			self.getList().set(index, element);
 		};
 		
-		def addAt(index, element) {
+		def addAt(index, element) { // mutator
 			self.getList().add(index, element);
 		};
 		
-		def removeAt(index) {
+		def removeAt(index) { // mutator
 			def remove := self.getList().&remove;
-			remove.cast(jlobby.java.lang.Integer.TYPE)(index);
+			try: {
+				remove.cast(jlobby.java.lang.Integer.TYPE)(index);
+			} catch: /.at.lang.types.SelectorNotFound using: { |e|
+				self.getCollection().removeAt(index);
+			};
 		};
 		
 		def indexOf(element) {

@@ -89,7 +89,11 @@ def CollectionTraitModule := object: {
 		
 		def remove(object) {
 			def remove := self.getCollection().&remove;
-			remove.cast(jlobby.java.lang.Object)(object);
+			try: {
+				remove.cast(jlobby.java.lang.Object)(object);
+			} catch: /.at.lang.types.SelectorNotFound using: { |e|
+				self.getCollection().remove(object);
+			};
 		};
 		
 		def removeAll(collection) {
