@@ -315,3 +315,5 @@ def fromCode: code in: scope {
 def fromCode: code {
 	eval: (read: code) in: {};
 };
+
+self
