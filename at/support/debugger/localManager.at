@@ -1,6 +1,6 @@
 /**
  * AmbientTalk/2 Project
- * (c) Software Languages Lab, 2006 - 2010
+ * (c) Software Languages Lab, 2006 - 2012
  * 
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -38,6 +38,26 @@ def ExternalMessage := /.at.lang.types.ExternalMessage;
 deftype DebuggerException <: /.at.lang.types.Exception;
 def XDebuggerException := /.at.lang.exceptions.createException(DebuggerException);
 
+def HashMap :=  jlobby.java.util.HashMap;
+def atHashMap :=  /.at.collections.java.hashMap.HashMap;
+// local manager life cycle constants.
+// all messages arrived in INITIAL 
+//correspond to initialization code, so we let them pass
+def INITIAL := 0; 
+// RUNNING is initially set when debuggerActor 
+// calls start() on the local manager
+def RUNNING := 1;
+// PAUSE is set due to a message breakpoint (implicit activation)  
+// or a pause command is received (explicit activation).
+def PAUSED := 2;
+// to distinguish between the two paused states:
+def COMMAND := 1;
+def BREAKPOINT := 2;
+def STEPINTO := 3;
+def STEPOVER := 4;
+def STEPRETURN := 5;
+
+def debuggerUtilModule := /.at.support.debugger.util;
  	
 /* Not possible to use annotateMessage //system because 
 line number get screwed up and we need it for breakpoints*/
@@ -55,7 +75,7 @@ def extendWithPauseBhv(msg, actorId, debuggerActor) {
  	         /.at.support.debugger.localManager.enableLocalManager(true, false, debuggerActor);
  	         rcv <+ self;
 		  } else:{
-		     raise: /.at.support.debugger.localManager.XDebuggerException("cannot infect an non-debuggeable actor");
+		     raise: /.at.support.debugger.localManager.XDebuggerException.new("cannot infect an non-debuggeable actor");
 		  };
 	    } else: {
 	      //already enabled.
@@ -68,72 +88,143 @@ def extendWithPauseBhv(msg, actorId, debuggerActor) {
     } taggedAs: [Pause];
   };
 };
-def HashMap :=  jlobby.java.util.HashMap;
-def Vector := /.at.collections.vector.Vector;
-// local manager life cycle constants.
-// all messages arrived in INITIAL 
-//correspond to initialization code, so we let them pass
-def INITIAL := 0; 
-// RUNNING is initially set when debuggerActor 
-// calls start() on the local manager
-def RUNNING := 1;
-// PAUSE is set due to a message breakpoint (implicit activation)  
-// or a pause command is received (explicit activation).
-def PAUSED := 2;
-// to distinguish between the two paused states:
-def COMMAND := 1;
-def BREAKPOINT := 2;
-def STEPINTO := 3;
-def STEPOVER := 4;
 
-def generateId(){
-  def rng := jlobby.java.util.Random.new();
-  rng.nextInt();
-};
-
-def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
+def makeLocalManager(actor, debuggingSession, debuggerActorFarRef){
   extend: actor with: {
 	def debuggingState := INITIAL; 
 	def pausedState := INITIAL;
 	def debuggerActor := nil;
 	def disconnectedFromDebuggerActor := false;
-	def actorId := generateId();
+	def actorId := debuggerUtilModule.generateId();
 	def inbox := []; // stores base-level messages that cannot be process because actor is paused.
-	def breakpoints := /.at.support.debugger.localManager.breakpointsDS.new();
-	//temporal breakpoints for stepInto, hack because installing is an async process.
-	def stepIntoBreakpoints := Vector.new();
+	def codeBreakpoints := atHashMap.new();
+	def conditionalBreakpoints := atHashMap.new(); // as hashmap for removals.
 	// helper methods
 	def isStarted() { (debuggingState != INITIAL) };
 	def isPaused(){ (debuggingState == PAUSED) };
 	def isPausedByBreakpoint(){ (pausedState == BREAKPOINT) };
-	def isInSteppingInto(){ (pausedState == STEPINTO) };
-	def isInSteppingOver(){ (pausedState == STEPOVER) };
+	def isInStepInto(){ (pausedState == STEPINTO) };
+	def isInStepOver(){ (pausedState == STEPOVER) };
+	def isInStepReturn() {(pausedState == STEPRETURN) };
 	def getActorId() { actorId };
 	def actorMirror := self;
-	def isBreakpointed(msg) {
+	//def debuggeable := true;
+	def filename := nil;
+	def setFilename(f) { filename := f};
+	/*def isBreakpointed(rcv,msg) {
 	  def lineNumber := msg.getLocationLine();
 	  def filename := msg.getLocationFilename();
 	  if: ((nil != lineNumber).and: { nil != filename }) then:{
 	    if: (is: msg taggedAs: Pause) then: {
 	      !(msg.alreadyPaused); 
 	    } else:{
-	      breakpoints.contains(filename, lineNumber);
+	      (codeBreakpoints.contains(filename, lineNumber)).or:{
+	      	matchesconditionalBreakpoints(rcv,msg);
+	      };
 	    };
 	  } else:{
 	    (is: msg taggedAs: Pause).and:{ !(msg.alreadyPaused)};
 	  };
+	};*/
+	
+	def matchesConditionalBreakpoint(rcv,msg) {
+		{ |return|
+			conditionalBreakpoints.each: { |bId, breakpoint| 
+				if: breakpoint.matches(rcv,msg) then: { return(true) };
+			};
+			false;
+		}.escape();
 	};
-	def getActorState() {
+	
+	def matchesCodeBreakpoint(filename, lineNumber, rcv,msg) {
+		def res := false;
+	    def b := debuggerUtilModule.codeBreakpoint.new(filename, lineNumber);
+		def bres := codeBreakpoints.get(b.getBreakpointId);
+		if: (nil != bres) then:{
+			res := bres.matches(rcv,msg);
+		};
+		res;
+	};
+	
+	def matchesCodeMethodBreakpoint(rcv,msg){
+		def rcvMethods := (reflect: rcv).listMethods();
+		{ |return|
+			rcvMethods.each:{ |method| 
+				def sourceLocation := /.at.support.util.getSourceLocation(method);
+				if: nil != sourceLocation then: {
+				 	if: matchesCodeBreakpoint(sourceLocation.fileName, sourceLocation.line, rcv,msg) then: {return(true)};
+				};
+			};
+			false;
+		}.escape();
+	};
+		
+	def isBreakpointedReception(rcv,msg){
+		def res := false;
+		if: (is: msg taggedAs: Pause) then: {
+			// if it carries the Pause tag = the async. message send was breakpointed.
+	    	res := !(msg.alreadyPaused); 
+	    } else:{
+	    	// check whether the message invokes a method with the name that matches a code method breakpoints.
+			// or the <rcv, message> pair matches a condition breakpoint.
+ 			res := (matchesCodeMethodBreakpoint(rcv,msg).or:{
+	      		matchesConditionalBreakpoint(rcv,msg)
+	      	});
+		};
+		system.println("isBreakpointedReception:" + res + ":futurized?:" + (is: msg taggedAs: /.at.lang.futures.FutureMessage) + ":" + msg);
+		res;
+	};
+	
+	def isBreakpointedSend(rcv,msg) {
+	  def lineNumber := msg.getLocationLine();
+	  def filename := msg.getLocationFilename();
+	  def res;	   
+	  if: ((nil != lineNumber).and: { nil != filename }) then:{
+	    if: (is: msg taggedAs: Pause) then: {
+	      res := !(msg.alreadyPaused); 
+	    } else:{
+	    // check whether the message send matches a message breakpoint. 
+			res := matchesCodeBreakpoint(filename, lineNumber, rcv, msg);
+	    };
+	  } else:{
+	    res := ((is: msg taggedAs: Pause).and:{ !(msg.alreadyPaused)});
+	  };
+	  system.println("isBreakpointedSend:" + res +":for:"+ filename + ":" + lineNumber + ":futurized?:"+ (is: msg taggedAs: /.at.lang.futures.FutureMessage) + ":" + msg);
+	  res;
+	
+	};
+	
+	def getFields(subject){			
+		def reflect := (reflect: subject);
+		def fields := reflect.listFields();
+		def state :=  debuggerUtilModule.createActorState(fields.length());
+		fields.each: { |field| 
+			def val := field.readField();
+			def convertVal := /.at.lang.firstclassrefs.eventualref: {|rcv, msg| 
+				if:(msg.selector.text() == "_unWrap") then:{ val };
+			} to: val;
+			state.addField(field.name.text(),  convertVal);
+	     };	      	
+	     state;
+	};
+		
+	def getActorState() {			
+		def fields := getFields(self.behaviour);
+		fields;
+	};
+	    
+	/*def getActorState() {
       def actorState := HashMap.new();
       def fields := (reflect: self.behaviour).listFields(); 
       fields.each: { |field| 
         actorState.put(field.name.text(), (print: field.readField()));
       };
       actorState;
-    };
+    };*/
 	def pauseAndBuffer(rcv,msg, state := INITIAL){ 
 	  inbox := inbox + [[msg, rcv]];
       if: isStarted() then: {
+      	system.println("pause and buffer" + msg);
         debuggerActor<-updateInbox(getActorId(),msg)@Debug; 
         debuggerActor<-actorPaused(getActorId(),getActorState())@Debug;
         debuggingState := PAUSED;
@@ -149,7 +240,7 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 		  msg.alreadyPaused := true;
 		};
         self<-schedule(rcv,msg); //needs to be async to be evaluated in next turn!
-      //  debuggerActor<-updateInbox(actorId, msg, false)@Debug;
+        //debuggerActor<-updateInbox(actorId, msg, false)@Debug;
 	  };
 	  inbox := [];
 	};
@@ -175,11 +266,153 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
       //  debuggerActor<-updateInbox(actorId, msg, false)@Debug;
       };
     };
-	// interface with debuggerActor
+	
+	
+	// Overriding serve() to call the leave(msg) method 
+    // as AmbientTalk does not provide this meta hook natively.
+	def serve() {
+	  def inboxLetters := self.listIncomingLetters();
+	  if: (inboxLetters.length() > 0) then: {
+	    def letter := inboxLetters[1];
+	    def msg := letter.message();
+	    def res := super^serve();
+	    leave(msg);
+	    res;
+	  } 
+	};
+	
+	// leave(msg) will put back the pausedState to initial 
+    // in the case we are stepping into a breakpointed message
+	// so that send() stops marking outgoing messages as breakpointed
+    // when the turn executing a breakpointed message is ended.
+	def leave(msg) {
+	  debuggerActor<-updateInbox(actorId, msg, false)@Debug;
+	  if: ((is: msg taggedAs: Pause)) then: {
+	    if: isInStepInto() then:{
+	    	pausedState := INITIAL;
+	    } else: {
+	    	if: (isInStepReturn().or:{isInStepOver()}) then:{
+	    		pausedState := INITIAL;
+	    		debuggingState := RUNNING;
+	        	debuggerActor<-actorResumed(getActorId())@Debug;
+	        	if: isInStepOver()	then: { futureBreakpoint := nil };	
+	    	};
+	  	};
+	  };
+	};
+	
+	def futureBreakpoint := nil;
+	
+	// meta actor protocol methods
+	def schedule(rcv, msg){
+	  // is base-level or debug-level message?
+	 if: (is: msg taggedAs: Debug) then:{
+		super^schedule(rcv,msg);			
+	  } else: {
+		if: isStarted() then:{
+		  
+		  // a base-level message gets buffered if the actor is paused
+		  // Note that a @Pause message gets also buffered, so that it pauses later the actor!
+	      if: isPaused() then: { 
+	        if: ((isInStepInto()).or:{isInStepOver()}) then:{
+	          // This means we got the message breakpointed that needs to be executed
+			  // or that we are paused in a message, and the user click on step over
+	          super^schedule(rcv,msg);
+	        } else: {
+	          	if: isInStepReturn() then: {
+	          		def res := super^schedule(rcv,msg);
+	          		// means we got a futurized message that needs to be executed with a conditional breakpoint.
+					def closure := {|receiver, message| (receiver == (reflect: msg).invokeField(msg, `future)).and:{ (message.selector == `resolveWithValue).or:{message.selector == `ruinWithValue} } };
+					futureBreakpoint := debuggerUtilModule.conditionalBreakpoint.new(closure);
+	          		res;
+	          	} else:{
+	          		
+	            	pauseAndBuffer(rcv, msg, pausedState); // all messages arriving to a paused actor
+				}
+		    };
+		  } else: { //else-isPaused
+		    //actor running
+		    //check whether the msg has a breakpoint.
+            if: isBreakpointedReception(rcv,msg) then:{
+              pauseAndBuffer(rcv,extendWithPauseBhv(msg, actorId, debuggerActor), BREAKPOINT);
+            } else: {
+              // while running it doesn't have to notify the debuggerActor.
+		      super^schedule(rcv,msg); 
+		    }; //if-isBreakpointed
+	      };//if-isPaused
+        } else: { // else-isStarted. 
+		  // actor not started
+          if: (is: msg taggedAs: ExternalMessage) then: {
+           // base-level message generated by the interpreter, e.g. to apply when:discovered listeners
+		  // arrived when the localManager is not started yet should be processed.
+            super^schedule(rcv,msg);
+          } else:{
+		  // application base-level messages are paused and buffered till the localManager gets synchronized with the debuggerActor.
+	      pauseAndBuffer(rcv,msg);
+	      }
+	    }; //if-isStarted
+	  }; //-ifDebug
+	};
+	
+	// We cannot attach the Pause annotation with def createMessage(sel, args, types) and annotateMessage(msg)
+    // because the lineNumbers get messed up. We intercept send where the msg is already well-formed.
+	def send(rcv, msg){
+      def types := tagsOf: msg;
+      if: (nil != (types.find: { |type| type.isSubtypeOf(Debug) })) then: {
+        //sending a debug-level message
+      	if: (disconnectedFromDebuggerActor) then: {
+  	      //while disconnected, @Debug messages toward the debuggerActor are thrown away.
+  		} else: {
+  		  //let the @Debug messages be sent to the debuggerActor even if the actor is paused.
+  		  system.println("Sending "+msg);
+      	  super^send(rcv,msg);
+  		}
+      } else: {
+         // sending an application-level message.
+      	if: ((isBreakpointedSend(rcv,msg)).or:{(isInStepInto()).or:{isInStepReturn()}}) then: {
+      	system.println("send:isBreakpointSend/isStepInto/isStepReturn: " + msg.selector + "msg" + msg+ "receiver is " + rcv);
+      	  // a breakpointed msg infects other actors if they were not part of the debugging session.
+		  //If the actor is stepping into because then we need to mark 
+          // all outgoing messages as breakpointed to infect other actors 
+		  // If the actor is stepping return then we just need to mark the resolution/ruining of the future messages.
+      	  def extendMsg := true;
+  		  if: isInStepReturn() then:{
+ 		  	 if: !futureBreakpoint.matches(rcv,msg) then: {
+ 		  		extendMsg := false; 	
+ 		  	 };
+ 		  };
+ 		  def newMsg := msg;
+		  if: extendMsg then: {
+		  	newMsg := extendWithPauseBhv(msg, actorId, debuggerActor);
+		  };
+	      def result := super^send(rcv,newMsg);
+      	  // check if we are sending now the message because stepInto command 
+ 		  if: isInStepInto() then: { 
+ 		    debuggerActor<-updateMessageSent(actorId, msg)@Debug;
+ 		  };
+		  result;
+  		} else:{
+  	      super^send(rcv,msg);
+	  	};
+      };
+	};
+	
+	// remote interface with debuggerActor
 	def interfaceDebuggerActor := object: {
-	  def start(tableBreakpoints){
+	  
+	  	def evaluateCode(){	
+	  	system.println("evaluate code on " +actorMirror.behaviour);	
+		 	if: (nil != filename) then:{ 
+				debuggerUtilModule.loadMainCodeFromFile(filename, actorMirror.behaviour);
+			} else:{
+				//raise: XDebuggerException.new("cannot evaluate code on a local manager created without a boostrapping file");
+			};
+	 	};
+				
+	  def startInDebugMode(tableCodeBreakpoints, tableConditionalBreakpoints := []){
 	  	debuggingState := RUNNING;
-	   	tableBreakpoints.each: { |t| breakpoints.putAll(t[1], t[2])};
+	   	tableCodeBreakpoints.each: { |codebkpt| addBreakpoint(codebkpt)};
+	   	tableConditionalBreakpoints.each: { |condbkpt| addConditionalBreakpoint(condbkpt)};
 	   	scheduleAllMessagesFromInbox(false);
 	  };
 	  
@@ -203,6 +436,25 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
         };
 	  };
 	  
+	  def stepAndReturn() {
+	  	if: isPausedByBreakpoint() then: { 
+	  		//check that the message is futurized
+			def futurized := false;
+	  		def length := inbox.length();
+	  		if: (length > 0 ) then:{
+	    		def msg := (inbox[1])[1]; //[msg,rcv]
+        		def rcv := (inbox[1])[2];
+        		if: (is: msg taggedAs: /.at.lang.futures.FutureMessage) then:{
+        			futurized := true;
+        		}
+        	};
+        	if: futurized then: {
+        		pausedState := STEPRETURN;
+        		scheduleOneMessageFromInbox();
+        	};
+        };
+	  };
+	  
 	  def stepOver(){
 	    if: isPaused() then:{
 	      pausedState := STEPOVER;
@@ -210,117 +462,26 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	    };
 	  };
 	  
-	  def addBreakpoint(filename, lineNumber) {
-	    breakpoints.put(filename, lineNumber);
+	  def addBreakpoint(breakpoint) {
+	  system.println("localManager: " + actorId+ ":addBreakpoint " + breakpoint.toString);
+	    codeBreakpoints.put(breakpoint.getBreakpointId, breakpoint);   
 	  };
-	  def removeBreakpoint(filename, lineNumber){
-	    breakpoints.remove(filename, lineNumber);
+	  	  
+	  def removeBreakpoint(breakpoint){
+	   system.println("localManager: " + actorId+ "removeBreakpoint " + breakpoint.toString);
+	    codeBreakpoints.remove(breakpoint.getBreakpointId);
 	  };
-	};
-	
-	// Overriding serve() to call the leave(msg) method 
-    // as AmbientTalk does not provide this meta hook natively.
-	def serve() {
-	  def inboxLetters := self.listIncomingLetters();
-	  if: (inboxLetters.length() > 0) then: {
-	    def letter := inboxLetters[1];
-	    def msg := letter.message();
-	    def res := super^serve();
-	    leave(msg);
-	    res;
-	  } 
-	};
-	
-	// leave(msg) will put back the pausedState to initial 
-    // in the case we are stepping into a breakpointed message
-	// so that send() stops marking outgoing messages as breakpointed
-    // when the turn executing a breakpointed message is ended.
-	def leave(msg) {
-	  if: ((is: msg taggedAs: Pause).and: {isInSteppingInto()}) then:{
-	    pausedState := INITIAL;
+	  
+	  def addConditionalBreakpoint(breakpoint) {
+		conditionalBreakpoints.put(breakpoint.getBreakpointId, breakpoint);
+	  };
+	  def removeConditionalBreakpoint(breakpoint) {
+		conditionalBreakpoints.remove(breakpoint.getBreakpointId);
 	  };
 	};
 	
-	// meta actor protocol methods
-	def schedule(rcv, msg){
-	  // is base-level or debug-level message?
-	 if: (is: msg taggedAs: Debug) then:{
-		super^schedule(rcv,msg);			
-	  } else: {
-		if: isStarted() then:{
-		  // a base-level message gets buffered if the actor is paused
-		  // Note that a @Pause message gets also buffered, so that it pauses later the actor!
-	      if: isPaused() then: { 
-	        if: (isInSteppingInto()) then:{
-	          // This means we got the message breakpointed that needs to be executed.
-	          super^schedule(rcv,msg);
-	        } else: {
-	          if: isInSteppingOver() then: {
-	            def res := super^schedule(rcv,msg);
-	          	pausedState := INITIAL;
-	            debuggingState := RUNNING;
-	            debuggerActor<-actorResumed(getActorId())@Debug;	
-	            res;
-	          } else:{
-	            pauseAndBuffer(rcv, msg, pausedState); // TOCHECK when this case happens?
-              }
-		    };
-		  } else: { //else-isPaused
-		    //actor running
-		    //check whether the msg has a breakpoint.
-            if: isBreakpointed(msg) then:{
-              pauseAndBuffer(rcv,extendWithPauseBhv(msg, actorId, debuggerActor), BREAKPOINT);
-            } else: {
-              // while running it doesn't have to notify the debuggerActor.
-		      super^schedule(rcv,msg); 
-		    }; //if-isBreakpointed
-	      };//if-isPaused
-        } else: { // else-isStarted. 
-		  // actor not started
-          if: (is: msg taggedAs: ExternalMessage) then: {
-           // base-level message generated by the interpreter, e.g. to apply when:discovered listeners
-		  // arrived when the localManager is not started yet should be processed.
-            super^schedule(rcv,msg);
-          } else:{
-		  // application base-level messages are paused and buffered till the localManager gets synchronized with the debuggerActor.
-	      pauseAndBuffer(rcv,msg);
-	      }
-	    }; //if-isStarted
-	  }; //-ifDebug
-	};
-	
-
-	// We cannot attach the Pause annotation with def createMessage(sel, args, types) and annotateMessage(msg)
-    // because the lineNumbers get messed up. We intercept send where the msg is already well-formed.
-	def send(rcv, msg){
-      def types := tagsOf: msg;
-      if: (nil != (types.find: { |type| type.isSubtypeOf(Debug) })) then: {
-        //sending a debug-level message
-      	if: (disconnectedFromDebuggerActor) then: {
-  	      //while disconnected, @Debug messages toward the debuggerActor are thrown away.
-  		} else: {
-  		  //let the @Debug messages be sent to the debuggerActor even if the actor is paused.
-      	  super^send(rcv,msg);
-  		}
-      } else: {
-         // sending an application-level message.
-      	if: ((isBreakpointed(msg)).or:{isInSteppingInto()}) then: {
-      	   // a breakpointed msg infects other actors if they were not part of the debugging session.
-		  //If the actor is stepping into because then we need to mark 
-          // all outgoing messages as breakpointed to infect other actors
-		  def newMsg := extendWithPauseBhv(msg, actorId, debuggerActor);
-	      def result := super^send(rcv,newMsg);
-      	  // check if we are sending now the message because stepInto command 
- 		  if: isInSteppingInto() then: { 
- 		    debuggerActor<-updateMessageSent(actorId, msg)@Debug;
- 		  };
-		  result;
-  		} else:{
-  	      super^send(rcv,msg);
-	  	};
-      };
-	};
 	def whenDiscoveryActorDiscovered(da) {
+		system.println("attaching to debugging session " + da);
 	  // TODO: 'Temporary' code to get the sourceLocation of the behaviour 
 	  //  while it is not added to the reflective layer.
 	  def sourceLocation := /.at.support.util.getSourceLocation(self.behaviour);
@@ -341,7 +502,7 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
 	  };
 	};
 	
-	// bound the debuggerActor or start service discovery otherwise.
+	// bound a given debuggerActor or start service discovery to search for a session otherwise.
 	if: (debuggerActorFarRef == nil) then: {
 	  // start discovery of DebuggerActor
 	  when: DebuggerActor discovered: { |da|
@@ -355,82 +516,17 @@ def makeLocalManagerMirror(actor, debuggingSession, debuggerActorFarRef){
   } taggedAs: [ LocalManagerModule ];
 };
 
-def breakpointsDSPrototype := object: {
-  def breakPoints;
-  
-  def init(){
-   breakPoints := HashMap.new();
-  };
-     
-  def put(filename, number) {
-      def value := breakPoints.get(filename);
-      if: (nil == value) then:{
-        breakPoints.put(filename, [number]);
-      } else:{
-        if: (!value.contains(number)) then:{
-          breakPoints.put(filename, value + [number])
-        };
-      };
-  };
-  
-    def putAll(filename, numbersT) {
-      def value := breakPoints.get(filename);
-      if: (nil == value) then:{
-        breakPoints.put(filename, numbersT);
-      } else:{
-        numbersT.each: { |number|
-          if: !value.contains(number) then:{
-            breakPoints.put(filename, value + [number])
-          };
-        };
-      };
-  };
-  
-  def remove(filename, number) {
-    def value := breakPoints.get(filename);
-    if: (nil != value) then:{
-      value := value.filter: { |e| e != number};
-      if: (nil != value) then: {
-        breakPoints.put(filename, value);
-      } else:{
-        breakPoints.remove(filename);
-      }
-    }
-  };
- 
-  def contains(filename,number) {
-    { |return|
-      def value := breakPoints.get(filename);
-      if: (nil != value) then:{
-        return(value.contains(number));
-      };
-      false;
-    }.escape();
-  };
-  
-  def toTable(){
-    def table := [];
-	def keyit := breakPoints.keySet().iterator();
-	while: { keyit.hasNext() } do: {
-		def filename := keyit.next();
-		def value := breakPoints.get(filename);
-		table := table + [[filename, value]];
-	};
-	table;
-  };
-  
-};
-
 object:{
   def LocalManagerModule := LocalManagerModule;
-  def XDebuggerException := &XDebuggerException;
+  def XDebuggerException := XDebuggerException;
+
   def enableLocalManager(enable, debuggingSession := true, debuggerActor := nil) { 
   // debuggingSession boolean denotes if an actor was part or not of the original debugging session, to be able to desinfect it if not.
 	def actor := reflectOnActor();
 	  if: (enable) then: {
 		// do not load the local manager module twice!
-		if: !(is: actor taggedAs: LocalManagerModule) then: {
-	  	    def newProtocol := makeLocalManagerMirror(actor, debuggingSession, debuggerActor);
+		if: (!(is: actor taggedAs: LocalManagerModule)) then: {
+	  	    def newProtocol := makeLocalManager(actor, debuggingSession, debuggerActor);
 		    // the futures protocol by default extends the currently active protocol
 			actor.becomeMirroredBy: newProtocol;
 			system.println("[localManager.at] enabling debugging support by default on actor " + reflectOnActor() + "with id: " + newProtocol.actorId);
@@ -443,6 +539,21 @@ object:{
 		actor.becomeMirroredBy: defaultActorMirror;
 	  }
   };
-   //data-structure for breakpoints
-  def breakpointsDS := breakpointsDSPrototype;
+  
+  def bootstrapLocalManager(fn := nil){
+		//[1] := fileName
+		def filename := fn;
+		if: (nil == filename) then:{
+			if: (system.argv().length() > 0) then:{ 
+				filename := system.argv()[1];
+			} else:{
+				raise: XDebuggerException.new("cannot enable debugging support on an actor without file name of the code it needs to debug");
+			};
+		};
+		network.online();	
+		def actor := enableLocalManager(true);
+		actor.setFilename(filename);
+		actor;
+  	};
+
 };

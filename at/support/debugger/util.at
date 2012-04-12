@@ -1,0 +1,111 @@
+/**
+ * AmbientTalk/2 Project
+ * (c) Software Languages Lab, 2006 - 2012
+ * 
+ * Permission is hereby granted, free of charge, to any person
+ * obtaining a copy of this software and associated documentation
+ * files (the "Software"), to deal in the Software without
+ * restriction, including without limitation the rights to use,
+ * copy, modify, merge, publish, distribute, sublicense, and/or
+ * sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following
+ * conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
+ * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+ * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+ * HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+ * WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+ * OTHER DEALINGS IN THE SOFTWARE.
+**/
+
+/** 
+ * An util module for the AmbientTalk debugger called REME-D (read remedy). 
+ * More information about REME-D at AmbientTalk's google code site.
+ * @author egonzale
+**/
+def HashMap :=  jlobby.java.util.HashMap;
+def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
+def Parser := jlobby.edu.vub.at.parser.NATParser;
+def File := jlobby.java.io.File;
+def Evaluator := jlobby.edu.vub.at.eval.Evaluator;
+		
+def debuggerUtilModule := object: {
+
+	def loadMainCodeFromFile(fileName, scope){
+		def programString := Evaluator.loadContentOfFile(File.new(fileName));
+		def tree := Parser.parse(fileName, programString);
+		eval: tree in: scope;
+	};
+	 def getVMIDFromFarReference(farReference) {
+		 def objectId := getObjectId(farReference);
+		 objectId.getVirtualMachineId().getID(); 
+	};
+	
+	def getObjectId(farReference){
+		def impl_getObjectId := /.at.support.symbiosis.getClassInstanceMethod(ATFarReference, "impl_getObjectId", []);
+		impl_getObjectId.invoke(farReference, []);
+	};
+	
+	def generateId(){
+		 def rng := jlobby.java.util.Random.new();
+		 rng.nextInt();
+	};
+	
+	// message sending and message reception.
+	def codeBreakpoint := isolate:{
+		def filename;
+		def lineNumber;
+		//def condition; // on message reception now.
+				
+		def init(name, number, cond := script: {|rcv, msg| true }){
+			filename := name;
+			lineNumber := number;
+
+			condition := cond;
+		};
+		def getBreakpointId() { filename + "-" + lineNumber };
+	//	def ==(otherBreakpoint) {
+		//	self.getBreakpointId == otherBreakpoint.getBreakpointId
+		//};
+		//def matches(rcv,msg) {
+	//		condition(rcv,msg);
+		//};
+		def toString() {
+			"<breakpoint:" + filename + ":"+lineNumber+ ":" + condition + ">";
+		};
+	};
+	
+	//only at message reception now.
+	def conditionalBreakpoint := isolate:{
+		def condition;
+		def breakpointId;
+		def init(cond){
+			breakpointId := /.at.support.debugger.util.generateId();
+			condition := cond;
+		};
+		def getBreakpointId() {breakpointId};
+		def ==(otherBreakpoint) {
+			self.getBreakpointId == otherBreakpoint.getBreakpointId
+		};
+		def matches(rcv,msg) {
+			condition(rcv,msg);
+		};
+		def toString(){
+		  "<breakpoint:"+breakpointId + ":" + condition+">";
+		};
+	};
+	
+	def methodBreakpoint := extendIsolate: conditionalBreakpoint with: {
+		def init(selector) {
+			def condition := script: { |rcv, msg| msg.selector.text == selector.text} carrying: [`selector];
+			super^init(condition);
+		};	
+	};
+	
+ };
