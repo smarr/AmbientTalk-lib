@@ -31,7 +31,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	enableFutures(false);
 
 	// Tests whether the same async message can be sent multiple times.
-	def xtestAsyncMultipleAsyncMessages() {
+	def testAsyncMultipleAsyncMessages() {
 		def [f1, res1] := makeFuture();
 		def o1 := object: {
 			def m() { res1.resolve(1) };
@@ -51,7 +51,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	
 	// Tests whether using import in isolates still makes them pass-by-copy
 	// and allows the imported methods to be invoked on the copied isolate
-	def xtestAsyncIsolatesAndImports() {
+	def testAsyncIsolatesAndImports() {
 		def i := isolate: {
 			def m() { "foo" }
 		};
@@ -68,7 +68,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	
 	// test following bug #49 in which the discovery actor failed
 	// to access 'system' and 'lobby' slots in deserialized code
-	def xtestAsyncDeserializationInDiscoveryActor() {
+	def testAsyncDeserializationInDiscoveryActor() {
 		def peer := actor: {
 			def obj := object: { } taggedAs: [/.at.lang.types.Isolate] mirroredBy: (extend: defaultMirror with: {
 				def x := 5;
@@ -94,7 +94,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	
 	// test whether invocation on a far ref fails with an illegal
 	// operation exception
-	def xtestAsyncInvocationOnFarRefFails() {
+	def testAsyncInvocationOnFarRefFails() {
 		(actor: {
 			// ref is a far reference
 			def get(ref) {
@@ -106,7 +106,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	// following bug report #50, test whether an object that is parameter-passed
 	// by far reference twice receives the same globally unique ID such that two
 	// far references to the same object can be properly compared for equality
-	def xtestAsyncUniqueObjectExport() {
+	def testAsyncUniqueObjectExport() {
 		def peer := actor: {
 			def first;
 			def receive1(x) { first := x; };
@@ -121,13 +121,13 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	
 	// tests whether fields and methods with the same name cannot
 	// co-exist within the same object (bug #51)
-	def xtestFieldMethodDuplicates() {
+	def testFieldMethodDuplicates() {
 		self.assert: /.at.lang.types.DuplicateSlot raisedIn: {
 			object: { def m; def m(); }
 		}
 	};
 
-	def xtestAsyncSymbioticFutures() {
+	def testAsyncSymbioticFutures() {
 		def [testF,testR] := makeFuture();
 		jlobby.test.SymbioticFuturesTest.test(object: {
 			import /.at.support.timer;
@@ -148,7 +148,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		testF;
 	};
 	
-	def xtestAsyncFutureTypeSymbioticInvocations() {
+	def testAsyncFutureTypeSymbioticInvocations() {
 		def [testF,testR] := makeFuture();
 		jlobby.test.SymbioticFuturesTest.testFuture(object: {
 			import /.at.support.timer;
@@ -170,7 +170,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// test whether futures work on unannotated messages when enabling them by default
-	def xtestAsyncDefaultFutures() {
+	def testAsyncDefaultFutures() {
 		def [f,r] := /.at.lang.futures.makeFuture();
 		def a := actor: { |r|
 			import /.at.lang.futures;
@@ -186,7 +186,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	
 	// test whether a single message can be sent multiple times and that
 	// each message send carries its own, independently resolvable future.
-	def xtestAsyncFuturePerSend() {
+	def testAsyncFuturePerSend() {
 		def msg := <-m()@FutureMessage;
 		def rcvr := object: {
 			def count := 0;
@@ -202,7 +202,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// Tests the new slot-based reflective interface defined on mirrors.
-	def xtestSlotbasedReflection() {
+	def testSlotbasedReflection() {
 		def o := object: {
 			def x := 5;
 			def y() { 6 };
@@ -249,7 +249,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// Tests the new slot-based reflective interface on mirrors of mirages.
-	def xtestSlotbasedReflectionOnMirages() {
+	def testSlotbasedReflectionOnMirages() {
 		def o := object: {
 			def x := 5;
 			def y() { 6 };
@@ -304,7 +304,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// Tests whether one can add and remove slots to an object dynamically.
-	def xtestSlotRemoval() {
+	def testSlotRemoval() {
 		def o := object: { def x := 1; def m() { x } };
 
 		self.assertEquals(1, o.x);
@@ -332,12 +332,12 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// tests whether the functor: construct defined in init.at works
-	def xtestFunctor() {
+	def testFunctor() {
 		def f := functor: { def x := 1; def run(y) { x + y } };
 		self.assertEquals(6, f(5));
 	};
 	
-	def xtestDiamondImport() {
+	def testDiamondImport() {
 		def A := object: {
 			def a() { "A" };
 			def d() { "D" };
@@ -361,7 +361,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertFalse((reflect: D).respondsTo(`d));
 	};
 	
-	def xtestConflicts() {
+	def testConflicts() {
 		def A1 := object: {
 			def a() { "A1" };
 		};
@@ -385,7 +385,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// test whether methods tagged as @Required are not included in the composite
-	def xtestRequiredMethodsAreFiltered() {
+	def testRequiredMethodsAreFiltered() {
 		def T := object: {
 			def m() { self.n() };
 			def n() @[/.at.lang.types.Required];
@@ -402,14 +402,14 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		self.assertEquals(42, o2.m());
 	};
 	
-	def xtestMirageMirroredByIntrospectiveMirror() {
+	def testMirageMirroredByIntrospectiveMirror() {
 		def nativeObj := object: { };
 		def newMirage := object: { def m() { 42 } } mirroredBy: (reflect: nativeObj);
 		self.assertEquals(42, newMirage.m());
 	};
 	
 	// test whether serve() is only invoked once per 'remote' async send
-	def xtestAsyncServeOncePerRemoteAsyncMessage() {
+	def testAsyncServeOncePerRemoteAsyncMessage() {
 		def a := actor: {
 			def count := 0;
 			def m() { };
@@ -430,7 +430,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 		};
 	};
 	
-	def xtestAsyncExplicitScheduling() {
+	def testAsyncExplicitScheduling() {
 		def [fut,res] := makeFuture(seconds(5));
 		def a := <-m(1);
 		def rcvr := object: {
@@ -440,7 +440,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	  fut
 	};
 	
-	def xtestAsyncHandlerTriggerConcurrencyBug() {
+	def testAsyncHandlerTriggerConcurrencyBug() {
 		def [fut,res] := makeFuture(seconds(6));
 		deftype testAsyncHandlerTriggerConcurrencyBug;
 		
@@ -488,7 +488,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// test order in outbox of (local) far references is kept after reconnection and when using retract.
-	def xtestAsyncRetract() {
+	def testAsyncRetract() {
 		def [fut,res] := makeFuture();
 		def [mfut,mres] := /.at.lang.multifutures.makeMultiFuture(2);
 		def makeServerActor(res) {
@@ -523,7 +523,7 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	};
 	
 	// test whether exception stack traces are serialized across actors
-	def xtestAsyncSerializedStackTrace() {
+	def testAsyncSerializedStackTrace() {
 	  def [fut,res] := makeFuture();
 	  def o := object: {
 	    def m() { raise: /.at.lang.exceptions.XIllegalOperation.new("test"); }

@@ -91,7 +91,6 @@ def makeDebuggerActor() {
 	def notifyCommand(actorId, message) {
 		def frLocalManager := actorList.get(actorId);
 		if: (nil != frLocalManager) then:{
-		system.println("actor found " + actorId);
 			frLocalManager <+ message;
 		};
 	};
@@ -121,7 +120,7 @@ def makeDebuggerActor() {
 	  	};
 	  	
 		def loadMainCode(actorId){
-			/.at.support.timer.when: 2.seconds() elapsed: { system.println("loadCode " + actorId); notifyCommand(actorId, <-evaluateCode()@Debug)};
+			notifyCommand(actorId, <-evaluateCode()@Debug);
 	  	};
 	  	
 		 def pauseActor(actorId){
@@ -166,8 +165,7 @@ def makeDebuggerActor() {
 		 def breakpointActiveOn(filename, lineNumber, listVMIds){
 			 // notify the local managers already discovered.
 			  def breakpoint := debuggerUtilModule.codeBreakpoint.new(filename, lineNumber); 
-			  		 system.println("setActiveOnBreakpoint " + breakpoint.toString() + "activeOn:" + listVMIds);
-			 vmIdToActorIdMap.each: { | vmId, actorIdsSet | 
+			  vmIdToActorIdMap.each: { | vmId, actorIdsSet | 
 				 def bkpDS := breakpointsInVM.get(vmId);
 				 if: (bkpDS != nil) then: {
 					 if: ( listVMIds.contains(vmId)) then:{
@@ -208,7 +206,6 @@ def makeDebuggerActor() {
 		 };
 		 
 		def exportDebugSession(){
-	 		system.println("exporting debugging session " + remoteInterface);
 	 		export: remoteInterface as: DebuggerActor;
 	 		network.online();
 		};
@@ -219,7 +216,6 @@ def makeDebuggerActor() {
 	 def remoteInterface := object: {
 		 // Interface methods called from Actors which need to be propagated to Eclipse
 		 def actorStarted(actorId, sourceLocation, frLocalManager){
-		 system.println("actorStarted " + actorId);
 			 def localManager := actorList.get(actorId);
 			if: (nil == localManager) then: {
 				 def vmId := debuggerUtilModule.getVMIDFromFarReference(frLocalManager);
@@ -261,7 +257,6 @@ def makeDebuggerActor() {
 		 
 		 def updateInbox(actorId, msg, addition := true) { // TODO: it should be actorId, msg, rcv? 
 			if: addition then: {
-			system.println("updateInbox "+msg);
 			//debuggerUtilModule.getObjectId(rcv)
 			 	debugEventListener<-messageAddedToActorEvent(actorId, msg)@Debug;
 	     	} else: {

@@ -36,20 +36,9 @@ def FieldUpdateEvent := jlobby.edu.vub.at.debug.events.FieldUpdateEvent;
 
 def eclipseActorBhv := object: {
 	
-	// create debuggerActor 
-	def debuggerActorBhv := /.at.support.debugger.debuggerActor.makeDebuggerActor();
-	/*def debuggerActor := actor: {  
-		def debuggerActorBhv := /.at.support.debugger.debuggerActor;
+	// create a debugger session 
+	def debuggerSessionBhv := /.at.support.debugger.debuggerActor.makeDebuggerActor();
 
-		def handShake(debuggerEventList, commandInter){
-		// eclipe --> debuggeActor commands
-		// set the behaviour in the eclipse plugin interface
-		commandInter<-setDebuggerActorBhv(debuggerActorBhv);
-		// eclipse <-- debuggeActor events
-		// set the controller interface in the debuggerActor
-		debuggerActorBhv.setupDebugSession(debuggerEventList);
-		};
-	};*/
 	//--------------------------------------------------------------
 	//interface with debuggerActor
 	//--------------------------------------------------------------
@@ -87,52 +76,56 @@ def eclipseActorBhv := object: {
 	
 	///--------------------------------------------------------------
 	//interface with eclipsePlugin
-	//--------------------------------------------------------------
-	//def commandBehaviour := /.at.support.debugger.commandBehaviour.commandBehaviour.new(debuggerActorBhv);
-	 
+	//-------------------------------------------------------------- 
 	 def commandBehaviour := object: {
 		 // StartCommand:
 		def executeStartCommand(startCommand){
 			startCommand.getBreakpoints().each: {|bP| 
 				bP.executeCommand(self);
 			};
-			debuggerActorBhv.loadMainCode(startCommand.getActorId());
+			debuggerSessionBhv.loadMainCode(startCommand.getActorId());
 		};
 		
 		// SetBreakPointCommand:
 		def executeSetBreakpointCommand(fileName, lineNumber, bpActiveOnList){
 			if: (bpActiveOnList == nil) then: {
-				debuggerActorBhv.setBreakpoint(fileName, lineNumber);
+				debuggerSessionBhv.setBreakpoint(fileName, lineNumber);
 			} else: {
-				debuggerActorBhv.breakPointActiveOn(fileName, lineNumber, bpActiveOnList );
+				debuggerSessionBhv.breakPointActiveOn(fileName, lineNumber, bpActiveOnList );
 			};
 		};
 		// ClearBreakPointCommand:
 		def executeClearBreakpointCommand(fileName, lineNumber){
-			debuggerActorBhv.clearBreakpoint(fileName, lineNumber);
+			debuggerSessionBhv.clearBreakpoint(fileName, lineNumber);
 		};
 		// ResumeCommand:
 		def executeResumeCommand(actorId){
-			debuggerActorBhv.resumeActor(actorId);
+			debuggerSessionBhv.resumeActor(actorId);
 		};
 		// StepIntoCommand:
 		def executeStepIntoCommand(actorId){
-			debuggerActorBhv.stepInto(actorId);
+			debuggerSessionBhv.stepInto(actorId);
 		};
 		// StepOverCommand:
 		def executeStepOverCommand(actorId){
-			debuggerActorBhv.stepOver(actorId);
+			debuggerSessionBhv.stepOver(actorId);
+		};
+		// StepReturnCommand:
+		def executeStepReturnCommand(actorId){
+			debuggerSessionBhv.stepReturn(actorId);
 		};
 		// SuspendCommand:
 		def executeSuspendCommand(actorId){
-			debuggerActorBhv.pauseActor(actorId);
+			debuggerSessionBhv.pauseActor(actorId);
 		};
-		//TODO:
+		//TODO
 		def executeFieldUpdateCommand(actorId, name, reference){
-			debuggerActorBhv.fieldUpdate(actorId, name, reference);
+			system.println("executeFieldUpdateCommand not supported on this REME-D version");
+			//debuggerSessionBhv.fieldUpdate(actorId, name, reference);
 		};
 		def executeRefreshActorCommand(actorId){
-			debuggerActorBhv.refreshActor(actorId);
+			system.println("executeFieldUpdateCommand not supported on this REME-D version");
+			//debuggerSessionBhv.refreshActor(actorId);
 		};
 	 
 	 };
@@ -141,15 +134,8 @@ def eclipseActorBhv := object: {
 	def debugCoreInstance := jlobby.edu.vub.at.debug.core.DebugCorePlugin.getDefault();
 	debugCoreInstance.registerController(commandBehaviour);
 	
-	debuggerActorBhv.setupDebugSession(debuggerEventListener);
+	// Export the session to the network and pass the debuggerEventListener
+	debuggerSessionBhv.setupDebugSession(debuggerEventListener);
 	 
-	// debuggerActor<-handShake(eventBehaviour, commandBehaviour);
-
 };
-
-//eclipseActorBhv;
-
-//def debuggerActorBhv := /.at.support.debugger.debuggerActor.makeDebuggerActor();
-//debuggerActorBhv.setupDebugSession(eclipseActorBhv.debuggerEventListener);
-//debuggerActorBhv.setBreakpoint("/Users/lisa/Desktop/debugger/src/testDebug.at", 23);
 self;

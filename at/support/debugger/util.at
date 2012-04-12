@@ -34,9 +34,30 @@ def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
 def Parser := jlobby.edu.vub.at.parser.NATParser;
 def File := jlobby.java.io.File;
 def Evaluator := jlobby.edu.vub.at.eval.Evaluator;
-		
+def XIndexOutOfBounds := /.at.lang.exceptions.XIndexOutOfBounds;
+
+// ActorStatePrototype is an object that conceptually represents a hashmap so that 
+// we avoid doing symbiosis by hand when including actor state in an event sent to Eclipse.	
+def actorStatePrototype := isolate: {
+	def keys; 
+	def values;
+			
+	def init() {
+	 [keys,values] := [[], []];
+	};
+   	def put(fieldName, fieldValue) {
+ 		keys := keys + [fieldName]; 
+ 		values := values + [fieldValue];
+   	};
+   	def getKeys(){keys};
+   	def getValues(){values};
+};	
+		def bar := 42;
+	
 def debuggerUtilModule := object: {
 
+	def actorState := actorStatePrototype;
+	
 	def loadMainCodeFromFile(fileName, scope){
 		def programString := Evaluator.loadContentOfFile(File.new(fileName));
 		def tree := Parser.parse(fileName, programString);
@@ -57,36 +78,12 @@ def debuggerUtilModule := object: {
 		 rng.nextInt();
 	};
 	
-	// message sending and message reception.
-	def codeBreakpoint := isolate:{
-		def filename;
-		def lineNumber;
-		//def condition; // on message reception now.
-				
-		def init(name, number, cond := script: {|rcv, msg| true }){
-			filename := name;
-			lineNumber := number;
-
-			condition := cond;
-		};
-		def getBreakpointId() { filename + "-" + lineNumber };
-	//	def ==(otherBreakpoint) {
-		//	self.getBreakpointId == otherBreakpoint.getBreakpointId
-		//};
-		//def matches(rcv,msg) {
-	//		condition(rcv,msg);
-		//};
-		def toString() {
-			"<breakpoint:" + filename + ":"+lineNumber+ ":" + condition + ">";
-		};
-	};
-	
 	//only at message reception now.
 	def conditionalBreakpoint := isolate:{
 		def condition;
 		def breakpointId;
-		def init(cond){
-			breakpointId := /.at.support.debugger.util.generateId();
+		def init(cond, bId := /.at.support.debugger.util.generateId()){
+			breakpointId := bId;
 			condition := cond;
 		};
 		def getBreakpointId() {breakpointId};
@@ -98,6 +95,22 @@ def debuggerUtilModule := object: {
 		};
 		def toString(){
 		  "<breakpoint:"+breakpointId + ":" + condition+">";
+		};
+	};
+	
+		// message sending and message reception.
+	def codeBreakpoint := extendIsolate: conditionalBreakpoint with: {
+		def filename;
+		def lineNumber;		
+		def init(name, number, cond := script: {|rcv, msg| true }){
+			def breakpointId := (name + "-" + number);			
+			super^init(cond, breakpointId);
+			filename := name;
+			lineNumber := number;
+
+		};
+		def toString() {
+			"<breakpoint:" + filename + ":"+lineNumber+ ":" + self.condition + ">";
 		};
 	};
 	
