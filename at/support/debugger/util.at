@@ -52,10 +52,15 @@ def actorStatePrototype := isolate: {
    	def getKeys(){keys};
    	def getValues(){values};
 };	
-		def bar := 42;
+	
 	
 def debuggerUtilModule := object: {
+	
+	deftype Debug <: /.at.lang.types.AsyncMessage;
+	deftype Pause <: /.at.lang.types.AsyncMessage;
 
+	deftype DebuggerManager;
+	
 	def actorState := actorStatePrototype;
 	
 	def loadMainCodeFromFile(fileName, scope){
@@ -73,16 +78,17 @@ def debuggerUtilModule := object: {
 		impl_getObjectId.invoke(farReference, []);
 	};
 	
-	def generateId(){
-		 def rng := jlobby.java.util.Random.new();
-		 rng.nextInt();
+	def generateRandomId(){
+		def currentTimeMillis := jlobby.java.lang.System.currentTimeMillis().intValue;
+		def abs := jlobby.java.lang.Math.&abs;
+		/.at.support.util.randomNumberBetween(0, abs(currentTimeMillis));
 	};
 	
 	//only at message reception now.
 	def conditionalBreakpoint := isolate:{
 		def condition;
 		def breakpointId;
-		def init(cond, bId := /.at.support.debugger.util.generateId()){
+		def init(cond, bId := /.at.support.debugger.util.generateRandomId()){
 			breakpointId := bId;
 			condition := cond;
 		};
@@ -110,7 +116,7 @@ def debuggerUtilModule := object: {
 
 		};
 		def toString() {
-			"<breakpoint:" + filename + ":"+lineNumber+ ":" + self.condition + ">";
+			"<code-breakpoint:" + filename + ":"+lineNumber+ ":" + self.condition + ">";
 		};
 	};
 	

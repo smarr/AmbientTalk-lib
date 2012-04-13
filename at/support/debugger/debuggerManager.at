@@ -29,13 +29,13 @@
  * More information about REME-D at AmbientTalk's google code site.
  * @author egonzale
 **/
-deftype DebuggerActor;
-deftype Debug <: /.at.lang.types.Message;
+
 def HashMap := /.at.collections.java.hashMap.HashMap;
 def Vector := /.at.collections.vector.Vector;
 def debuggerUtilModule := /.at.support.debugger.util;
+def Debug := debuggerUtilModule.Debug;
 
-def makeDebuggerActor() {
+def makeDebuggerManager() {
 	 // actorId -> far reference to local manager.
 	 def actorList := HashMap.new(); 
 	 // stores breakpoints active on all VMs
@@ -180,7 +180,7 @@ def makeDebuggerActor() {
 					 }
 				 } else:{
 					 // if the VMID is not in the data structures means that a local manager didn't
-					 // have time to announce his presence to the debuggerActor. 
+					 // have time to announce his presence to the DebuggerManager. 
 					 // Do not do anything, it will get the breakpoint in the actorStarted method.
 					 };
 			 };
@@ -206,7 +206,7 @@ def makeDebuggerActor() {
 		 };
 		 
 		def exportDebugSession(){
-	 		export: remoteInterface as: DebuggerActor;
+	 		export: remoteInterface as: debuggerUtilModule.DebuggerManager;
 	 		network.online();
 		};
 		

@@ -37,10 +37,10 @@ def FieldUpdateEvent := jlobby.edu.vub.at.debug.events.FieldUpdateEvent;
 def eclipseActorBhv := object: {
 	
 	// create a debugger session 
-	def debuggerSessionBhv := /.at.support.debugger.debuggerActor.makeDebuggerActor();
+	def debuggerSessionBhv := /.at.support.debugger.debuggerManager.makeDebuggerManager();
 
 	//--------------------------------------------------------------
-	//interface with debuggerActor
+	//interface with debugger manager
 	//--------------------------------------------------------------
 	def debuggerEventListener := object:{
 		
@@ -88,10 +88,10 @@ def eclipseActorBhv := object: {
 		
 		// SetBreakPointCommand:
 		def executeSetBreakpointCommand(fileName, lineNumber, bpActiveOnList){
-			if: (bpActiveOnList == nil) then: {
+			if: ( nil == bpActiveOnList) then: {			
 				debuggerSessionBhv.setBreakpoint(fileName, lineNumber);
 			} else: {
-				debuggerSessionBhv.breakPointActiveOn(fileName, lineNumber, bpActiveOnList );
+				debuggerSessionBhv.breakpointActiveOn(fileName, lineNumber, bpActiveOnList );
 			};
 		};
 		// ClearBreakPointCommand:
