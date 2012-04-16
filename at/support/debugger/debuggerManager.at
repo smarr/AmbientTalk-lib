@@ -25,7 +25,7 @@
 **/
 
 /** 
- * Implementation of debugger Actor module of the AmbientTalk debugger called REME-D (read remedy). 
+ * Implementation of debugger session manager module of the AmbientTalk debugger called REME-D (read remedy). 
  * More information about REME-D at AmbientTalk's google code site.
  * @author egonzale
 **/
@@ -33,6 +33,7 @@
 def HashMap := /.at.collections.java.hashMap.HashMap;
 def Vector := /.at.collections.vector.Vector;
 def debuggerUtilModule := /.at.support.debugger.util;
+def breakpointsModule := /.at.support.debugger.breakpoints;
 def Debug := debuggerUtilModule.Debug;
 
 def makeDebuggerManager() {
@@ -144,8 +145,13 @@ def makeDebuggerManager() {
 		 	notifyCommand(actorId, <-stepReturn()@Debug);
 		 };
 		 		 
-		 def setBreakpoint(filename, lineNumber){
-		 	 def breakpoint := debuggerUtilModule.codeBreakpoint.new(filename, lineNumber);
+		 def setBreakpoint(filename, lineNumber, messageResolved := false){
+		     def breakpoint;
+		 	 if: messageResolved then: {
+		 	 	breakpoint := breakpointsModule.messageResolvedBreakpoint.new(filename, lineNumber);
+		 	 } else: {
+		 	 	breakpoint := breakpointsModule.messageBreakpoint.new(filename, lineNumber);
+		 	 };
 		 	 if: !breakpointsInAllVM.contains(breakpoint) then: {
   				breakpointsInAllVM.add(breakpoint);
 			 };
@@ -155,7 +161,7 @@ def makeDebuggerManager() {
 		 };
 		 
 		 def clearBreakpoint(filename, lineNumber){
-		  	 def breakpoint := debuggerUtilModule.codeBreakpoint.new(filename, lineNumber);
+		  	 def breakpoint := breakpointsModule.messageBreakpoint.new(filename, lineNumber);
 			 breakpointsInAllVM.remove(breakpoint);
 			 actorList.each: { |actorId, frLocalManager|
 				 frLocalManager<-removeBreakpoint(breakpoint)@Debug;
@@ -164,7 +170,7 @@ def makeDebuggerManager() {
 		 
 		 def breakpointActiveOn(filename, lineNumber, listVMIds){
 			 // notify the local managers already discovered.
-			  def breakpoint := debuggerUtilModule.codeBreakpoint.new(filename, lineNumber); 
+			  def breakpoint := breakpointsModule.messageBreakpoint.new(filename, lineNumber); 
 			  vmIdToActorIdMap.each: { | vmId, actorIdsSet | 
 				 def bkpDS := breakpointsInVM.get(vmId);
 				 if: (bkpDS != nil) then: {

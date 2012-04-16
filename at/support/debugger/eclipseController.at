@@ -34,9 +34,9 @@ def MessageAddedToActorEvent := jlobby.edu.vub.at.debug.events.MessageAddedToAct
 def MessageRemovedFromActorEvent := jlobby.edu.vub.at.debug.events.MessageRemovedFromActorEvent;
 def FieldUpdateEvent := jlobby.edu.vub.at.debug.events.FieldUpdateEvent;
 
-def eclipseActorBhv := object: {
+def eclipseController := object: {
 	
-	// create a debugger session 
+	// create a debugger manager for the debugging session 
 	def debuggerSessionBhv := /.at.support.debugger.debuggerManager.makeDebuggerManager();
 
 	//--------------------------------------------------------------
@@ -138,4 +138,5 @@ def eclipseActorBhv := object: {
 	debuggerSessionBhv.setupDebugSession(debuggerEventListener);
 	 
 };
+
 self;

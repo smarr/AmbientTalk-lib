@@ -29,7 +29,7 @@
  * More information about REME-D at AmbientTalk's google code site.
  * @author egonzale
 **/
-def HashMap :=  jlobby.java.util.HashMap;
+def atHashMap :=  /.at.collections.java.hashMap.HashMap;
 def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
 def Parser := jlobby.edu.vub.at.parser.NATParser;
 def File := jlobby.java.io.File;
@@ -53,13 +53,37 @@ def actorStatePrototype := isolate: {
    	def getValues(){values};
 };	
 	
+def breakpointsCatalogPrototype := object:{
+	def breakpoints;
+	def observers;
+	def init(){
+		breakpoints := atHashMap.new();
+		observers := atHashMap.new();
+	};
+	def put(bkptId, bkpt, observer := nil) {
+		if: (nil != observer) then:{
+			observers.put(bkptId, bkpt);
+		}; 
+		breakpoints.put(bkptId, bkpt);
+	};
+	def remove(bkptId) {
+		breakpoints.remove(bkptId);
+		observers.remove(bkptId); 
+	};
+};
 	
 def debuggerUtilModule := object: {
 	
 	deftype Debug <: /.at.lang.types.AsyncMessage;
 	deftype Pause <: /.at.lang.types.AsyncMessage;
-
+    deftype PauseResolve <: Pause;
+    
 	deftype DebuggerManager;
+	
+	deftype SenderBreakpoint;
+	deftype ReceiverBreakpoint;
+	deftype MessageBreakpoint;
+	deftype MessageResolveBreakpoint;
 	
 	def actorState := actorStatePrototype;
 	
@@ -68,7 +92,8 @@ def debuggerUtilModule := object: {
 		def tree := Parser.parse(fileName, programString);
 		eval: tree in: scope;
 	};
-	 def getVMIDFromFarReference(farReference) {
+	
+	def getVMIDFromFarReference(farReference) {
 		 def objectId := getObjectId(farReference);
 		 objectId.getVirtualMachineId().getID(); 
 	};
@@ -83,48 +108,49 @@ def debuggerUtilModule := object: {
 		def abs := jlobby.java.lang.Math.&abs;
 		/.at.support.util.randomNumberBetween(0, abs(currentTimeMillis));
 	};
-	
-	//only at message reception now.
-	def conditionalBreakpoint := isolate:{
+		
+	/** 
+	* stateful trait encapsulating the core behaviour of breakpoints.
+	* This trait is meant to be mixed into a breakpoint definition
+   	* It encapsuates a <breakpointId, condition> pair:
+	* breakpointId is used for efficient storage in the debugger data structures.
+	* condition denotes a boolean predicate that takes as parameter an AT letter (a <receiver,message> pair) to be check.
+	* when the condition evaluates to true, the letter is said to be breakpointed. 
+   	*  
+   	* Trait requires:
+   	*  def toString(); // a method defining how to print the breakpoint (without "<" ">")
+	**/ 
+	def TBreakpoint := isolate:{
 		def condition;
 		def breakpointId;
-		def init(cond, bId := /.at.support.debugger.util.generateRandomId()){
-			breakpointId := bId;
-			condition := cond;
+		def breakpointTypes;
+		
+		def init(cond, types, bId := /.at.support.debugger.util.generateRandomId()){
+			self.breakpointId := bId;
+			self.condition := cond;
+			self.breakpointTypes := types;
 		};
-		def getBreakpointId() {breakpointId};
+		def getBreakpointId() {self.breakpointId};
+		def onEntry() {true};
 		def ==(otherBreakpoint) {
 			self.getBreakpointId == otherBreakpoint.getBreakpointId
 		};
 		def matches(rcv,msg) {
-			condition(rcv,msg);
+			self.condition(rcv,msg);
 		};
-		def toString(){
-		  "<breakpoint:"+breakpointId + ":" + condition+">";
+		def print() {
+			"<" + self.toString() + ":taggedAs:" + self.breakpointTypes + ">";
 		};
-	};
-	
-		// message sending and message reception.
-	def codeBreakpoint := extendIsolate: conditionalBreakpoint with: {
-		def filename;
-		def lineNumber;		
-		def init(name, number, cond := script: {|rcv, msg| true }){
-			def breakpointId := (name + "-" + number);			
-			super^init(cond, breakpointId);
-			filename := name;
-			lineNumber := number;
-
+		def getBreakpointTypeTags() { self.breakpointTypes };
+		//There are two valid breakpoint type tags = { SenderBreakpoint, ReceiverBreakpoint};
+		def isTaggedAs(typeTag) {
+			{ |return|
+				self.breakpointTypes.each: { |t| 
+					if: t.isSubtypeOf(typeTag) then: { return(true)}
+				};
+				false;
+			}.escape();
 		};
-		def toString() {
-			"<code-breakpoint:" + filename + ":"+lineNumber+ ":" + self.condition + ">";
-		};
-	};
-	
-	def methodBreakpoint := extendIsolate: conditionalBreakpoint with: {
-		def init(selector) {
-			def condition := script: { |rcv, msg| msg.selector.text == selector.text} carrying: [`selector];
-			super^init(condition);
-		};	
 	};
 	
  };
