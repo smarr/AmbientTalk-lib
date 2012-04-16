@@ -100,11 +100,13 @@ def breakpointsModule := object: {
 		def init(name, number) {
 			def cond := script: { |rcv, msg|
 				def res := false;
-				def method :=  (reflect: rcv).grabMethod(msg.selector);
-				def sourceLocation := /.at.support.util.getSourceLocation(method);
-				if: (nil != sourceLocation) then: {
-					if: ((name == sourceLocation.fileName).and:{number == sourceLocation.line}) then: {
-						res := true;
+				if: ((reflect: rcv).respondsTo(msg.selector)) then: {
+					def method :=  (reflect: rcv).grabMethod(msg.selector);
+					def sourceLocation := /.at.support.util.getSourceLocation(method);
+					if: (nil != sourceLocation) then: {
+						if: ((name == sourceLocation.fileName).and:{number == sourceLocation.line}) then: {
+							res := true;
+						};
 					};
 				};
 				res;
