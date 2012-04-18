@@ -30,7 +30,7 @@
  * @author egonzale
 **/
 
-def HashMap := /.at.collections.java.hashMap.HashMap;
+def HashMap := /.at.collections.java.hashmap.HashMap;
 def Vector := /.at.collections.vector.Vector;
 def debuggerUtilModule := /.at.support.debugger.util;
 def breakpointsModule := /.at.support.debugger.breakpoints;

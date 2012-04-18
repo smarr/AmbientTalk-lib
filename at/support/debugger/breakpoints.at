@@ -129,5 +129,17 @@ def breakpointsModule := object: {
 			"futureResolution-breakpoint:"+ super^toString();
 		};
 	};	
-				
-}
+	
+	// defines a breakpoint on a method name
+	// the execution pauses before the receiver invokes a method
+	// with the given name ( as a result of an asynchornously message)
+	def symbolBreakpoint := extendIsolate: conditionalBreakpoint with: {
+		def init(selector) {
+			def condition := script: { |rcv, msg| msg.selector.text == selector.text } carrying: [`selector];
+			super^init(condition, [/.at.support.debugger.util.ReceiverBreakpoint]);
+		};
+		def toString() {
+			"symbol-breakpoint:"+ super^toString();
+		};	
+	};			
+};

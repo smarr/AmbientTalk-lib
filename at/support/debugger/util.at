@@ -29,7 +29,7 @@
  * More information about REME-D at AmbientTalk's google code site.
  * @author egonzale
 **/
-def atHashMap :=  /.at.collections.java.hashMap.HashMap;
+def atHashMap :=  /.at.collections.java.hashmap.HashMap;
 def ATFarReference := jlobby.edu.vub.at.actors.ATFarReference;
 def Parser := jlobby.edu.vub.at.parser.NATParser;
 def File := jlobby.java.io.File;
