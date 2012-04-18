@@ -389,7 +389,7 @@ def makeLocalManager(actor, debuggingSession, debuggerManagerFarRef){
 	def interfaceDebuggerManager := object: {
 	  
 	  def evaluateCode(){
-			if: (nil != filename).and:{ !alreadyEvaluated } then:{ 
+			if: ((nil != filename).and:{ !alreadyEvaluated }) then:{ 
 				alreadyEvaluated := true;
 				debuggerUtilModule.loadMainCodeFromFile(filename, actorMirror.behaviour);
 			}
