@@ -346,7 +346,7 @@ def RFIDService := object: {
 	def ackTag(serial, tag) {
 		info("ack serial: " + serial);
 		debug("  ack serial: " + serial);
-		if: (discoTags.contains(serial)) then: {
+		if: (discoTags.containsKey(serial)) then: {
 			// if tag marked offline
 			// take back online
 			// update mark
@@ -390,7 +390,7 @@ def RFIDService := object: {
 	// case 3: tag not seen with respect to previous poll
 	//         - disconnect
 	def unseeTag(serial, tag) {
-		if: (!(discoTags.contains(serial))) then: {
+		if: (!(discoTags.containsKey(serial))) then: {
 			// take all unseen tags offline
 	        info("  off serial: " + serial + " object: " + tagToObject.get(serial));
 					try: {
@@ -414,12 +414,12 @@ def RFIDService := object: {
 			def tags := Vector.new(device.inventory(true));
 			debug("in range: " + tags.size());
 			
-			def unseen := serialToTag.clone();
+			def unseen := HashMap.new(serialToTag);
       
 			tags.each: { |tag|
 				def serial := tag.getSerial().toString();
 				unseen.remove(serial);
-				if: (serialToTag.contains(serial)) then: {
+				if: (serialToTag.containsKey(serial)) then: {
 					// case 1
 					// seen before
 					// check for possible disconnection object
