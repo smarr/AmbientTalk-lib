@@ -67,7 +67,18 @@ def VectorModule := object: {
 		def init(collection := []) { 
 			// a collection that supports .each: {|e| ... }
 			self.jvector := JVector.new();
-			collection.each: { |e| self.add(e) };
+			try: {
+				collection.each: { |e| self.add(e) };
+			} catch: /.at.lang.types.SelectorNotFound using: { |e|
+				if: (reflect: collection).isTaggedAs(jlobby.java.util.List) then: {
+					def i := collection.iterator();
+					while: { i.hasNext() } do: {
+						self.add(i.next());
+					};
+				} else: {
+					raise: e;
+				};
+			};
 			self;
 		};
 		
