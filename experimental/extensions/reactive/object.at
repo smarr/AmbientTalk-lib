@@ -1,6 +1,6 @@
 import /.at.lang.types;
 import /.experimental.extensions.reactive.types;
-import /.experimental.extensions.observable;
+import /.experimental.extensions.reactive.observable;
 import /.experimental.extensions.reactive.observablefield;
 
 // mirror for reactive objects
