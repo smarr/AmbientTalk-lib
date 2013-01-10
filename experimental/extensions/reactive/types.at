@@ -1,5 +1,6 @@
 deftype ReactiveObject;
 deftype ReactiveValue;
+deftype ReactiveField;
 deftype ReactiveLambda;
 deftype Reactive;
 self;

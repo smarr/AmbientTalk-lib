@@ -27,19 +27,23 @@ def ObservableFieldModule := object: {
     		
     		def readField() { val };
     		def writeField(newVal) {
-    		    if: (callback_ != nil) then: {
-    		        // cancel previous observer if there was one
-    	            callback_.cancel();
-    	        };
-    		    if: (is: newVal taggedAs: ReactiveObject) then: {
-    		        // register observer if necessary
-    		        callback_ := (reflect: newVal).register: { |fld, val|
-    		            self.notify: self.observerCatalog.writes withArgs: [newVal];
+    		    if: (is: val taggedAs: ReactiveField) then: {
+    		        val.setValue(newVal);
+    		    } else: {
+    		        if: (callback_ != nil) then: {
+    		            // cancel previous observer if there was one
+    	                callback_.cancel();
+    	            };
+    		        if: (is: newVal taggedAs: ReactiveObject) then: {
+    		            // register observer if necessary
+    		            callback_ := (reflect: newVal).register: { |fld, val|
+    		                self.notify: self.observerCatalog.writes withArgs: [newVal];
+    		            };
     		        };
-    		    };
-    		    // set new value and notify observers
-    			val := newVal; 
-    			self.notify: self.observerCatalog.writes withArgs: [newVal];
+    		        // set new value and notify observers
+    			    val := newVal; 
+    			    self.notify: self.observerCatalog.writes withArgs: [newVal];
+    			};
     			val;
     		};
     		def accMethod := createClosureMethod(self, createMethod(nam, [], `{ readField() }, []));

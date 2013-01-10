@@ -69,7 +69,7 @@ def createReactiveValueMirror(rv) {
 // a reactive value is a reactive object with one (hidden) field
 // the field can be set using setValue or snapshotted using getValue
 // it is used to wrap a native value
-def createReactiveValue(init := nil) {
+def createReactiveValue(init := nil, typeTags := []) {
     
 	def rv := robject: {
 	    // wraps the value
@@ -88,7 +88,7 @@ def createReactiveValue(init := nil) {
 		//def setValueWith: clo { 
 		//	setValue(clo(getValue()));
 		//};
-	} taggedAs: [ReactiveObject] mirroredBy: createReactiveValueMirror(rv);
+	} taggedAs: ([ReactiveObject] + typeTags) mirroredBy: createReactiveValueMirror(rv);
 	
 	publicInterface;
 };
@@ -96,6 +96,8 @@ def createReactiveValue(init := nil) {
 def ReactiveValueModule := object: {
     
     def rwrap: v { createReactiveValue(v) };
+    
+    def rfield: v { createReactiveValue(v, [ReactiveField]) }
 
 };
 
