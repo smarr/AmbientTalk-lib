@@ -50,13 +50,21 @@ def createReactiveValueMirror(rv) {
 	    		// XXX system.println("invoking " + invocation.selector);
                 // XXX system.println("  args " + invocation.arguments);
 	    		// XXX system.println("  forward to " + self.base.getValue());
+	    		def args := invocation.arguments.map: { |a|
+	    		    if: (is: a taggedAs: ReactiveValue) then: {
+	    		        a.getValue();
+	    		    } else: {
+	    		        a;
+	    		    };
+	    		};
+	    		invocation.arguments := args;
 	    		invocation.sendTo(self.base.getValue(), delegate);
 	    		//(reflect: self.base.getValue()).invoke(self.base.getValue(), invocation);
 	    	};
 	    };
 	    
 	    def typeTags() {
-	      [ReactiveObject, ReactiveValue] + (tagsOf: self.base.getValue());  
+	      super.typeTags() + (tagsOf: self.base.getValue());  
 	    };
 	    
 	    def print() {
@@ -88,7 +96,7 @@ def createReactiveValue(init := nil, typeTags := []) {
 		//def setValueWith: clo { 
 		//	setValue(clo(getValue()));
 		//};
-	} taggedAs: ([ReactiveObject] + typeTags) mirroredBy: createReactiveValueMirror(rv);
+	} taggedAs: ([ReactiveObject, ReactiveValue] + typeTags) mirroredBy: createReactiveValueMirror(rv);
 	
 	publicInterface;
 };
