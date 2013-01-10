@@ -1,0 +1,102 @@
+import /.experimental.extensions.reactive.types;
+import /.experimental.extensions.reactive.object;
+
+// mirror for reactive values
+def createReactiveValueMirror(rv) {
+    mirror: {
+        
+        def parent;
+        
+        def register: clo {
+            // rv is the object that wraps the actual value
+            // registering an observer here should really be registered at the wrapper
+	    	(reflect: rv).register: clo;
+	    };
+	    
+	    def registerParent(parent) {
+	        self.cancelParent();
+	        self.parent := parent;
+	    };
+	    
+	    def cancelParent() {
+	        if: (parent != nil) then: {
+	            self.parent.cancel();
+	            self.parent := nil;
+	        };
+	    };
+	    
+	    def setValue(val) {
+	        rv.current :=  val;
+	    };
+        
+        def invokeField(receiver, selector) {
+            // delegate any invocation to the actual value
+            // except the special methods to set and snapshot the current value
+	    	if: ([`setValue, `setValueWith:, `getValue].contains(selector)) then: {
+	    		super.invokeField(receiver, selector);
+	    	} else: {
+	    		def val := self.base.getValue();
+	    		(reflect: val).invokeField(val, selector);
+	    	};
+	    };
+	    
+	    def invoke(delegate, invocation) {
+	        // delegate any invocation to the actual value
+            // except the special methods to set and snapshot the current value
+	    	if: ([`setValue, `setValueWith:, `getValue].contains(invocation.selector)) then: {
+	    		super.invoke(delegate, invocation);
+	    	} else: {
+	    		// forward invocation to current value
+	    		// XXX system.println("invoking " + invocation.selector);
+                // XXX system.println("  args " + invocation.arguments);
+	    		// XXX system.println("  forward to " + self.base.getValue());
+	    		invocation.sendTo(self.base.getValue(), delegate);
+	    		//(reflect: self.base.getValue()).invoke(self.base.getValue(), invocation);
+	    	};
+	    };
+	    
+	    def typeTags() {
+	      [ReactiveObject, ReactiveValue] + (tagsOf: self.base.getValue());  
+	    };
+	    
+	    def print() {
+	    	"<rval:"+(print: self.base.getValue())+">";
+	    };
+	};
+	
+};
+
+// a reactive value is a reactive object with one (hidden) field
+// the field can be set using setValue or snapshotted using getValue
+// it is used to wrap a native value
+def createReactiveValue(init := nil) {
+    
+	def rv := robject: {
+	    // wraps the value
+		def current := init;
+	};
+	
+	def publicInterface := object: {
+	    // the public interface for a wrapped value
+		def setValue(v) {
+		    (reflect: self).cancelParent();
+			rv.current := v;
+		};
+		def getValue() {
+			rv.current;
+		};
+		//def setValueWith: clo { 
+		//	setValue(clo(getValue()));
+		//};
+	} taggedAs: [ReactiveObject] mirroredBy: createReactiveValueMirror(rv);
+	
+	publicInterface;
+};
+
+def ReactiveValueModule := object: {
+    
+    def rwrap: v { createReactiveValue(v) };
+
+};
+
+ReactiveValueModule;

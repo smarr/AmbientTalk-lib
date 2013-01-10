@@ -1,0 +1,52 @@
+import /.at.lang.types;
+import /.experimental.extensions.reactive.types;
+
+def createReactiveLambda(clo) {
+    object: {
+        def apply(args) {
+            def rv := nil;
+            def wrapIt := false;
+            def callback := object: {
+                def parents := [];
+                def cancel() {
+                    parents.each: { |p| p.cancel() };
+                };
+            }; 
+            args.each: { |a|
+                if: (is: a taggedAs: ReactiveObject) then: {
+                    // if so: we must wrap the return value in a rval
+                    wrapIt := true;
+                    def par := (reflect: a).register: { |fld, val|
+                        // register observer to update the rval
+                        (reflect: rv).setValue(clo.apply(args));
+                    };
+                    callback.parents := callback.parents + [par]
+                } else: {
+                  // ignore regular argument
+                };
+            };
+            if: wrapIt then: {
+                // wrap the return value
+                // XXX maybe we should do this ONLY unless it already returns a rval/reactiveobject
+                rv := /.experimental.extensions.reactive.value.rwrap: clo.apply(args);
+                (reflect: rv).registerParent(callback);
+                rv;
+            } else: {
+                // no reactive argument => regular apply
+                clo.apply(args);
+            };
+        };
+    } taggedAs: [Closure, ReactiveLambda]; 
+};
+
+def ReactiveLambdaModule := object: {
+    def rambda: clo {
+        createReactiveLambda(clo);
+    };
+    
+    def withDependency: v do: clo {
+      (rambda: { |val| clo(val) })(v);
+    };
+};
+
+ReactiveLambdaModule;

@@ -124,6 +124,10 @@ def makeMutator(selector) {
 	mutatorAllocator((print: selector) + ":=")
 };
 
+def getSelector(mutator) {
+	mutatorAllocator(mutator.text.replace: ":=$" by: { |m| "" });
+};
+
 def isMutator(selector) { selector.text ~= ".*:=$"; }; 
 
 def primitiveSelectors := [`super,`super:=,`new,`init,`==];

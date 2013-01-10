@@ -1,0 +1,77 @@
+import /.at.lang.types;
+import /.experimental.extensions.reactive.types;
+import /.experimental.extensions.observable;
+import /.experimental.extensions.reactive.observablefield;
+
+// mirror for reactive objects
+def ReactiveObjectMirror := mirror: {
+	import ObservableTrait;
+	
+	def init(base) {
+		super.init(base);
+		self.initObserverCatalogs(`dependents);
+		def self.dependents := self.observerCatalog.dependents;
+	};
+			
+	def register: clo {
+	    // register a closure as observer to state changes in this object
+		self.addObserver: clo to: self.observerCatalog.dependents;
+	};
+
+	def defineField(nam, val) {
+	    // create a field that is observable to trap assignment
+		def fld := createObservableField(nam, val);
+		fld.addObserver: { |newVal| self.notify: self.dependents withArgs: [nam, newVal] } to: fld.observerCatalog.writes;
+		self.addField(fld);
+		nil;
+	};
+	
+	def invoke(delegate, invocation) {
+	    // lift regular invocations tagged as Reactive
+	    if: (is: invocation taggedAs: Reactive) then: {
+	        (/.experimental.extensions.reactive.lambda.rambda: { |base| super.invoke(delegate, invocation) })(self.base);
+	    } else: {
+    	    super.invoke(delegate, invocation);
+    	};
+	};
+	
+	def addMethod(method) {
+        // wrap methods annotated as Reactive in a reactive lambda (putting a dependency on self)
+        if: (method.annotations().contains(Reactive)) then: {
+            def slf := self.base;
+            def replacementMethod := extend: method with: {
+                def apply(@args) {
+                    (/.experimental.extensions.reactive.lambda.rambda: { |slf, @args| method.apply(@args) }).apply([slf] + args);
+                };
+            } taggedAs: [Method];
+                super^addMethod(replacementMethod);  
+        } else: {
+            super^addMethod(method); 
+        };
+    };
+    
+    def print() {
+        (super^print()).replace: "obj" by: { |m| "robj" };
+    };
+
+};
+
+def ReactiveObjectModule := object: {
+        
+    // convenience construct for registering an observer
+    def whenever: robject modified: clo {
+    	(reflect: robject).register(clo);
+    };
+
+    // create reactive objects
+    def robject: clo {
+        object: clo taggedAs: [ReactiveObject] mirroredBy: ReactiveObjectMirror;
+    };
+
+    def robject: clo taggedAs: typeTags {
+        object: clo taggedAs: ([ReactiveObject] + typeTags) mirroredBy: ReactiveObjectMirror;
+    };
+    
+};
+
+ReactiveObjectModule;

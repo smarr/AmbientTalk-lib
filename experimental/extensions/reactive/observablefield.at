@@ -1,0 +1,54 @@
+import /.at.lang.values;
+import /.at.lang.types;
+import /.experimental.extensions.reactive.types;
+import /.experimental.extensions.reactive.observable;
+
+def ObservableFieldModule := object: {
+
+    def createObservableField(nam, val) {
+    	object: { 
+    		import ObservableTrait;
+    		self.addObserverCatalogs(`writes);
+    		def new(newHost) { self }; // singleton pattern
+    		def name() { nam };
+    		def nam_ := /.at.support.util.makeMutator(nam);
+    		
+    		// if a reactive object is assigned to a field
+    		// register an observer on that field that triggers our observers
+    		// i.e. if a reactive field assigned to a field is changed, we consider ourselves to be changed too
+    		def callback_ := nil;
+    		// the callback to the observer
+    		if: (is: val taggedAs: ReactiveObject) then: {
+    		    // register observer if necessary
+    	        callback_ := (reflect: val).register: { |fld, fval|
+    	            self.notify: self.observerCatalog.writes withArgs: [val];
+    	        };
+    	    };
+    		
+    		def readField() { val };
+    		def writeField(newVal) {
+    		    if: (callback_ != nil) then: {
+    		        // cancel previous observer if there was one
+    	            callback_.cancel();
+    	        };
+    		    if: (is: newVal taggedAs: ReactiveObject) then: {
+    		        // register observer if necessary
+    		        callback_ := (reflect: newVal).register: { |fld, val|
+    		            self.notify: self.observerCatalog.writes withArgs: [newVal];
+    		        };
+    		    };
+    		    // set new value and notify observers
+    			val := newVal; 
+    			self.notify: self.observerCatalog.writes withArgs: [newVal];
+    			val;
+    		};
+    		def accMethod := createClosureMethod(self, createMethod(nam, [], `{ readField() }, []));
+    		def mutMethod := createClosureMethod(self, createMethod(nam_, [ `v ], `{ writeField(v) }, []));
+    		def accessor() { accMethod };
+    		def mutator() { mutMethod };
+    	} taggedAs: [Field];
+    };
+    
+};
+
+ObservableFieldModule;

@@ -233,6 +233,11 @@ def isolate: closure taggedAs: tagTable mirroredBy: m {
 	object: closure taggedAs: [/.at.lang.types.Isolate] + tagTable mirroredBy: m;
 };
 
+// closure with typetags and mirror
+def isolate: closure mirroredBy: m {
+	object: closure taggedAs: [/.at.lang.types.Isolate] mirroredBy: m;
+};
+
 /**
  * alias for extend:with: as a mental note for the programmer he's extending isolates
  */

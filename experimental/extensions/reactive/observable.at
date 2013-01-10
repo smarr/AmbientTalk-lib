@@ -1,0 +1,71 @@
+//import /.at.collections.java.hashset; // don't use a set
+import /.at.collections.java.linkedlist;
+
+def ObservableModule := object: {
+
+	// a stateful trait encapsulating the behaviour for storing and notifying observers
+	def ObservableTrait := isolate: {
+		def self.observerCatalog;
+	
+		def initObserverCatalogs(@observerTypes) {
+			self.observerCatalog := isolate: { };
+	
+			def catalogMirror := (reflect: self.observerCatalog);
+			observerTypes.each: { |type|
+				catalogMirror.defineField(type, LinkedList.new());
+			};
+		};
+		
+		def addObserverCatalogs(@observerTypes) {
+			if: (self.observerCatalog == nil) then: {
+				self.observerCatalog := isolate: { };
+			};
+	
+			def catalogMirror := (reflect: self.observerCatalog);
+			observerTypes.each: { |type|
+				catalogMirror.defineField(type, LinkedList.new());
+			};
+		};
+		
+		def addObserver(clo, observers) {
+			def observer := object: {
+				def cancelled := false;
+					
+				def notify(@args) {
+					if: !cancelled then: {
+						clo.apply(args);
+					};
+				};
+				def notifyAsync(@args) {
+					if: !cancelled then: {
+						clo<-apply(args);
+					};
+				};
+				def publicInterface := object: {
+					def cancel() {
+						cancelled := true;
+						observers<-remove(self)@/.at.lang.futures.OneWayMessage;
+					};
+				};
+			};
+			observers.add(observer);
+			observer.publicInterface;
+		};
+	
+		def addObserver: clo to: observers {
+			addObserver(clo, observers);
+		};
+	
+		def notify: observers withArgs: args { // notify observers syncronously
+			observers.each: { |o| o.notify(@args); }
+		};
+		
+		def notifyAsync: observers withArgs: args {
+			observers.each: { |o| o.notifyAsync(@args)@/.at.lang.futures.OneWayMessage; }
+		};
+				
+	}; // end TObservable
+	
+};
+
+ObservableModule;
