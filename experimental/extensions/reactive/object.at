@@ -67,6 +67,10 @@ def ReactiveObjectModule := object: {
     def robject: clo {
         object: clo taggedAs: [ReactiveObject] mirroredBy: ReactiveObjectMirror;
     };
+   
+    def risolate: clo {
+        object: clo taggedAs: [ReactiveObject, /.at.lang.types.Isolate] mirroredBy: ReactiveObjectMirror;
+    };
 
     def robject: clo taggedAs: typeTags {
         object: clo taggedAs: ([ReactiveObject] + typeTags) mirroredBy: ReactiveObjectMirror;

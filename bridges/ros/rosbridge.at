@@ -1,0 +1,64 @@
+import /.experimental.extensions.reactive.main;
+
+def jsonModule := /.at.support.json;
+def JSONObject := jlobby.org.json.JSONObject;
+def Rosbridge := jlobby.edu.brown.robotics.rosbridge.Rosbridge;
+
+def processIncomingMessages(bridge) {
+	bridge.processIncomingMessages(true);
+	self<-processIncomingMessages(bridge);
+};
+
+// Creates a new Rosbridge communicating with host:port.
+def makeRosbridge(host, port) {
+	def bridge := Rosbridge.new(host, port);
+	self<-processIncomingMessages(bridge);
+	bridge;
+};
+
+// Publishes an isolate as a JSON object on bridge, under topic, and using message.
+def publish(bridge, topic, message, iso) @Reactive {
+	def jsonString := jsonModule.isolateToJSON(iso);
+	
+	// DEBUG
+	system.println("publishing: " + jsonString);
+	// /DEBUG
+	
+	bridge.publish(
+		topic, 
+		message, 
+		JSONObject.&new.cast(jlobby.java.lang.String)(jsonString));
+};
+
+// Subscribes to events from bridge under topic, 
+// with the least amount of time between messages maxUpdateRate (-1 is as fast as possible).
+// The callback is a closure with a single argument that will be invoked upon an event. This argument is bound
+// to the JSON string representation of the event.
+def subscribe(bridge, topic, maxUpdateRate, callback) {
+	bridge.subscribe(
+		topic, 
+		object: {
+			def messageReceived(jsonObj) {
+				callback(jsonModule.jsonObjectToIsolate(jsonObj.get("msg")));
+			};
+		},
+		maxUpdateRate);
+};
+
+// The same, but subscribes a behavior that is returned.
+def subscribeBehavior(bridge, topic, maxUpdateRate, initValue) {
+	def wrapped := risolate: { def value := (/.experimental.extensions.reactive.main.rfield: initValue); };
+
+	bridge.subscribe(
+		topic, 
+		object: {
+			def messageReceived(jsonObj) {
+				wrapped.value := jsonModule.jsonObjectToRisolate(jsonObj.get("msg"));
+			};
+		},
+		maxUpdateRate);
+		
+	wrapped.value;
+};
+
+self;
