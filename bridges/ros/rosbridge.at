@@ -21,7 +21,7 @@ def publish := rambda: { |bridge, topic, message, iso|
 	def jsonString := jsonModule.isolateToJSON(iso);
 	
 	// DEBUG
-	system.println("publishing: " + jsonString);
+	//system.println("publishing: " + jsonString);
 	// /DEBUG
 	
 	bridge.publish(

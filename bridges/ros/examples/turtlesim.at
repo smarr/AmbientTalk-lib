@@ -2,16 +2,15 @@ import /.bridges.ros.rosbridge;
 //import /.experimental.extensions.reactive.main;
 import /.at.support.timer;
 
-def rseconds := rwrap: 1;
-
-whenever: millisec(1000) elapsed: {
-	rseconds.setValue(rseconds + 1);
-};
-
 // Velocity object that cycles every second between linear 0..5, angular 0..5.
 def velocityB := risolate: { 
-	def linear := (/.experimental.extensions.reactive.main.rfield: (rseconds % 5));	
-	def angular := (/.experimental.extensions.reactive.main.rfield: (rseconds % 5));
+	def linear := (/.experimental.extensions.reactive.main.rfield: 1);	
+	def angular := (/.experimental.extensions.reactive.main.rfield: 1);
+};
+
+whenever: millisec(1000) elapsed: {
+	velocityB.linear := (velocityB.linear + 1) % 5;
+	velocityB.angular := (velocityB.angular + 1) % 5;
 };
 
 // turtlesim TEST
