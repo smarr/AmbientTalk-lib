@@ -2,18 +2,16 @@ import /.bridges.ros.rosbridge;
 //import /.experimental.extensions.reactive.main;
 import /.at.support.timer;
 
-def _SECONDSVALUE := 1;
-
-// Velocity object that cycles every second between linear 0..5, angular 0..5.
-def velocityB := risolate: {
-	def linear := (/.experimental.extensions.reactive.main.rfield: (_SECONDSVALUE % 5));		// XXX Why can't I refer to rfield:?
-	def angular := (/.experimental.extensions.reactive.main.rfield: (_SECONDSVALUE % 5));
-};
+def rseconds := rwrap: 1;
 
 whenever: millisec(1000) elapsed: {
-	_SECONDSVALUE := _SECONDSVALUE + 1;
-	velocityB.linear := (_SECONDSVALUE % 5);	// XXX Assignment of rfield does not trigger reactive update???
-	velocityB.angular := (_SECONDSVALUE % 5);
+	rseconds.setValue(rseconds + 1);
+};
+
+// Velocity object that cycles every second between linear 0..5, angular 0..5.
+def velocityB := risolate: { 
+	def linear := (/.experimental.extensions.reactive.main.rfield: (rseconds % 5));	
+	def angular := (/.experimental.extensions.reactive.main.rfield: (rseconds % 5));
 };
 
 // turtlesim TEST
@@ -39,13 +37,13 @@ publish(
 
 // Subscribe behavior that every 2 seconds contains the pose of the turtle1
 // TODO: fix json isolate equality!
-def poseB := subscribeBehavior(
+def poseB := rsubscribe(
 	bridge, 
 	"/turtle1/pose", 
 	2000, 
 	isolate: { def x := 0; def y := 0; });	
 
-def printPose(poseMsg) {
+def printPose := rambda: { |poseMsg|
 	system.println("The new pose of the turtle is: x: " + poseMsg.x + ", y: " + poseMsg.y);
 };
 

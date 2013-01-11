@@ -101,9 +101,37 @@ def createReactiveValue(init := nil, typeTags := []) {
 	publicInterface;
 };
 
+
+def createReactiveIsolateValue(init := nil, typeTags := []) {
+    
+	def rv := risolate: { |init|
+	    // wraps the value
+		def current := init;
+	};
+	
+	def publicInterface := object: {
+	    // the public interface for a wrapped value
+		def setValue(v) {
+		    (reflect: self).cancelParent();
+			rv.current := v;
+		};
+		def getValue() {
+			rv.current;
+		};
+		//def setValueWith: clo { 
+		//	setValue(clo(getValue()));
+		//};
+	} taggedAs: ([ReactiveObject] + typeTags) mirroredBy: createReactiveValueMirror(rv);
+	
+	publicInterface;
+};
+
+
 def ReactiveValueModule := object: {
     
     def rwrap: v { createReactiveValue(v) };
+    
+    def rwrapIso: v { createReactiveIsolateValue(v) };
     
     def rfield: v { createReactiveValue(v, [ReactiveField]) }
 

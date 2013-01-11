@@ -17,7 +17,7 @@ def makeRosbridge(host, port) {
 };
 
 // Publishes an isolate as a JSON object on bridge, under topic, and using message.
-def publish(bridge, topic, message, iso) @Reactive {
+def publish := rambda: { |bridge, topic, message, iso|
 	def jsonString := jsonModule.isolateToJSON(iso);
 	
 	// DEBUG
@@ -46,19 +46,19 @@ def subscribe(bridge, topic, maxUpdateRate, callback) {
 };
 
 // The same, but subscribes a behavior that is returned.
-def subscribeBehavior(bridge, topic, maxUpdateRate, initValue) {
-	def wrapped := risolate: { def value := (/.experimental.extensions.reactive.main.rfield: initValue); };
+def rsubscribe(bridge, topic, maxUpdateRate, initValue) {
+	def riso := rwrapIso: initValue;
 
 	bridge.subscribe(
 		topic, 
 		object: {
 			def messageReceived(jsonObj) {
-				wrapped.value := jsonModule.jsonObjectToRisolate(jsonObj.get("msg"));
+				riso.setValue(jsonModule.jsonObjectToRisolate(jsonObj.get("msg")));
 			};
 		},
 		maxUpdateRate);
 		
-	wrapped.value;
+	riso;
 };
 
 self;
