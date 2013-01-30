@@ -76,6 +76,10 @@ def ReactiveObjectModule := object: {
         object: clo taggedAs: ([ReactiveObject] + typeTags) mirroredBy: ReactiveObjectMirror;
     };
     
+    def atomic: clo {
+    	&atomic:(clo);
+    };
+    
 };
 
 ReactiveObjectModule;

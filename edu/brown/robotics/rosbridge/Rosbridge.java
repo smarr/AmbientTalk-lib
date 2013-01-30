@@ -187,7 +187,7 @@ public class Rosbridge {
                         try {
                                 handler.messageReceived(message);
                         } catch(Exception e) {
-                        		e.printStackTrace(System.err);
+                        		//e.printStackTrace(System.err);
                                 System.err.println("Exception in callback handler for topic " + topic);
                         }
                 }

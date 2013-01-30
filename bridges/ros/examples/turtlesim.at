@@ -1,29 +1,29 @@
+// Little test file to see if we can interact with the Turtlesim reactively.
+
 import /.bridges.ros.rosbridge;
 //import /.experimental.extensions.reactive.main;
 import /.at.support.timer;
 
 // Velocity object that cycles every second between linear 0..5, angular 0..5.
+// It's represented as a reactive isolate with two reactive fields (linear and angular).
+// Modifying reactive fields triggers reevaluation of calls to which the risolate is passed
+// as an argument AND of any invocations on the risolate.
 def velocityB := risolate: { 
-	def linear := (/.experimental.extensions.reactive.main.rfield: 1);	
+	def linear := (/.experimental.extensions.reactive.main.rfield: 1);	// TODO: eliminate absolute path (how? risolate has no lexical scope)
 	def angular := (/.experimental.extensions.reactive.main.rfield: 1);
 };
 
+// Modify the velocity fields every second, our way of modifying program state 
+// AND notifying dependent stuff like ROS in one go.
 whenever: millisec(1000) elapsed: {
-	velocityB.linear := (velocityB.linear + 1) % 5;
-	velocityB.angular := (velocityB.angular + 1) % 5;
+	// TODO: fix atomic block (so that only an event is triggered when the atomic operation is complete).
+	//atomic: {
+		velocityB.linear := (velocityB.linear + 1) % 5;
+		velocityB.angular := (velocityB.angular + 1) % 5;
+	//};
 };
 
-// turtlesim TEST
-
 def bridge := makeRosbridge("localhost", 9090);
-
-
-// TODO: atomic operations so that only an event is triggered when the atomic operations is complete.
-// Example:
-//atomic: {
-//	velocity.linear := 4;
-//	velocity.angular := 7;
-//};
 
 
 // Publish velocity behavior to turtle1.
@@ -34,7 +34,8 @@ publish(
 	velocityB);
 
 
-// Subscribe behavior that every 2 seconds contains the pose of the turtle1
+// Subscribe behavior that every 2 seconds contains the pose of the turtle1 
+// (because "pose" is a perpetually published event by ROS)
 // TODO: fix json isolate equality!
 def poseB := rsubscribe(
 	bridge, 
