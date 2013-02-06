@@ -52,7 +52,7 @@
  * @author tvcutsem
  */
 import /.at.lang.values;
-import /.at.lang.structuralTypes;
+import /.at.lang.structuraltypes;
 
 // fact that wildcard is nil is important for implicitly
 // matching super with anything
