@@ -27,7 +27,7 @@ def ObservableFieldModule := object: {
     		
     		def readField() { val };
     		def writeField(newVal) {
-    			if: (callback_ != nil) then: {
+    		    if: (callback_ != nil) then: {
     		        // cancel previous observer if there was one
     	            callback_.cancel();
     	        };
@@ -41,12 +41,6 @@ def ObservableFieldModule := object: {
     			val := newVal; 
     			self.notify: self.observerCatalog.writes withArgs: [newVal];
     			val;
-    		};
-    		def notify(newVal) {
-    			self.notify: self.observerCatalog.writes withArgs: [newVal];
-    		};
-    		def notifyWithCurrentValue() {
-    			self.notify(self.readField());
     		};
     		def accMethod := createClosureMethod(self, createMethod(nam, [], `{ readField() }, []));
     		def mutMethod := createClosureMethod(self, createMethod(nam_, [ `v ], `{ writeField(v) }, []));
