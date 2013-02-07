@@ -16,11 +16,10 @@ def velocityB := risolate: {
 // Modify the velocity fields every second, our way of modifying program state 
 // AND notifying dependent stuff like ROS in one go.
 whenever: millisec(1000) elapsed: {
-	// TODO: fix atomic block (so that only an event is triggered when the atomic operation is complete).
-	//atomic: {
+	atomic: {
 		velocityB.linear := (velocityB.linear + 1) % 5;
 		velocityB.angular := (velocityB.angular + 1) % 5;
-	//};
+	};
 };
 
 def bridge := makeRosbridge("localhost", 9090);
