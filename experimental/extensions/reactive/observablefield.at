@@ -3,45 +3,7 @@ import /.at.lang.types;
 import /.experimental.extensions.reactive.types;
 import /.experimental.extensions.reactive.observable;
 
-import /.at.collections.vector;
-
-def atomicBlocksStack := Vector.new();
-
-def atomicBlock := object: {
-	def bundledAssignments := [];
-	def storeAssignment(ass) {
-		bundledAssignments := bundledAssignments + [ ass ];
-	};
-	def processAssignments() {
-		bundledAssignments.each: { |ass| ass(); };
-	};
-};
-
-def inAtomicBlock() {
-	!atomicBlocksStack.isEmpty();
-};
-
-def currentAtomicBlock() {
-	atomicBlocksStack.at(atomicBlocksStack.length);
-};
-
-def newAtomicBlock() {
-	atomicBlocksStack.push(atomicBlock.new());
-};
-
-def popAtomicBlock() {
-	atomicBlocksStack.pop().processAssignments();
-};
-
-
 def ObservableFieldModule := object: {
-
-	def atomic: closure {
-		newAtomicBlock();
-		def result := closure();
-		popAtomicBlock();
-		result;
-	};
 
     def createObservableField(nam, val) {
     	object: { 
@@ -65,32 +27,26 @@ def ObservableFieldModule := object: {
     		
     		def readField() { val };
     		def writeField(newVal) {
-    			def writeOperation := {
-    		    	if: (is: val taggedAs: ReactiveField) then: {
-    		       		val.setValue(newVal);
-    		   	 	} else: {
-    		        	if: (callback_ != nil) then: {
-    		          		// cancel previous observer if there was one
-    	               	 	callback_.cancel();
-    	           	 	};
-    		       	 if: (is: newVal taggedAs: ReactiveObject) then: {
-    		         	// register observer if necessary
-    		           	callback_ := (reflect: newVal).register: { |fld, val|
-    		            	self.notify: self.observerCatalog.writes withArgs: [newVal];
-    		           	};
-    		      	 };
-    		        // set new value and notify observers
-    			   	val := newVal; 
-    			    self.notify: self.observerCatalog.writes withArgs: [newVal];
-    			};
+    			if: (callback_ != nil) then: {
+    		        // cancel previous observer if there was one
+    	            callback_.cancel();
+    	        };
+    		    if: (is: newVal taggedAs: ReactiveObject) then: {
+    		        // register observer if necessary
+    		        callback_ := (reflect: newVal).register: { |fld, val|
+    		            self.notify: self.observerCatalog.writes withArgs: [newVal];
+    		        };
+    		    };
+    		    // set new value and notify observers
+    			val := newVal; 
+    			self.notify: self.observerCatalog.writes withArgs: [newVal];
     			val;
-    			};
-    			if: inAtomicBlock() then: {
-    				currentAtomicBlock.storeAssignment(writeOperation); 
-    			} else: {
-    				writeOperation();
-    			};
-    			val;
+    		};
+    		def notify(newVal) {
+    			self.notify: self.observerCatalog.writes withArgs: [newVal];
+    		};
+    		def notifyWithCurrentValue() {
+    			self.notify(self.readField());
     		};
     		def accMethod := createClosureMethod(self, createMethod(nam, [], `{ readField() }, []));
     		def mutMethod := createClosureMethod(self, createMethod(nam_, [ `v ], `{ writeField(v) }, []));
