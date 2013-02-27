@@ -40,11 +40,12 @@ def popAtomicBlock() {
 // mirror for reactive objects
 def ReactiveObjectMirror := mirror: {
 	import ObservableTrait;
+	def self.dependents;
 	
 	def init(base) {
 		super.init(base);
 		self.initObserverCatalogs(`dependents);
-		def self.dependents := self.observerCatalog.dependents;
+		self.dependents := self.observerCatalog.dependents;
 	};
 			
 	def register: clo {
