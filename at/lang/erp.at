@@ -83,7 +83,7 @@ def makeBehavior(initVal) {
 	def currentValue := initVal;
 	def state := `changing;
 	def problem := nil;
-	[object: {} mirroredBy: (mirror: {
+	[object: {} taggedAs: [Behavior] mirroredBy: (mirror: {
 	  import TEventualRef exclude pass;
 	  // def transportStrategy; // not necessary, behaviors are pass-by-far-ref
 	  
@@ -147,7 +147,7 @@ def makeBehavior(initVal) {
     
     def toString() { "behavior:" + currentValue + "("+state+")" };
     
-	}) taggedAs: [Behavior],
+	}),
 	
 	// behavior controller
 	object: {
@@ -217,12 +217,12 @@ def whenever: behavior changed: closure catch: clause finally: finalize {
     behavior := join: behavior;
     def origclosure := closure;
     closure := { |values| origclosure(@values) };
-  }
+  };
   
-	def [dependentBehavior, controller] := makeBehavior(behavior.value);
-	def perform(control, val, fun) {
+  def [dependentBehavior, controller] := makeBehavior(behavior.value);
+  def perform(control, val, fun) {
 	  try: { control(fun(val)) } catch: /.at.lang.types.Exception using: { |e| controller.break(e) }
-	};
+  };
   behavior<-register(object: {
 	  def onNextValue(nextVal) { perform(controller.nextValue, nextVal, closure) };
 	  def onLastValue(lastVal) { perform(controller.lastValue, lastVal, finalize) };
@@ -297,31 +297,32 @@ def join: behaviors {
   };
   
   joinedB;
-}
+};
 
 // lift a value into a stable behavior
 def stable: value {
 	def [behavior, controller] := makeBehavior(value);
 	controller.lastValue(value);
 	behavior;
-}
+};
 // lift an exception into a broken behavior
 def broken: exc {
 	def [behavior, controller] := makeBehavior(value);
 	controller.break(exc);
 	behavior;
-}
+};
 
 def makeSecondsBehavior(start) {
   def Timer := /.at.support.timer;
   def ticks := start;
   def [seconds, controller] := makeBehavior(ticks);
   def pub := Timer.whenever: 1.seconds elapsed: {
-    controller.nextValue(ticks := ticks + 1);
+    ticks := ticks + 1;
+    controller.nextValue(ticks);
   };
   [seconds, object: { def cancel() { pub.cancel(); controller.lastValue(ticks); }}];
-}
+};
 
-def [seconds, pub] := makeSecondBehavior(0);
+def [seconds, pub] := makeSecondsBehavior(0);
 
 self
