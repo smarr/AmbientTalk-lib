@@ -412,7 +412,7 @@ def MultiFutureModule := object: {
   //     returned multifuture. i is an index specifying the ith call
   def multi: n future: closure {
 	  def [mf, resolver] := makeMultiFuture(n);
-	  1.to: n+1 do: { |i|
+	  1.to: n do: { |i|
 		  closure<-apply([i, resolver.&resolve ]);
 		};
 	  mf

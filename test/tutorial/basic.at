@@ -135,7 +135,10 @@ extend: /.at.unit.test.UnitTest.new("BasicProgTutorial") with: {
 		  self.assertEquals( 2, 1.4.ceiling());
 		  self.assertEquals( -1, -1.abs());
 		  def output := "";
-		  6.to: 0 step: 2 do: { |i| output := output + i };
+		  2.to: 6 step: 2 do: { |i| output := output + i };
+		  self.assertEquals("246", output);
+		  output := "";
+		  6.downTo: 1 step: 2 do: { |i| output := output + i };
 		  self.assertEquals("642", output);
 		  output := "";
 		  3.doTimes: { |i| output := output + i };

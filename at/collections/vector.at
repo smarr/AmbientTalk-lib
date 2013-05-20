@@ -67,7 +67,7 @@ def VectorPrototype := object: {
 	
 	def grow() {
 		def newelements[elements.length * 2] { nil };
-		1.to: free do: { |i| newelements[i] := elements[i] };
+		1.to: (free-1) do: { |i| newelements[i] := elements[i] };
 		elements := newelements;
 	};
 	
@@ -98,25 +98,25 @@ def VectorPrototype := object: {
 	};
 
 	def each: iterator {
-		1.to: free do: { |i| iterator(elements[i]) };
+		1.to: free-1 do: { |i| iterator(elements[i]) };
 		self
 	};
 	
 	def eachWithIndex: iterator {
-		1.to: free do: { |i| iterator(i, elements[i]) };
+		1.to: free-1 do: { |i| iterator(i, elements[i]) };
 		self
 	};
 	
 	def map: fun {
 		def cloned := self.new(elements.length, comparator);
 		cloned.free := free;
-		1.to: free do: { |i| cloned.atPut(i, fun(elements[i])) };
+		1.to: free-1 do: { |i| cloned.atPut(i, fun(elements[i])) };
         cloned
 	};
 	
 	def inject: init into: accum {
 		def result := init;
-		1.to: free do: { |i| result := accum(result, elements[i]) };
+		1.to: free-1 do: { |i| result := accum(result, elements[i]) };
 		result
 	};
 	
@@ -152,10 +152,10 @@ def VectorPrototype := object: {
   // appends an element to the back of the vector
   // returns the vector itself
   def add(element) {
-	  self.growIfNecessary();
-		elements[free] := element;
-		free := free + 1;
-		self
+	self.growIfNecessary();
+	elements[free] := element;
+	free := free + 1;
+	self
   };
 
   def <<(element) { self.add(element) };
@@ -166,7 +166,7 @@ def VectorPrototype := object: {
   def insert(atPos, element) {
 	  checkBounds(1,free,atPos);
 		self.growIfNecessary();
-		free.to: atPos do: {|i|
+		free.downTo: atPos do: {|i|
 			elements[i] := elements[i-1]
 		};
 		elements[atPos] := element;
@@ -180,7 +180,7 @@ def VectorPrototype := object: {
   def delete(atPos) {
 	  checkBounds(1,free-1,atPos);
 		def tmp := elements[atPos];
-		atPos.to: (free-1) do: { |i|
+		atPos.to: (free-2) do: { |i|
 			elements[i] := elements[i+1]
 		};
 		free := free - 1;

@@ -621,7 +621,7 @@ def AmbientRefsModule(ARImplModule := /.at.discovery.ar_extensional_impl) {
 					deftype VotePlayerTest;
 				
 					def spawnPlayers(max) {
-					  1.to: max+1 do: { |i|
+					  1.to: max do: { |i|
 							actor: { |i,ARImplModuleCapsule|
 								deftype VotePlayerTest;
 								/.at.lang.ambientrefs(ARImplModuleCapsule).export: (object: {
@@ -645,7 +645,7 @@ def AmbientRefsModule(ARImplModule := /.at.discovery.ar_extensional_impl) {
 					MFuturesModule.whenAll: handle.future resolved: { |votes|
 						//(handle.future<-sender())<-voteResult(votes)@Oneway;
 						self.assertEquals(MAX, votes.length);
-						1.to: MAX+1 do: { |i|
+						1.to: MAX do: { |i|
 							self.assertTrue(votes.contains(i));
 						}
 					} ruined: { |excs|

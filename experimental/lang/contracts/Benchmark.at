@@ -72,7 +72,7 @@ def normalTestActor := actor: {
 			system.println("Sending " + numMessages + " messages WITHOUT an invariant");
 			startTime := jlobby.java.lang.System.currentTimeMillis();
 			def num := numMessages - 1;
-			1.to: numMessages do: { |x|
+			numMessages.doTimes: { |x|
 				when: c.participant<-message(x)@FutureMessage becomes: { |idc|
 					num := num - 1;
 					if: (num == 0) then: {
@@ -130,7 +130,7 @@ def invTestActor := actor: {
 		when: seconds(5) elapsed: {
 			system.println("Sending " + numMessages + " messages WITH an invariant");
 			startTime := jlobby.java.lang.System.currentTimeMillis();
-			1.to: numMessages do: { |x|
+			numMessages.doTimes: { |x|
 				when: c.participant<-message(x)@FutureMessage becomes: { |idc|
 					num := num - 1;
 					if: (num == 0) then: {

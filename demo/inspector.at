@@ -32,7 +32,7 @@ def Vector	:= jlobby.java.util.Vector;
 // Auxiliary function to easily iterate over Vectors in AmbientTalk
 def Vector.each: closure {
 	if: !(self.isEmpty()) then: {
-		0.to: self.size() do: { | index |
+		0.to: self.size()-1 do: { | index |
 			closure(self.elementAt(index));
 		};
 	};
@@ -149,7 +149,7 @@ def InspectorTemplate := object: {
 						if: !(traceIndex == -1) then: {
 							def divingSubject := traceObjects.elementAt(traceIndex);
 							
-							traceObjects.size().to: traceIndex do: { | index |
+							(traceObjects.size()-1).downTo: traceIndex do: { | index |
 								traceObjects.removeElementAt(index - 1);
 								traceList.getModel().removeElementAt(index - 1);
 							};

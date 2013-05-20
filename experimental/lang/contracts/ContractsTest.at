@@ -92,7 +92,7 @@ def spawn_audio_actor(id, loc := "test") {
 
 def num_audio := 10;
 
-1.to: num_audio do: { |i|
+num_audio.doTimes: { |i|
 	spawn_audio_actor(i);
 };
 

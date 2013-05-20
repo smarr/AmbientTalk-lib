@@ -110,7 +110,7 @@ def ParallelSplit(@args) {
         };
         
         def execute(env, resolver) {
-            1.to: components.length+1 do: { | idx |
+            1.to: components.length do: { | idx |
                 def clonedEnv := lobby.ME.environment.SystemEnvironment.new(env);
                 clonedEnv.id := env.id;
                 when: components[idx].start(clonedEnv) becomes: { |nEnv|
@@ -319,7 +319,7 @@ def MultiChoice(@cmps) {
         
         def execute(env, resolver) {
             def clonedEnv := clone: env;
-            1.to: conditionActions.length+1 do: { |idx|
+            1.to: conditionActions.length do: { |idx|
             	when: conditionActions[idx][2].start(clonedEnv) becomes: { |nEnv|
             		resolver.resolve(nEnv);
             	};
@@ -442,7 +442,7 @@ def MultipleInstancesWithoutSynchronization(cmp) {
         };
     
         def execute(env, resolver) {
-            0.to: number do: { |idx|
+            0.to: number-1 do: { |idx|
                 id := id + 1;
                 def clonedEnv := SystemEnvironment.new(env);
                 clonedEnv.id := id;

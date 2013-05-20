@@ -24,7 +24,7 @@ def TriggerPattern := object: {
         };
         
         (reflect: listener).addMethod(createMethod(selector, `[@values], `{
-            1.to: parameters.length + 1 do: { | idx | self.environment.insert(self.parameters[idx], values[idx]) };
+            1.to: parameters.length do: { | idx | self.environment.insert(self.parameters[idx], values[idx]) };
             self.subscription.cancel();
             self.resolver.resolve(values)
         }, []));

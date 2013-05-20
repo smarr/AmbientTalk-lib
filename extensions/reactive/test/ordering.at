@@ -8,7 +8,7 @@ def makeOrderChecker(totalNumberOfCases, allowDuplicateTriggering := false) {
 	def theTriggeredTestClauses[totalNumberOfCases] { nil };
 	
 	def check(whenItShouldBeTriggered) {
-		1.to: whenItShouldBeTriggered do: { | previouslyTriggered | 
+		1.to: whenItShouldBeTriggered-1 do: { | previouslyTriggered | 
 			if: (theTriggeredTestClauses[previouslyTriggered] == nil)
 				then: { UnitTest.fail("A test clause was triggered prematurely:" + whenItShouldBeTriggered + ", missing: " + previouslyTriggered) }
 		};

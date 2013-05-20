@@ -570,6 +570,30 @@ def BugFixTest := extend: /.at.unit.test.UnitTest.new("BugFixTest") with: {
 	  };
 	  fut;
 	};
+	
+	// originally (1.to: n do: block) was defined so that
+    // the upper bound was exclusive. It is now inclusive (AT 2.24)
+	def testToDo() {
+	  def sum := 0;
+	  1.to: 3 do: { |i| sum := sum + i; };
+	  self.assertEquals(6, sum);
+	  
+	  sum := 0;
+	  1.to: 1 do: { |i| sum := sum + i; };
+	  self.assertEquals(1, sum);
+	  
+	  sum := 0;
+	  3.downTo: 1 do: { |i| sum := sum + i; };
+	  self.assertEquals(6, sum);
+	  
+	  sum := 0;
+	  2.to: 1 do: { |i| sum := sum + i; };
+	  self.assertEquals(0, sum);
+	  
+	  sum := 0;
+	  1.downTo: 2 do: { |i| sum := sum + i; };
+	  self.assertEquals(0, sum);
+	};
 
 };
 

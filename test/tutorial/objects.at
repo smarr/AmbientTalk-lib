@@ -105,7 +105,7 @@ extend: /.at.unit.test.UnitTest.new("OOProgTutorial") with: {
 		      Enumerable^collect: closure;
 		    };
 		    def each: clo {
-		      1.to: elements.length + 1 do: { |i|
+		      1.to: elements.length do: { |i|
 		        //clo(elements[i]);
 		        elements[i] := clo(elements[i]);
 		      };

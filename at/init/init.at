@@ -66,7 +66,7 @@ def does: obj respondTo: selector {
 // example: table: 5 fill: { |i| i } => [1,2,3,4,5]
 def table: size fill: closure {
   def t[size] { nil };
-  1.to: size+1 do: { |i| t[i] := closure(i) };
+  1.to: size do: { |i| t[i] := closure(i) };
   t
 };
 

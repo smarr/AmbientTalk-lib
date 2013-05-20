@@ -88,7 +88,7 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 		    start := from; end := to;
 		  };
 		  def each: clo {
-		    start.to: end do: clo
+		    start.to: end-1 do: clo
 		  };
 		};
 		self.assertEquals("[0, 3, 6, 9]", print: Range.new(0,10).reject: { |i| (i%3 != 0) });
@@ -106,7 +106,7 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 		    start := from; end := to;
 		  };
 		  def each: clo {
-		    start.to: end do: clo
+		    start.to: end-1 do: clo
 		  };
 		};
 		self.assertTrue((reflect: Range).respondsTo(`reject:));
@@ -126,7 +126,7 @@ extend: /.at.unit.test.UnitTest.new("ModularTutorial") with: {
 		    start := from; end := to;
 		  };
 		  def each: clo {
-		    start.to: end do: clo
+		    start.to: end-1 do: clo
 		  };
 		};
 		self.assertTrue((reflect: Range).respondsTo(`remove));
