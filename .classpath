@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path=""/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/interpreter"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/parser"/>
+	<classpathentry kind="lib" path="frameworks/html/lib/htmllexer.jar"/>
+	<classpathentry kind="lib" path="frameworks/html/lib/htmlparser.jar"/>
+	<classpathentry kind="lib" path="bridges/crime/crime_at.jar"/>
+	<classpathentry kind="lib" path="bridges/m2mi/m2mi.jar"/>
+	<classpathentry kind="lib" path="bridges/rfid/librfid.jar"/>
+	<classpathentry kind="lib" path="experimental/demo/TwitterWall/lib/core.jar"/>
+	<classpathentry kind="output" path=""/>
+</classpath>
